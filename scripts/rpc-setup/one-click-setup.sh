@@ -40,7 +40,6 @@ MAINNET_OP_GETH_IMAGE="xlayer/op-geth:release"
 # User input variables
 NETWORK_TYPE=""
 L1_RPC_URL=""
-L1_BEACON_URL=""
 DATA_DIR=""
 RPC_PORT=""
 WS_PORT=""
@@ -167,7 +166,6 @@ get_user_input() {
         print_info "🚀 Auto-mode: Using default configuration"
         NETWORK_TYPE="$DEFAULT_NETWORK"
         L1_RPC_URL="https://placeholder-l1-rpc-url"
-        L1_BEACON_URL="https://placeholder-l1-beacon-url"
         DATA_DIR="$DEFAULT_DATA_DIR"
         RPC_PORT="$DEFAULT_RPC_PORT"
         WS_PORT="$DEFAULT_WS_PORT"
@@ -214,47 +212,31 @@ get_user_input() {
         fi
     done
     
-    # L1 Beacon URL
-    while true; do
-        echo -n "3. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
-        read -r L1_BEACON_URL
-        if [[ -n "$L1_BEACON_URL" ]]; then
-            # Basic URL validation
-            if [[ "$L1_BEACON_URL" =~ ^https?:// ]]; then
-                break
-            else
-                print_error "Please enter a valid HTTP/HTTPS URL"
-            fi
-        else
-            print_error "L1 Beacon URL is required"
-        fi
-    done
-    
     # Optional configurations
     echo ""
     print_info "Optional configurations (press Enter to use defaults):"
     
-    echo -n "4. Data directory [default: $DEFAULT_DATA_DIR]: "
+    echo -n "3. Data directory [default: $DEFAULT_DATA_DIR]: "
     read -r input
     DATA_DIR="${input:-$DEFAULT_DATA_DIR}"
     
-    echo -n "5. RPC port [default: $DEFAULT_RPC_PORT]: "
+    echo -n "4. RPC port [default: $DEFAULT_RPC_PORT]: "
     read -r input
     RPC_PORT="${input:-$DEFAULT_RPC_PORT}"
     
-    echo -n "6. WebSocket port [default: $DEFAULT_WS_PORT]: "
+    echo -n "5. WebSocket port [default: $DEFAULT_WS_PORT]: "
     read -r input
     WS_PORT="${input:-$DEFAULT_WS_PORT}"
     
-    echo -n "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: "
+    echo -n "6. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: "
     read -r input
     NODE_RPC_PORT="${input:-$DEFAULT_NODE_RPC_PORT}"
     
-    echo -n "8. Geth P2P port [default: $DEFAULT_GETH_P2P_PORT]: "
+    echo -n "7. Geth P2P port [default: $DEFAULT_GETH_P2P_PORT]: "
     read -r input
     GETH_P2P_PORT="${input:-$DEFAULT_GETH_P2P_PORT}"
     
-    echo -n "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: "
+    echo -n "8. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: "
     read -r input
     NODE_P2P_PORT="${input:-$DEFAULT_NODE_P2P_PORT}"
     
@@ -277,7 +259,6 @@ generate_config_files() {
     cat > .env << EOF
 # X Layer $NETWORK_TYPE Configuration
 L1_RPC_URL=$L1_RPC_URL
-L1_BEACON_URL=$L1_BEACON_URL
 
 # Bootnode Configuration
 OP_NODE_BOOTNODE=$TESTNET_BOOTNODE_OP_NODE
@@ -502,7 +483,6 @@ display_connection_info() {
         print_info "1. Edit .env file: nano .env"
         print_info "2. Update L1 URLs:"
         echo "   L1_RPC_URL=https://your-ethereum-l1-rpc-endpoint"
-        echo "   L1_BEACON_URL=https://your-ethereum-l1-beacon-endpoint"
         print_info "3. Restart: docker compose down && docker compose up -d"
         echo ""
     fi
