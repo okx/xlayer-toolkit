@@ -162,6 +162,22 @@ get_user_input() {
     print_info "Please provide the following information:"
     echo ""
     
+    # Check if running from pipe (curl | bash) - use defaults
+    if [ ! -t 0 ]; then
+        print_info "🚀 Auto-mode: Using default configuration"
+        NETWORK_TYPE="$DEFAULT_NETWORK"
+        L1_RPC_URL="https://placeholder-l1-rpc-url"
+        L1_BEACON_URL="https://placeholder-l1-beacon-url"
+        DATA_DIR="$DEFAULT_DATA_DIR"
+        RPC_PORT="$DEFAULT_RPC_PORT"
+        WS_PORT="$DEFAULT_WS_PORT"
+        NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
+        GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
+        NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
+        print_warning "⚠️  L1 URLs will need to be configured after setup"
+        return 0
+    fi
+    
     # Network type selection
     while true; do
         echo -n "1. Network type (testnet/mainnet) [default: $DEFAULT_NETWORK]: "
@@ -476,6 +492,21 @@ display_connection_info() {
     echo "📁 Data Directory: $DATA_DIR"
     echo "🌍 Network: $NETWORK_TYPE"
     echo ""
+    
+    # Check if L1 URLs are placeholder values
+    if [[ "$L1_RPC_URL" == "https://placeholder-l1-rpc-url" ]]; then
+        echo "⚠️  IMPORTANT: Configure L1 RPC URLs to complete setup!"
+        echo "=========================================="
+        echo ""
+        print_info "📝 Next Steps:"
+        print_info "1. Edit .env file: nano .env"
+        print_info "2. Update L1 URLs:"
+        echo "   L1_RPC_URL=https://your-ethereum-l1-rpc-endpoint"
+        echo "   L1_BEACON_URL=https://your-ethereum-l1-beacon-endpoint"
+        print_info "3. Restart: docker compose down && docker compose up -d"
+        echo ""
+    fi
+    
     print_info "Your X Layer RPC node is now running and ready to serve requests!"
 }
 
