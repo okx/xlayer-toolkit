@@ -1,0 +1,53 @@
+[Node]
+HTTPHost = "0.0.0.0"
+HTTPPort = 8545
+HTTPCors = ["*"]
+HTTPVirtualHosts = ["*"]
+HTTPModules = ["web3", "debug", "eth", "txpool", "net", "engine", "miner", "admin"]
+WSHost = "0.0.0.0"
+WSPort = 7546
+WSOrigins = ["*"]
+WSModules = ["debug", "eth", "txpool", "net", "engine"]
+AuthAddr = "0.0.0.0"
+AuthPort = 8552
+AuthVirtualHosts = ["*"]
+JWTSecret = "/jwt.txt"
+
+[Node.P2P]
+MaxPeers = 30
+DiscoveryV5 = true
+
+BootstrapNodes = [
+  "enode://2104d54a7fbd58a408590035a3628f1e162833c901400d490ccc94de416baf13639ce2dad388b7a5fd43c535468c106b660d42d94451e39b08912005aa4e4195@8.210.181.50:30303"
+]
+
+StaticNodes = [
+  "enode://2104d54a7fbd58a408590035a3628f1e162833c901400d490ccc94de416baf13639ce2dad388b7a5fd43c535468c106b660d42d94451e39b08912005aa4e4195@8.210.181.50:30303"
+]
+
+[Eth]
+NetworkId = 1952
+SyncMode = "full"
+EnableInnerTx = true
+
+
+[Eth.GPO]
+Blocks = 20
+Percentile = 60
+MaxHeaderHistory = 1024
+MaxBlockHistory = 1024
+MaxPrice = "5000000000000000000000"
+IgnorePrice = "2000000000000000000"
+
+[Eth.GPO.XLayer]
+Type = "follower"
+UpdatePeriod = 100000000000
+Default = "100000000"
+KafkaURL = "localhost:9092"
+Topic = "middle_coinPrice_push"
+GroupID = "geth-consumer"
+L1CoinId = 15756
+L2CoinId = 7184
+DefaultL1CoinPrice = 2000.0
+DefaultL2CoinPrice = 0.5
+Factor = 0.1
