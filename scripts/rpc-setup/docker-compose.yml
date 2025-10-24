@@ -1,5 +1,3 @@
-version: '3.8'
-
 networks:
   xlayer-network:
     name: xlayer-network
@@ -16,7 +14,7 @@ services:
       - "30303:30303" # P2P TCP
       - "30303:30303/udp" # P2P UDP
     volumes:
-      - ./data:/data
+      - ./data/op-geth:/data
       - ./config/jwt.txt:/jwt.txt
       - ./config/op-geth-config-testnet.toml:/config.toml
     command:
@@ -30,6 +28,34 @@ services:
       - xlayer-network
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+  op-reth:
+    image: "${OP_RETH_IMAGE_TAG:-op-reth:latest}"
+    container_name: xlayer-op-reth
+    networks:
+      - xlayer-network
+    entrypoint: /entrypoint/reth-rpc.sh
+    env_file:
+      - .env
+    volumes:
+      - ./data/op-reth:/datadir
+      - ./config/jwt.txt:/jwt.txt
+      - ./config/genesis-reth.json:/genesis.json
+      - ./config/op-reth-config-testnet.toml:/config.toml
+      - ./entrypoint/reth-rpc.sh:/entrypoint/reth-rpc.sh
+      - ./.env:/app/.env
+    ports:
+      - "8123:8545"
+      - "7546:7546"
+      - "8552:8552"
+      - "30303:30303"
+      - "30303:30303/udp"
+    healthcheck:
+      test: ["CMD", "curl", "-X", "POST", "http://localhost:8545"]
       interval: 3s
       timeout: 3s
       retries: 10
@@ -49,7 +75,7 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=info
-      - --l2=http://op-geth:8552
+      - --l2=http://${RPC_TYPE:-op-geth}:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled=false
       - --verifier.l1-confs=1
@@ -60,13 +86,14 @@ services:
       - --p2p.listen.udp=9223
       - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
       - --p2p.discovery.path=/data/p2p/opnode_discovery_db
-      - --p2p.bootnodes=enode://eaae9fe2fc758add65fe4cfd42918e898e16ab23294db88f0dcdbcab2773e75bbea6bfdaa42b3ed502dfbee1335c242c602078c4aa009264e4705caa20d3dca7@8.210.181.50:9223
-      #- --p2p.static=enode://eaae9fe2fc758add65fe4cfd42918e898e16ab23294db88f0dcdbcab2773e75bbea6bfdaa42b3ed502dfbee1335c242c602078c4aa009264e4705caa20d3dca7@8.210.181.50:9223
+      - --p2p.bootnodes=${OP_NODE_BOOTNODE}
       - --rpc.enable-admin=true
       - --l1=${L1_RPC_URL}
-      - --l1.beacon.ignore=true
+      # - --l1.beacon.ignore=true
+      - --l1.beacon=${L1_BEACON_URL}
       - --l1.rpckind=standard
       - --conductor.enabled=false
       - --safedb.path=/data/safedb
+      - --l2.enginekind=${L2_ENGINEKIND:-geth}
     depends_on:
-      - op-geth
+      - ${RPC_TYPE:-op-geth}

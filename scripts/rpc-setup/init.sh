@@ -60,6 +60,26 @@ fi
 
 echo "✅ Genesis file extracted successfully to config/genesis.json"
 
+# Prepare genesis file for Reth RPC
+sed_inplace() {
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' "$@"
+  else
+    sed -i "$@"
+  fi
+}
+
+if [ ! -f "config/genesis-reth.json" ]; then
+  cp config/genesis.json config/genesis-reth.json
+  BLKNO=$(grep "legacyXLayerBlock" config/genesis.json | tr -d ', ' | cut -d ':' -f 2)
+  if [ -z "$BLKNO" ]; then
+    echo "❌ Error: Failed to extract legacyXLayerBlock from genesis.json"
+    exit 1
+  fi
+  sed_inplace 's/"number": "0x0"/"number": "'"$BLKNO"'"/' ./config/genesis-reth.json
+  echo "✅ Genesis file extracted successfully to config/genesis-reth.json"
+fi
+
 # Initialize op-geth with the genesis file
 echo "🔧 Initializing op-geth with genesis file... (It may take a while, please wait patiently.)"
 docker run --rm \
