@@ -18,12 +18,13 @@ TEMP_DIR="/tmp/xlayer-setup-$$"
 
 # Default values
 DEFAULT_NETWORK="testnet"
+DEFAULT_RPC_TYPE="geth"
 DEFAULT_DATA_DIR="./data"
 DEFAULT_RPC_PORT="8123"
 DEFAULT_ENGINE_API_PORT="8552"
 DEFAULT_WS_PORT="8546"
 DEFAULT_NODE_RPC_PORT="9545"
-DEFAULT_GETH_P2P_PORT="30303"
+DEFAULT_RPC_P2P_PORT="30303"
 DEFAULT_NODE_P2P_PORT="9223"
 
 # Testnet configuration
@@ -31,23 +32,27 @@ TESTNET_BOOTNODE_OP_NODE="enode://eaae9fe2fc758add65fe4cfd42918e898e16ab23294db8
 TESTNET_BOOTNODE_OP_GETH="enode://2104d54a7fbd58a408590035a3628f1e162833c901400d490ccc94de416baf13639ce2dad388b7a5fd43c535468c106b660d42d94451e39b08912005aa4e4195@8.210.181.50:30303"
 TESTNET_OP_STACK_IMAGE="xlayer/op-stack:release-testnet"
 TESTNET_OP_GETH_IMAGE="xlayer/op-geth:release-testnet"
+TESTNET_OP_RETH_IMAGE="xlayer/op-reth:release-testnet"
 
 # Mainnet configuration (for future use)
 MAINNET_BOOTNODE_OP_NODE=""
 MAINNET_BOOTNODE_OP_GETH=""
 MAINNET_OP_STACK_IMAGE="xlayer/op-stack:release"
 MAINNET_OP_GETH_IMAGE="xlayer/op-geth:release"
+MAINNET_OP_RETH_IMAGE="xlayer/op-reth:release"
 
 # User input variables
 NETWORK_TYPE=""
 L1_RPC_URL=""
+L1_BEACON_URL=""
 DATA_DIR=""
 RPC_PORT=""
 ENG_PORT=""
 WS_PORT=""
 NODE_RPC_PORT=""
-GETH_P2P_PORT=""
+RPC_P2P_PORT=""
 NODE_P2P_PORT=""
+DOCKER_COMPOSE_CMD=""
 
 # Function to print colored output
 print_info() {
@@ -92,11 +97,16 @@ check_system_requirements() {
     fi
 
     # Check Docker Compose
-    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+    if docker compose version &> /dev/null; then
+        DOCKER_COMPOSE_CMD="docker compose"
+    elif command -v docker-compose &> /dev/null; then
+        DOCKER_COMPOSE_CMD="docker-compose"
+    else
         print_error "Docker Compose is not installed. Please install Docker Compose 2.0+ first."
         print_info "Visit: https://docs.docker.com/compose/install/"
         exit 1
     fi
+    print_info "Using Docker Compose command: $DOCKER_COMPOSE_CMD"
 
     # Check Docker daemon
     if ! docker info &> /dev/null; then
@@ -140,6 +150,7 @@ download_config_files() {
     mkdir -p "$TEMP_DIR"
 
     # Download configuration files
+    # TODO: Download op-reth-config-testnet.toml and entrypoint/reth-rpc.sh
     local config_files=(
         "config/rollup.json"
         "config/op-geth-config-testnet.toml"
@@ -149,7 +160,9 @@ download_config_files() {
 
     for file in "${config_files[@]}"; do
         print_info "Downloading $file..."
-        if ! wget -q "$REPO_URL/$file" -O "$TEMP_DIR/$(basename "$file")"; then
+        local target_file="$TEMP_DIR/$file"
+        mkdir -p "$(dirname "$target_file")"
+        if ! wget -q "$REPO_URL/$file" -O "$target_file"; then
             print_error "Failed to download $file"
             exit 1
         fi
@@ -168,12 +181,14 @@ get_user_input() {
         print_info "🚀 Auto-mode: Using default configuration"
         NETWORK_TYPE="$DEFAULT_NETWORK"
         L1_RPC_URL="https://placeholder-l1-rpc-url"
+        L1_BEACON_URL="https://placeholder-l1-beacon-url"
+        L2_ENGINEKIND="$DEFAULT_RPC_TYPE"
         DATA_DIR="$DEFAULT_DATA_DIR"
         RPC_PORT="$DEFAULT_RPC_PORT"
         ENG_PORT="$DEFAULT_ENGINE_API_PORT"
         WS_PORT="$DEFAULT_WS_PORT"
         NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
-        GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
+        RPC_P2P_PORT="$DEFAULT_RPC_P2P_PORT"
         NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
         print_warning "⚠️  L1 URLs will need to be configured after setup"
         return 0
@@ -215,35 +230,63 @@ get_user_input() {
         fi
     done
 
+    # L1 Beacon URL
+    while true; do
+        echo -n "3. L1 Beacon URL (Ethereum L1 Beacon endpoint): "
+        read -r L1_BEACON_URL
+        if [[ -n "$L1_BEACON_URL" ]]; then
+            # Basic URL validation
+            if [[ "$L1_BEACON_URL" =~ ^https?:// ]]; then
+                break
+            else
+                print_error "Please enter a valid HTTP/HTTPS URL"
+            fi
+        else
+            print_error "L1 Beacon URL is required"
+        fi
+    done
+
     # Optional configurations
     echo ""
     print_info "Optional configurations (press Enter to use defaults):"
 
-    echo -n "3. Data directory [default: $DEFAULT_DATA_DIR]: "
+    # RPC Type
+    while true; do
+        echo -n "4. RPC Type (geth/reth) [default: $DEFAULT_RPC_TYPE]: "
+        read -r input
+        L2_ENGINEKIND="${input:-$DEFAULT_RPC_TYPE}"
+        if [[ "$L2_ENGINEKIND" == "geth" || "$L2_ENGINEKIND" == "reth" ]]; then
+            break
+        else
+            print_error "Invalid RPC type. Please enter 'geth' or 'reth'"
+        fi
+    done
+
+    echo -n "5. Data directory [default: $DEFAULT_DATA_DIR]: "
     read -r input
     DATA_DIR="${input:-$DEFAULT_DATA_DIR}"
 
-    echo -n "4. RPC port [default: $DEFAULT_RPC_PORT]: "
+    echo -n "6. RPC port [default: $DEFAULT_RPC_PORT]: "
     read -r input
     RPC_PORT="${input:-$DEFAULT_RPC_PORT}"
 
-    echo -n "5. Engine API port [default: $DEFAULT_ENGINE_API_PORT]: "
+    echo -n "7. Engine API port [default: $DEFAULT_ENGINE_API_PORT]: "
     read -r input
     ENG_PORT="${input:-$DEFAULT_ENGINE_API_PORT}"
 
-    echo -n "6. WebSocket port [default: $DEFAULT_WS_PORT]: "
+    echo -n "8. WebSocket port [default: $DEFAULT_WS_PORT]: "
     read -r input
     WS_PORT="${input:-$DEFAULT_WS_PORT}"
 
-    echo -n "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: "
+    echo -n "9. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: "
     read -r input
     NODE_RPC_PORT="${input:-$DEFAULT_NODE_RPC_PORT}"
 
-    echo -n "8. Geth P2P port [default: $DEFAULT_GETH_P2P_PORT]: "
+    echo -n "10. RPC P2P port [default: $DEFAULT_RPC_P2P_PORT]: "
     read -r input
-    GETH_P2P_PORT="${input:-$DEFAULT_GETH_P2P_PORT}"
+    RPC_P2P_PORT="${input:-$DEFAULT_RPC_P2P_PORT}"
 
-    echo -n "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: "
+    echo -n "11. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: "
     read -r input
     NODE_P2P_PORT="${input:-$DEFAULT_NODE_P2P_PORT}"
 
@@ -259,17 +302,22 @@ generate_config_files() {
     cd "$WORK_DIR"
 
     # Create necessary directories
-    mkdir -p config data/op-node/p2p
+    mkdir -p config entrypoint data/op-node/p2p
 
     # Generate .env file
     print_info "Generating .env file..."
     cat > .env << EOF
 # X Layer $NETWORK_TYPE Configuration
 L1_RPC_URL=$L1_RPC_URL
+L1_BEACON_URL=$L1_BEACON_URL
 
 # Bootnode Configuration
 OP_NODE_BOOTNODE=$TESTNET_BOOTNODE_OP_NODE
 OP_GETH_BOOTNODE=$TESTNET_BOOTNODE_OP_GETH
+
+# RPC Type
+L2_ENGINEKIND=$L2_ENGINEKIND
+RPC_TYPE=op-$L2_ENGINEKIND
 
 # Docker Image Tags
 OP_STACK_IMAGE_TAG=$TESTNET_OP_STACK_IMAGE
@@ -280,14 +328,20 @@ OP_RETH_IMAGE_TAG=$TESTNET_OP_RETH_IMAGE
 HTTP_RPC_PORT=$RPC_PORT
 ENGINE_API_PORT=$ENG_PORT
 WEBSOCKET_PORT=$WS_PORT
-P2P_TCP_PORT=$GETH_P2P_PORT
-P2P_UDP_PORT=$GETH_P2P_PORT
+P2P_TCP_PORT=$RPC_P2P_PORT
+P2P_UDP_PORT=$RPC_P2P_PORT
 NODE_RPC_PORT=$NODE_RPC_PORT
 EOF
 
     # Copy configuration files from temp directory
-    cp "$TEMP_DIR/rollup.json" config/
-    cp "$TEMP_DIR/op-geth-config-testnet.toml" config/
+    cp "$TEMP_DIR/config/rollup.json" config/
+    cp "$TEMP_DIR/config/op-geth-config-testnet.toml" config/
+    # TODO: Copy docker-compose.yml
+    # cp "$TEMP_DIR/docker-compose.yml" .
+    # TODO: Copy op-reth-config-testnet.toml
+    # cp "$TEMP_DIR/config/op-reth-config-testnet.toml" config/
+    # TODO: Copy entrypoint/reth-rpc.sh
+    # cp "$TEMP_DIR/entrypoint/reth-rpc.sh" entrypoint/
 
     print_success "Configuration files generated successfully"
 }
@@ -296,6 +350,12 @@ EOF
 initialize_node() {
     print_info "Initializing X Layer RPC node..."
 
+    if [ ! -f "./init.sh" ]; then
+        print_error "init.sh not found in current directory"
+        exit 1
+    fi
+
+    chmod +x ./init.sh
     ./init.sh $NETWORK_TYPE
 
     print_success "X Layer RPC node initialization completed"
@@ -305,6 +365,12 @@ initialize_node() {
 start_services() {
     print_info "Starting Docker services..."
 
+    if [ ! -f "./start.sh" ]; then
+        print_error "start.sh not found in current directory"
+        exit 1
+    fi
+
+    chmod +x ./start.sh
     ./start.sh $NETWORK_TYPE
 
     print_success "X Layer RPC node startup completed"
@@ -318,9 +384,9 @@ verify_installation() {
     sleep 10
 
     # Check if services are running
-    if ! docker compose ps | grep -q "Up"; then
+    if ! $DOCKER_COMPOSE_CMD ps | grep -q "Up"; then
         print_error "Some services are not running properly"
-        print_info "Check logs with: docker compose logs"
+        print_info "Check logs with: $DOCKER_COMPOSE_CMD logs"
         return 1
     fi
 
@@ -352,9 +418,9 @@ display_connection_info() {
     echo "  Node RPC: http://localhost:$NODE_RPC_PORT"
     echo ""
     echo "🔍 Service Management:"
-    echo "  View logs: docker compose logs -f"
-    echo "  Stop services: docker compose down"
-    echo "  Restart services: docker compose restart"
+    echo "  View logs: $DOCKER_COMPOSE_CMD logs -f"
+    echo "  Stop services: $DOCKER_COMPOSE_CMD down"
+    echo "  Restart services: $DOCKER_COMPOSE_CMD restart"
     echo ""
     echo "🧪 Test Commands:"
     echo "  Test RPC: curl http://127.0.0.1:$RPC_PORT \\"
@@ -375,7 +441,7 @@ display_connection_info() {
         print_info "1. Edit .env file: nano .env"
         print_info "2. Update L1 URLs:"
         echo "   L1_RPC_URL=https://your-ethereum-l1-rpc-endpoint"
-        print_info "3. Restart: docker compose down && docker compose up -d"
+        print_info "3. Restart: $DOCKER_COMPOSE_CMD down && $DOCKER_COMPOSE_CMD up -d"
         echo ""
     fi
 
