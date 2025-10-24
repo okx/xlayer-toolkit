@@ -343,9 +343,10 @@ rpc-setup/
 │   └── jwt.txt                 # JWT secret (auto-generated)
 ├── data/                        # Blockchain data directory
 │   ├── op-node/                # op-node data
+|   ├── op-geth/                # op-geth data (if using geth)
 │   └── op-reth/                # op-reth data (if using reth)
 └── entrypoint/                  # Custom entrypoint scripts
-    └── reth-rpc.sh             # Reth RPC entrypoint
+    └── reth-rpc.sh             # Reth RPC docker entrypoint
 ```
 
 ## Advanced Configuration
