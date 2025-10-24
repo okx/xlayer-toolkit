@@ -304,6 +304,7 @@ services:
       - --db.engine=pebble
       - --gcmode=archive
       - --rollup.enabletxpooladmission
+      - --rollup.sequencerhttp=https://testrpc.xlayer.tech
     networks:
       - xlayer-network
     healthcheck:
