@@ -8,11 +8,11 @@ services:
     container_name: xlayer-op-geth
     entrypoint: geth
     ports:
-      - "8123:8545"   # HTTP RPC
-      - "8552:8552"
-      - "7546:7546"
-      - "30303:30303" # P2P TCP
-      - "30303:30303/udp" # P2P UDP
+      - "${HTTP_RPC_PORT:-8123}:8545"   # HTTP RPC
+      - "${ENGINE_API_PORT:-8552}:8552"
+      - "${WEBSOCKET_PORT:-7546}:7546"
+      - "${P2P_TCP_PORT:-30303}:30303" # P2P TCP
+      - "${P2P_UDP_PORT:-30303}:30303/udp" # P2P UDP
     volumes:
       - ./data/op-geth:/data
       - ./config/jwt.txt:/jwt.txt
@@ -49,11 +49,11 @@ services:
       - ./entrypoint/reth-rpc.sh:/entrypoint/reth-rpc.sh
       - ./.env:/app/.env
     ports:
-      - "8123:8545"
-      - "7546:7546"
-      - "8552:8552"
-      - "30303:30303"
-      - "30303:30303/udp"
+      - "${HTTP_RPC_PORT:-8123}:8545"
+      - "${WEBSOCKET_PORT:-7546}:7546"
+      - "${ENGINE_API_PORT:-8552}:8552"
+      - "${P2P_TCP_PORT:-30303}:30303"
+      - "${P2P_UDP_PORT:-30303}:30303/udp"
     healthcheck:
       test: ["CMD", "curl", "-X", "POST", "http://localhost:8545"]
       interval: 3s
@@ -67,7 +67,7 @@ services:
     networks:
       - xlayer-network
     ports:
-      - "9545:9545"
+      - "${NODE_RPC_PORT:-9545}:9545"
     volumes:
       - ./data/op-node:/data
       - ./config/rollup.json:/rollup.json
