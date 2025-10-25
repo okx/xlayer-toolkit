@@ -65,7 +65,7 @@ services:
       #- --p2p.static=enode://eaae9fe2fc758add65fe4cfd42918e898e16ab23294db88f0dcdbcab2773e75bbea6bfdaa42b3ed502dfbee1335c242c602078c4aa009264e4705caa20d3dca7@8.210.181.50:9223
       - --rpc.enable-admin=true
       - --l1=${L1_RPC_URL}
-      - --l1.beacon.ignore=true
+      - --l1.beacon=${L1_BEACON_URL}
       - --l1.rpckind=standard
       - --conductor.enabled=false
       - --safedb.path=/data/safedb
