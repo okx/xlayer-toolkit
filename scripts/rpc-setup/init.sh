@@ -38,32 +38,50 @@ source .env
 echo "🚀 Initializing X Layer Self-hosted RPC node for $NETWORK_TYPE network..."
 
 mkdir -p data
+mkdir -p config
 
-# Download the genesis file
-echo "📥 Downloading genesis file..."
-wget -c https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz -O merged.genesis.json.tar.gz
-
-# Extract the genesis file
-echo "📦 Extracting genesis file..."
-tar -xzf merged.genesis.json.tar.gz -C config/
-mv config/merged.genesis.json config/genesis.json
-
-# Clean up the downloaded archive
-echo "🧹 Cleaning up downloaded archive..."
-rm merged.genesis.json.tar.gz
-
-# Check if genesis.json exists
 if [ ! -f "config/genesis.json" ]; then
-    echo "❌ Error: Failed to extract genesis.json"
-    exit 1
+  # Download the genesis file
+  echo "📥 Downloading genesis file..."
+  wget -c https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz -O merged.genesis.json.tar.gz
+
+  # Extract the genesis file
+  echo "📦 Extracting genesis file..."
+  tar -xzf merged.genesis.json.tar.gz -C config/
+  mv config/merged.genesis.json config/genesis.json
+
+  # Clean up the downloaded archive
+  echo "🧹 Cleaning up downloaded archive..."
+  rm merged.genesis.json.tar.gz
+
+  echo "✅ Genesis file extracted successfully to config/genesis.json"
 fi
 
-echo "✅ Genesis file extracted successfully to config/genesis.json"
+# Prepare genesis file for Reth RPC
+sed_inplace() {
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    sed -i '' "$@"
+  else
+    sed -i "$@"
+  fi
+}
 
+if [ ! -f "config/genesis-reth.json" ]; then
+  cp config/genesis.json config/genesis-reth.json
+  BLKNO=$(grep "legacyXLayerBlock" config/genesis.json | tr -d ', ' | cut -d ':' -f 2)
+  if [ -z "$BLKNO" ]; then
+    echo "❌ Error: Failed to extract legacyXLayerBlock from genesis.json"
+    exit 1
+  fi
+  sed_inplace 's/"number": "0x0"/"number": "'"$BLKNO"'"/' ./config/genesis-reth.json
+  echo "✅ Genesis file extracted successfully to config/genesis-reth.json"
+fi
+
+if [ "${L2_ENGINEKIND}" = "geth" ]; then
 # Initialize op-geth with the genesis file
-echo "🔧 Initializing op-geth with genesis file... (It may take a while, please wait patiently.)"
-docker run --rm \
-    -v "$(pwd)/data:/data" \
+  echo "🔧 Initializing op-geth with genesis file... (It may take a while, please wait patiently.)"
+  docker run --rm \
+    -v "$(pwd)/data/op-geth:/data" \
     -v "$(pwd)/config/genesis.json:/genesis.json" \
     ${OP_GETH_IMAGE_TAG} \
     --datadir /data \
@@ -73,6 +91,7 @@ docker run --rm \
     init \
     --state.scheme=hash \
     /genesis.json
+fi
 
 echo "✅ X Layer RPC node initialization completed!"
 echo ""
