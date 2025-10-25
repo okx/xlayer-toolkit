@@ -90,7 +90,6 @@ services:
       - --p2p.bootnodes=${OP_NODE_BOOTNODE}
       - --rpc.enable-admin=true
       - --l1=${L1_RPC_URL}
-      # - --l1.beacon.ignore=true
       - --l1.beacon=${L1_BEACON_URL}
       - --l1.rpckind=standard
       - --conductor.enabled=false

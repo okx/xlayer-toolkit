@@ -232,7 +232,7 @@ get_user_input() {
 
     # L1 Beacon URL
     while true; do
-        echo -n "3. L1 Beacon URL (Ethereum L1 Beacon endpoint): "
+        echo -n "3. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
         read -r L1_BEACON_URL
         if [[ -n "$L1_BEACON_URL" ]]; then
             # Basic URL validation
@@ -441,6 +441,7 @@ display_connection_info() {
         print_info "1. Edit .env file: nano .env"
         print_info "2. Update L1 URLs:"
         echo "   L1_RPC_URL=https://your-ethereum-l1-rpc-endpoint"
+        echo "   L1_BEACON_URL=https://your-ethereum-l1-beacon-endpoint"
         print_info "3. Restart: $DOCKER_COMPOSE_CMD down && $DOCKER_COMPOSE_CMD up -d"
         echo ""
     fi
