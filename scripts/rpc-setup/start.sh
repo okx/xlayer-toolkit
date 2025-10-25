@@ -39,7 +39,7 @@ fi
 source .env
 
 # Check required environment variables
-required_vars=("L1_RPC_URL" "OP_NODE_BOOTNODE" "OP_GETH_BOOTNODE")
+required_vars=("L1_RPC_URL" "L1_BEACON_URL" "OP_NODE_BOOTNODE" "OP_GETH_BOOTNODE")
 for var in "${required_vars[@]}"; do
     if [ -z "${!var}" ]; then
         echo "❌ Error: Environment variable $var is not set"
