@@ -1,0 +1,13 @@
+# Environment files
+.env
+
+# Log files
+*.log
+
+# Binary
+rpc-compare
+
+# Build artifacts
+*.o
+*.exe
+
