@@ -25,7 +25,7 @@ TESTNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/x
 
 # Mainnet configuration
 MAINNET_OP_GETH_IMAGE="xlayer/op-geth:v0.0.6"
-MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
+MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.test.tar.gz"
 
 # Load network-specific configuration
 case "$NETWORK_TYPE" in
