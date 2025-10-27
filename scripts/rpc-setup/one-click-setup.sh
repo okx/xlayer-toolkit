@@ -214,11 +214,6 @@ get_user_input() {
         fi
     done
     
-    # Validate mainnet configuration
-    if [[ "$NETWORK_TYPE" == "mainnet" ]]; then
-        validate_network_config "mainnet" || exit 1
-    fi
-    
     # L1 RPC URL
     while true; do
         echo -n "2. L1 RPC URL (Ethereum L1 RPC endpoint): "
