@@ -304,6 +304,23 @@ generate_config_files() {
     # Create necessary directories
     mkdir -p "$CONFIG_DIR" "$DATA_DIR/op-node/p2p" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
     
+    # Generate JWT secret for this network
+    print_info "Generating JWT secret for $NETWORK_TYPE..."
+    if [ ! -s "$CONFIG_DIR/jwt.txt" ]; then
+        openssl rand -hex 32 | tr -d '\n' > "$CONFIG_DIR/jwt.txt"
+        print_success "JWT secret generated at $CONFIG_DIR/jwt.txt"
+    else
+        print_info "Using existing JWT secret from $CONFIG_DIR/jwt.txt"
+    fi
+    
+    # Verify JWT file format
+    JWT_CONTENT=$(cat "$CONFIG_DIR/jwt.txt" 2>/dev/null | tr -d '\n\r ' || echo "")
+    if [ ${#JWT_CONTENT} -ne 64 ]; then
+        print_warning "JWT file has incorrect format (expected 64 hex chars, got ${#JWT_CONTENT}), regenerating..."
+        openssl rand -hex 32 | tr -d '\n' > "$CONFIG_DIR/jwt.txt"
+        print_success "JWT secret regenerated"
+    fi
+    
     # Generate .env file
     print_info "Generating .env file..."
     cat > .env << EOF
@@ -422,10 +439,16 @@ initialize_node() {
     if [ -d "$DATA_DIR/geth" ]; then
         print_warning "Data directory $DATA_DIR already contains a geth database."
         print_warning "This might be initialized for a different network."
-        print_warning "Cleaning up old data directory..."
-        rm -rf "$DATA_DIR"
-        # Recreate necessary directories
-        mkdir -p "$DATA_DIR/op-node/p2p"
+        read -p "Do you want to remove the existing data and reinitialize? (y/N): " -r
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Cleaning up old data directory..."
+            rm -rf "$DATA_DIR"
+            # Recreate necessary directories
+            mkdir -p "$DATA_DIR/op-node/p2p"
+            print_success "Old data removed"
+        else
+            print_info "Keeping existing data directory"
+        fi
     fi
     
     # Download the genesis file
@@ -458,6 +481,28 @@ initialize_node() {
     
     print_success "Genesis file extracted successfully to $CONFIG_DIR/$GENESIS_FILE"
     
+    # Verify genesis file chain ID matches network configuration
+    print_info "Verifying genesis file chain ID..."
+    if command -v jq &> /dev/null; then
+        GENESIS_CHAIN_ID=$(jq -r '.config.chainId // .chainId' "$CONFIG_DIR/$GENESIS_FILE" 2>/dev/null || echo "")
+        if [ -n "$GENESIS_CHAIN_ID" ]; then
+            print_info "Genesis file chain ID: $GENESIS_CHAIN_ID"
+            # Validate against expected chain IDs
+            if [ "$NETWORK_TYPE" == "testnet" ] && [ "$GENESIS_CHAIN_ID" != "1952" ]; then
+                print_error "Genesis file chain ID mismatch! Expected 1952 (testnet), got $GENESIS_CHAIN_ID"
+                exit 1
+            elif [ "$NETWORK_TYPE" == "mainnet" ] && [ "$GENESIS_CHAIN_ID" != "196" ]; then
+                print_error "Genesis file chain ID mismatch! Expected 196 (mainnet), got $GENESIS_CHAIN_ID"
+                exit 1
+            fi
+            print_success "Genesis file chain ID verified"
+        else
+            print_warning "Could not read chain ID from genesis file, skipping verification"
+        fi
+    else
+        print_warning "jq not found, skipping chain ID verification"
+    fi
+    
     # Initialize op-geth with the genesis file
     print_info "Initializing op-geth with genesis file... (This may take a while, please wait patiently.)"
     docker run --rm \
@@ -479,10 +524,15 @@ initialize_node() {
 start_services() {
     print_info "Starting Docker services..."
     
-    # Generate JWT secret
-    if [ ! -s "$CONFIG_DIR/jwt.txt" ]; then
-        print_info "Generating JWT secret..."
-        openssl rand -hex 32 > "$CONFIG_DIR/jwt.txt"
+    # Load network configuration to ensure CONFIG_DIR is set
+    load_network_config "$NETWORK_TYPE"
+    CONFIG_DIR="config-${NETWORK_TYPE}"
+    
+    # Verify JWT file exists
+    if [ ! -f "$CONFIG_DIR/jwt.txt" ]; then
+        print_error "JWT file not found at $CONFIG_DIR/jwt.txt"
+        print_info "Please run the setup script again to generate JWT secret"
+        exit 1
     fi
     
     # Start services
