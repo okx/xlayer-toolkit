@@ -28,15 +28,24 @@ DEFAULT_NODE_P2P_PORT="9223"
 # Testnet configuration
 TESTNET_BOOTNODE_OP_NODE="enode://eaae9fe2fc758add65fe4cfd42918e898e16ab23294db88f0dcdbcab2773e75bbea6bfdaa42b3ed502dfbee1335c242c602078c4aa009264e4705caa20d3dca7@8.210.181.50:9223"
 TESTNET_P2P_STATIC="/ip4/47.242.219.101/tcp/9223/p2p/16Uiu2HAkwUdbn9Q7UBKQYRsfjm9SQX5Yc2e96HUz2pyR3cw1FZLv,/ip4/47.242.235.15/tcp/9223/p2p/16Uiu2HAmThDG9xMpADbyGo1oCU8fndztwNg1PH6A7yp1BhCk5jfE"
-TESTNET_BOOTNODE_OP_GETH="enode://2104d54a7fbd58a408590035a3628f1e162833c901400d490ccc94de416baf13639ce2dad388b7a5fd43c535468c106b660d42d94451e39b08912005aa4e4195@8.210.181.50:30303"
-TESTNET_OP_STACK_IMAGE="xlayer/op-stack:release-testnet"
-TESTNET_OP_GETH_IMAGE="xlayer/op-geth:release-testnet"
+TESTNET_OP_STACK_IMAGE="xlayer/op-stack:v0.0.6"
+TESTNET_OP_GETH_IMAGE="xlayer/op-geth:v0.0.6"
+TESTNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
+TESTNET_SEQUENCER_HTTP="https://testrpc.xlayer.tech"
+TESTNET_ROLLUP_CONFIG="rollup-testnet.json"
+TESTNET_GETH_CONFIG="op-geth-config-testnet.toml"
 
-# Mainnet configuration (for future use)
-MAINNET_BOOTNODE_OP_NODE=""
-MAINNET_BOOTNODE_OP_GETH=""
-MAINNET_OP_STACK_IMAGE="xlayer/op-stack:release"
-MAINNET_OP_GETH_IMAGE="xlayer/op-geth:release"
+# Mainnet configuration
+# TODO: fix config
+MAINNET_BOOTNODE_OP_NODE="enode://c67d7f63c5483ab8311123d2997bfe6a8aac2b117a40167cf71682f8a3e37d3b86547c786559355c4c05ae0b1a7e7a1b8fde55050b183f96728d62e276467ce1@8.210.177.150:9223,enode://28e3e305b266e01226a7cc979ab692b22507784095157453ee0e34607bb3beac9a5b00f3e3d7d3ac36164612ca25108e6b79f75e3a9ecb54a0b3e7eb3e097d37@8.210.15.172:9223,enode://b5aa43622aad25c619650a0b7f8bb030161dfbfd5664233f92d841a33b404cea3ffffdc5bc8d6667c7dc212242a52f0702825c1e51612047f75c847ab96ef7a6@8.210.69.97:9223"
+MAINNET_P2P_STATIC="/ip4/47.242.38.0/tcp/9223/p2p/16Uiu2HAmH1AVhKWR29mb5s8Cubgsbh4CH1G86A6yoVtjrLWQgiY3,/ip4/8.210.153.12/tcp/9223/p2p/16Uiu2HAkuerkmQYMZxYiQYfQcPob9H7XHPwS7pd8opPTMEm2nsAp,/ip4/8.210.117.27/tcp/9223/p2p/16Uiu2HAmQEzn2WQj4kmWVrK9aQsfyQcETgXQKjcKGrTPsKcJBv7a"
+MAINNET_OP_STACK_IMAGE="xlayer/op-stack:v0.0.6"
+MAINNET_OP_GETH_IMAGE="xlayer/op-geth:v0.0.6"
+# TODO: 填写主网 genesis 文件 URL
+MAINNET_GENESIS_URL=""
+MAINNET_SEQUENCER_HTTP="https://rpc.xlayer.tech"
+MAINNET_ROLLUP_CONFIG="rollup-mainnet.json"
+MAINNET_GETH_CONFIG="op-geth-config-mainnet.toml"
 
 # User input variables
 NETWORK_TYPE=""
@@ -73,6 +82,39 @@ print_header() {
     echo "=========================================="
     echo -e "${NC}"
 }
+
+# Function to load network-specific configuration
+load_network_config() {
+    local network=$1
+    
+    case "$network" in
+        testnet)
+            OP_NODE_BOOTNODE="$TESTNET_BOOTNODE_OP_NODE"
+            P2P_STATIC="$TESTNET_P2P_STATIC"
+            OP_STACK_IMAGE_TAG="$TESTNET_OP_STACK_IMAGE"
+            OP_GETH_IMAGE_TAG="$TESTNET_OP_GETH_IMAGE"
+            GENESIS_URL="$TESTNET_GENESIS_URL"
+            SEQUENCER_HTTP="$TESTNET_SEQUENCER_HTTP"
+            ROLLUP_CONFIG="$TESTNET_ROLLUP_CONFIG"
+            GETH_CONFIG="$TESTNET_GETH_CONFIG"
+            ;;
+        mainnet)
+            OP_NODE_BOOTNODE="$MAINNET_BOOTNODE_OP_NODE"
+            P2P_STATIC="$MAINNET_P2P_STATIC"
+            OP_STACK_IMAGE_TAG="$MAINNET_OP_STACK_IMAGE"
+            OP_GETH_IMAGE_TAG="$MAINNET_OP_GETH_IMAGE"
+            GENESIS_URL="$MAINNET_GENESIS_URL"
+            SEQUENCER_HTTP="$MAINNET_SEQUENCER_HTTP"
+            ROLLUP_CONFIG="$MAINNET_ROLLUP_CONFIG"
+            GETH_CONFIG="$MAINNET_GETH_CONFIG"
+            ;;
+        *)
+            print_error "Unknown network type: $network"
+            exit 1
+            ;;
+    esac
+}
+
 
 # Function to check system requirements
 check_system_requirements() {
@@ -117,18 +159,20 @@ download_config_files() {
     # Create temporary directory
     mkdir -p "$TEMP_DIR"
     
-    # Download configuration files
+    # Load network-specific configuration to know which files to download
+    load_network_config "$NETWORK_TYPE"
+    
+    # Download configuration files based on network
     local config_files=(
-        "config/rollup.json"
-        "config/op-geth-config-testnet.toml"
-        "docker-compose.yml"
-        "env.example"
+        "config/$ROLLUP_CONFIG"
+        "config/$GETH_CONFIG"
     )
     
     for file in "${config_files[@]}"; do
         print_info "Downloading $file..."
         if ! wget -q "$REPO_URL/$file" -O "$TEMP_DIR/$(basename "$file")"; then
             print_error "Failed to download $file"
+            print_info "If this is a mainnet config file, make sure it exists in the repository"
             exit 1
         fi
     done
@@ -170,11 +214,9 @@ get_user_input() {
         fi
     done
     
-    # Check if mainnet is supported
+    # Validate mainnet configuration
     if [[ "$NETWORK_TYPE" == "mainnet" ]]; then
-        print_error "Mainnet is not currently supported"
-        print_info "Please use 'testnet' for now. Mainnet support will be available in future releases."
-        exit 1
+        validate_network_config "mainnet" || exit 1
     fi
     
     # L1 RPC URL
@@ -248,8 +290,17 @@ generate_config_files() {
     WORK_DIR="$SCRIPT_DIR"
     cd "$WORK_DIR"
     
+    # Load network-specific configuration
+    load_network_config "$NETWORK_TYPE"
+    
+    # Network-specific directories
+    DATA_DIR="data-${NETWORK_TYPE}"
+    CONFIG_DIR="config-${NETWORK_TYPE}"
+    GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
+    LOGS_DIR="logs-${NETWORK_TYPE}"
+    
     # Create necessary directories
-    mkdir -p config data/op-node/p2p logs/op-geth logs/op-node
+    mkdir -p "$CONFIG_DIR" "$DATA_DIR/op-node/p2p" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
     
     # Generate .env file
     print_info "Generating .env file..."
@@ -258,18 +309,17 @@ generate_config_files() {
 L1_RPC_URL=$L1_RPC_URL
 L1_BEACON_URL=$L1_BEACON_URL
 
-# Bootnode Configuration
-OP_NODE_BOOTNODE=$TESTNET_BOOTNODE_OP_NODE
-OP_GETH_BOOTNODE=$TESTNET_BOOTNODE_OP_GETH
+# Bootnode Configuration (only for OP-Node)
+OP_NODE_BOOTNODE=$OP_NODE_BOOTNODE
 
 # Docker Image Tags
-OP_STACK_IMAGE_TAG=$TESTNET_OP_STACK_IMAGE
-OP_GETH_IMAGE_TAG=$TESTNET_OP_GETH_IMAGE
+OP_STACK_IMAGE_TAG=$OP_STACK_IMAGE_TAG
+OP_GETH_IMAGE_TAG=$OP_GETH_IMAGE_TAG
 EOF
     
     # Copy configuration files from temp directory
-    cp "$TEMP_DIR/rollup.json" config/
-    cp "$TEMP_DIR/op-geth-config-testnet.toml" config/
+    cp "$TEMP_DIR/$ROLLUP_CONFIG" "$CONFIG_DIR/"
+    cp "$TEMP_DIR/$GETH_CONFIG" "$CONFIG_DIR/"
     
     # Generate docker-compose.yml with custom ports
     print_info "Generating docker-compose.yml with custom ports..."
@@ -283,7 +333,7 @@ networks:
 services:
   op-geth:
     image: "\${OP_GETH_IMAGE_TAG}"
-    container_name: xlayer-op-geth
+    container_name: xlayer-${NETWORK_TYPE}-op-geth
     entrypoint: geth
     ports:
       - "$RPC_PORT:8545"   # HTTP RPC
@@ -292,10 +342,10 @@ services:
       - "$GETH_P2P_PORT:30303" # P2P TCP
       - "$GETH_P2P_PORT:30303/udp" # P2P UDP
     volumes:
-      - ./data:/data
-      - ./config/jwt.txt:/jwt.txt
-      - ./config/op-geth-config-testnet.toml:/config.toml
-      - ./logs/op-geth:/var/log/op-geth
+      - ./$DATA_DIR:/data
+      - ./$CONFIG_DIR/jwt.txt:/jwt.txt
+      - ./$CONFIG_DIR/$GETH_CONFIG:/config.toml
+      - ./$LOGS_DIR/op-geth:/var/log/op-geth
     command:
       - --verbosity=3
       - --datadir=/data
@@ -303,7 +353,7 @@ services:
       - --db.engine=pebble
       - --gcmode=archive
       - --rollup.enabletxpooladmission
-      - --rollup.sequencerhttp=https://testrpc.xlayer.tech
+      - --rollup.sequencerhttp=$SEQUENCER_HTTP
       - --log.file=/var/log/op-geth/geth.log
     networks:
       - xlayer-network
@@ -316,17 +366,17 @@ services:
 
   op-node:
     image: "\${OP_STACK_IMAGE_TAG}"
-    container_name: xlayer-op-node
+    container_name: xlayer-${NETWORK_TYPE}-op-node
     entrypoint: sh
     networks:
       - xlayer-network
     ports:
       - "$NODE_RPC_PORT:9545"
     volumes:
-      - ./data/op-node:/data
-      - ./config/rollup.json:/rollup.json
-      - ./config/jwt.txt:/jwt.txt
-      - ./logs/op-node:/var/log/op-node
+      - ./$DATA_DIR/op-node:/data
+      - ./$CONFIG_DIR/$ROLLUP_CONFIG:/rollup.json
+      - ./$CONFIG_DIR/jwt.txt:/jwt.txt
+      - ./$LOGS_DIR/op-node:/var/log/op-node
     command:
       - -c
       - |
@@ -343,8 +393,8 @@ services:
           --p2p.listen.udp=$NODE_P2P_PORT \\
           --p2p.peerstore.path=/data/p2p/opnode_peerstore_db \\
           --p2p.discovery.path=/data/p2p/opnode_discovery_db \\
-          --p2p.bootnodes=$TESTNET_BOOTNODE_OP_NODE \\
-          --p2p.static=$TESTNET_P2P_STATIC \\
+          --p2p.bootnodes=$OP_NODE_BOOTNODE \\
+          --p2p.static=$P2P_STATIC \\
           --rpc.enable-admin=true \\
           --l1=\${L1_RPC_URL} \\
           --l1.beacon=\${L1_BEACON_URL} \\
@@ -363,33 +413,45 @@ EOF
 initialize_node() {
     print_info "Initializing X Layer RPC node..."
     
+    # Load network configuration
+    load_network_config "$NETWORK_TYPE"
+    
     # Download the genesis file
-    print_info "Downloading genesis file..."
-    wget -c https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz -O merged.genesis.json.tar.gz
+    print_info "Downloading genesis file from $GENESIS_URL..."
+    wget -c "$GENESIS_URL" -O genesis.tar.gz
     
     # Extract the genesis file
     print_info "Extracting genesis file..."
-    tar -xzf merged.genesis.json.tar.gz -C config/
-    mv config/merged.genesis.json config/genesis.json
+    tar -xzf genesis.tar.gz -C "$CONFIG_DIR/"
     
-    # Clean up the downloaded archive
-    print_info "Cleaning up downloaded archive..."
-    rm merged.genesis.json.tar.gz
-    
-    # Check if genesis.json exists
-    if [ ! -f "config/genesis.json" ]; then
-        print_error "Failed to extract genesis.json"
+    # Handle different genesis file names and rename to network-specific name
+    if [ -f "$CONFIG_DIR/merged.genesis.json" ]; then
+        mv "$CONFIG_DIR/merged.genesis.json" "$CONFIG_DIR/$GENESIS_FILE"
+    elif [ -f "$CONFIG_DIR/genesis.json" ]; then
+        mv "$CONFIG_DIR/genesis.json" "$CONFIG_DIR/$GENESIS_FILE"
+    else
+        print_error "Failed to find genesis.json in the archive"
         exit 1
     fi
     
-    print_success "Genesis file extracted successfully"
+    # Clean up the downloaded archive
+    print_info "Cleaning up downloaded archive..."
+    rm genesis.tar.gz
+    
+    # Check if genesis file exists
+    if [ ! -f "$CONFIG_DIR/$GENESIS_FILE" ]; then
+        print_error "Failed to extract genesis file"
+        exit 1
+    fi
+    
+    print_success "Genesis file extracted successfully to $CONFIG_DIR/$GENESIS_FILE"
     
     # Initialize op-geth with the genesis file
     print_info "Initializing op-geth with genesis file... (This may take a while, please wait patiently.)"
     docker run --rm \
-        -v "$(pwd)/data:/data" \
-        -v "$(pwd)/config/genesis.json:/genesis.json" \
-        "$TESTNET_OP_GETH_IMAGE" \
+        -v "$(pwd)/$DATA_DIR:/data" \
+        -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
+        "$OP_GETH_IMAGE_TAG" \
         --datadir /data \
         --gcmode=archive \
         --db.engine=pebble \
@@ -406,9 +468,9 @@ start_services() {
     print_info "Starting Docker services..."
     
     # Generate JWT secret
-    if [ ! -s config/jwt.txt ]; then
+    if [ ! -s "$CONFIG_DIR/jwt.txt" ]; then
         print_info "Generating JWT secret..."
-        openssl rand -hex 32 > config/jwt.txt
+        openssl rand -hex 32 > "$CONFIG_DIR/jwt.txt"
     fi
     
     # Start services
@@ -470,7 +532,7 @@ display_connection_info() {
     echo "  View logs: docker compose logs -f"
     echo "  View op-geth logs: docker compose logs -f op-geth"
     echo "  View op-node logs: docker compose logs -f op-node"
-    echo "  Persisted logs (full): ./logs/op-geth/ and ./logs/op-node/"
+    echo "  Persisted logs (full): ./$LOGS_DIR/op-geth/ and ./$LOGS_DIR/op-node/"
     echo "  Stop services: docker compose down"
     echo "  Restart services: docker compose restart"
     echo ""
