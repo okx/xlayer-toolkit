@@ -580,11 +580,11 @@ main() {
     # Check system requirements
     check_system_requirements
     
+    # Get user input FIRST (before downloading config files)
+    get_user_input
+    
     # Download configuration files
     download_config_files
-    
-    # Get user input
-    get_user_input
     
     # Generate configuration files
     generate_config_files
