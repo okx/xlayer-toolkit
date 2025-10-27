@@ -27,7 +27,7 @@ StaticNodes = [
 
 [Eth]
 NetworkId = 1952
-SyncMode = "archive"
+SyncMode = "full"
 
 
 [Eth.GPO]

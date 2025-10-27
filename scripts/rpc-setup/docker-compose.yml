@@ -10,7 +10,7 @@ services:
     container_name: xlayer-op-geth
     entrypoint: geth
     ports:
-      - "8123:8545"   # HTTP RPC
+      - "8545:8545"   # HTTP RPC
       - "8552:8552"
       - "7546:7546"
       - "30303:30303" # P2P TCP
