@@ -191,7 +191,7 @@ get_user_input() {
         NETWORK_TYPE="$DEFAULT_NETWORK"
         L1_RPC_URL="https://placeholder-l1-rpc-url"
         L1_BEACON_URL="https://placeholder-l1-beacon-url"
-        DATA_DIR="$DEFAULT_DATA_DIR"
+        DATA_DIR="data-${NETWORK_TYPE}"
         RPC_PORT="$DEFAULT_RPC_PORT"
         WS_PORT="$DEFAULT_WS_PORT"
         NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
@@ -255,9 +255,11 @@ get_user_input() {
     echo ""
     print_info "Optional configurations (press Enter to use defaults):"
     
-    echo -n "4. Data directory [default: $DEFAULT_DATA_DIR]: "
+    # Set default data directory based on network type
+    DEFAULT_NETWORK_DATA_DIR="data-${NETWORK_TYPE}"
+    echo -n "4. Data directory [default: $DEFAULT_NETWORK_DATA_DIR]: "
     read -r input
-    DATA_DIR="${input:-$DEFAULT_DATA_DIR}"
+    DATA_DIR="${input:-$DEFAULT_NETWORK_DATA_DIR}"
     
     echo -n "5. RPC port [default: $DEFAULT_RPC_PORT]: "
     read -r input
