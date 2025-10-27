@@ -109,15 +109,13 @@ echo "🐳 Generating docker-compose file for $NETWORK_TYPE..."
 
 # Generate docker-compose.yml with network-specific paths
 cat > docker-compose.yml << EOF
-version: '3.8'
-
 networks:
   xlayer-network:
     name: xlayer-network
 
 services:
   op-geth:
-    image: "\${OP_GETH_IMAGE_TAG}"
+    image: $OP_GETH_IMAGE_TAG
     container_name: xlayer-${NETWORK_TYPE}-op-geth
     entrypoint: geth
     ports:
@@ -150,7 +148,7 @@ services:
       start_period: 3s
 
   op-node:
-    image: "\${OP_STACK_IMAGE_TAG}"
+    image: $OP_STACK_IMAGE_TAG
     container_name: xlayer-${NETWORK_TYPE}-op-node
     entrypoint: sh
     networks:
