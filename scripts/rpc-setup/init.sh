@@ -19,14 +19,29 @@ if [ "$NETWORK_TYPE" != "testnet" ] && [ "$NETWORK_TYPE" != "mainnet" ]; then
     exit 1
 fi
 
-if [ ! -f .env ]; then
-    echo "❌ Error: .env file does not exist"
-    echo "Please copy env.example to .env and fill in the correct configuration"
-    exit 1
-fi
+# Testnet configuration
+TESTNET_OP_GETH_IMAGE="xlayer/op-geth:v0.0.6"
+TESTNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
 
-# Load environment variables
-source .env
+# Mainnet configuration
+MAINNET_OP_GETH_IMAGE="xlayer/op-geth:v0.0.6"
+MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
+
+# Load network-specific configuration
+case "$NETWORK_TYPE" in
+    testnet)
+        OP_GETH_IMAGE_TAG="$TESTNET_OP_GETH_IMAGE"
+        GENESIS_URL="$TESTNET_GENESIS_URL"
+        ;;
+    mainnet)
+        OP_GETH_IMAGE_TAG="$MAINNET_OP_GETH_IMAGE"
+        GENESIS_URL="$MAINNET_GENESIS_URL"
+        ;;
+    *)
+        echo "❌ Error: Unknown network type: $NETWORK_TYPE"
+        exit 1
+        ;;
+esac
 
 echo "🚀 Initializing X Layer Self-hosted RPC node for $NETWORK_TYPE network..."
 
@@ -35,21 +50,7 @@ DATA_DIR="data-${NETWORK_TYPE}"
 CONFIG_DIR="config-${NETWORK_TYPE}"
 GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
 
-mkdir -p "$DATA_DIR"
-mkdir -p "$CONFIG_DIR"
-
-# Determine genesis URL based on network type
-if [ "$NETWORK_TYPE" = "testnet" ]; then
-    GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
-elif [ "$NETWORK_TYPE" = "mainnet" ]; then
-    # TODO: fix url
-    GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.test.tar.gz"
-    if [ -z "$GENESIS_URL" ]; then
-        echo "❌ Error: Mainnet genesis file URL is not configured"
-        echo "Please edit init.sh and fill in the GENESIS_URL variable for mainnet (around line 47)"
-        exit 1
-    fi
-fi
+mkdir -p "$DATA_DIR" "$CONFIG_DIR"
 
 # Download the genesis file
 echo "📥 Downloading genesis file from $GENESIS_URL..."
