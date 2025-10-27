@@ -49,8 +49,9 @@ echo "🚀 Initializing X Layer Self-hosted RPC node for $NETWORK_TYPE network..
 DATA_DIR="data-${NETWORK_TYPE}"
 CONFIG_DIR="config-${NETWORK_TYPE}"
 GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
+LOGS_DIR="logs-${NETWORK_TYPE}"
 
-mkdir -p "$DATA_DIR" "$CONFIG_DIR"
+mkdir -p "$DATA_DIR" "$CONFIG_DIR" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
 
 # Download the genesis file
 echo "📥 Downloading genesis file from $GENESIS_URL..."
@@ -82,6 +83,33 @@ fi
 
 echo "✅ Genesis file extracted successfully to $CONFIG_DIR/$GENESIS_FILE"
 
+# Determine config file names based on network
+if [ "$NETWORK_TYPE" = "testnet" ]; then
+    ROLLUP_CONFIG="rollup-testnet.json"
+    GETH_CONFIG="op-geth-config-testnet.toml"
+else
+    ROLLUP_CONFIG="rollup-mainnet.json"
+    GETH_CONFIG="op-geth-config-mainnet.toml"
+fi
+
+# Copy configuration files from config/ directory
+echo "📋 Copying configuration files..."
+if [ -f "config/$ROLLUP_CONFIG" ]; then
+    cp "config/$ROLLUP_CONFIG" "$CONFIG_DIR/"
+    echo "✅ Copied $ROLLUP_CONFIG"
+else
+    echo "❌ Error: Configuration file config/$ROLLUP_CONFIG does not exist"
+    exit 1
+fi
+
+if [ -f "config/$GETH_CONFIG" ]; then
+    cp "config/$GETH_CONFIG" "$CONFIG_DIR/"
+    echo "✅ Copied $GETH_CONFIG"
+else
+    echo "❌ Error: Configuration file config/$GETH_CONFIG does not exist"
+    exit 1
+fi
+
 # Initialize op-geth with the genesis file
 echo "🔧 Initializing op-geth with genesis file... (It may take a while, please wait patiently.)"
 docker run --rm \
@@ -100,4 +128,5 @@ echo "✅ X Layer RPC node initialization completed!"
 echo ""
 echo "📁 Generated directories for $NETWORK_TYPE:"
 echo "  - $DATA_DIR/: Contains op-geth blockchain data"
-echo "  - $CONFIG_DIR/: Contains configuration files"
+echo "  - $CONFIG_DIR/: Contains configuration files (genesis, rollup, and geth config)"
+echo "  - $LOGS_DIR/: Contains log files"

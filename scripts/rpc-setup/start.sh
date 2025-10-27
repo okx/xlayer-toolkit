@@ -76,6 +76,7 @@ fi
 echo "📁 Creating data directories..."
 mkdir -p "$DATA_DIR/op-node/p2p"
 mkdir -p "$CONFIG_DIR"
+mkdir -p "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
 
 # Determine config file names based on network
 if [ "$NETWORK_TYPE" = "testnet" ]; then
@@ -88,7 +89,7 @@ fi
 
 # Check configuration files
 echo "🔍 Checking configuration files for $NETWORK_TYPE..."
-config_files=("$CONFIG_DIR/$ROLLUP_CONFIG" "$CONFIG_DIR/$GENESIS_FILE")
+config_files=("$CONFIG_DIR/$ROLLUP_CONFIG" "$CONFIG_DIR/$GETH_CONFIG" "$CONFIG_DIR/$GENESIS_FILE")
 for file in "${config_files[@]}"; do
     if [ ! -f "$file" ]; then
         echo "❌ Error: Configuration file $file does not exist"
@@ -100,7 +101,7 @@ done
 # Generate JWT secret (if it does not exist)
 if [ ! -s "$CONFIG_DIR/jwt.txt" ]; then
     echo "🔑 Generating JWT secret..."
-    openssl rand -hex 32 > "$CONFIG_DIR/jwt.txt"
+    openssl rand -hex 32 | tr -d '\n' > "$CONFIG_DIR/jwt.txt"
 fi
 
 # Generate network-specific docker-compose file
