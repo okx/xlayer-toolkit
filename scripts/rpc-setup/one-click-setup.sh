@@ -271,7 +271,7 @@ generate_config_files() {
     cd "$WORK_DIR"
     
     # Create necessary directories
-    mkdir -p config data/op-node/p2p
+    mkdir -p config data/op-node/p2p logs/op-geth logs/op-node
     
     # Generate .env file
     print_info "Generating .env file..."
@@ -306,7 +306,7 @@ services:
   op-geth:
     image: "\${OP_GETH_IMAGE_TAG}"
     container_name: xlayer-op-geth
-    entrypoint: geth
+    entrypoint: sh
     ports:
       - "$RPC_PORT:8545"   # HTTP RPC
       - "8552:8552"
@@ -317,14 +317,19 @@ services:
       - ./data:/data
       - ./config/jwt.txt:/jwt.txt
       - ./config/op-geth-config-testnet.toml:/config.toml
+      - ./logs/op-geth:/var/log/op-geth
     command:
-      - --verbosity=3
-      - --datadir=/data
-      - --config=/config.toml
-      - --db.engine=pebble
-      - --gcmode=archive
-      - --rollup.enabletxpooladmission
-      - --rollup.sequencerhttp=https://testrpc.xlayer.tech
+      - -c
+      - |
+        exec geth \\
+          --verbosity=3 \\
+          --datadir=/data \\
+          --config=/config.toml \\
+          --db.engine=pebble \\
+          --gcmode=archive \\
+          --rollup.enabletxpooladmission \\
+          --rollup.sequencerhttp=https://testrpc.xlayer.tech \\
+          2>&1 | tee /var/log/op-geth/geth.log
     networks:
       - xlayer-network
     healthcheck:
@@ -337,6 +342,7 @@ services:
   op-node:
     image: "\${OP_STACK_IMAGE_TAG}"
     container_name: xlayer-op-node
+    entrypoint: sh
     networks:
       - xlayer-network
     ports:
@@ -345,28 +351,32 @@ services:
       - ./data/op-node:/data
       - ./config/rollup.json:/rollup.json
       - ./config/jwt.txt:/jwt.txt
+      - ./logs/op-node:/var/log/op-node
     command:
-      - /app/op-node/bin/op-node
-      - --log.level=info
-      - --l2=http://op-geth:8552
-      - --l2.jwt-secret=/jwt.txt
-      - --sequencer.enabled=false
-      - --verifier.l1-confs=1
-      - --rollup.config=/rollup.json
-      - --rpc.addr=0.0.0.0
-      - --rpc.port=9545
-      - --p2p.listen.tcp=$NODE_P2P_PORT
-      - --p2p.listen.udp=$NODE_P2P_PORT
-      - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
-      - --p2p.discovery.path=/data/p2p/opnode_discovery_db
-      - --p2p.bootnodes=$TESTNET_BOOTNODE_OP_NODE
-      - --p2p.static=$TESTNET_P2P_STATIC
-      - --rpc.enable-admin=true
-      - --l1=\${L1_RPC_URL}
-      - --l1.beacon=\${L1_BEACON_URL}
-      - --l1.rpckind=standard
-      - --conductor.enabled=false
-      - --safedb.path=/data/safedb
+      - -c
+      - |
+        exec /app/op-node/bin/op-node \\
+          --log.level=info \\
+          --l2=http://op-geth:8552 \\
+          --l2.jwt-secret=/jwt.txt \\
+          --sequencer.enabled=false \\
+          --verifier.l1-confs=1 \\
+          --rollup.config=/rollup.json \\
+          --rpc.addr=0.0.0.0 \\
+          --rpc.port=9545 \\
+          --p2p.listen.tcp=$NODE_P2P_PORT \\
+          --p2p.listen.udp=$NODE_P2P_PORT \\
+          --p2p.peerstore.path=/data/p2p/opnode_peerstore_db \\
+          --p2p.discovery.path=/data/p2p/opnode_discovery_db \\
+          --p2p.bootnodes=$TESTNET_BOOTNODE_OP_NODE \\
+          --p2p.static=$TESTNET_P2P_STATIC \\
+          --rpc.enable-admin=true \\
+          --l1=\${L1_RPC_URL} \\
+          --l1.beacon=\${L1_BEACON_URL} \\
+          --l1.rpckind=standard \\
+          --conductor.enabled=false \\
+          --safedb.path=/data/safedb \\
+          2>&1 | tee /var/log/op-node/op-node.log
     depends_on:
       - op-geth
 EOF
@@ -483,6 +493,9 @@ display_connection_info() {
     echo ""
     echo "🔍 Service Management:"
     echo "  View logs: docker compose logs -f"
+    echo "  View op-geth logs: docker compose logs -f op-geth"
+    echo "  View op-node logs: docker compose logs -f op-node"
+    echo "  Persisted logs (full): ./logs/op-geth/ and ./logs/op-node/"
     echo "  Stop services: docker compose down"
     echo "  Restart services: docker compose restart"
     echo ""
