@@ -78,12 +78,6 @@ print_header() {
 check_system_requirements() {
     print_info "Checking system requirements..."
     
-    # Check if running on Linux
-    if [[ "$OSTYPE" != "linux-gnu"* ]]; then
-        print_warning "This script is designed for Linux systems. You're running on $OSTYPE"
-        print_warning "Proceeding anyway, but some features may not work correctly."
-    fi
-    
     # Check Docker
     if ! command -v docker &> /dev/null; then
         print_error "Docker is not installed. Please install Docker 20.10+ first."
