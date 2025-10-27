@@ -295,8 +295,8 @@ generate_config_files() {
     # Load network-specific configuration
     load_network_config "$NETWORK_TYPE"
     
-    # Network-specific directories
-    DATA_DIR="data-${NETWORK_TYPE}"
+    # Network-specific directories (only set if not already set by user input)
+    DATA_DIR="${DATA_DIR:-data-${NETWORK_TYPE}}"
     CONFIG_DIR="config-${NETWORK_TYPE}"
     GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
     LOGS_DIR="logs-${NETWORK_TYPE}"
@@ -417,6 +417,16 @@ initialize_node() {
     
     # Load network configuration
     load_network_config "$NETWORK_TYPE"
+    
+    # Check if data directory already exists and has geth data
+    if [ -d "$DATA_DIR/geth" ]; then
+        print_warning "Data directory $DATA_DIR already contains a geth database."
+        print_warning "This might be initialized for a different network."
+        print_warning "Cleaning up old data directory..."
+        rm -rf "$DATA_DIR"
+        # Recreate necessary directories
+        mkdir -p "$DATA_DIR/op-node/p2p"
+    fi
     
     # Download the genesis file
     print_info "Downloading genesis file from $GENESIS_URL..."
