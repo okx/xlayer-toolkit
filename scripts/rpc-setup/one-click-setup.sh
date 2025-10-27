@@ -306,7 +306,7 @@ services:
   op-geth:
     image: "\${OP_GETH_IMAGE_TAG}"
     container_name: xlayer-op-geth
-    entrypoint: sh
+    entrypoint: geth
     ports:
       - "$RPC_PORT:8545"   # HTTP RPC
       - "8552:8552"
@@ -319,17 +319,14 @@ services:
       - ./config/op-geth-config-testnet.toml:/config.toml
       - ./logs/op-geth:/var/log/op-geth
     command:
-      - -c
-      - |
-        exec geth \\
-          --verbosity=3 \\
-          --datadir=/data \\
-          --config=/config.toml \\
-          --db.engine=pebble \\
-          --gcmode=archive \\
-          --rollup.enabletxpooladmission \\
-          --rollup.sequencerhttp=https://testrpc.xlayer.tech \\
-          2>&1 | tee /var/log/op-geth/geth.log
+      - --verbosity=3
+      - --datadir=/data
+      - --config=/config.toml
+      - --db.engine=pebble
+      - --gcmode=archive
+      - --rollup.enabletxpooladmission
+      - --rollup.sequencerhttp=https://testrpc.xlayer.tech
+      - --log.file=/var/log/op-geth/geth.log
     networks:
       - xlayer-network
     healthcheck:
