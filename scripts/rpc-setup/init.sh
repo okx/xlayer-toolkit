@@ -20,11 +20,11 @@ if [ "$NETWORK_TYPE" != "testnet" ] && [ "$NETWORK_TYPE" != "mainnet" ]; then
 fi
 
 # Testnet configuration
-TESTNET_OP_GETH_IMAGE="xlayer/op-geth:v0.0.6"
+TESTNET_OP_GETH_IMAGE="xlayer/op-node:0.0.9"
 TESTNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
 
 # Mainnet configuration
-MAINNET_OP_GETH_IMAGE="xlayer/op-geth:v0.0.6"
+MAINNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
 MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.test.tar.gz"
 
 # Load network-specific configuration
