@@ -104,22 +104,6 @@ check_system_requirements() {
         exit 1
     fi
     
-    # Check available memory (minimum 8GB)
-    if command -v free &> /dev/null; then
-        MEMORY_GB=$(free -g | awk '/^Mem:/{print $2}')
-        if [ "$MEMORY_GB" -lt 8 ]; then
-            print_warning "Available memory is ${MEMORY_GB}GB. Minimum 8GB recommended."
-        fi
-    fi
-    
-    # Check available disk space (minimum 100GB)
-    if command -v df &> /dev/null; then
-        DISK_SPACE=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
-        if [ "$DISK_SPACE" -lt 100 ]; then
-            print_warning "Available disk space is ${DISK_SPACE}GB. Minimum 100GB recommended."
-        fi
-    fi
-    
     # Check required tools
     REQUIRED_TOOLS=("wget" "tar" "openssl")
     for tool in "${REQUIRED_TOOLS[@]}"; do
