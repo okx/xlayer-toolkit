@@ -41,8 +41,8 @@ MAINNET_BOOTNODE_OP_NODE="enode://c67d7f63c5483ab8311123d2997bfe6a8aac2b117a4016
 MAINNET_P2P_STATIC="/ip4/47.242.38.0/tcp/9223/p2p/16Uiu2HAmH1AVhKWR29mb5s8Cubgsbh4CH1G86A6yoVtjrLWQgiY3,/ip4/8.210.153.12/tcp/9223/p2p/16Uiu2HAkuerkmQYMZxYiQYfQcPob9H7XHPwS7pd8opPTMEm2nsAp,/ip4/8.210.117.27/tcp/9223/p2p/16Uiu2HAmQEzn2WQj4kmWVrK9aQsfyQcETgXQKjcKGrTPsKcJBv7a"
 MAINNET_OP_STACK_IMAGE="xlayer/op-stack:v0.0.6"
 MAINNET_OP_GETH_IMAGE="xlayer/op-geth:v0.0.6"
-# TODO: 填写主网 genesis 文件 URL
-MAINNET_GENESIS_URL=""
+# TODO: fix url
+MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.test.tar.gz"
 MAINNET_SEQUENCER_HTTP="https://rpc.xlayer.tech"
 MAINNET_ROLLUP_CONFIG="rollup-mainnet.json"
 MAINNET_GETH_CONFIG="op-geth-config-mainnet.toml"

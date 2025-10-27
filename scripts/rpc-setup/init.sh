@@ -42,8 +42,8 @@ mkdir -p "$CONFIG_DIR"
 if [ "$NETWORK_TYPE" = "testnet" ]; then
     GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
 elif [ "$NETWORK_TYPE" = "mainnet" ]; then
-    # TODO: 请在此处填写主网 genesis 文件 URL
-    GENESIS_URL=""
+    # TODO: fix url
+    GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.test.tar.gz"
     if [ -z "$GENESIS_URL" ]; then
         echo "❌ Error: Mainnet genesis file URL is not configured"
         echo "Please edit init.sh and fill in the GENESIS_URL variable for mainnet (around line 47)"
