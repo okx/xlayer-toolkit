@@ -27,6 +27,7 @@ DEFAULT_NODE_P2P_PORT="9223"
 
 # Testnet configuration
 TESTNET_BOOTNODE_OP_NODE="enode://eaae9fe2fc758add65fe4cfd42918e898e16ab23294db88f0dcdbcab2773e75bbea6bfdaa42b3ed502dfbee1335c242c602078c4aa009264e4705caa20d3dca7@8.210.181.50:9223"
+TESTNET_P2P_STATIC="/ip4/47.242.219.101/tcp/9223/p2p/16Uiu2HAkwUdbn9Q7UBKQYRsfjm9SQX5Yc2e96HUz2pyR3cw1FZLv,/ip4/47.242.235.15/tcp/9223/p2p/16Uiu2HAmThDG9xMpADbyGo1oCU8fndztwNg1PH6A7yp1BhCk5jfE"
 TESTNET_BOOTNODE_OP_GETH="enode://2104d54a7fbd58a408590035a3628f1e162833c901400d490ccc94de416baf13639ce2dad388b7a5fd43c535468c106b660d42d94451e39b08912005aa4e4195@8.210.181.50:30303"
 TESTNET_OP_STACK_IMAGE="xlayer/op-stack:release-testnet"
 TESTNET_OP_GETH_IMAGE="xlayer/op-geth:release-testnet"
@@ -359,6 +360,7 @@ services:
       - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
       - --p2p.discovery.path=/data/p2p/opnode_discovery_db
       - --p2p.bootnodes=$TESTNET_BOOTNODE_OP_NODE
+      - --p2p.static=$TESTNET_P2P_STATIC
       - --rpc.enable-admin=true
       - --l1=\${L1_RPC_URL}
       - --l1.beacon=\${L1_BEACON_URL}
