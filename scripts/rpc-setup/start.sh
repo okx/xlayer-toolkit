@@ -178,6 +178,7 @@ services:
           --p2p.static=$P2P_STATIC \\
           --rpc.enable-admin=true \\
           --l1=\${L1_RPC_URL} \\
+          --l1.trustrpc \\
           --l1.beacon=\${L1_BEACON_URL} \\
           --l1.rpckind=standard \\
           --conductor.enabled=false \\
