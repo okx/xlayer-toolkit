@@ -15,7 +15,7 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # TODO: Change to main after release
 REPO_BRANCH="feature/reth-rpc"
-REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/$REPO_BRANCH/scripts/rpc-setup"
+# REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/$REPO_BRANCH/scripts/rpc-setup"
 TEMP_DIR="/tmp/xlayer-setup-$$"
 
 # Default values
@@ -31,17 +31,31 @@ DEFAULT_NODE_P2P_PORT="9223"
 
 # Testnet configuration
 TESTNET_BOOTNODE_OP_NODE="enode://eaae9fe2fc758add65fe4cfd42918e898e16ab23294db88f0dcdbcab2773e75bbea6bfdaa42b3ed502dfbee1335c242c602078c4aa009264e4705caa20d3dca7@8.210.181.50:9223"
-TESTNET_BOOTNODE_OP_GETH="enode://2104d54a7fbd58a408590035a3628f1e162833c901400d490ccc94de416baf13639ce2dad388b7a5fd43c535468c106b660d42d94451e39b08912005aa4e4195@8.210.181.50:30303"
-TESTNET_OP_STACK_IMAGE="xlayer/op-stack:release-testnet"
-TESTNET_OP_GETH_IMAGE="xlayer/op-geth:release-testnet"
+TESTNET_P2P_STATIC="/ip4/47.242.219.101/tcp/9223/p2p/16Uiu2HAkwUdbn9Q7UBKQYRsfjm9SQX5Yc2e96HUz2pyR3cw1FZLv,/ip4/47.242.235.15/tcp/9223/p2p/16Uiu2HAmThDG9xMpADbyGo1oCU8fndztwNg1PH6A7yp1BhCk5jfE"
+TESTNET_OP_STACK_IMAGE="xlayer/op-node:0.0.9"
+TESTNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
 TESTNET_OP_RETH_IMAGE="xlayer/op-reth:release-testnet"
+TESTNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
+TESTNET_SEQUENCER_HTTP="https://testrpc.xlayer.tech"
+TESTNET_ROLLUP_CONFIG="rollup-testnet.json"
+TESTNET_GETH_CONFIG="op-geth-config-testnet.toml"
+TESTNET_LEGACY_RPC_URL="https://testrpc.xlayer.tech"
+TESTNET_LEGACY_CUTOFF_BLOCK="12241701"
+TESTNET_LEGACY_RPC_TIMEOUT="30s"
 
-# Mainnet configuration (for future use)
-MAINNET_BOOTNODE_OP_NODE=""
-MAINNET_BOOTNODE_OP_GETH=""
+# Mainnet configuration
+MAINNET_BOOTNODE_OP_NODE="enode://c67d7f63c5483ab8311123d2997bfe6a8aac2b117a40167cf71682f8a3e37d3b86547c786559355c4c05ae0b1a7e7a1b8fde55050b183f96728d62e276467ce1@8.210.177.150:9223,enode://28e3e305b266e01226a7cc979ab692b22507784095157453ee0e34607bb3beac9a5b00f3e3d7d3ac36164612ca25108e6b79f75e3a9ecb54a0b3e7eb3e097d37@8.210.15.172:9223,enode://b5aa43622aad25c619650a0b7f8bb030161dfbfd5664233f92d841a33b404cea3ffffdc5bc8d6667c7dc212242a52f0702825c1e51612047f75c847ab96ef7a6@8.210.69.97:9223"
+MAINNET_P2P_STATIC="/ip4/47.242.38.0/tcp/9223/p2p/16Uiu2HAmH1AVhKWR29mb5s8Cubgsbh4CH1G86A6yoVtjrLWQgiY3,/ip4/8.210.153.12/tcp/9223/p2p/16Uiu2HAkuerkmQYMZxYiQYfQcPob9H7XHPwS7pd8opPTMEm2nsAp,/ip4/8.210.117.27/tcp/9223/p2p/16Uiu2HAmQEzn2WQj4kmWVrK9aQsfyQcETgXQKjcKGrTPsKcJBv7a"
 MAINNET_OP_STACK_IMAGE="xlayer/op-stack:release"
 MAINNET_OP_GETH_IMAGE="xlayer/op-geth:release"
 MAINNET_OP_RETH_IMAGE="xlayer/op-reth:release"
+MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.mainnet.tar.gz"
+MAINNET_SEQUENCER_HTTP="https://rpc.xlayer.tech"
+MAINNET_ROLLUP_CONFIG="rollup-mainnet.json"
+MAINNET_GETH_CONFIG="op-geth-config-mainnet.toml"
+MAINNET_LEGACY_RPC_URL="https://xlayerrpc.okx.com"
+MAINNET_LEGACY_CUTOFF_BLOCK="42810021"
+MAINNET_LEGACY_RPC_TIMEOUT="30s"
 
 # User input variables
 NETWORK_TYPE=""
@@ -223,13 +237,6 @@ get_user_input() {
         fi
     done
 
-    # Check if mainnet is supported
-    if [[ "$NETWORK_TYPE" == "mainnet" ]]; then
-        print_error "Mainnet is not currently supported"
-        print_info "Please use 'testnet' for now. Mainnet support will be available in future releases."
-        exit 1
-    fi
-
     # L1 RPC URL
     while true; do
         echo -n "2. L1 RPC URL (Ethereum L1 RPC endpoint): "
@@ -371,25 +378,46 @@ generate_config_files() {
     # Generate .env file
     print_info "Generating .env file..."
 
-    # Set bootnode configuration based on network type
+    # Set configuration based on network type
     local BOOTNODE_OP_NODE
-    local BOOTNODE_OP_GETH
+    local P2P_STATIC
     local OP_STACK_IMAGE
     local OP_GETH_IMAGE
     local OP_RETH_IMAGE
+    local GENESIS_URL
+    local SEQUENCER_HTTP
+    local ROLLUP_CONFIG
+    local GETH_CONFIG
+    local LEGACY_RPC_URL
+    local LEGACY_CUTOFF_BLOCK
+    local LEGACY_RPC_TIMEOUT
 
     if [[ "$NETWORK_TYPE" == "mainnet" ]]; then
         BOOTNODE_OP_NODE="$MAINNET_BOOTNODE_OP_NODE"
-        BOOTNODE_OP_GETH="$MAINNET_BOOTNODE_OP_GETH"
+        P2P_STATIC="$MAINNET_P2P_STATIC"
         OP_STACK_IMAGE="$MAINNET_OP_STACK_IMAGE"
         OP_GETH_IMAGE="$MAINNET_OP_GETH_IMAGE"
         OP_RETH_IMAGE="$MAINNET_OP_RETH_IMAGE"
+        GENESIS_URL="$MAINNET_GENESIS_URL"
+        SEQUENCER_HTTP="$MAINNET_SEQUENCER_HTTP"
+        ROLLUP_CONFIG="$MAINNET_ROLLUP_CONFIG"
+        GETH_CONFIG="$MAINNET_GETH_CONFIG"
+        LEGACY_RPC_URL="$MAINNET_LEGACY_RPC_URL"
+        LEGACY_CUTOFF_BLOCK="$MAINNET_LEGACY_CUTOFF_BLOCK"
+        LEGACY_RPC_TIMEOUT="$MAINNET_LEGACY_RPC_TIMEOUT"
     else
         BOOTNODE_OP_NODE="$TESTNET_BOOTNODE_OP_NODE"
-        BOOTNODE_OP_GETH="$TESTNET_BOOTNODE_OP_GETH"
+        P2P_STATIC="$TESTNET_P2P_STATIC"
         OP_STACK_IMAGE="$TESTNET_OP_STACK_IMAGE"
         OP_GETH_IMAGE="$TESTNET_OP_GETH_IMAGE"
         OP_RETH_IMAGE="$TESTNET_OP_RETH_IMAGE"
+        GENESIS_URL="$TESTNET_GENESIS_URL"
+        SEQUENCER_HTTP="$TESTNET_SEQUENCER_HTTP"
+        ROLLUP_CONFIG="$TESTNET_ROLLUP_CONFIG"
+        GETH_CONFIG="$TESTNET_GETH_CONFIG"
+        LEGACY_RPC_URL="$TESTNET_LEGACY_RPC_URL"
+        LEGACY_CUTOFF_BLOCK="$TESTNET_LEGACY_CUTOFF_BLOCK"
+        LEGACY_RPC_TIMEOUT="$TESTNET_LEGACY_RPC_TIMEOUT"
     fi
 
     cat > .env << EOF
@@ -397,9 +425,17 @@ generate_config_files() {
 L1_RPC_URL=$L1_RPC_URL
 L1_BEACON_URL=$L1_BEACON_URL
 
+# Network Configuration
+NETWORK_TYPE=$NETWORK_TYPE
+GENESIS_URL=$GENESIS_URL
+SEQUENCER_HTTP_URL=$SEQUENCER_HTTP
+ROLLUP_CONFIG=$ROLLUP_CONFIG
+GETH_CONFIG=$GETH_CONFIG
+
 # Bootnode Configuration
 OP_NODE_BOOTNODE=$BOOTNODE_OP_NODE
-OP_GETH_BOOTNODE=$BOOTNODE_OP_GETH
+OP_GETH_BOOTNODE=$BOOTNODE_OP_NODE
+P2P_STATIC=$P2P_STATIC
 
 # RPC Type
 L2_ENGINEKIND=$L2_ENGINEKIND
@@ -409,6 +445,11 @@ RPC_TYPE=op-$L2_ENGINEKIND
 OP_STACK_IMAGE_TAG=$OP_STACK_IMAGE
 OP_GETH_IMAGE_TAG=$OP_GETH_IMAGE
 OP_RETH_IMAGE_TAG=$OP_RETH_IMAGE
+
+# Legacy RPC Configuration (for historical data before cutoff block)
+L2_RPC_URL=$LEGACY_RPC_URL
+L2_CUTOFF_BLOCK=$LEGACY_CUTOFF_BLOCK
+L2_RPC_TIMEOUT=$LEGACY_RPC_TIMEOUT
 
 # Ports
 HTTP_RPC_PORT=$RPC_PORT

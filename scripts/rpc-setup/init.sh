@@ -19,13 +19,6 @@ if [ "$NETWORK_TYPE" != "testnet" ] && [ "$NETWORK_TYPE" != "mainnet" ]; then
     exit 1
 fi
 
-# Check if mainnet is supported
-if [ "$NETWORK_TYPE" = "mainnet" ]; then
-    echo "❌ Error: Mainnet is not currently supported"
-    echo "Please use 'testnet' for now. Mainnet support will be available in future releases."
-    exit 1
-fi
-
 if [ ! -f .env ]; then
     echo "❌ Error: .env file does not exist"
     echo "Please copy env.example to .env and fill in the correct configuration"

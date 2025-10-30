@@ -19,13 +19,6 @@ if [ "$NETWORK_TYPE" != "testnet" ] && [ "$NETWORK_TYPE" != "mainnet" ]; then
     exit 1
 fi
 
-# Check if mainnet is supported
-if [ "$NETWORK_TYPE" = "mainnet" ]; then
-    echo "❌ Error: Mainnet is not currently supported"
-    echo "Please use 'testnet' for now. Mainnet support will be available in future releases."
-    exit 1
-fi
-
 echo "🚀 Starting X Layer Self-hosted RPC node for $NETWORK_TYPE network..."
 
 # Check environment variables file
