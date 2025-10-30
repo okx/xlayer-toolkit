@@ -1,1 +1,4 @@
 /.vscode/openscaidentity
+.env
+data/
+config/
