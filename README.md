@@ -13,6 +13,10 @@
 
 A comprehensive collection of tools and scripts for deploying and managing X Layer infrastructure.
 
+## 📚 Project Overview
+
+X Layer is a Layer 2 blockchain network built on Optimism OP Stack. This toolkit provides a set of practical tools to help developers and service providers interact with the X Layer network, deploy infrastructure, and manage operations.
+
 ## 📦 Available Tools
 
 ### [RPC Node Setup](scripts/rpc-setup/README.md)
@@ -20,12 +24,16 @@ A comprehensive collection of tools and scripts for deploying and managing X Lay
 Deploy and manage your own X Layer RPC node with Docker. This toolkit provides everything you need to run a self-hosted, full-featured RPC endpoint.
 
 **Features:**
+- ✅ Support for Testnet and Mainnet
 - ✅ One-click automated setup
 - 🐳 Docker-based deployment
-- 🔄 Full RPC support (HTTP, WebSocket, Admin)
+- 🔄 **Dual execution engine support (op-geth / op-reth)**
 - 📊 Archive node capability
 - 🌐 P2P network connectivity
 - 🔐 Secure JWT authentication
+- ⚡ **Legacy RPC fallback for historical data**
+- 🔧 Full RPC support (HTTP, WebSocket, Admin)
+- 🎛️ Customizable ports
 
 **Quick Start:**
 ```bash
@@ -43,10 +51,22 @@ cd scripts/rpc-setup
 - **Docker**: 20.10+
 - **Docker Compose**: 2.0+
 
+## 🤝 Contributing
+
+Issues and Pull Requests are welcome!
+
 ## 📞 Support and Resources
 
 - **Official Documentation**: [X Layer Docs](https://web3.okx.com/xlayer/docs/developer/build-on-xlayer/about-xlayer)
+- **X Layer RPC Endpoint**: [https://rpc.xlayer.tech](https://rpc.xlayer.tech)
 - **GitHub Repository**: [xlayer-toolkit](https://github.com/okx/xlayer-toolkit)
+
+## 💡 Support
+
+If you encounter any issues:
+
+1. Check the relevant documentation
+2. Submit an Issue on GitHub
 
 ## 📄 License
 
@@ -55,4 +75,3 @@ This project is part of the X Layer ecosystem. Please refer to individual tool d
 ---
 
 **Built with ❤️ for the X Layer community**
-
