@@ -13,9 +13,8 @@ NC='\033[0m' # No Color
 
 # Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# TODO: Change to main after release
-REPO_BRANCH="feature/reth-rpc"
-# REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/$REPO_BRANCH/scripts/rpc-setup"
+REPO_BRANCH="zjg/legacy-rpc"
+REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/$REPO_BRANCH/scripts/rpc-setup"
 TEMP_DIR="/tmp/xlayer-setup-$$"
 
 # Default values
