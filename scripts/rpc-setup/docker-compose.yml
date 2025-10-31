@@ -1,0 +1,128 @@
+networks:
+  xlayer-network:
+    name: xlayer-network
+
+services:
+  op-geth:
+    image: "${OP_GETH_IMAGE_TAG}"
+    container_name: xlayer-${NETWORK_TYPE}-op-geth
+    entrypoint: geth
+    networks:
+      - xlayer-network
+    ports:
+      - "${HTTP_RPC_PORT:-8123}:8545"
+      - "${ENGINE_API_PORT:-8552}:8552"
+      - "${WEBSOCKET_PORT:-8546}:8546"
+      - "${P2P_TCP_PORT:-30303}:30303"
+      - "${P2P_UDP_PORT:-30303}:30303/udp"
+    volumes:
+      - ./chaindata/${NETWORK_TYPE}-geth/data:/data
+      - ./chaindata/${NETWORK_TYPE}-geth/config/jwt.txt:/jwt.txt
+      - ./chaindata/${NETWORK_TYPE}-geth/config/op-geth-config-${NETWORK_TYPE}.toml:/config.toml
+      - ./chaindata/${NETWORK_TYPE}-geth/logs:/logs
+    command:
+      - --verbosity=3
+      - --datadir=/data
+      - --config=/config.toml
+      - --db.engine=pebble
+      - --gcmode=archive
+      - --rollup.enabletxpooladmission
+      - --rollup.sequencerhttp=${SEQUENCER_HTTP_URL}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  op-reth:
+    image: "${OP_RETH_IMAGE_TAG}"
+    container_name: xlayer-${NETWORK_TYPE}-op-reth
+    entrypoint: op-reth
+    networks:
+      - xlayer-network
+    ports:
+      - "${HTTP_RPC_PORT:-8123}:8545"
+      - "${WEBSOCKET_PORT:-8546}:8546"
+      - "${ENGINE_API_PORT:-8552}:8552"
+      - "${P2P_TCP_PORT:-30303}:30303"
+      - "${P2P_UDP_PORT:-30303}:30303/udp"
+    volumes:
+      - ./chaindata/${NETWORK_TYPE}-reth/data:/datadir
+      - ./chaindata/${NETWORK_TYPE}-reth/config/jwt.txt:/jwt.txt
+      - ./chaindata/${NETWORK_TYPE}-reth/config/genesis-${NETWORK_TYPE}.json:/genesis.json
+      - ./chaindata/${NETWORK_TYPE}-reth/config/op-reth-config-${NETWORK_TYPE}.toml:/config.toml
+      - ./chaindata/${NETWORK_TYPE}-reth/logs:/logs
+    command:
+      - node
+      - --datadir=/datadir
+      - --chain=/genesis.json
+      - --config=/config.toml
+      - --http
+      - --http.corsdomain=*
+      - --http.port=8545
+      - --http.addr=0.0.0.0
+      - --http.api=web3,debug,eth,txpool,net,miner
+      - --ws
+      - --ws.addr=0.0.0.0
+      - --ws.port=8546
+      - --ws.origins=*
+      - --ws.api=debug,eth,txpool,net
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8552
+      - --authrpc.jwtsecret=/jwt.txt
+      - --rollup.disable-tx-pool-gossip
+      - --rollup.sequencer-http=${SEQUENCER_HTTP_URL}
+      - --disable-discovery
+      - --max-outbound-peers=0
+      - --max-inbound-peers=0
+      - --bootnodes=${OP_GETH_BOOTNODE}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "--data", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 600s
+
+  op-node:
+    image: "${OP_STACK_IMAGE_TAG}"
+    container_name: xlayer-${NETWORK_TYPE}-op-node
+    networks:
+      - xlayer-network
+    ports:
+      - "${NODE_RPC_PORT:-9545}:9545"
+      - "${NODE_P2P_PORT:-9223}:9223"
+      - "${NODE_P2P_PORT:-9223}:9223/udp"
+    volumes:
+      - ./chaindata/${NETWORK_TYPE}-${RPC_TYPE}/data/op-node:/data
+      - ./chaindata/${NETWORK_TYPE}-${RPC_TYPE}/config/rollup-${NETWORK_TYPE}.json:/rollup.json
+      - ./chaindata/${NETWORK_TYPE}-${RPC_TYPE}/config/jwt.txt:/jwt.txt
+      - ./chaindata/${NETWORK_TYPE}-${RPC_TYPE}/logs:/logs
+    command:
+      - /app/op-node/bin/op-node
+      - --log.level=info
+      - --l2=http://xlayer-${NETWORK_TYPE}-${RPC_TYPE}:8552
+      - --l2.jwt-secret=/jwt.txt
+      - --sequencer.enabled=false
+      - --verifier.l1-confs=1
+      - --rollup.config=/rollup.json
+      - --rpc.addr=0.0.0.0
+      - --rpc.port=9545
+      - --p2p.listen.tcp=9223
+      - --p2p.listen.udp=9223
+      - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
+      - --p2p.discovery.path=/data/p2p/opnode_discovery_db
+      - --p2p.bootnodes=${OP_NODE_BOOTNODE}
+      - --rpc.enable-admin=true
+      - --l1=${L1_RPC_URL}
+      - --l1.beacon=${L1_BEACON_URL}
+      - --l1.rpckind=standard
+      - --conductor.enabled=false
+      - --safedb.path=/data/safedb
+      - --l2.enginekind=${RPC_TYPE}
+    restart: unless-stopped
+    depends_on:
+      xlayer-${NETWORK_TYPE}-${RPC_TYPE}:
+        condition: service_healthy
