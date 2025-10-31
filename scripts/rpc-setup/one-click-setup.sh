@@ -418,23 +418,27 @@ services:
       - --http
       - --http.addr=0.0.0.0
       - --http.port=8545
-      - --http.api=web3,debug,eth,txpool,net,trace,rpc
+      - --http.api=web3,debug,eth,txpool,net,miner
       - --http.corsdomain=*
       - --ws
       - --ws.addr=0.0.0.0
       - --ws.port=7546
       - --ws.origins=*
-      - --ws.api=debug,eth,txpool,net,trace
+      - --ws.api=debug,eth,txpool,net
       - --log.file.directory=/var/log/op-reth
       - --rollup.disable-tx-pool-gossip
+      - --disable-discovery
+      - --max-outbound-peers=0
+      - --max-inbound-peers=0
+      - --bootnodes=enode://2104d54a7fbd58a408590035a3628f1e162833c901400d490ccc94de416baf13639ce2dad388b7a5fd43c535468c106b660d42d94451e39b08912005aa4e4195@8.210.181.50:30303
     networks:
       - xlayer-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8545"]
-      interval: 3s
-      timeout: 3s
-      retries: 10
-      start_period: 3s
+      test: ["CMD-SHELL", "curl -sf -X POST -H 'Content-Type: application/json' --data '{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}' http://localhost:8545 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 600s
 
   op-node:
     image: "\${OP_STACK_IMAGE_TAG}"
@@ -456,6 +460,7 @@ services:
           --log.level=info \\
           --l2=http://op-reth:8552 \\
           --l2.jwt-secret=/jwt.txt \\
+          --l2.enginekind=reth \\
           --sequencer.enabled=false \\
           --verifier.l1-confs=1 \\
           --rollup.config=/rollup.json \\
@@ -466,9 +471,7 @@ services:
           --p2p.peerstore.path=/data/p2p/opnode_peerstore_db \\
           --p2p.discovery.path=/data/p2p/opnode_discovery_db \\
           --p2p.bootnodes=$OP_NODE_BOOTNODE \\
-          --p2p.static=$P2P_STATIC \\
           --rpc.enable-admin=true \\
-          --l1.trustrpc \\
           --l1=\${L1_RPC_URL} \\
           --l1.beacon=\${L1_BEACON_URL} \\
           --l1.rpckind=standard \\
@@ -476,7 +479,9 @@ services:
           --safedb.path=/data/safedb \\
           2>&1 | tee /var/log/op-node/op-node.log
     depends_on:
-      - op-reth
+      op-reth:
+        condition: service_healthy
+    restart: unless-stopped
 EOF
     else
         # Generate docker-compose.yml for Geth
