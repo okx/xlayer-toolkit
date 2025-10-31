@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-set -x
+# set -x
 
 BRANCH="zjg/reth"
 REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/scripts/rpc-setup"
@@ -274,7 +274,7 @@ prompt_input() {
     local result
     
     while true; do
-        echo -n "$prompt_text"
+        printf "%s" "$prompt_text"
         read -r input
         result="${input:-$default_value}"
         
@@ -328,13 +328,13 @@ get_user_input() {
     
     # L1 URLs (required)
     while true; do
-        echo -n "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
+        printf "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
         read -r L1_RPC_URL
         [ -n "$L1_RPC_URL" ] && validate_url "$L1_RPC_URL" && break
     done
     
     while true; do
-        echo -n "4. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
+        printf "4. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
         read -r L1_BEACON_URL
         [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
     done
