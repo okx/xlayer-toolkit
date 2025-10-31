@@ -1,0 +1,99 @@
+version: '3.8'
+
+networks:
+  xlayer-network:
+    name: xlayer-network
+
+services:
+  # op-geth service (enabled when L2_ENGINEKIND=geth)
+  op-geth:
+    image: "${OP_GETH_IMAGE_TAG:-xlayer/op-geth:0.0.6}"
+    container_name: xlayer-${NETWORK_TYPE:-testnet}-op-geth
+    profiles: ["geth"]
+    entrypoint: /entrypoint/geth-rpc.sh
+    networks:
+      - xlayer-network
+    env_file:
+      - .env
+    environment:
+      - SEQUENCER_HTTP_URL=${SEQUENCER_HTTP_URL}
+    ports:
+      - "${RPC_PORT:-8545}:8545"   # HTTP RPC
+      - "8552:8552"                 # Engine API
+      - "${WS_PORT:-7546}:7546"     # WebSocket
+      - "${GETH_P2P_PORT:-30303}:30303"     # P2P TCP
+      - "${GETH_P2P_PORT:-30303}:30303/udp" # P2P UDP
+    volumes:
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-geth/data:/data
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-geth/config/jwt.txt:/jwt.txt
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-geth/config/op-geth-config-${NETWORK_TYPE:-testnet}.toml:/config.toml
+      - ./entrypoint/geth-rpc.sh:/entrypoint/geth-rpc.sh
+      - ./.env:/app/.env
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-geth/logs/op-geth:/var/log/op-geth
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+  # op-reth service (enabled when L2_ENGINEKIND=reth)
+  op-reth:
+    image: "${OP_RETH_IMAGE_TAG:-xlayer/op-reth:release-testnet}"
+    container_name: xlayer-${NETWORK_TYPE:-testnet}-op-reth
+    profiles: ["reth"]
+    entrypoint: /entrypoint/reth-rpc.sh
+    networks:
+      - xlayer-network
+    env_file:
+      - .env
+    environment:
+      - L1_RPC_URL=${L1_RPC_URL}
+      - L1_BEACON_URL=${L1_BEACON_URL}
+      - SEQUENCER_HTTP_URL=${SEQUENCER_HTTP_URL}
+    ports:
+      - "${RPC_PORT:-8545}:8545"   # HTTP RPC
+      - "8552:8552"                 # Engine API
+      - "${WS_PORT:-7546}:7546"     # WebSocket
+      - "${GETH_P2P_PORT:-30303}:30303"     # P2P TCP
+      - "${GETH_P2P_PORT:-30303}:30303/udp" # P2P UDP
+    volumes:
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-reth/data/op-reth:/datadir
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-reth/config/jwt.txt:/jwt.txt
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-reth/config/genesis.json:/genesis.json
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-reth/config/op-reth-config-${NETWORK_TYPE:-testnet}.toml:/config.toml
+      - ./entrypoint/reth-rpc.sh:/entrypoint/reth-rpc.sh
+      - ./.env:/app/.env
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-reth/logs/op-reth:/var/log/op-reth
+    healthcheck:
+      test: ["CMD", "curl", "-X", "POST", "http://localhost:8545"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+  # op-node service (common for both geth and reth)
+  op-node:
+    image: "${OP_STACK_IMAGE_TAG:-xlayer/op-node:0.0.9}"
+    container_name: xlayer-${NETWORK_TYPE:-testnet}-op-node
+    entrypoint: /entrypoint/op-node.sh
+    networks:
+      - xlayer-network
+    env_file:
+      - .env
+    environment:
+      - L1_RPC_URL=${L1_RPC_URL}
+      - L1_BEACON_URL=${L1_BEACON_URL}
+      - L2_ENGINEKIND=${L2_ENGINEKIND}
+      - NODE_P2P_PORT=${NODE_P2P_PORT}
+      - OP_NODE_BOOTNODE=${OP_NODE_BOOTNODE}
+      - P2P_STATIC=${P2P_STATIC}
+    ports:
+      - "${NODE_RPC_PORT:-9545}:9545"
+    volumes:
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-${L2_ENGINEKIND:-geth}/data/op-node:/data
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-${L2_ENGINEKIND:-geth}/config/rollup-${NETWORK_TYPE:-testnet}.json:/rollup.json
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-${L2_ENGINEKIND:-geth}/config/jwt.txt:/jwt.txt
+      - ./entrypoint/op-node.sh:/entrypoint/op-node.sh
+      - ./.env:/app/.env
+      - ${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-${L2_ENGINEKIND:-geth}/logs/op-node:/var/log/op-node

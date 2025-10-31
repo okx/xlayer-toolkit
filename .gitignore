@@ -4,6 +4,3 @@
 
 # RPC node data directories (new structure)
 chaindata
-
-# RPC setup generated files
-scripts/rpc-setup/docker-compose.yml
