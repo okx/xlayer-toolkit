@@ -5,36 +5,48 @@ set -e
 
 # Parse command line arguments
 NETWORK_TYPE=${1:-""}
+RPC_TYPE=${2:-"geth"}
 
 # Validate network type
 if [ -z "$NETWORK_TYPE" ]; then
     echo "❌ Error: Network type is required"
-    echo "Usage: $0 [testnet|mainnet]"
+    echo "Usage: $0 [testnet|mainnet] [geth|reth]"
     exit 1
 fi
 
 if [ "$NETWORK_TYPE" != "testnet" ] && [ "$NETWORK_TYPE" != "mainnet" ]; then
     echo "❌ Error: Invalid network type. Please use 'testnet' or 'mainnet'"
-    echo "Usage: $0 [testnet|mainnet]"
+    echo "Usage: $0 [testnet|mainnet] [geth|reth]"
+    exit 1
+fi
+
+# Validate RPC type
+if [ "$RPC_TYPE" != "geth" ] && [ "$RPC_TYPE" != "reth" ]; then
+    echo "❌ Error: Invalid RPC type. Please use 'geth' or 'reth'"
+    echo "Usage: $0 [testnet|mainnet] [geth|reth]"
     exit 1
 fi
 
 # Testnet configuration
 TESTNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
+TESTNET_OP_RETH_IMAGE="xlayer/op-reth:release-testnet"
 TESTNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
 
 # Mainnet configuration
 MAINNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
+MAINNET_OP_RETH_IMAGE="xlayer/op-reth:release-testnet"
 MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.mainnet.tar.gz"
 
 # Load network-specific configuration
 case "$NETWORK_TYPE" in
     testnet)
         OP_GETH_IMAGE_TAG="$TESTNET_OP_GETH_IMAGE"
+        OP_RETH_IMAGE_TAG="$TESTNET_OP_RETH_IMAGE"
         GENESIS_URL="$TESTNET_GENESIS_URL"
         ;;
     mainnet)
         OP_GETH_IMAGE_TAG="$MAINNET_OP_GETH_IMAGE"
+        OP_RETH_IMAGE_TAG="$MAINNET_OP_RETH_IMAGE"
         GENESIS_URL="$MAINNET_GENESIS_URL"
         ;;
     *)
@@ -43,13 +55,22 @@ case "$NETWORK_TYPE" in
         ;;
 esac
 
-echo "🚀 Initializing X Layer Self-hosted RPC node for $NETWORK_TYPE network..."
+# Set execution client image based on RPC type
+if [ "$RPC_TYPE" = "reth" ]; then
+    EXEC_IMAGE_TAG="$OP_RETH_IMAGE_TAG"
+    EXEC_CLIENT="op-reth"
+else
+    EXEC_IMAGE_TAG="$OP_GETH_IMAGE_TAG"
+    EXEC_CLIENT="op-geth"
+fi
+
+echo "🚀 Initializing X Layer Self-hosted RPC node for $NETWORK_TYPE network with $RPC_TYPE..."
 
 # Network-specific directories and files
-DATA_DIR="data-${NETWORK_TYPE}"
-CONFIG_DIR="config-${NETWORK_TYPE}"
+DATA_DIR="data-${NETWORK_TYPE}-${RPC_TYPE}"
+CONFIG_DIR="config-${NETWORK_TYPE}-${RPC_TYPE}"
 GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-LOGS_DIR="logs-${NETWORK_TYPE}"
+LOGS_DIR="logs-${NETWORK_TYPE}-${RPC_TYPE}"
 
 mkdir -p "$DATA_DIR" "$CONFIG_DIR" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
 
@@ -83,13 +104,21 @@ fi
 
 echo "✅ Genesis file extracted successfully to $CONFIG_DIR/$GENESIS_FILE"
 
-# Determine config file names based on network
+# Determine config file names based on network and RPC type
 if [ "$NETWORK_TYPE" = "testnet" ]; then
     ROLLUP_CONFIG="rollup-testnet.json"
-    GETH_CONFIG="op-geth-config-testnet.toml"
+    if [ "$RPC_TYPE" = "reth" ]; then
+        EXEC_CONFIG="op-reth-config-testnet.toml"
+    else
+        EXEC_CONFIG="op-geth-config-testnet.toml"
+    fi
 else
     ROLLUP_CONFIG="rollup-mainnet.json"
-    GETH_CONFIG="op-geth-config-mainnet.toml"
+    if [ "$RPC_TYPE" = "reth" ]; then
+        EXEC_CONFIG="op-reth-config-mainnet.toml"
+    else
+        EXEC_CONFIG="op-geth-config-mainnet.toml"
+    fi
 fi
 
 # Copy configuration files from config/ directory
@@ -102,31 +131,42 @@ else
     exit 1
 fi
 
-if [ -f "config/$GETH_CONFIG" ]; then
-    cp "config/$GETH_CONFIG" "$CONFIG_DIR/"
-    echo "✅ Copied $GETH_CONFIG"
+if [ -f "config/$EXEC_CONFIG" ]; then
+    cp "config/$EXEC_CONFIG" "$CONFIG_DIR/"
+    echo "✅ Copied $EXEC_CONFIG"
 else
-    echo "❌ Error: Configuration file config/$GETH_CONFIG does not exist"
+    echo "❌ Error: Configuration file config/$EXEC_CONFIG does not exist"
     exit 1
 fi
 
-# Initialize op-geth with the genesis file
-echo "🔧 Initializing op-geth with genesis file... (It may take a while, please wait patiently.)"
-docker run --rm \
-    -v "$(pwd)/$DATA_DIR:/data" \
-    -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
-    ${OP_GETH_IMAGE_TAG} \
-    --datadir /data \
-    --gcmode=archive \
-    --db.engine=pebble \
-    --log.format json \
-    init \
-    --state.scheme=hash \
-    /genesis.json
+# Initialize execution client with the genesis file
+if [ "$RPC_TYPE" = "reth" ]; then
+    echo "🔧 Initializing op-reth with genesis file... (It may take a while, please wait patiently.)"
+    docker run --rm \
+        -v "$(pwd)/$DATA_DIR:/data" \
+        -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
+        ${OP_RETH_IMAGE_TAG} \
+        init \
+        --datadir /data \
+        --chain /genesis.json
+else
+    echo "🔧 Initializing op-geth with genesis file... (It may take a while, please wait patiently.)"
+    docker run --rm \
+        -v "$(pwd)/$DATA_DIR:/data" \
+        -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
+        ${OP_GETH_IMAGE_TAG} \
+        --datadir /data \
+        --gcmode=archive \
+        --db.engine=pebble \
+        --log.format json \
+        init \
+        --state.scheme=hash \
+        /genesis.json
+fi
 
 echo "✅ X Layer RPC node initialization completed!"
 echo ""
-echo "📁 Generated directories for $NETWORK_TYPE:"
-echo "  - $DATA_DIR/: Contains op-geth blockchain data"
-echo "  - $CONFIG_DIR/: Contains configuration files (genesis, rollup, and geth config)"
+echo "📁 Generated directories for $NETWORK_TYPE with $RPC_TYPE:"
+echo "  - $DATA_DIR/: Contains $EXEC_CLIENT blockchain data"
+echo "  - $CONFIG_DIR/: Contains configuration files (genesis, rollup, and exec client config)"
 echo "  - $LOGS_DIR/: Contains log files"

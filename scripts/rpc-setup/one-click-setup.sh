@@ -30,23 +30,28 @@ TESTNET_BOOTNODE_OP_NODE="enode://eaae9fe2fc758add65fe4cfd42918e898e16ab23294db8
 TESTNET_P2P_STATIC="/ip4/47.242.219.101/tcp/9223/p2p/16Uiu2HAkwUdbn9Q7UBKQYRsfjm9SQX5Yc2e96HUz2pyR3cw1FZLv,/ip4/47.242.235.15/tcp/9223/p2p/16Uiu2HAmThDG9xMpADbyGo1oCU8fndztwNg1PH6A7yp1BhCk5jfE"
 TESTNET_OP_STACK_IMAGE="xlayer/op-node:0.0.9"
 TESTNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
+TESTNET_OP_RETH_IMAGE="xlayer/op-reth:release-testnet"
 TESTNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
 TESTNET_SEQUENCER_HTTP="https://testrpc.xlayer.tech"
 TESTNET_ROLLUP_CONFIG="rollup-testnet.json"
 TESTNET_GETH_CONFIG="op-geth-config-testnet.toml"
+TESTNET_RETH_CONFIG="op-reth-config-testnet.toml"
 
 # Mainnet configuration
 MAINNET_BOOTNODE_OP_NODE="enode://c67d7f63c5483ab8311123d2997bfe6a8aac2b117a40167cf71682f8a3e37d3b86547c786559355c4c05ae0b1a7e7a1b8fde55050b183f96728d62e276467ce1@8.210.177.150:9223,enode://28e3e305b266e01226a7cc979ab692b22507784095157453ee0e34607bb3beac9a5b00f3e3d7d3ac36164612ca25108e6b79f75e3a9ecb54a0b3e7eb3e097d37@8.210.15.172:9223,enode://b5aa43622aad25c619650a0b7f8bb030161dfbfd5664233f92d841a33b404cea3ffffdc5bc8d6667c7dc212242a52f0702825c1e51612047f75c847ab96ef7a6@8.210.69.97:9223"
 MAINNET_P2P_STATIC="/ip4/47.242.38.0/tcp/9223/p2p/16Uiu2HAmH1AVhKWR29mb5s8Cubgsbh4CH1G86A6yoVtjrLWQgiY3,/ip4/8.210.153.12/tcp/9223/p2p/16Uiu2HAkuerkmQYMZxYiQYfQcPob9H7XHPwS7pd8opPTMEm2nsAp,/ip4/8.210.117.27/tcp/9223/p2p/16Uiu2HAmQEzn2WQj4kmWVrK9aQsfyQcETgXQKjcKGrTPsKcJBv7a"
 MAINNET_OP_STACK_IMAGE="xlayer/op-node:0.0.9"
 MAINNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
+MAINNET_OP_RETH_IMAGE="xlayer/op-reth:release-testnet"
 MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.mainnet.tar.gz"
 MAINNET_SEQUENCER_HTTP="https://rpc.xlayer.tech"
 MAINNET_ROLLUP_CONFIG="rollup-mainnet.json"
 MAINNET_GETH_CONFIG="op-geth-config-mainnet.toml"
+MAINNET_RETH_CONFIG="op-reth-config-mainnet.toml"
 
 # User input variables
 NETWORK_TYPE=""
+RPC_TYPE=""
 L1_RPC_URL=""
 L1_BEACON_URL=""
 DATA_DIR=""
@@ -91,20 +96,24 @@ load_network_config() {
             P2P_STATIC="$TESTNET_P2P_STATIC"
             OP_STACK_IMAGE_TAG="$TESTNET_OP_STACK_IMAGE"
             OP_GETH_IMAGE_TAG="$TESTNET_OP_GETH_IMAGE"
+            OP_RETH_IMAGE_TAG="$TESTNET_OP_RETH_IMAGE"
             GENESIS_URL="$TESTNET_GENESIS_URL"
             SEQUENCER_HTTP="$TESTNET_SEQUENCER_HTTP"
             ROLLUP_CONFIG="$TESTNET_ROLLUP_CONFIG"
             GETH_CONFIG="$TESTNET_GETH_CONFIG"
+            RETH_CONFIG="$TESTNET_RETH_CONFIG"
             ;;
         mainnet)
             OP_NODE_BOOTNODE="$MAINNET_BOOTNODE_OP_NODE"
             P2P_STATIC="$MAINNET_P2P_STATIC"
             OP_STACK_IMAGE_TAG="$MAINNET_OP_STACK_IMAGE"
             OP_GETH_IMAGE_TAG="$MAINNET_OP_GETH_IMAGE"
+            OP_RETH_IMAGE_TAG="$MAINNET_OP_RETH_IMAGE"
             GENESIS_URL="$MAINNET_GENESIS_URL"
             SEQUENCER_HTTP="$MAINNET_SEQUENCER_HTTP"
             ROLLUP_CONFIG="$MAINNET_ROLLUP_CONFIG"
             GETH_CONFIG="$MAINNET_GETH_CONFIG"
+            RETH_CONFIG="$MAINNET_RETH_CONFIG"
             ;;
         *)
             print_error "Unknown network type: $network"
@@ -160,11 +169,17 @@ download_config_files() {
     # Load network-specific configuration to know which files to download
     load_network_config "$NETWORK_TYPE"
     
-    # Download configuration files based on network
+    # Download configuration files based on network and RPC type
     local config_files=(
         "config/$ROLLUP_CONFIG"
-        "config/$GETH_CONFIG"
     )
+    
+    # Add execution client config based on RPC type
+    if [ "$RPC_TYPE" = "reth" ]; then
+        config_files+=("config/$RETH_CONFIG")
+    else
+        config_files+=("config/$GETH_CONFIG")
+    fi
     
     for file in "${config_files[@]}"; do
         print_info "Downloading $file..."
@@ -187,9 +202,10 @@ get_user_input() {
     if [ ! -t 0 ]; then
         print_info "🚀 Auto-mode: Using default configuration"
         NETWORK_TYPE="$DEFAULT_NETWORK"
+        RPC_TYPE="geth"
         L1_RPC_URL="https://placeholder-l1-rpc-url"
         L1_BEACON_URL="https://placeholder-l1-beacon-url"
-        DATA_DIR="data-${NETWORK_TYPE}"
+        DATA_DIR="data-${NETWORK_TYPE}-${RPC_TYPE}"
         RPC_PORT="$DEFAULT_RPC_PORT"
         WS_PORT="$DEFAULT_WS_PORT"
         NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
@@ -212,9 +228,22 @@ get_user_input() {
         fi
     done
     
+    # RPC type selection
+    while true; do
+        echo -n "2. RPC client type (geth/reth) [default: geth]: "
+        read -r input
+        RPC_TYPE="${input:-geth}"
+        
+        if [[ "$RPC_TYPE" == "geth" || "$RPC_TYPE" == "reth" ]]; then
+            break
+        else
+            print_error "Invalid RPC type. Please enter 'geth' or 'reth'"
+        fi
+    done
+    
     # L1 RPC URL
     while true; do
-        echo -n "2. L1 RPC URL (Ethereum L1 RPC endpoint): "
+        echo -n "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
         read -r L1_RPC_URL
         if [[ -n "$L1_RPC_URL" ]]; then
             # Basic URL validation
@@ -230,7 +259,7 @@ get_user_input() {
     
     # L1 Beacon URL
     while true; do
-        echo -n "3. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
+        echo -n "4. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
         read -r L1_BEACON_URL
         if [[ -n "$L1_BEACON_URL" ]]; then
             # Basic URL validation
@@ -248,29 +277,29 @@ get_user_input() {
     echo ""
     print_info "Optional configurations (press Enter to use defaults):"
     
-    # Set default data directory based on network type
-    DEFAULT_NETWORK_DATA_DIR="data-${NETWORK_TYPE}"
-    echo -n "4. Data directory [default: $DEFAULT_NETWORK_DATA_DIR]: "
+    # Set default data directory based on network type and RPC type
+    DEFAULT_NETWORK_DATA_DIR="data-${NETWORK_TYPE}-${RPC_TYPE}"
+    echo -n "5. Data directory [default: $DEFAULT_NETWORK_DATA_DIR]: "
     read -r input
     DATA_DIR="${input:-$DEFAULT_NETWORK_DATA_DIR}"
     
-    echo -n "5. RPC port [default: $DEFAULT_RPC_PORT]: "
+    echo -n "6. RPC port [default: $DEFAULT_RPC_PORT]: "
     read -r input
     RPC_PORT="${input:-$DEFAULT_RPC_PORT}"
     
-    echo -n "6. WebSocket port [default: $DEFAULT_WS_PORT]: "
+    echo -n "7. WebSocket port [default: $DEFAULT_WS_PORT]: "
     read -r input
     WS_PORT="${input:-$DEFAULT_WS_PORT}"
     
-    echo -n "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: "
+    echo -n "8. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: "
     read -r input
     NODE_RPC_PORT="${input:-$DEFAULT_NODE_RPC_PORT}"
     
-    echo -n "8. Geth P2P port [default: $DEFAULT_GETH_P2P_PORT]: "
+    echo -n "9. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: "
     read -r input
     GETH_P2P_PORT="${input:-$DEFAULT_GETH_P2P_PORT}"
     
-    echo -n "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: "
+    echo -n "10. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: "
     read -r input
     NODE_P2P_PORT="${input:-$DEFAULT_NODE_P2P_PORT}"
     
@@ -288,11 +317,22 @@ generate_config_files() {
     # Load network-specific configuration
     load_network_config "$NETWORK_TYPE"
     
+    # Set execution client image and config based on RPC type
+    if [ "$RPC_TYPE" = "reth" ]; then
+        EXEC_IMAGE_TAG="$OP_RETH_IMAGE_TAG"
+        EXEC_CONFIG="$RETH_CONFIG"
+        EXEC_CLIENT="op-reth"
+    else
+        EXEC_IMAGE_TAG="$OP_GETH_IMAGE_TAG"
+        EXEC_CONFIG="$GETH_CONFIG"
+        EXEC_CLIENT="op-geth"
+    fi
+    
     # Network-specific directories (only set if not already set by user input)
-    DATA_DIR="${DATA_DIR:-data-${NETWORK_TYPE}}"
-    CONFIG_DIR="config-${NETWORK_TYPE}"
+    DATA_DIR="${DATA_DIR:-data-${NETWORK_TYPE}-${RPC_TYPE}}"
+    CONFIG_DIR="config-${NETWORK_TYPE}-${RPC_TYPE}"
     GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-    LOGS_DIR="logs-${NETWORK_TYPE}"
+    LOGS_DIR="logs-${NETWORK_TYPE}-${RPC_TYPE}"
     
     # Create necessary directories
     mkdir -p "$CONFIG_DIR" "$DATA_DIR/op-node/p2p" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
@@ -331,11 +371,109 @@ EOF
     
     # Copy configuration files from temp directory
     cp "$TEMP_DIR/$ROLLUP_CONFIG" "$CONFIG_DIR/"
-    cp "$TEMP_DIR/$GETH_CONFIG" "$CONFIG_DIR/"
+    cp "$TEMP_DIR/$EXEC_CONFIG" "$CONFIG_DIR/"
     
     # Generate docker-compose.yml with custom ports
-    print_info "Generating docker-compose.yml with custom ports..."
-    cat > docker-compose.yml << EOF
+    print_info "Generating docker-compose.yml for $RPC_TYPE with custom ports..."
+    
+    if [ "$RPC_TYPE" = "reth" ]; then
+        # Generate docker-compose.yml for Reth
+        cat > docker-compose.yml << EOF
+version: '3.8'
+
+networks:
+  xlayer-network:
+    name: xlayer-network
+
+services:
+  op-reth:
+    image: "\${OP_RETH_IMAGE_TAG}"
+    container_name: xlayer-${NETWORK_TYPE}-op-reth
+    ports:
+      - "$RPC_PORT:8545"   # HTTP RPC
+      - "8552:8552"        # Engine API
+      - "$WS_PORT:7546"    # WebSocket
+      - "$GETH_P2P_PORT:30303" # P2P TCP
+      - "$GETH_P2P_PORT:30303/udp" # P2P UDP
+    volumes:
+      - ./$DATA_DIR:/data
+      - ./$CONFIG_DIR/jwt.txt:/jwt.txt
+      - ./$CONFIG_DIR/$EXEC_CONFIG:/config.toml
+      - ./$LOGS_DIR/op-reth:/var/log/op-reth
+    command:
+      - node
+      - --datadir=/data
+      - --config=/config.toml
+      - --chain=optimism
+      - --rollup.sequencer-http=$SEQUENCER_HTTP
+      - --authrpc.jwtsecret=/jwt.txt
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8552
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api=web3,debug,eth,txpool,net,trace,rpc
+      - --http.corsdomain=*
+      - --ws
+      - --ws.addr=0.0.0.0
+      - --ws.port=7546
+      - --ws.origins=*
+      - --ws.api=debug,eth,txpool,net,trace
+      - --log.file.directory=/var/log/op-reth
+    networks:
+      - xlayer-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+  op-node:
+    image: "\${OP_STACK_IMAGE_TAG}"
+    container_name: xlayer-${NETWORK_TYPE}-op-node
+    entrypoint: sh
+    networks:
+      - xlayer-network
+    ports:
+      - "$NODE_RPC_PORT:9545"
+    volumes:
+      - ./$DATA_DIR/op-node:/data
+      - ./$CONFIG_DIR/$ROLLUP_CONFIG:/rollup.json
+      - ./$CONFIG_DIR/jwt.txt:/jwt.txt
+      - ./$LOGS_DIR/op-node:/var/log/op-node
+    command:
+      - -c
+      - |
+        exec /app/op-node/bin/op-node \\
+          --log.level=info \\
+          --l2=http://op-reth:8552 \\
+          --l2.jwt-secret=/jwt.txt \\
+          --sequencer.enabled=false \\
+          --verifier.l1-confs=1 \\
+          --rollup.config=/rollup.json \\
+          --rpc.addr=0.0.0.0 \\
+          --rpc.port=9545 \\
+          --p2p.listen.tcp=$NODE_P2P_PORT \\
+          --p2p.listen.udp=$NODE_P2P_PORT \\
+          --p2p.peerstore.path=/data/p2p/opnode_peerstore_db \\
+          --p2p.discovery.path=/data/p2p/opnode_discovery_db \\
+          --p2p.bootnodes=$OP_NODE_BOOTNODE \\
+          --p2p.static=$P2P_STATIC \\
+          --rpc.enable-admin=true \\
+          --l1.trustrpc \\
+          --l1=\${L1_RPC_URL} \\
+          --l1.beacon=\${L1_BEACON_URL} \\
+          --l1.rpckind=standard \\
+          --conductor.enabled=false \\
+          --safedb.path=/data/safedb \\
+          2>&1 | tee /var/log/op-node/op-node.log
+    depends_on:
+      - op-reth
+EOF
+    else
+        # Generate docker-compose.yml for Geth
+        cat > docker-compose.yml << EOF
 version: '3.8'
 
 networks:
@@ -356,7 +494,7 @@ services:
     volumes:
       - ./$DATA_DIR:/data
       - ./$CONFIG_DIR/jwt.txt:/jwt.txt
-      - ./$CONFIG_DIR/$GETH_CONFIG:/config.toml
+      - ./$CONFIG_DIR/$EXEC_CONFIG:/config.toml
       - ./$LOGS_DIR/op-geth:/var/log/op-geth
     command:
       - --verbosity=3
@@ -418,6 +556,7 @@ services:
     depends_on:
       - op-geth
 EOF
+    fi
     
     print_success "Configuration files generated successfully"
 }
@@ -497,21 +636,32 @@ initialize_node() {
         print_warning "jq not found, skipping chain ID verification"
     fi
     
-    # Initialize op-geth with the genesis file
-    print_info "Initializing op-geth with genesis file... (This may take a while, please wait patiently.)"
-    docker run --rm \
-        -v "$(pwd)/$DATA_DIR:/data" \
-        -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
-        "$OP_GETH_IMAGE_TAG" \
-        --datadir /data \
-        --gcmode=archive \
-        --db.engine=pebble \
-        --log.format json \
-        init \
-        --state.scheme=hash \
-        /genesis.json
+    # Initialize execution client with the genesis file
+    if [ "$RPC_TYPE" = "reth" ]; then
+        print_info "Initializing op-reth with genesis file... (This may take a while, please wait patiently.)"
+        docker run --rm \
+            -v "$(pwd)/$DATA_DIR:/data" \
+            -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
+            "$OP_RETH_IMAGE_TAG" \
+            init \
+            --datadir /data \
+            --chain /genesis.json
+    else
+        print_info "Initializing op-geth with genesis file... (This may take a while, please wait patiently.)"
+        docker run --rm \
+            -v "$(pwd)/$DATA_DIR:/data" \
+            -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
+            "$OP_GETH_IMAGE_TAG" \
+            --datadir /data \
+            --gcmode=archive \
+            --db.engine=pebble \
+            --log.format json \
+            init \
+            --state.scheme=hash \
+            /genesis.json
+    fi
     
-    print_success "X Layer RPC node initialization completed"
+    print_success "X Layer RPC node ($EXEC_CLIENT) initialization completed"
 }
 
 # Function to start services
@@ -600,6 +750,7 @@ display_connection_info() {
     echo ""
     echo "📁 Data Directory: $DATA_DIR"
     echo "🌍 Network: $NETWORK_TYPE"
+    echo "⚙️  Execution Client: $EXEC_CLIENT"
     echo ""
     
     # Check if L1 URLs are placeholder values

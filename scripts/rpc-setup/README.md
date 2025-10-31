@@ -8,7 +8,9 @@ X Layer is a Layer 2 network built on Optimism OP Stack. This project provides a
 
 ### Core Components
 
-- **op-geth**: X Layer execution layer client (modified version based on Geth)
+- **Execution Layer Client** (choose one):
+  - **op-geth**: Go-based execution client (default, stable and battle-tested)
+  - **op-reth**: Rust-based execution client (high performance, lower memory footprint)
 - **op-node**: X Layer consensus layer client, connects to Ethereum L1 and manages L2 state
 
 ### Network Support
@@ -28,6 +30,10 @@ curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/main/scripts/rpc
 chmod +x one-click-setup.sh && ./one-click-setup.sh
 ```
 
+The script will prompt you to choose:
+- Network type: `testnet` or `mainnet`
+- RPC client type: `geth` (default) or `reth`
+
 ### Method 2: Step-by-Step Deployment
 
 If you want to manually control the deployment process:
@@ -35,17 +41,23 @@ If you want to manually control the deployment process:
 #### 1. Initialize Node
 
 ```bash
-# Initialize testnet
+# Initialize testnet with op-geth (default)
 ./init.sh testnet
 
-# Or initialize mainnet
+# Initialize testnet with op-reth
+./init.sh testnet reth
+
+# Or initialize mainnet with op-geth
 ./init.sh mainnet
+
+# Or initialize mainnet with op-reth
+./init.sh mainnet reth
 ```
 
 This will complete the following operations:
 - Download and extract Genesis file
 - Copy configuration files to corresponding network directories
-- Initialize op-geth database
+- Initialize execution client (op-geth or op-reth) database
 
 #### 2. Configure Environment Variables
 
@@ -66,12 +78,20 @@ L1_BEACON_URL={your-l1-beacon-url}  # Ethereum Beacon API endpoint
 #### 3. Start Node
 
 ```bash
-# Start testnet node
+# Start testnet node with op-geth (default)
 ./start.sh testnet
 
-# Or start mainnet node
+# Start testnet node with op-reth
+./start.sh testnet reth
+
+# Or start mainnet node with op-geth
 ./start.sh mainnet
+
+# Or start mainnet node with op-reth
+./start.sh mainnet reth
 ```
+
+**Note**: The RPC type must match what you used in the initialization step.
 
 #### 4. Stop Node
 
@@ -91,14 +111,22 @@ rpc-setup/
 ├── config/                 # Configuration directory
 │   ├── op-geth-config-testnet.toml   # Testnet op-geth config
 │   ├── op-geth-config-mainnet.toml   # Mainnet op-geth config
+│   ├── op-reth-config-testnet.toml   # Testnet op-reth config
+│   ├── op-reth-config-mainnet.toml   # Mainnet op-reth config
 │   ├── rollup-testnet.json           # Testnet rollup config
 │   └── rollup-mainnet.json           # Mainnet rollup config
-├── data-testnet/           # Testnet data directory (generated after init)
-├── data-mainnet/           # Mainnet data directory (generated after init)
-├── config-testnet/         # Testnet config directory (generated after init)
-├── config-mainnet/         # Mainnet config directory (generated after init)
-└── logs-testnet/           # Testnet logs directory
-    logs-mainnet/           # Mainnet logs directory
+├── data-testnet-geth/      # Testnet Geth data (generated after init)
+├── data-testnet-reth/      # Testnet Reth data (generated after init)
+├── data-mainnet-geth/      # Mainnet Geth data (generated after init)
+├── data-mainnet-reth/      # Mainnet Reth data (generated after init)
+├── config-testnet-geth/    # Testnet Geth config (generated after init)
+├── config-testnet-reth/    # Testnet Reth config (generated after init)
+├── config-mainnet-geth/    # Mainnet Geth config (generated after init)
+├── config-mainnet-reth/    # Mainnet Reth config (generated after init)
+└── logs-testnet-geth/      # Testnet Geth logs
+    logs-testnet-reth/      # Testnet Reth logs
+    logs-mainnet-geth/      # Mainnet Geth logs
+    logs-mainnet-reth/      # Mainnet Reth logs
 ```
 
 ## 🔧 System Requirements
@@ -203,30 +231,51 @@ Log files are saved in the following locations:
 
 ## 🛠️ Advanced Configuration
 
+### Choosing Between Geth and Reth
+
+**Use op-geth if:**
+- You prefer stability and proven track record
+- You need maximum compatibility
+- You're familiar with Geth's tooling
+
+**Use op-reth if:**
+- You want better performance and efficiency
+- You need lower memory consumption
+- You're interested in Rust-based infrastructure
+
 ### Custom Ports
 
 Select custom ports in `one-click-setup.sh`, or directly modify port mapping in `start.sh`.
 
 ### Modify P2P Settings
 
-Edit P2P related parameters in configuration file:
+**For op-geth**, edit P2P related parameters in configuration file:
 
 ```toml
 [Node.P2P]
 MaxPeers = 30  # Maximum connections
 ```
 
+**For op-reth**, edit in configuration file:
+
+```toml
+[p2p]
+max_outbound_peers = 30
+max_inbound_peers = 30
+```
+
 ### Enable Debug Mode
 
-Increase log verbosity:
-
-Modify `--verbosity` parameter in `start.sh`:
+**For op-geth**, modify `--verbosity` parameter in `start.sh`:
 - `0` = Silent
 - `1` = Error
 - `2` = Warning  
 - `3` = Info
 - `4` = Debug
 - `5` = Trace
+
+**For op-reth**, modify `--log.level` parameter:
+- `error`, `warn`, `info`, `debug`, `trace`
 
 ## 🔄 Update Node
 
@@ -262,6 +311,8 @@ cp -r data-testnet data-testnet.backup
 2. **Mainnet**: Production environment use, requires higher resource requirements
 3. **Backup**: Regularly backup data directory and configuration files
 4. **Monitoring**: Continuously monitor node status and sync progress
+5. **Client Choice**: Once initialized with a specific client (geth/reth), you should continue using the same client. Switching requires re-initialization
+6. **Reth Status**: op-reth is a newer client. While highly performant, it may have different compatibility characteristics than op-geth
 
 ## 📄 License
 

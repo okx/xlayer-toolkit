@@ -1,43 +1,58 @@
+```
+ __  __  _                            _              _ _    _ _   
+ \ \/ / | |                          | |            | | |  (_) |  
+  \  /  | |     __ _ _   _  ___ _ __ | |_ ___   ___ | | | ___| |_ 
+  / \  | |    / _` | | | |/ _ \ '__| | __/ _ \ / _ \| | |/ / | __|
+ / /\ \ | |___| (_| | |_| |  __/ |    | || (_) | (_) | |   <| | |_ 
+/_/  \_\|______\__,_|\__, |\___|_|     \__\___/ \___/|_|_|\_\_|\__|
+                      __/ |                                        
+                     |___/                                         
+```
+
 # X Layer Toolkit
 
-X Layer Toolkit is a collection of development and maintenance tools provided by OKX to support the X Layer ecosystem development and operations.
+A comprehensive collection of tools and scripts for deploying and managing X Layer infrastructure.
 
-## 📚 Project Overview
+## 📦 Available Tools
 
-X Layer is a Layer 2 blockchain network built on Optimism OP Stack. This project provides a set of practical tools to help developers and service providers interact with the X Layer network.
+### [RPC Node Setup](scripts/rpc-setup/README.md)
 
-## 🎯 Modules
+Deploy your own X Layer RPC node with support for both Geth and Reth execution clients.
 
-### RPC Setup
+**Features:**
+- ✅ One-click automated setup
+- 🐳 Docker-based deployment
+- 🔄 Full RPC support (HTTP, WebSocket, Admin)
+- 📊 Archive node capability
+- 🌐 P2P network connectivity
+- 🔐 Secure JWT authentication
+- ⚡ Support for both op-geth and op-reth clients
 
-Complete self-hosted X Layer RPC node solution, supporting quick deployment and management of dedicated RPC nodes.
+**Quick Start:**
+```bash
+cd scripts/rpc-setup
+./one-click-setup.sh
+```
 
-**Key Features:**
-- ✅ Support for Testnet and Mainnet
-- ✅ One-click deployment scripts
-- ✅ Docker containerized deployment
-- ✅ Automatic initialization and synchronization
-- ✅ Complete logging
+[📖 Full RPC Setup Documentation →](scripts/rpc-setup/README.md)
 
-**Detailed Documentation:** [scripts/rpc-setup/README.md](scripts/rpc-setup/README.md)
+## 🛠️ System Requirements
 
+- **OS**: Linux (Ubuntu 24.04+ recommended)
+- **Memory**: 16GB RAM minimum (32GB+ recommended for RPC nodes)
+- **Storage**: 100GB+ available disk space (SSD recommended)
+- **Docker**: 20.10+
+- **Docker Compose**: 2.0+
 
-## 🤝 Contributing
+## 📞 Support and Resources
 
-Issues and Pull Requests are welcome!
+- **Official Documentation**: [X Layer Docs](https://web3.okx.com/xlayer/docs/developer/build-on-xlayer/about-xlayer)
+- **GitHub Repository**: [xlayer-toolkit](https://github.com/okx/xlayer-toolkit)
 
 ## 📄 License
 
-This project follows the corresponding open source license.
+This project is part of the X Layer ecosystem. Please refer to individual tool directories for specific licensing information.
 
-## 🔗 Related Links
+---
 
-- [X Layer RPC Endpoint](https://rpc.xlayer.tech)
-- [GitHub Repository](https://github.com/okx/xlayer-toolkit)
-
-## 💡 Support
-
-If you encounter any issues:
-
-1. Check the relevant documentation
-2. Submit an Issue on GitHub
+**Built with ❤️ for the X Layer community**
