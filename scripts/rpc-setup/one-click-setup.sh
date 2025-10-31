@@ -661,6 +661,29 @@ initialize_node() {
     
     print_success "Genesis file extracted successfully to $CONFIG_DIR/$GENESIS_FILE"
     
+    # Prepare genesis file for Reth (if needed)
+    print_info "📋 Preparing genesis-reth.json for op-reth support..."
+    GENESIS_RETH_FILE="genesis-reth.json"
+    
+    if [ ! -f "$CONFIG_DIR/$GENESIS_RETH_FILE" ]; then
+        cp "$CONFIG_DIR/$GENESIS_FILE" "$CONFIG_DIR/$GENESIS_RETH_FILE"
+        BLKNO=$(grep "legacyXLayerBlock" "$CONFIG_DIR/$GENESIS_FILE" | tr -d ', ' | cut -d ':' -f 2)
+        if [ -z "$BLKNO" ]; then
+            print_error "Failed to extract legacyXLayerBlock from $GENESIS_FILE"
+            exit 1
+        fi
+        
+        # Use appropriate sed for macOS or Linux
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' 's/"number": "0x0"/"number": "'"$BLKNO"'"/' "$CONFIG_DIR/$GENESIS_RETH_FILE"
+        else
+            sed -i 's/"number": "0x0"/"number": "'"$BLKNO"'"/' "$CONFIG_DIR/$GENESIS_RETH_FILE"
+        fi
+        print_success "Genesis-reth file generated successfully at $CONFIG_DIR/$GENESIS_RETH_FILE"
+    else
+        print_success "Genesis-reth file already exists at $CONFIG_DIR/$GENESIS_RETH_FILE"
+    fi
+    
     # Verify genesis file chain ID matches network configuration
     print_info "Verifying genesis file chain ID..."
     if command -v jq &> /dev/null; then
