@@ -68,13 +68,15 @@ echo "📁 Data will be stored in: $CHAIN_DATA_DIR"
 
 mkdir -p "$DATA_DIR" "$CONFIG_DIR" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node" "$LOGS_DIR/op-reth"
 
-# Download the genesis file
+# Download the genesis file to chaindata directory
+GENESIS_TAR_PATH="$CHAIN_DATA_DIR/genesis.tar.gz"
 echo "📥 Downloading genesis file from $GENESIS_URL..."
-wget -c "$GENESIS_URL" -O genesis.tar.gz
+echo "📁 Download location: $GENESIS_TAR_PATH"
+wget -c "$GENESIS_URL" -O "$GENESIS_TAR_PATH"
 
 # Extract the genesis file
 echo "📦 Extracting genesis file..."
-tar -xzf genesis.tar.gz -C "$CONFIG_DIR/"
+tar -xzf "$GENESIS_TAR_PATH" -C "$CONFIG_DIR/"
 
 # Handle different genesis file names and rename to network-specific name
 if [ -f "$CONFIG_DIR/merged.genesis.json" ]; then
@@ -88,7 +90,8 @@ fi
 
 # Clean up the downloaded archive
 echo "🧹 Cleaning up downloaded archive..."
-rm genesis.tar.gz
+rm "$GENESIS_TAR_PATH"
+echo "✅ Temporary file removed: $GENESIS_TAR_PATH"
 
 # Check if genesis file exists
 if [ ! -f "$CONFIG_DIR/$GENESIS_FILE" ]; then

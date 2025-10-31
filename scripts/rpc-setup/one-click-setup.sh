@@ -590,13 +590,15 @@ initialize_node() {
         fi
     fi
     
-    # Download the genesis file
+    # Download the genesis file to chaindata directory
+    GENESIS_TAR_PATH="$CHAIN_DATA_DIR/genesis.tar.gz"
     print_info "Downloading genesis file from $GENESIS_URL..."
-    wget -c "$GENESIS_URL" -O genesis.tar.gz
+    print_info "Download location: $GENESIS_TAR_PATH"
+    wget -c "$GENESIS_URL" -O "$GENESIS_TAR_PATH"
     
     # Extract the genesis file
     print_info "Extracting genesis file..."
-    tar -xzf genesis.tar.gz -C "$CONFIG_DIR/"
+    tar -xzf "$GENESIS_TAR_PATH" -C "$CONFIG_DIR/"
     
     # Handle different genesis file names and rename to network-specific name
     if [ -f "$CONFIG_DIR/merged.genesis.json" ]; then
@@ -610,7 +612,8 @@ initialize_node() {
     
     # Clean up the downloaded archive
     print_info "Cleaning up downloaded archive..."
-    rm genesis.tar.gz
+    rm "$GENESIS_TAR_PATH"
+    print_success "Temporary file removed: $GENESIS_TAR_PATH"
     
     # Check if genesis file exists
     if [ ! -f "$CONFIG_DIR/$GENESIS_FILE" ]; then
