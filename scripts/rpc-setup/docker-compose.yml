@@ -26,13 +26,12 @@ services:
       - ./${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-geth/config/op-geth-config-${NETWORK_TYPE:-testnet}.toml:/config.toml
       - ./entrypoint/geth-rpc.sh:/entrypoint/geth-rpc.sh
       - ./.env:/app/.env
-      - ./${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-geth/logs/op-geth:/var/log/op-geth
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
-      interval: 3s
-      timeout: 3s
+      interval: 10s
+      timeout: 5s
       retries: 10
-      start_period: 3s
+      start_period: 60s
 
   op-reth:
     image: "${OP_RETH_IMAGE_TAG:-xlayer/op-reth:release-testnet}"
@@ -60,13 +59,12 @@ services:
       - ./${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-reth/config/op-reth-config-${NETWORK_TYPE:-testnet}.toml:/config.toml
       - ./entrypoint/reth-rpc.sh:/entrypoint/reth-rpc.sh
       - ./.env:/app/.env
-      - ./${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-reth/logs/op-reth:/var/log/op-reth
     healthcheck:
       test: ["CMD", "curl", "-X", "POST", "http://localhost:8545"]
-      interval: 3s
-      timeout: 3s
+      interval: 10s
+      timeout: 5s
       retries: 10
-      start_period: 3s
+      start_period: 60s
 
   op-node:
     image: "${OP_STACK_IMAGE_TAG:-xlayer/op-node:0.0.9}"
@@ -91,4 +89,3 @@ services:
       - ./${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-${L2_ENGINEKIND:-geth}/config/jwt.txt:/jwt.txt
       - ./entrypoint/op-node.sh:/entrypoint/op-node.sh
       - ./.env:/app/.env
-      - ./${CHAIN_DATA_ROOT:-chaindata}/${NETWORK_TYPE:-testnet}-${L2_ENGINEKIND:-geth}/logs/op-node:/var/log/op-node

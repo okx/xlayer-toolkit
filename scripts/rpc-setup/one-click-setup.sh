@@ -335,11 +335,8 @@ L1_BEACON_URL=$L1_BEACON_URL
 # Network Type
 NETWORK_TYPE=$NETWORK_TYPE
 
-# L2 Engine Type: geth or reth
+# L2 Engine Type: geth or reth (Docker Compose profiles will be set automatically)
 L2_ENGINEKIND=$L2_ENGINEKIND
-
-# Docker Compose Profile (should match L2_ENGINEKIND)
-COMPOSE_PROFILES=$L2_ENGINEKIND
 
 # Data Directory Root
 CHAIN_DATA_ROOT=chaindata
@@ -512,6 +509,7 @@ start_services() {
 
     # Set environment variables and start
     export OP_GETH_IMAGE_TAG OP_STACK_IMAGE_TAG OP_RETH_IMAGE_TAG
+    export COMPOSE_PROFILES="$L2_ENGINEKIND"  # Activate the correct Docker Compose profile
     $DOCKER_COMPOSE_CMD up -d
     print_success "X Layer RPC node startup completed"
 }

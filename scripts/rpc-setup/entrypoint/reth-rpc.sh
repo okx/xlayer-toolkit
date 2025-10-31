@@ -3,6 +3,7 @@
 set -e
 source /app/.env
 echo "SEQUENCER_HTTP_URL: ${SEQUENCER_HTTP_URL}"
+echo "OP_GETH_BOOTNODE: ${OP_GETH_BOOTNODE}"
 exec op-reth node \
       --datadir=/datadir \
       --chain=/genesis.json \
@@ -24,4 +25,5 @@ exec op-reth node \
       --authrpc.port=8552 \
       --authrpc.jwtsecret=/jwt.txt \
       --rollup.disable-tx-pool-gossip \
-      --rollup.sequencer-http=${SEQUENCER_HTTP_URL}
+      --rollup.sequencer-http=${SEQUENCER_HTTP_URL} \
+      --bootnodes=${OP_GETH_BOOTNODE}
