@@ -31,11 +31,27 @@ fi
 # Load environment variables first
 source .env
 
+# Validate: command line argument must match .env NETWORK_TYPE
+ENV_NETWORK_TYPE="${NETWORK_TYPE:-}"
+if [ -n "$ENV_NETWORK_TYPE" ] && [ "$ENV_NETWORK_TYPE" != "$1" ]; then
+    echo "❌ Error: Network type mismatch!"
+    echo "   Command line argument: $1"
+    echo "   .env NETWORK_TYPE: $ENV_NETWORK_TYPE"
+    echo ""
+    echo "💡 Please update .env file to match the network you want to start:"
+    echo "   NETWORK_TYPE=$1"
+    exit 1
+fi
+
+# Restore NETWORK_TYPE from command line argument
+NETWORK_TYPE=$1
+
 # Set RPC_TYPE based on L2_ENGINEKIND
 L2_ENGINEKIND="${L2_ENGINEKIND:-geth}"
 RPC_TYPE="op-${L2_ENGINEKIND}"
 
 echo "🔍 RPC type: $RPC_TYPE"
+echo "📋 Using configuration: $NETWORK_TYPE network with $L2_ENGINEKIND engine"
 
 # Verify static docker-compose.yml exists
 if [ ! -f docker-compose.yml ]; then

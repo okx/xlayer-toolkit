@@ -51,10 +51,27 @@ echo "🚀 Initializing X Layer Self-hosted RPC node for $NETWORK_TYPE network..
 # Load environment variables if .env exists (for CHAIN_DATA_ROOT and L2_ENGINEKIND)
 if [ -f .env ]; then
     source .env
+    
+    # Validate: command line argument must match .env NETWORK_TYPE
+    if [ -n "$NETWORK_TYPE" ] && [ "${NETWORK_TYPE:-}" != "" ]; then
+        ENV_NETWORK_TYPE="${NETWORK_TYPE}"
+    fi
+    
+    if [ -n "$ENV_NETWORK_TYPE" ] && [ "$ENV_NETWORK_TYPE" != "$NETWORK_TYPE" ]; then
+        echo "❌ Error: Network type mismatch!"
+        echo "   Command line argument: $NETWORK_TYPE"
+        echo "   .env NETWORK_TYPE: $ENV_NETWORK_TYPE"
+        echo ""
+        echo "💡 Please update .env file to match the network you want to initialize:"
+        echo "   NETWORK_TYPE=$NETWORK_TYPE"
+        exit 1
+    fi
 fi
 
 # Set L2_ENGINEKIND default if not set
 L2_ENGINEKIND="${L2_ENGINEKIND:-geth}"
+
+echo "📋 Using configuration: $NETWORK_TYPE network with $L2_ENGINEKIND engine"
 
 # Data root directory (can be overridden via .env)
 CHAIN_DATA_ROOT="${CHAIN_DATA_ROOT:-chaindata}"
