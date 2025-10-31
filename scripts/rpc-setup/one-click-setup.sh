@@ -645,19 +645,28 @@ initialize_node() {
         print_warning "jq not found, skipping chain ID verification"
     fi
     
-    # Initialize op-geth with the genesis file
-    print_info "Initializing op-geth with genesis file... (This may take a while, please wait patiently.)"
-    docker run --rm \
-        -v "$(pwd)/$DATA_DIR:/data" \
-        -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
-        "$OP_GETH_IMAGE_TAG" \
-        --datadir /data \
-        --gcmode=archive \
-        --db.engine=pebble \
-        --log.format json \
-        init \
-        --state.scheme=hash \
-        /genesis.json
+    # Initialize based on L2_ENGINEKIND
+    if [ "$L2_ENGINEKIND" = "geth" ]; then
+        # Initialize op-geth with the genesis file (geth requires init)
+        print_info "Initializing op-geth with genesis file... (This may take a while, please wait patiently.)"
+        docker run --rm \
+            -v "$(pwd)/$DATA_DIR:/data" \
+            -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
+            "$OP_GETH_IMAGE_TAG" \
+            --datadir /data \
+            --gcmode=archive \
+            --db.engine=pebble \
+            --log.format json \
+            init \
+            --state.scheme=hash \
+            /genesis.json
+        print_success "op-geth initialization completed"
+    else
+        # op-reth does not need init command, it will load genesis on first start
+        print_info "op-reth does not require initialization"
+        print_info "Genesis file will be loaded automatically on first start"
+        print_success "op-reth configuration ready"
+    fi
     
     print_success "X Layer RPC node initialization completed"
 }

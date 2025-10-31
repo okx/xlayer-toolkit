@@ -158,19 +158,28 @@ ln -sf "$GENESIS_FILE" "$CONFIG_DIR/genesis.json" 2>/dev/null || true
 ln -sf "$GENESIS_RETH_FILE" "$CONFIG_DIR/genesis-reth.json" 2>/dev/null || true
 ln -sf "$ROLLUP_CONFIG" "$CONFIG_DIR/rollup.json" 2>/dev/null || true
 
-# Initialize op-geth with the genesis file
-echo "🔧 Initializing op-geth with genesis file... (It may take a while, please wait patiently.)"
-docker run --rm \
-    -v "$(pwd)/$DATA_DIR:/data" \
-    -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
-    ${OP_GETH_IMAGE_TAG} \
-    --datadir /data \
-    --gcmode=archive \
-    --db.engine=pebble \
-    --log.format json \
-    init \
-    --state.scheme=hash \
-    /genesis.json
+# Initialize based on L2_ENGINEKIND
+if [ "$L2_ENGINEKIND" = "geth" ]; then
+    # Initialize op-geth with the genesis file (geth requires init)
+    echo "🔧 Initializing op-geth with genesis file... (It may take a while, please wait patiently.)"
+    docker run --rm \
+        -v "$(pwd)/$DATA_DIR:/data" \
+        -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
+        ${OP_GETH_IMAGE_TAG} \
+        --datadir /data \
+        --gcmode=archive \
+        --db.engine=pebble \
+        --log.format json \
+        init \
+        --state.scheme=hash \
+        /genesis.json
+    echo "✅ op-geth initialization completed!"
+else
+    # op-reth does not need init command, it will load genesis on first start
+    echo "ℹ️  op-reth does not require initialization"
+    echo "ℹ️  Genesis file will be loaded automatically on first start"
+    echo "✅ op-reth configuration ready!"
+fi
 
 echo "✅ X Layer RPC node initialization completed!"
 echo ""
