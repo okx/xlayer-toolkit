@@ -1,1 +1,6 @@
 /.vscode/openscaidentity
+.env
+.node
+
+# RPC node data directories (new structure)
+chaindata

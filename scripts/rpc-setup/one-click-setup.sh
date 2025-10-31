@@ -209,7 +209,7 @@ get_user_input() {
         L1_RPC_URL="https://placeholder-l1-rpc-url"
         L1_BEACON_URL="https://placeholder-l1-beacon-url"
         L2_ENGINEKIND="geth"
-        DATA_DIR="data-${NETWORK_TYPE}"
+        # DATA_DIR will be set in generate_config_files based on NETWORK_TYPE and L2_ENGINEKIND
         RPC_PORT="$DEFAULT_RPC_PORT"
         WS_PORT="$DEFAULT_WS_PORT"
         NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
@@ -280,14 +280,13 @@ get_user_input() {
         fi
     done
     
-    # Set default data directory based on network type
-    DEFAULT_NETWORK_DATA_DIR="data-${NETWORK_TYPE}"
-    echo -n "5. Data directory [default: $DEFAULT_NETWORK_DATA_DIR]: "
-    read -r input
-    DATA_DIR="${input:-$DEFAULT_NETWORK_DATA_DIR}"
+    print_info "Note: Data will be stored in chaindata/${NETWORK_TYPE}-${L2_ENGINEKIND}/"
+    
+    # Skip data directory input - will be auto-determined
+    # DATA_DIR will be set in generate_config_files as: chaindata/{network}-{engine}/data
     
     while true; do
-        echo -n "6. RPC port [default: $DEFAULT_RPC_PORT]: "
+        echo -n "5. RPC port [default: $DEFAULT_RPC_PORT]: "
         read -r input
         RPC_PORT="${input:-$DEFAULT_RPC_PORT}"
         if validate_port "$RPC_PORT"; then
@@ -298,7 +297,7 @@ get_user_input() {
     done
     
     while true; do
-        echo -n "7. WebSocket port [default: $DEFAULT_WS_PORT]: "
+        echo -n "6. WebSocket port [default: $DEFAULT_WS_PORT]: "
         read -r input
         WS_PORT="${input:-$DEFAULT_WS_PORT}"
         if validate_port "$WS_PORT"; then
@@ -309,7 +308,7 @@ get_user_input() {
     done
     
     while true; do
-        echo -n "8. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: "
+        echo -n "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: "
         read -r input
         NODE_RPC_PORT="${input:-$DEFAULT_NODE_RPC_PORT}"
         if validate_port "$NODE_RPC_PORT"; then
@@ -320,7 +319,7 @@ get_user_input() {
     done
     
     while true; do
-        echo -n "9. Geth P2P port [default: $DEFAULT_GETH_P2P_PORT]: "
+        echo -n "8. Geth P2P port [default: $DEFAULT_GETH_P2P_PORT]: "
         read -r input
         GETH_P2P_PORT="${input:-$DEFAULT_GETH_P2P_PORT}"
         if validate_port "$GETH_P2P_PORT"; then
@@ -331,7 +330,7 @@ get_user_input() {
     done
     
     while true; do
-        echo -n "10. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: "
+        echo -n "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: "
         read -r input
         NODE_P2P_PORT="${input:-$DEFAULT_NODE_P2P_PORT}"
         if validate_port "$NODE_P2P_PORT"; then
@@ -355,14 +354,21 @@ generate_config_files() {
     # Load network-specific configuration
     load_network_config "$NETWORK_TYPE"
     
-    # Network-specific directories (only set if not already set by user input)
-    DATA_DIR="${DATA_DIR:-data-${NETWORK_TYPE}}"
-    CONFIG_DIR="config-${NETWORK_TYPE}"
+    # Data root directory (can be overridden via .env)
+    CHAIN_DATA_ROOT="${CHAIN_DATA_ROOT:-chaindata}"
+    
+    # Network and engine specific directory structure
+    # Format: chaindata/{network}-{engine}/
+    CHAIN_DATA_DIR="$CHAIN_DATA_ROOT/${NETWORK_TYPE}-${L2_ENGINEKIND}"
+    DATA_DIR="$CHAIN_DATA_DIR/data"
+    CONFIG_DIR="$CHAIN_DATA_DIR/config"
+    LOGS_DIR="$CHAIN_DATA_DIR/logs"
     GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-    LOGS_DIR="logs-${NETWORK_TYPE}"
+    
+    print_info "📁 Data will be stored in: $CHAIN_DATA_DIR"
     
     # Create necessary directories
-    mkdir -p "$CONFIG_DIR" "$DATA_DIR/op-node/p2p" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
+    mkdir -p "$CONFIG_DIR" "$DATA_DIR/op-node/p2p" "$DATA_DIR/op-reth" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node" "$LOGS_DIR/op-reth"
     
     # Generate JWT secret for this network
     print_info "Generating JWT secret for $NETWORK_TYPE..."
@@ -392,6 +398,10 @@ L1_BEACON_URL=$L1_BEACON_URL
 # L2 Engine Type: geth or reth
 L2_ENGINEKIND=$L2_ENGINEKIND
 
+# Data Directory Root (default: chaindata)
+# All blockchain data will be stored under: chaindata/{network}-{engine}/
+# CHAIN_DATA_ROOT=chaindata
+
 # Docker Image Tags (optional, will use defaults if not set)
 # OP_STACK_IMAGE_TAG=$OP_STACK_IMAGE_TAG
 # OP_GETH_IMAGE_TAG=$OP_GETH_IMAGE_TAG
@@ -402,8 +412,22 @@ EOF
     cp "$TEMP_DIR/config/$ROLLUP_CONFIG" "$CONFIG_DIR/"
     cp "$TEMP_DIR/config/$GETH_CONFIG" "$CONFIG_DIR/"
     
-    # Generate docker-compose.yml with custom ports
-    print_info "Generating docker-compose.yml with custom ports..."
+    # Determine RETH config file based on network
+    if [ "$NETWORK_TYPE" = "testnet" ]; then
+        RETH_CONFIG="op-reth-config-testnet.toml"
+    else
+        RETH_CONFIG="op-reth-config-mainnet.toml"
+    fi
+    
+    # Set RPC_TYPE for docker-compose
+    RPC_TYPE="op-${L2_ENGINEKIND}"
+    
+    # Set default image tags if not provided
+    OP_RETH_IMAGE_TAG="${OP_RETH_IMAGE_TAG:-xlayer/op-reth:release-testnet}"
+    
+    # Generate docker-compose.yml with custom ports - dynamically based on L2_ENGINEKIND
+    print_info "Generating docker-compose.yml for $L2_ENGINEKIND with custom ports..."
+    
     cat > docker-compose.yml << EOF
 version: '3.8'
 
@@ -412,6 +436,44 @@ networks:
     name: xlayer-network
 
 services:
+EOF
+
+    # Add op-geth or op-reth service based on L2_ENGINEKIND
+    if [ "$L2_ENGINEKIND" = "reth" ]; then
+        cat >> docker-compose.yml << EOF
+  op-reth:
+    image: "$OP_RETH_IMAGE_TAG"
+    container_name: xlayer-${NETWORK_TYPE}-op-reth
+    networks:
+      - xlayer-network
+    entrypoint: /entrypoint/reth-rpc.sh
+    environment:
+      - L1_RPC_URL=\${L1_RPC_URL}
+      - L1_BEACON_URL=\${L1_BEACON_URL}
+      - SEQUENCER_HTTP_URL=$SEQUENCER_HTTP
+    volumes:
+      - ./$DATA_DIR/op-reth:/datadir
+      - ./$CONFIG_DIR/jwt.txt:/jwt.txt
+      - ./$CONFIG_DIR/genesis-reth.json:/genesis.json
+      - ./$CONFIG_DIR/$RETH_CONFIG:/config.toml
+      - ./entrypoint/reth-rpc.sh:/entrypoint/reth-rpc.sh
+      - ./$LOGS_DIR/op-reth:/var/log/op-reth
+    ports:
+      - "$RPC_PORT:8545"   # HTTP RPC
+      - "8552:8552"        # Engine API
+      - "$WS_PORT:7546"     # WebSocket
+      - "$GETH_P2P_PORT:30303" # P2P TCP
+      - "$GETH_P2P_PORT:30303/udp" # P2P UDP
+    healthcheck:
+      test: ["CMD", "curl", "-X", "POST", "http://localhost:8545"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+EOF
+    else
+        cat >> docker-compose.yml << EOF
   op-geth:
     image: "\${OP_GETH_IMAGE_TAG:-$OP_GETH_IMAGE_TAG}"
     container_name: xlayer-${NETWORK_TYPE}-op-geth
@@ -445,6 +507,11 @@ services:
       retries: 10
       start_period: 3s
 
+EOF
+    fi
+    
+    # Add op-node service (common for both geth and reth)
+    cat >> docker-compose.yml << EOF
   op-node:
     image: "\${OP_STACK_IMAGE_TAG:-$OP_STACK_IMAGE_TAG}"
     container_name: xlayer-${NETWORK_TYPE}-op-node
@@ -463,7 +530,7 @@ services:
       - |
         exec /app/op-node/bin/op-node \\
           --log.level=info \\
-          --l2=http://op-geth:8552 \\
+          --l2=http://$RPC_TYPE:8552 \\
           --l2.jwt-secret=/jwt.txt \\
           --sequencer.enabled=false \\
           --verifier.l1-confs=1 \\
@@ -483,9 +550,10 @@ services:
           --l1.rpckind=standard \\
           --conductor.enabled=false \\
           --safedb.path=/data/safedb \\
+          --l2.enginekind=$L2_ENGINEKIND \\
           2>&1 | tee /var/log/op-node/op-node.log
     depends_on:
-      - op-geth
+      - $RPC_TYPE
 EOF
     
     print_success "Configuration files generated successfully"
@@ -597,7 +665,11 @@ start_services() {
     
     # Load network configuration to ensure CONFIG_DIR is set
     load_network_config "$NETWORK_TYPE"
-    CONFIG_DIR="config-${NETWORK_TYPE}"
+    
+    # Reconstruct directory paths (matching generate_config_files)
+    CHAIN_DATA_ROOT="${CHAIN_DATA_ROOT:-chaindata}"
+    CHAIN_DATA_DIR="$CHAIN_DATA_ROOT/${NETWORK_TYPE}-${L2_ENGINEKIND}"
+    CONFIG_DIR="$CHAIN_DATA_DIR/config"
     
     # Verify JWT file exists
     if [ ! -f "$CONFIG_DIR/jwt.txt" ]; then

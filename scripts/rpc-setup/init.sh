@@ -45,13 +45,28 @@ esac
 
 echo "🚀 Initializing X Layer Self-hosted RPC node for $NETWORK_TYPE network..."
 
-# Network-specific directories and files
-DATA_DIR="data-${NETWORK_TYPE}"
-CONFIG_DIR="config-${NETWORK_TYPE}"
-GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-LOGS_DIR="logs-${NETWORK_TYPE}"
+# Load environment variables if .env exists (for CHAIN_DATA_ROOT and L2_ENGINEKIND)
+if [ -f .env ]; then
+    source .env
+fi
 
-mkdir -p "$DATA_DIR" "$CONFIG_DIR" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
+# Set L2_ENGINEKIND default if not set
+L2_ENGINEKIND="${L2_ENGINEKIND:-geth}"
+
+# Data root directory (can be overridden via .env)
+CHAIN_DATA_ROOT="${CHAIN_DATA_ROOT:-chaindata}"
+
+# Network and engine specific directory structure
+# Format: chaindata/{network}-{engine}/
+CHAIN_DATA_DIR="$CHAIN_DATA_ROOT/${NETWORK_TYPE}-${L2_ENGINEKIND}"
+DATA_DIR="$CHAIN_DATA_DIR/data"
+CONFIG_DIR="$CHAIN_DATA_DIR/config"
+LOGS_DIR="$CHAIN_DATA_DIR/logs"
+GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
+
+echo "📁 Data will be stored in: $CHAIN_DATA_DIR"
+
+mkdir -p "$DATA_DIR" "$CONFIG_DIR" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node" "$LOGS_DIR/op-reth"
 
 # Download the genesis file
 echo "📥 Downloading genesis file from $GENESIS_URL..."
