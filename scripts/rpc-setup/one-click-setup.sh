@@ -4,6 +4,9 @@
 
 set -e
 
+LOCAL_GENESIS_TESTNET="/Users/oker/Downloads/merged.genesis.json.testnet.tar.gz"
+LOCAL_GENESIS_MAINNET="/Users/oker/Downloads/merged.genesis.json.mainnet.tar.gz"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -447,6 +450,8 @@ EOF
     networks:
       - xlayer-network
     entrypoint: /entrypoint/reth-rpc.sh
+    env_file:
+      - .env
     environment:
       - L1_RPC_URL=\${L1_RPC_URL}
       - L1_BEACON_URL=\${L1_BEACON_URL}
@@ -457,6 +462,7 @@ EOF
       - ./$CONFIG_DIR/genesis-reth.json:/genesis.json
       - ./$CONFIG_DIR/$RETH_CONFIG:/config.toml
       - ./entrypoint/reth-rpc.sh:/entrypoint/reth-rpc.sh
+      - ./.env:/app/.env
       - ./$LOGS_DIR/op-reth:/var/log/op-reth
     ports:
       - "$RPC_PORT:8545"   # HTTP RPC
@@ -592,9 +598,34 @@ initialize_node() {
     
     # Download the genesis file to chaindata directory
     GENESIS_TAR_PATH="$CHAIN_DATA_DIR/genesis.tar.gz"
-    print_info "Downloading genesis file from $GENESIS_URL..."
-    print_info "Download location: $GENESIS_TAR_PATH"
-    wget -c "$GENESIS_URL" -O "$GENESIS_TAR_PATH"
+    
+    # Select local genesis file based on network type
+    if [ "$NETWORK_TYPE" = "testnet" ]; then
+        LOCAL_GENESIS_FILE="$LOCAL_GENESIS_TESTNET"
+    else
+        LOCAL_GENESIS_FILE="$LOCAL_GENESIS_MAINNET"
+    fi
+    
+    # Check if local genesis file is configured and exists
+    if [ -n "$LOCAL_GENESIS_FILE" ] && [ -f "$LOCAL_GENESIS_FILE" ]; then
+        print_info "Using local pre-downloaded genesis file: $LOCAL_GENESIS_FILE"
+        print_info "Copying to: $GENESIS_TAR_PATH"
+        cp "$LOCAL_GENESIS_FILE" "$GENESIS_TAR_PATH"
+        USE_LOCAL_GENESIS=true
+    elif [ -n "$LOCAL_GENESIS_FILE" ]; then
+        print_warning "Local genesis file configured but not found: $LOCAL_GENESIS_FILE"
+        print_info "Falling back to download from network..."
+        print_info "Downloading genesis file from $GENESIS_URL..."
+        print_info "Download location: $GENESIS_TAR_PATH"
+        wget -c "$GENESIS_URL" -O "$GENESIS_TAR_PATH"
+        USE_LOCAL_GENESIS=false
+    else
+        # No local path configured, download from network
+        print_info "Downloading genesis file from $GENESIS_URL..."
+        print_info "Download location: $GENESIS_TAR_PATH"
+        wget -c "$GENESIS_URL" -O "$GENESIS_TAR_PATH"
+        USE_LOCAL_GENESIS=false
+    fi
     
     # Extract the genesis file
     print_info "Extracting genesis file..."
@@ -611,9 +642,15 @@ initialize_node() {
     fi
     
     # Clean up the downloaded archive
-    print_info "Cleaning up downloaded archive..."
-    rm "$GENESIS_TAR_PATH"
-    print_success "Temporary file removed: $GENESIS_TAR_PATH"
+    if [ "$USE_LOCAL_GENESIS" = "true" ]; then
+        # Keep the file when using local genesis (for reuse)
+        print_info "Keeping genesis archive for reuse: $GENESIS_TAR_PATH"
+    else
+        # Remove the file when downloaded from network
+        print_info "Cleaning up downloaded archive..."
+        rm "$GENESIS_TAR_PATH"
+        print_success "Temporary file removed: $GENESIS_TAR_PATH"
+    fi
     
     # Check if genesis file exists
     if [ ! -f "$CONFIG_DIR/$GENESIS_FILE" ]; then

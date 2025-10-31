@@ -3,6 +3,9 @@
 
 set -e
 
+LOCAL_GENESIS_TESTNET="/Users/oker/Downloads/merged.genesis.json.testnet.tar.gz"
+LOCAL_GENESIS_MAINNET="/Users/oker/Downloads/merged.genesis.json.mainnet.tar.gz"
+
 # Parse command line arguments
 NETWORK_TYPE=${1:-""}
 
@@ -70,9 +73,34 @@ mkdir -p "$DATA_DIR" "$CONFIG_DIR" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node" "$LOG
 
 # Download the genesis file to chaindata directory
 GENESIS_TAR_PATH="$CHAIN_DATA_DIR/genesis.tar.gz"
-echo "📥 Downloading genesis file from $GENESIS_URL..."
-echo "📁 Download location: $GENESIS_TAR_PATH"
-wget -c "$GENESIS_URL" -O "$GENESIS_TAR_PATH"
+
+# Select local genesis file based on network type
+if [ "$NETWORK_TYPE" = "testnet" ]; then
+    LOCAL_GENESIS_FILE="$LOCAL_GENESIS_TESTNET"
+else
+    LOCAL_GENESIS_FILE="$LOCAL_GENESIS_MAINNET"
+fi
+
+# Check if local genesis file is configured and exists
+if [ -n "$LOCAL_GENESIS_FILE" ] && [ -f "$LOCAL_GENESIS_FILE" ]; then
+    echo "📋 Using local pre-downloaded genesis file: $LOCAL_GENESIS_FILE"
+    echo "📁 Copying to: $GENESIS_TAR_PATH"
+    cp "$LOCAL_GENESIS_FILE" "$GENESIS_TAR_PATH"
+    USE_LOCAL_GENESIS=true
+elif [ -n "$LOCAL_GENESIS_FILE" ]; then
+    echo "⚠️  Local genesis file configured but not found: $LOCAL_GENESIS_FILE"
+    echo "⬇️  Falling back to download from network..."
+    echo "📥 Downloading genesis file from $GENESIS_URL..."
+    echo "📁 Download location: $GENESIS_TAR_PATH"
+    wget -c "$GENESIS_URL" -O "$GENESIS_TAR_PATH"
+    USE_LOCAL_GENESIS=false
+else
+    # No local path configured, download from network
+    echo "📥 Downloading genesis file from $GENESIS_URL..."
+    echo "📁 Download location: $GENESIS_TAR_PATH"
+    wget -c "$GENESIS_URL" -O "$GENESIS_TAR_PATH"
+    USE_LOCAL_GENESIS=false
+fi
 
 # Extract the genesis file
 echo "📦 Extracting genesis file..."
@@ -89,9 +117,15 @@ else
 fi
 
 # Clean up the downloaded archive
-echo "🧹 Cleaning up downloaded archive..."
-rm "$GENESIS_TAR_PATH"
-echo "✅ Temporary file removed: $GENESIS_TAR_PATH"
+if [ "$USE_LOCAL_GENESIS" = "true" ]; then
+    # Keep the file when using local genesis (for reuse)
+    echo "ℹ️  Keeping genesis archive for reuse: $GENESIS_TAR_PATH"
+else
+    # Remove the file when downloaded from network
+    echo "🧹 Cleaning up downloaded archive..."
+    rm "$GENESIS_TAR_PATH"
+    echo "✅ Temporary file removed: $GENESIS_TAR_PATH"
+fi
 
 # Check if genesis file exists
 if [ ! -f "$CONFIG_DIR/$GENESIS_FILE" ]; then

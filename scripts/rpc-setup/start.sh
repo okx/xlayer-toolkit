@@ -36,6 +36,26 @@ elif [ "$NETWORK_TYPE" = "mainnet" ]; then
     OP_NODE_BOOTNODE="enode://c67d7f63c5483ab8311123d2997bfe6a8aac2b117a40167cf71682f8a3e37d3b86547c786559355c4c05ae0b1a7e7a1b8fde55050b183f96728d62e276467ce1@8.210.177.150:9223,enode://28e3e305b266e01226a7cc979ab692b22507784095157453ee0e34607bb3beac9a5b00f3e3d7d3ac36164612ca25108e6b79f75e3a9ecb54a0b3e7eb3e097d37@8.210.15.172:9223,enode://b5aa43622aad25c619650a0b7f8bb030161dfbfd5664233f92d841a33b404cea3ffffdc5bc8d6667c7dc212242a52f0702825c1e51612047f75c847ab96ef7a6@8.210.69.97:9223"
 fi
 
+# Check environment variables file
+if [ ! -f .env ]; then
+    echo "❌ Error: .env file does not exist"
+    echo "Please copy env.example to .env and fill in the correct configuration"
+    exit 1
+fi
+
+# Load environment variables first
+source .env
+
+# Set RPC_TYPE based on L2_ENGINEKIND
+L2_ENGINEKIND="${L2_ENGINEKIND:-geth}"
+RPC_TYPE="op-${L2_ENGINEKIND}"
+
+if [ "${L2_ENGINEKIND}" = "reth" ]; then
+    echo "🔍 RPC type: op-reth"
+else
+    echo "🔍 RPC type: op-geth"
+fi
+
 # Data root directory (can be overridden via .env)
 CHAIN_DATA_ROOT="${CHAIN_DATA_ROOT:-chaindata}"
 
@@ -48,26 +68,6 @@ LOGS_DIR="$CHAIN_DATA_DIR/logs"
 GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
 
 echo "📁 Using data directory: $CHAIN_DATA_DIR"
-
-# Check environment variables file
-if [ ! -f .env ]; then
-    echo "❌ Error: .env file does not exist"
-    echo "Please copy env.example to .env and fill in the correct configuration"
-    exit 1
-fi
-
-# Load environment variables
-source .env
-
-# Set RPC_TYPE based on L2_ENGINEKIND
-L2_ENGINEKIND="${L2_ENGINEKIND:-geth}"
-RPC_TYPE="op-${L2_ENGINEKIND}"
-
-if [ "${L2_ENGINEKIND}" = "reth" ]; then
-    echo "🔍 RPC type: op-reth"
-else
-    echo "🔍 RPC type: op-geth"
-fi
 
 # Check required environment variables (only L1 URLs from .env)
 required_vars=("L1_RPC_URL" "L1_BEACON_URL")
@@ -151,6 +151,8 @@ if [ "$L2_ENGINEKIND" = "reth" ]; then
     networks:
       - xlayer-network
     entrypoint: /entrypoint/reth-rpc.sh
+    env_file:
+      - .env
     environment:
       - L1_RPC_URL=\${L1_RPC_URL}
       - L1_BEACON_URL=\${L1_BEACON_URL}
@@ -161,6 +163,7 @@ if [ "$L2_ENGINEKIND" = "reth" ]; then
       - ./$CONFIG_DIR/genesis-reth.json:/genesis.json
       - ./$CONFIG_DIR/$RETH_CONFIG:/config.toml
       - ./entrypoint/reth-rpc.sh:/entrypoint/reth-rpc.sh
+      - ./.env:/app/.env
       - ./$LOGS_DIR/op-reth:/var/log/op-reth
     ports:
       - "8545:8545"   # HTTP RPC

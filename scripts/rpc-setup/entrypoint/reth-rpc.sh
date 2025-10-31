@@ -2,7 +2,7 @@
 
 set -e
 
-source .env
+source /app/.env
 
 if [ -z "${SEQUENCER_HTTP_URL}" ]; then
 exec op-reth node \
