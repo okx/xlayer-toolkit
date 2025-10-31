@@ -373,6 +373,7 @@ OP_NODE_BOOTNODE=$OP_NODE_BOOTNODE
 # Docker Image Tags
 OP_STACK_IMAGE_TAG=$OP_STACK_IMAGE_TAG
 OP_GETH_IMAGE_TAG=$OP_GETH_IMAGE_TAG
+OP_RETH_IMAGE_TAG=$OP_RETH_IMAGE_TAG
 EOF
     
     # Copy configuration files from temp directory
@@ -385,8 +386,6 @@ EOF
     if [ "$RPC_TYPE" = "reth" ]; then
         # Generate docker-compose.yml for Reth
         cat > docker-compose.yml << EOF
-version: '3.8'
-
 networks:
   xlayer-network:
     name: xlayer-network
@@ -405,12 +404,13 @@ services:
       - ./$DATA_DIR:/data
       - ./$CONFIG_DIR/jwt.txt:/jwt.txt
       - ./$CONFIG_DIR/$EXEC_CONFIG:/config.toml
+      - ./$CONFIG_DIR/$GENESIS_FILE:/genesis.json
       - ./$LOGS_DIR/op-reth:/var/log/op-reth
     command:
       - node
       - --datadir=/data
       - --config=/config.toml
-      - --chain=optimism
+      - --chain=/genesis.json
       - --rollup.sequencer-http=$SEQUENCER_HTTP
       - --authrpc.jwtsecret=/jwt.txt
       - --authrpc.addr=0.0.0.0
@@ -426,6 +426,7 @@ services:
       - --ws.origins=*
       - --ws.api=debug,eth,txpool,net,trace
       - --log.file.directory=/var/log/op-reth
+      - --rollup.disable-tx-pool-gossip
     networks:
       - xlayer-network
     healthcheck:
@@ -480,8 +481,6 @@ EOF
     else
         # Generate docker-compose.yml for Geth
         cat > docker-compose.yml << EOF
-version: '3.8'
-
 networks:
   xlayer-network:
     name: xlayer-network
@@ -680,11 +679,10 @@ initialize_node() {
 start_services() {
     print_info "Starting Docker services..."
     
-    # Load network configuration to ensure CONFIG_DIR is set
-    load_network_config "$NETWORK_TYPE"
-    CONFIG_DIR="config-${NETWORK_TYPE}"
+    # Verify JWT file exists (using the chaindata structure)
+    CHAINDATA_BASE="chaindata/${NETWORK_TYPE}-${RPC_TYPE}"
+    CONFIG_DIR="${CHAINDATA_BASE}/config"
     
-    # Verify JWT file exists
     if [ ! -f "$CONFIG_DIR/jwt.txt" ]; then
         print_error "JWT file not found at $CONFIG_DIR/jwt.txt"
         print_info "Please run the setup script again to generate JWT secret"
