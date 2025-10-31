@@ -113,7 +113,8 @@ print_header() {
 # Load network-specific configuration dynamically
 load_network_config() {
     local network=$1
-    local prefix="${network^^}"  # Convert to uppercase (TESTNET/MAINNET)
+    # Convert to uppercase using tr (more compatible)
+    local prefix=$(echo "$network" | tr '[:lower:]' '[:upper:]')
     
     # Dynamically set variables based on network prefix
     eval "OP_NODE_BOOTNODE=\${${prefix}_BOOTNODE_OP_NODE}"
