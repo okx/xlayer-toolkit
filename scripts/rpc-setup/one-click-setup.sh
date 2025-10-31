@@ -474,7 +474,7 @@ EOF
     volumes:
       - ./$DATA_DIR/op-reth:/datadir
       - ./$CONFIG_DIR/jwt.txt:/jwt.txt
-      - ./$CONFIG_DIR/genesis-reth.json:/genesis.json
+      - ./$CONFIG_DIR/$GENESIS_FILE:/genesis.json
       - ./$CONFIG_DIR/$RETH_CONFIG:/config.toml
       - ./entrypoint/reth-rpc.sh:/entrypoint/reth-rpc.sh
       - ./.env:/app/.env
@@ -675,12 +675,9 @@ initialize_node() {
     
     print_success "Genesis file extracted successfully to $CONFIG_DIR/$GENESIS_FILE"
     
-    # Prepare genesis file for Reth (if needed)
-    print_info "📋 Preparing genesis-reth.json for op-reth support..."
-    GENESIS_RETH_FILE="genesis-reth.json"
-    
-    if [ ! -f "$CONFIG_DIR/$GENESIS_RETH_FILE" ]; then
-        cp "$CONFIG_DIR/$GENESIS_FILE" "$CONFIG_DIR/$GENESIS_RETH_FILE"
+    # Modify genesis file for Reth if needed (reth needs different "number" value)
+    if [ "$L2_ENGINEKIND" = "reth" ]; then
+        print_info "📋 Modifying genesis.json for op-reth (updating number field)..."
         BLKNO=$(grep "legacyXLayerBlock" "$CONFIG_DIR/$GENESIS_FILE" | tr -d ', ' | cut -d ':' -f 2)
         if [ -z "$BLKNO" ]; then
             print_error "Failed to extract legacyXLayerBlock from $GENESIS_FILE"
@@ -689,13 +686,11 @@ initialize_node() {
         
         # Use appropriate sed for macOS or Linux
         if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' 's/"number": "0x0"/"number": "'"$BLKNO"'"/' "$CONFIG_DIR/$GENESIS_RETH_FILE"
+            sed -i '' 's/"number": "0x0"/"number": "'"$BLKNO"'"/' "$CONFIG_DIR/$GENESIS_FILE"
         else
-            sed -i 's/"number": "0x0"/"number": "'"$BLKNO"'"/' "$CONFIG_DIR/$GENESIS_RETH_FILE"
+            sed -i 's/"number": "0x0"/"number": "'"$BLKNO"'"/' "$CONFIG_DIR/$GENESIS_FILE"
         fi
-        print_success "Genesis-reth file generated successfully at $CONFIG_DIR/$GENESIS_RETH_FILE"
-    else
-        print_success "Genesis-reth file already exists at $CONFIG_DIR/$GENESIS_RETH_FILE"
+        print_success "Genesis file modified for op-reth (number set to $BLKNO)"
     fi
     
     # Verify genesis file chain ID matches network configuration

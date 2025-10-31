@@ -163,30 +163,25 @@ else
     exit 1
 fi
 
-# Prepare genesis file for Reth (if needed)
-echo "📋 Preparing genesis-reth.json for op-reth support..."
-# Use simple filename without network suffix (directory already contains network info)
-GENESIS_RETH_FILE="genesis-reth.json"
-
-sed_inplace() {
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "$@"
-  else
-    sed -i "$@"
-  fi
-}
-
-if [ ! -f "$CONFIG_DIR/$GENESIS_RETH_FILE" ]; then
-  cp "$CONFIG_DIR/$GENESIS_FILE" "$CONFIG_DIR/$GENESIS_RETH_FILE"
+# Modify genesis file for Reth if needed (reth needs different "number" value)
+if [ "$L2_ENGINEKIND" = "reth" ]; then
+  echo "📋 Modifying genesis.json for op-reth (updating number field)..."
+  
+  sed_inplace() {
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+      sed -i '' "$@"
+    else
+      sed -i "$@"
+    fi
+  }
+  
   BLKNO=$(grep "legacyXLayerBlock" "$CONFIG_DIR/$GENESIS_FILE" | tr -d ', ' | cut -d ':' -f 2)
   if [ -z "$BLKNO" ]; then
     echo "❌ Error: Failed to extract legacyXLayerBlock from $GENESIS_FILE"
     exit 1
   fi
-  sed_inplace 's/"number": "0x0"/"number": "'"$BLKNO"'"/' "$CONFIG_DIR/$GENESIS_RETH_FILE"
-  echo "✅ Genesis-reth file generated successfully at $CONFIG_DIR/$GENESIS_RETH_FILE"
-else
-  echo "✅ Genesis-reth file already exists at $CONFIG_DIR/$GENESIS_RETH_FILE"
+  sed_inplace 's/"number": "0x0"/"number": "'"$BLKNO"'"/' "$CONFIG_DIR/$GENESIS_FILE"
+  echo "✅ Genesis file modified for op-reth (number set to $BLKNO)"
 fi
 
 # Initialize based on L2_ENGINEKIND

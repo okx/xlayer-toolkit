@@ -161,7 +161,7 @@ if [ "$L2_ENGINEKIND" = "reth" ]; then
     volumes:
       - ./$DATA_DIR/op-reth:/datadir
       - ./$CONFIG_DIR/jwt.txt:/jwt.txt
-      - ./$CONFIG_DIR/genesis-reth.json:/genesis.json
+      - ./$CONFIG_DIR/$GENESIS_FILE:/genesis.json
       - ./$CONFIG_DIR/$RETH_CONFIG:/config.toml
       - ./entrypoint/reth-rpc.sh:/entrypoint/reth-rpc.sh
       - ./.env:/app/.env
