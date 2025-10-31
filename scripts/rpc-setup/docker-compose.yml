@@ -123,6 +123,4 @@ services:
       - --safedb.path=/data/safedb
       - --l2.enginekind=${RPC_TYPE}
     restart: unless-stopped
-    depends_on:
-      xlayer-${NETWORK_TYPE}-${RPC_TYPE}:
-        condition: service_healthy
+    # Note: Service startup order is controlled by Makefile

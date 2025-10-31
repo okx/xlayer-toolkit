@@ -31,15 +31,23 @@ start:
 	if [ "$$RPC_TYPE" = "reth" ]; then \
 		echo "  Starting op-reth..."; \
 		docker compose up -d op-reth; \
-		echo "⏳ Waiting for op-reth to be ready..."; \
-		sleep 5; \
+		echo "⏳ Waiting for op-reth to be ready (this may take several minutes for first start)..."; \
+		while [ "$$(docker compose ps op-reth --format json 2>/dev/null | grep -o '\"Health\":\"[^\"]*\"' | cut -d'"' -f4)" != "healthy" ]; do \
+			sleep 10; \
+			printf "."; \
+		done; \
+		echo ""; \
 		echo "  Starting op-node..."; \
 		docker compose up -d op-node; \
 	else \
 		echo "  Starting op-geth..."; \
 		docker compose up -d op-geth; \
-		echo "⏳ Waiting for op-geth to be ready..."; \
-		sleep 5; \
+		echo "⏳ Waiting for op-geth to be ready (this may take several minutes for first start)..."; \
+		while [ "$$(docker compose ps op-geth --format json 2>/dev/null | grep -o '\"Health\":\"[^\"]*\"' | cut -d'"' -f4)" != "healthy" ]; do \
+			sleep 10; \
+			printf "."; \
+		done; \
+		echo ""; \
 		echo "  Starting op-node..."; \
 		docker compose up -d op-node; \
 	fi
