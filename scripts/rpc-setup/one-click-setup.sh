@@ -19,41 +19,13 @@ IN_REPO=false
 REPO_ROOT=""
 REPO_RPC_SETUP_DIR=""
 
-# Detect if script is running from within the repository
+# Detect if running from repository (check if docker-compose.yml exists in SCRIPT_DIR)
 detect_repository() {
-    local current_dir="$SCRIPT_DIR"
-    local max_depth=10
-    local depth=0
-    
-    # Search upward for scripts/rpc-setup directory
-    while [ "$depth" -lt "$max_depth" ]; do
-        if [ -d "$current_dir/scripts/rpc-setup" ]; then
-            REPO_ROOT="$current_dir"
-            REPO_RPC_SETUP_DIR="$current_dir/scripts/rpc-setup"
-            IN_REPO=true
-            return 0
-        fi
-        
-        # Check if we're already in scripts/rpc-setup
-        if [ "$(basename "$current_dir")" = "rpc-setup" ] && [ "$(basename "$(dirname "$current_dir")")" = "scripts" ]; then
-            REPO_ROOT="$(dirname "$(dirname "$current_dir")")"
-            REPO_RPC_SETUP_DIR="$current_dir"
-            IN_REPO=true
-            return 0
-        fi
-        
-        # Move up one directory
-        local parent_dir="$(dirname "$current_dir")"
-        if [ "$parent_dir" = "$current_dir" ]; then
-            # Reached filesystem root
-            break
-        fi
-        current_dir="$parent_dir"
-        ((depth++))
-    done
-    
-    IN_REPO=false
-    return 1
+    if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
+        IN_REPO=true
+        REPO_RPC_SETUP_DIR="$SCRIPT_DIR"
+        REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+    fi
 }
 
 # Load configuration from latest.cfg
@@ -101,16 +73,7 @@ print_success() { echo -e "${GREEN}✅ $1${NC}"; }
 print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 print_error() { echo -e "${RED}❌ $1${NC}"; }
 print_prompt() { 
-    # Output directly to tty with color
     printf "\033[0;34m%s\033[0m" "$1" > /dev/tty
-}  # For user input prompts (no newline, direct to terminal)
-
-print_header() {
-    echo -e "${BLUE}"
-    echo "=========================================="
-    echo "  X Layer RPC Node One-Click Setup"
-    echo "=========================================="
-    echo -e "${NC}"
 }
 
 # Load network-specific configuration dynamically
@@ -146,19 +109,38 @@ command_exists() {
 
 # Check Docker and Docker Compose
 check_docker() {
-    if ! command_exists docker; then
+    print_info "Checking Docker environment..."
+    
+    # Check Docker
+    if command_exists docker; then
+        local docker_version=$(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        echo "  ✓ docker ($docker_version)"
+    else
+        echo "  ✗ docker (missing)"
         print_error "Docker is not installed. Please install Docker 20.10+ first."
         print_info "Visit: https://docs.docker.com/get-docker/"
         exit 1
     fi
     
-    if ! command_exists docker-compose && ! docker compose version &> /dev/null; then
+    # Check Docker Compose
+    if command_exists docker-compose; then
+        local compose_version=$(docker-compose --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        echo "  ✓ docker-compose ($compose_version)"
+    elif docker compose version &> /dev/null; then
+        local compose_version=$(docker compose version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        echo "  ✓ docker compose ($compose_version)"
+    else
+        echo "  ✗ docker compose (missing)"
         print_error "Docker Compose is not installed. Please install Docker Compose 2.0+ first."
         print_info "Visit: https://docs.docker.com/compose/install/"
         exit 1
     fi
     
-    if ! docker info &> /dev/null; then
+    # Check Docker daemon
+    if docker info &> /dev/null; then
+        echo "  ✓ docker daemon (running)"
+    else
+        echo "  ✗ docker daemon (not running)"
         print_error "Docker daemon is not running. Please start Docker first."
         exit 1
     fi
@@ -166,19 +148,51 @@ check_docker() {
 
 # Check required system tools
 check_required_tools() {
-    local missing_tools=()
-    local required_tools=("wget" "tar" "openssl")
+    local missing_required=()
+    local missing_optional=()
     
+    # Required tools
+    local required_tools=("wget" "tar" "openssl" "curl" "sed" "make")
+    
+    # Optional tools (script works without them but with degraded functionality)
+    local optional_tools=("jq")
+    
+    print_info "Checking required tools..."
     for tool in "${required_tools[@]}"; do
-        if ! command_exists "$tool"; then
-            missing_tools+=("$tool")
+        if command_exists "$tool"; then
+            echo "  ✓ $tool"
+        else
+            missing_required+=("$tool")
+            echo "  ✗ $tool (missing)"
         fi
     done
     
-    if [ ${#missing_tools[@]} -gt 0 ]; then
-        print_error "Missing required tools: ${missing_tools[*]}"
-        print_info "Please install them first"
+    print_info "Checking optional tools..."
+    for tool in "${optional_tools[@]}"; do
+        if command_exists "$tool"; then
+            echo "  ✓ $tool"
+        else
+            missing_optional+=("$tool")
+            echo "  ⚠ $tool (optional, recommended)"
+        fi
+    done
+    
+    # Exit if required tools are missing
+    if [ ${#missing_required[@]} -gt 0 ]; then
+        print_error "Missing required tools: ${missing_required[*]}"
+        print_info "Please install them first. Example:"
+        echo "  # macOS:"
+        echo "  brew install ${missing_required[*]}"
+        echo ""
+        echo "  # Ubuntu/Debian:"
+        echo "  sudo apt-get install ${missing_required[*]}"
         exit 1
+    fi
+    
+    # Warn if optional tools are missing
+    if [ ${#missing_optional[@]} -gt 0 ]; then
+        print_warning "Optional tools not found: ${missing_optional[*]}"
+        print_info "The script will work but some features may be slower"
     fi
 }
 
@@ -186,7 +200,7 @@ check_system_requirements() {
     print_info "Checking system requirements..."
     check_docker
     check_required_tools
-    print_success "System requirements check completed"
+    print_success "All system requirements satisfied"
 }
 
 # Get file from repository or download from GitHub
@@ -634,48 +648,8 @@ start_services() {
     print_success "Services started successfully"
 }
 
-display_connection_info() {
-    echo ""
-    print_success "🎉 X Layer RPC Node Setup Complete!"
-    echo ""
-    echo "📋 Connection Information:"
-    echo "========================"
-    echo ""
-    echo "🌐 RPC Endpoints:"
-    echo "  HTTP RPC: http://localhost:$RPC_PORT"
-    echo "  WebSocket: ws://localhost:$WS_PORT"
-    echo "  Node RPC: http://localhost:$NODE_RPC_PORT"
-    echo ""
-    echo "🔍 Service Management:"
-    echo "  Start services:   make run    (or make start)"
-    echo "  Stop services:    make stop"
-    echo "  Restart services: make restart"
-    echo "  View logs:        make logs-follow"
-    echo "  Check status:     make status"
-    echo ""
-    echo "📁 Working Directory: $WORK_DIR"
-    echo "📁 Data Directory: $DATA_DIR"
-    echo "🌍 Network: $NETWORK_TYPE"
-    echo "⚙️  Execution Client: $EXEC_CLIENT"
-    echo ""
-    
-    # Warn if using placeholder URLs
-    if [[ "$L1_RPC_URL" == "https://placeholder-l1-rpc-url" ]]; then
-        print_warning "IMPORTANT: Configure L1 RPC URLs to complete setup!"
-        print_info "1. Edit .env file: nano $WORK_DIR/.env"
-        print_info "2. Update L1_RPC_URL and L1_BEACON_URL"
-        print_info "3. Restart: make stop && make run"
-        echo ""
-    fi
-    
-    print_info "Your X Layer RPC node is ready!"
-}
-
 main() {
-    
-    print_header
-    
-    # Detect if running from repository
+    echo "  X Layer RPC Node One-Click Setup"
     detect_repository
     if [ "$IN_REPO" = true ]; then
         print_info "📂 Running from repository: $REPO_ROOT"
@@ -698,11 +672,6 @@ main() {
     generate_config_files
     initialize_node
     start_services
-    
-    # Display connection info
-    display_connection_info
-    
-    print_success "Setup completed successfully!"
 }
 
 # Run main function
