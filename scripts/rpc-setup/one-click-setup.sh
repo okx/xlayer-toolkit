@@ -635,6 +635,40 @@ initialize_node() {
     
     print_success "Genesis file extracted successfully to $CONFIG_DIR/$GENESIS_FILE"
     
+    # Prepare genesis file for Reth (if using reth)
+    if [ "$RPC_TYPE" = "reth" ]; then
+        print_info "Preparing genesis file for op-reth..."
+        
+        # Extract legacyXLayerBlock value
+        if command -v jq &> /dev/null; then
+            BLKNO=$(jq -r '.config.legacyXLayerBlock' "$CONFIG_DIR/$GENESIS_FILE" 2>/dev/null || echo "")
+        else
+            BLKNO=$(grep "legacyXLayerBlock" "$CONFIG_DIR/$GENESIS_FILE" | tr -d ', ' | cut -d ':' -f 2 || echo "")
+        fi
+        
+        if [ -z "$BLKNO" ]; then
+            print_error "Failed to extract legacyXLayerBlock from genesis file"
+            exit 1
+        fi
+        
+        print_info "Setting genesis block number to $BLKNO (0x$(printf '%x' $BLKNO))"
+        
+        # Create modified genesis for reth with correct block number
+        if command -v jq &> /dev/null; then
+            jq ".number = \"0x$(printf '%x' $BLKNO)\"" "$CONFIG_DIR/$GENESIS_FILE" > "$CONFIG_DIR/$GENESIS_FILE.tmp"
+            mv "$CONFIG_DIR/$GENESIS_FILE.tmp" "$CONFIG_DIR/$GENESIS_FILE"
+        else
+            # Fallback to sed if jq not available
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+                sed -i '' 's/"number": "0x0"/"number": "0x'"$(printf '%x' $BLKNO)"'"/' "$CONFIG_DIR/$GENESIS_FILE"
+            else
+                sed -i 's/"number": "0x0"/"number": "0x'"$(printf '%x' $BLKNO)"'"/' "$CONFIG_DIR/$GENESIS_FILE"
+            fi
+        fi
+        
+        print_success "Genesis file prepared for op-reth with block number $BLKNO"
+    fi
+    
     # Verify genesis file chain ID matches network configuration
     print_info "Verifying genesis file chain ID..."
     if command -v jq &> /dev/null; then
