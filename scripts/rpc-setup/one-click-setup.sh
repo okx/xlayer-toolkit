@@ -5,11 +5,11 @@ set -e
 BRANCH="zjg/reth"
 REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/scripts/rpc-setup"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+BLUE=$'\033[0;34m'
+NC=$'\033[0m' # No Color
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="$(pwd)"  # Working directory is where the user runs the script
@@ -101,6 +101,10 @@ print_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
 print_success() { echo -e "${GREEN}✅ $1${NC}"; }
 print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 print_error() { echo -e "${RED}❌ $1${NC}"; }
+print_prompt() { 
+    # Output directly to tty with color
+    printf "\033[0;34m%s\033[0m" "$1" > /dev/tty
+}  # For user input prompts (no newline, direct to terminal)
 
 print_header() {
     echo -e "${BLUE}"
@@ -275,8 +279,8 @@ prompt_input() {
     local result
     
     while true; do
-        printf "%s" "$prompt_text"
-        read -r input
+        print_prompt "$prompt_text"
+        read -r input </dev/tty
         result="${input:-$default_value}"
         
         # If validator function provided, call it
@@ -329,14 +333,14 @@ get_user_input() {
     
     # L1 URLs (required)
     while true; do
-        printf "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
-        read -r L1_RPC_URL
+        print_prompt "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
+        read -r L1_RPC_URL </dev/tty
         [ -n "$L1_RPC_URL" ] && validate_url "$L1_RPC_URL" && break
     done
     
     while true; do
-        printf "4. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
-        read -r L1_BEACON_URL
+        print_prompt "4. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
+        read -r L1_BEACON_URL </dev/tty
         [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
     done
     
