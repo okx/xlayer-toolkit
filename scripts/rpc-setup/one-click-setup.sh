@@ -3,6 +3,7 @@
 # X Layer RPC Node One-Click Installation Script
 
 set -e
+set -x
 
 # ============================================================================
 # Script Configuration
@@ -140,8 +141,8 @@ load_network_config() {
         exit 1
     }
     
-    # Convert to uppercase for variable prefix
-    local prefix="${network^^}"
+    # Convert to uppercase for variable prefix (compatible with bash 3.x)
+    local prefix=$(echo "$network" | tr '[:lower:]' '[:upper:]')
     
     # Load all configuration variables dynamically
     OP_NODE_BOOTNODE="${prefix}_BOOTNODE_OP_NODE"
