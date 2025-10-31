@@ -1,9 +1,15 @@
-make init-mainnet:
+init-mainnet:
 	./init.sh mainnet
-	
-make init-testnet:
+
+start-mainnet:
+	./start.sh mainnet
+
+init-testnet:
 	./init.sh testnet
 
-make rm:
+start-testnet:
+	./start.sh testnet
+
+rm:
 	docker compose rm -f
 	rm -rf chaindata
