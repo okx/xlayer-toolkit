@@ -35,14 +35,14 @@ if [ "$NETWORK_TYPE" = "testnet" ]; then
     SEQUENCER_HTTP="https://testrpc.xlayer.tech"
     OP_STACK_IMAGE_TAG="xlayer/op-node:0.0.9"
     OP_GETH_IMAGE_TAG="xlayer/op-geth:0.0.6"
-    OP_RETH_IMAGE_TAG="xlayer/op-reth:0.0.1"
+    OP_RETH_IMAGE_TAG="xlayer/op-reth:release-testnet"
     OP_NODE_BOOTNODE="enode://eaae9fe2fc758add65fe4cfd42918e898e16ab23294db88f0dcdbcab2773e75bbea6bfdaa42b3ed502dfbee1335c242c602078c4aa009264e4705caa20d3dca7@8.210.181.50:9223"
 elif [ "$NETWORK_TYPE" = "mainnet" ]; then
     P2P_STATIC="/ip4/47.242.38.0/tcp/9223/p2p/16Uiu2HAmH1AVhKWR29mb5s8Cubgsbh4CH1G86A6yoVtjrLWQgiY3,/ip4/8.210.153.12/tcp/9223/p2p/16Uiu2HAkuerkmQYMZxYiQYfQcPob9H7XHPwS7pd8opPTMEm2nsAp,/ip4/8.210.117.27/tcp/9223/p2p/16Uiu2HAmQEzn2WQj4kmWVrK9aQsfyQcETgXQKjcKGrTPsKcJBv7a"
     SEQUENCER_HTTP="https://rpc.xlayer.tech"
     OP_STACK_IMAGE_TAG="xlayer/op-node:0.0.9"
     OP_GETH_IMAGE_TAG="xlayer/op-geth:0.0.6"
-    OP_RETH_IMAGE_TAG="xlayer/op-reth:0.0.1"
+    OP_RETH_IMAGE_TAG="xlayer/op-reth:release-testnet"
     OP_NODE_BOOTNODE="enode://c67d7f63c5483ab8311123d2997bfe6a8aac2b117a40167cf71682f8a3e37d3b86547c786559355c4c05ae0b1a7e7a1b8fde55050b183f96728d62e276467ce1@8.210.177.150:9223,enode://28e3e305b266e01226a7cc979ab692b22507784095157453ee0e34607bb3beac9a5b00f3e3d7d3ac36164612ca25108e6b79f75e3a9ecb54a0b3e7eb3e097d37@8.210.15.172:9223,enode://b5aa43622aad25c619650a0b7f8bb030161dfbfd5664233f92d841a33b404cea3ffffdc5bc8d6667c7dc212242a52f0702825c1e51612047f75c847ab96ef7a6@8.210.69.97:9223"
 fi
 
@@ -55,11 +55,12 @@ else
     EXEC_CLIENT="op-geth"
 fi
 
-# Network-specific directories and files
-DATA_DIR="data-${NETWORK_TYPE}-${RPC_TYPE}"
-CONFIG_DIR="config-${NETWORK_TYPE}-${RPC_TYPE}"
+# Unified chaindata directory structure
+CHAINDATA_BASE="chaindata/${NETWORK_TYPE}-${RPC_TYPE}"
+DATA_DIR="${CHAINDATA_BASE}/data"
+CONFIG_DIR="${CHAINDATA_BASE}/config"
+LOGS_DIR="${CHAINDATA_BASE}/logs"
 GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-LOGS_DIR="logs-${NETWORK_TYPE}-${RPC_TYPE}"
 
 # Check environment variables file
 if [ ! -f .env ]; then

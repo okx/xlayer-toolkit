@@ -70,11 +70,12 @@ fi
 
 echo "🚀 Initializing X Layer Self-hosted RPC node for $NETWORK_TYPE network with $RPC_TYPE..."
 
-# Network-specific directories and files
-DATA_DIR="data-${NETWORK_TYPE}-${RPC_TYPE}"
-CONFIG_DIR="config-${NETWORK_TYPE}-${RPC_TYPE}"
+# Unified chaindata directory structure
+CHAINDATA_BASE="chaindata/${NETWORK_TYPE}-${RPC_TYPE}"
+DATA_DIR="${CHAINDATA_BASE}/data"
+CONFIG_DIR="${CHAINDATA_BASE}/config"
+LOGS_DIR="${CHAINDATA_BASE}/logs"
 GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-LOGS_DIR="logs-${NETWORK_TYPE}-${RPC_TYPE}"
 
 mkdir -p "$DATA_DIR" "$CONFIG_DIR" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
 
@@ -157,14 +158,9 @@ fi
 
 # Initialize execution client with the genesis file
 if [ "$RPC_TYPE" = "reth" ]; then
-    echo "🔧 Initializing op-reth with genesis file... (It may take a while, please wait patiently.)"
-    docker run --rm \
-        -v "$(pwd)/$DATA_DIR:/data" \
-        -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
-        ${OP_RETH_IMAGE_TAG} \
-        init \
-        --datadir /data \
-        --chain /genesis.json
+    echo "✅ op-reth setup completed!"
+    echo "ℹ️  Note: op-reth does not require separate initialization."
+    echo "ℹ️  It will automatically initialize on first startup."
 else
     echo "🔧 Initializing op-geth with genesis file... (It may take a while, please wait patiently.)"
     docker run --rm \

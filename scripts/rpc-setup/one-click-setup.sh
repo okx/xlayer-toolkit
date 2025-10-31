@@ -210,7 +210,7 @@ get_user_input() {
         RPC_TYPE="geth"
         L1_RPC_URL="https://placeholder-l1-rpc-url"
         L1_BEACON_URL="https://placeholder-l1-beacon-url"
-        DATA_DIR="data-${NETWORK_TYPE}-${RPC_TYPE}"
+        DATA_DIR="chaindata/${NETWORK_TYPE}-${RPC_TYPE}/data"
         RPC_PORT="$DEFAULT_RPC_PORT"
         WS_PORT="$DEFAULT_WS_PORT"
         NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
@@ -283,7 +283,7 @@ get_user_input() {
     print_info "Optional configurations (press Enter to use defaults):"
     
     # Set default data directory based on network type and RPC type
-    DEFAULT_NETWORK_DATA_DIR="data-${NETWORK_TYPE}-${RPC_TYPE}"
+    DEFAULT_NETWORK_DATA_DIR="chaindata/${NETWORK_TYPE}-${RPC_TYPE}/data"
     echo -n "5. Data directory [default: $DEFAULT_NETWORK_DATA_DIR]: "
     read -r input
     DATA_DIR="${input:-$DEFAULT_NETWORK_DATA_DIR}"
@@ -333,11 +333,12 @@ generate_config_files() {
         EXEC_CLIENT="op-geth"
     fi
     
-    # Network-specific directories (only set if not already set by user input)
-    DATA_DIR="${DATA_DIR:-data-${NETWORK_TYPE}-${RPC_TYPE}}"
-    CONFIG_DIR="config-${NETWORK_TYPE}-${RPC_TYPE}"
+    # Unified chaindata directory structure
+    CHAINDATA_BASE="chaindata/${NETWORK_TYPE}-${RPC_TYPE}"
+    DATA_DIR="${DATA_DIR:-${CHAINDATA_BASE}/data}"
+    CONFIG_DIR="${CHAINDATA_BASE}/config"
+    LOGS_DIR="${CHAINDATA_BASE}/logs"
     GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-    LOGS_DIR="logs-${NETWORK_TYPE}-${RPC_TYPE}"
     
     # Create necessary directories
     mkdir -p "$CONFIG_DIR" "$DATA_DIR/op-node/p2p" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
@@ -655,14 +656,9 @@ initialize_node() {
     
     # Initialize execution client with the genesis file
     if [ "$RPC_TYPE" = "reth" ]; then
-        print_info "Initializing op-reth with genesis file... (This may take a while, please wait patiently.)"
-        docker run --rm \
-            -v "$(pwd)/$DATA_DIR:/data" \
-            -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
-            "$OP_RETH_IMAGE_TAG" \
-            init \
-            --datadir /data \
-            --chain /genesis.json
+        print_success "op-reth setup completed!"
+        print_info "Note: op-reth does not require separate initialization."
+        print_info "It will automatically initialize on first startup."
     else
         print_info "Initializing op-geth with genesis file... (This may take a while, please wait patiently.)"
         docker run --rm \
@@ -676,9 +672,8 @@ initialize_node() {
             init \
             --state.scheme=hash \
             /genesis.json
+        print_success "X Layer RPC node ($EXEC_CLIENT) initialization completed"
     fi
-    
-    print_success "X Layer RPC node ($EXEC_CLIENT) initialization completed"
 }
 
 # Function to start services

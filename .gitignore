@@ -1,1 +1,7 @@
 /.vscode/openscaidentity
+
+# Chain data directory - contains all network and client data
+scripts/rpc-setup/chaindata/
+
+# Docker compose files (generated dynamically)
+scripts/rpc-setup/docker-compose.yml
