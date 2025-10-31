@@ -1,34 +1,15 @@
 #!/bin/bash
-# one-click-setup.sh
-# X Layer RPC Node One-Click Installation Script
-#
-# This script can run from anywhere and will:
-# 1. Detect if it's in a repository (has local files)
-# 2. Use local files if available, or download from GitHub
-# 3. Create all necessary files in the current working directory
-
 set -e
-
-# ============================================================================
-# Repository Configuration (required for downloading files)
-# ============================================================================
+set -x
 
 BRANCH="zjg/reth"
 REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/scripts/rpc-setup"
-
-# ============================================================================
-# Color Output Configuration
-# ============================================================================
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
-
-# ============================================================================
-# Script Runtime Variables
-# ============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="$(pwd)"  # Working directory is where the user runs the script
@@ -38,10 +19,6 @@ TEMP_DIR="/tmp/xlayer-setup-$$"
 IN_REPO=false
 REPO_ROOT=""
 REPO_RPC_SETUP_DIR=""
-
-# ============================================================================
-# Repository Detection
-# ============================================================================
 
 # Detect if script is running from within the repository
 detect_repository() {
@@ -79,10 +56,6 @@ detect_repository() {
     IN_REPO=false
     return 1
 }
-
-# ============================================================================
-# Configuration Loading
-# ============================================================================
 
 # Load configuration from latest.cfg
 load_configuration() {
@@ -124,10 +97,6 @@ NODE_RPC_PORT=""
 GETH_P2P_PORT=""
 NODE_P2P_PORT=""
 
-# ============================================================================
-# Output Functions
-# ============================================================================
-
 print_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
 print_success() { echo -e "${GREEN}✅ $1${NC}"; }
 print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
@@ -140,10 +109,6 @@ print_header() {
     echo "=========================================="
     echo -e "${NC}"
 }
-
-# ============================================================================
-# Configuration Functions
-# ============================================================================
 
 # Load network-specific configuration dynamically
 load_network_config() {
@@ -169,10 +134,6 @@ load_network_config() {
         exit 1
     fi
 }
-
-# ============================================================================
-# System Validation Functions
-# ============================================================================
 
 # Check if a command exists
 command_exists() {
@@ -223,10 +184,6 @@ check_system_requirements() {
     check_required_tools
     print_success "System requirements check completed"
 }
-
-# ============================================================================
-# File Management Functions
-# ============================================================================
 
 # Get file from repository or download from GitHub
 get_file_from_source() {
@@ -308,10 +265,6 @@ download_config_files() {
     
     print_success "Configuration files ready"
 }
-
-# ============================================================================
-# User Input Functions
-# ============================================================================
 
 # Generic input prompt with validation
 prompt_input() {
@@ -401,10 +354,6 @@ get_user_input() {
     print_success "Configuration input completed"
 }
 
-# ============================================================================
-# JWT Management
-# ============================================================================
-
 generate_or_verify_jwt() {
     local jwt_file=$1
     
@@ -427,10 +376,6 @@ generate_or_verify_jwt() {
         print_info "Using existing JWT secret"
     fi
 }
-
-# ============================================================================
-# Configuration Generation
-# ============================================================================
 
 generate_config_files() {
     print_info "Generating configuration files..."
@@ -512,10 +457,6 @@ EOF
     
     print_success ".env file generated"
 }
-
-# ============================================================================
-# Genesis Management
-# ============================================================================
 
 download_genesis() {
     local genesis_url=$1
