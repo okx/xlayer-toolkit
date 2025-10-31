@@ -103,7 +103,7 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=info
-      - --l2=http://xlayer-${NETWORK_TYPE}-${RPC_TYPE}:8552
+      - --l2=${L2_ENGINE_URL}
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled=false
       - --verifier.l1-confs=1
