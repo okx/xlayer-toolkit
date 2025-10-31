@@ -3,6 +3,10 @@
 
 set -e
 
+# Genesis file local paths (if files exist locally, they will be used instead of downloading)
+LOCAL_TESTNET_GENESIS="/Users/oker/Downloads/merged.genesis.json.testnet.tar.gz"
+LOCAL_MAINNET_GENESIS="/Users/oker/Downloads/merged.genesis.json.mainnet.tar.gz"
+
 # Parse command line arguments
 NETWORK_TYPE=${1:-""}
 RPC_TYPE=${2:-"geth"}
@@ -74,9 +78,21 @@ LOGS_DIR="logs-${NETWORK_TYPE}-${RPC_TYPE}"
 
 mkdir -p "$DATA_DIR" "$CONFIG_DIR" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
 
-# Download the genesis file
-echo "📥 Downloading genesis file from $GENESIS_URL..."
-wget -c "$GENESIS_URL" -O genesis.tar.gz
+# Determine local genesis file path
+if [ "$NETWORK_TYPE" = "testnet" ]; then
+    LOCAL_GENESIS="$LOCAL_TESTNET_GENESIS"
+else
+    LOCAL_GENESIS="$LOCAL_MAINNET_GENESIS"
+fi
+
+# Check if local genesis file exists
+if [ -f "$LOCAL_GENESIS" ]; then
+    echo "📥 Using local genesis file: $LOCAL_GENESIS"
+    cp "$LOCAL_GENESIS" genesis.tar.gz
+else
+    echo "📥 Local genesis file not found, downloading from $GENESIS_URL..."
+    wget -c "$GENESIS_URL" -O genesis.tar.gz
+fi
 
 # Extract the genesis file
 echo "📦 Extracting genesis file..."

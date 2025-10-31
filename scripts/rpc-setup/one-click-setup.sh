@@ -13,8 +13,13 @@ NC='\033[0m' # No Color
 
 # Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/main/scripts/rpc-setup"
+BRANCH="zjg/reth"
+REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/$BRANCH/scripts/rpc-setup"
 TEMP_DIR="/tmp/xlayer-setup-$$"
+
+# Genesis file local paths (if files exist locally, they will be used instead of downloading)
+LOCAL_TESTNET_GENESIS="/Users/oker/Downloads/merged.genesis.json.testnet.tar.gz"
+LOCAL_MAINNET_GENESIS="/Users/oker/Downloads/merged.genesis.json.mainnet.tar.gz"
 
 # Default values
 DEFAULT_NETWORK="testnet"
@@ -584,9 +589,21 @@ initialize_node() {
         fi
     fi
     
-    # Download the genesis file
-    print_info "Downloading genesis file from $GENESIS_URL..."
-    wget -c "$GENESIS_URL" -O genesis.tar.gz
+    # Determine local genesis file path
+    if [ "$NETWORK_TYPE" = "testnet" ]; then
+        LOCAL_GENESIS="$LOCAL_TESTNET_GENESIS"
+    else
+        LOCAL_GENESIS="$LOCAL_MAINNET_GENESIS"
+    fi
+    
+    # Check if local genesis file exists
+    if [ -f "$LOCAL_GENESIS" ]; then
+        print_info "Using local genesis file: $LOCAL_GENESIS"
+        cp "$LOCAL_GENESIS" genesis.tar.gz
+    else
+        print_info "Local genesis file not found, downloading from $GENESIS_URL..."
+        wget -c "$GENESIS_URL" -O genesis.tar.gz
+    fi
     
     # Extract the genesis file
     print_info "Extracting genesis file..."
