@@ -366,7 +366,8 @@ generate_config_files() {
     DATA_DIR="$CHAIN_DATA_DIR/data"
     CONFIG_DIR="$CHAIN_DATA_DIR/config"
     LOGS_DIR="$CHAIN_DATA_DIR/logs"
-    GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
+    # Use simple filename without network suffix (directory already contains network info)
+    GENESIS_FILE="genesis.json"
     
     print_info "📁 Data will be stored in: $CHAIN_DATA_DIR"
     

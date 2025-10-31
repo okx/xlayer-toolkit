@@ -65,7 +65,8 @@ CHAIN_DATA_DIR="$CHAIN_DATA_ROOT/${NETWORK_TYPE}-${L2_ENGINEKIND}"
 DATA_DIR="$CHAIN_DATA_DIR/data"
 CONFIG_DIR="$CHAIN_DATA_DIR/config"
 LOGS_DIR="$CHAIN_DATA_DIR/logs"
-GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
+# Use simple filename without network suffix (directory already contains network info)
+GENESIS_FILE="genesis.json"
 
 echo "📁 Data will be stored in: $CHAIN_DATA_DIR"
 
@@ -164,7 +165,8 @@ fi
 
 # Prepare genesis file for Reth (if needed)
 echo "📋 Preparing genesis-reth.json for op-reth support..."
-GENESIS_RETH_FILE="genesis-reth-${NETWORK_TYPE}.json"
+# Use simple filename without network suffix (directory already contains network info)
+GENESIS_RETH_FILE="genesis-reth.json"
 
 sed_inplace() {
   if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -186,11 +188,6 @@ if [ ! -f "$CONFIG_DIR/$GENESIS_RETH_FILE" ]; then
 else
   echo "✅ Genesis-reth file already exists at $CONFIG_DIR/$GENESIS_RETH_FILE"
 fi
-
-# Also create a symlink for backward compatibility with old config
-ln -sf "$GENESIS_FILE" "$CONFIG_DIR/genesis.json" 2>/dev/null || true
-ln -sf "$GENESIS_RETH_FILE" "$CONFIG_DIR/genesis-reth.json" 2>/dev/null || true
-ln -sf "$ROLLUP_CONFIG" "$CONFIG_DIR/rollup.json" 2>/dev/null || true
 
 # Initialize based on L2_ENGINEKIND
 if [ "$L2_ENGINEKIND" = "geth" ]; then
