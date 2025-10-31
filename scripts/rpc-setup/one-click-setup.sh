@@ -180,10 +180,18 @@ download_config_files() {
     # Load network-specific configuration to know which files to download
     load_network_config "$NETWORK_TYPE"
     
+    # Determine RETH config file based on network
+    if [ "$NETWORK_TYPE" = "testnet" ]; then
+        RETH_CONFIG_FILE="op-reth-config-testnet.toml"
+    else
+        RETH_CONFIG_FILE="op-reth-config-mainnet.toml"
+    fi
+    
     # Download configuration files based on network
     local config_files=(
         "config/$ROLLUP_CONFIG"
         "config/$GETH_CONFIG"
+        "config/$RETH_CONFIG_FILE"
     )
 
     for file in "${config_files[@]}"; do
@@ -412,16 +420,17 @@ L2_ENGINEKIND=$L2_ENGINEKIND
 # OP_RETH_IMAGE_TAG=xlayer/op-reth:release-testnet
 EOF
 
-    # Copy configuration files from temp directory
-    cp "$TEMP_DIR/config/$ROLLUP_CONFIG" "$CONFIG_DIR/"
-    cp "$TEMP_DIR/config/$GETH_CONFIG" "$CONFIG_DIR/"
-    
     # Determine RETH config file based on network
     if [ "$NETWORK_TYPE" = "testnet" ]; then
         RETH_CONFIG="op-reth-config-testnet.toml"
     else
         RETH_CONFIG="op-reth-config-mainnet.toml"
     fi
+    
+    # Copy configuration files from temp directory
+    cp "$TEMP_DIR/config/$ROLLUP_CONFIG" "$CONFIG_DIR/"
+    cp "$TEMP_DIR/config/$GETH_CONFIG" "$CONFIG_DIR/"
+    cp "$TEMP_DIR/config/$RETH_CONFIG" "$CONFIG_DIR/"
     
     # Set RPC_TYPE for docker-compose
     RPC_TYPE="op-${L2_ENGINEKIND}"
