@@ -13,7 +13,6 @@ NC=$'\033[0m' # No Color
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="$(pwd)"  # Working directory is where the user runs the script
-TEMP_DIR="/tmp/xlayer-setup-$$"
 
 # Repository detection
 IN_REPO=false
@@ -241,9 +240,13 @@ check_required_files() {
 # Get configuration files based on network and RPC type
 download_config_files() {
     print_info "Getting configuration files..."
-    mkdir -p "$TEMP_DIR"
     
     load_network_config "$NETWORK_TYPE"
+    
+    # Determine CONFIG_DIR early
+    local chaindata_base="chaindata/${NETWORK_TYPE}-${RPC_TYPE}"
+    local config_dir="${chaindata_base}/config"
+    mkdir -p "$config_dir"
     
     local config_files=("config/$ROLLUP_CONFIG")
     
@@ -252,7 +255,7 @@ download_config_files() {
     
     for file in "${config_files[@]}"; do
         local filename=$(basename "$file")
-        local target="$TEMP_DIR/$filename"
+        local target="$config_dir/$filename"
         
         # Try to copy from local repository first
         if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/$file" ]; then
@@ -413,9 +416,7 @@ generate_config_files() {
     # Generate and verify JWT
     generate_or_verify_jwt "$CONFIG_DIR/jwt.txt"
     
-    # Copy configuration files
-    cp "$TEMP_DIR/$ROLLUP_CONFIG" "$CONFIG_DIR/"
-    cp "$TEMP_DIR/$EXEC_CONFIG" "$CONFIG_DIR/"
+    # Note: Configuration files are already downloaded to CONFIG_DIR by download_config_files()
     
     # Generate .env file
     generate_env_file
@@ -574,10 +575,6 @@ init_geth() {
     print_success "op-geth initialized successfully"
 }
 
-# ============================================================================
-# Node Initialization
-# ============================================================================
-
 initialize_node() {
     print_info "Initializing X Layer RPC node..."
     
@@ -607,10 +604,6 @@ initialize_node() {
     print_info "  - $LOGS_DIR: Log files"
 }
 
-# ============================================================================
-# Service Management
-# ============================================================================
-
 start_services() {
     print_info "Starting Docker services..."
     
@@ -629,35 +622,6 @@ start_services() {
     
     print_success "Services started successfully"
 }
-
-verify_installation() {
-    print_info "Verifying installation..."
-    
-    sleep 10
-    
-    if ! docker compose ps | grep -q "Up"; then
-        print_error "Some services are not running properly"
-        print_info "Check logs with: docker compose logs"
-        return 1
-    fi
-    
-    # Test RPC endpoint
-    print_info "Testing RPC endpoint..."
-    if curl -s -X POST \
-        -H "Content-Type: application/json" \
-        --data '{"method":"eth_blockNumber","params":[],"id":1,"jsonrpc":"2.0"}' \
-        "http://127.0.0.1:$RPC_PORT" > /dev/null; then
-        print_success "RPC endpoint is responding"
-    else
-        print_warning "RPC endpoint test failed, but services are running"
-    fi
-    
-    print_success "Installation verified"
-}
-
-# ============================================================================
-# Display Functions
-# ============================================================================
 
 display_connection_info() {
     echo ""
@@ -696,20 +660,7 @@ display_connection_info() {
     print_info "Your X Layer RPC node is ready!"
 }
 
-# ============================================================================
-# Cleanup
-# ============================================================================
-
-cleanup() {
-    [ -d "$TEMP_DIR" ] && rm -rf "$TEMP_DIR"
-}
-
-# ============================================================================
-# Main Execution
-# ============================================================================
-
 main() {
-    trap cleanup EXIT
     
     print_header
     
@@ -737,8 +688,7 @@ main() {
     initialize_node
     start_services
     
-    # Verification and info
-    verify_installation
+    # Display connection info
     display_connection_info
     
     print_success "Setup completed successfully!"
