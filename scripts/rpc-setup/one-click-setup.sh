@@ -325,13 +325,6 @@ check_existing_data() {
     fi
     
     print_warning "Existing data directory found: $target_dir"
-    
-    # Auto-mode: skip if not interactive
-    if [ ! -t 0 ]; then
-        print_info "Auto-mode: Keeping existing directory"
-        return 0
-    fi
-    
     echo ""
     print_prompt "Do you want to delete it and start fresh? (yes/no) [default: no]: "
     read -r response </dev/tty
@@ -358,24 +351,7 @@ get_user_input() {
     print_info "Please provide the following information:"
     echo ""
     
-    # Auto-mode detection (curl | bash)
-    if [ ! -t 0 ]; then
-        print_info "🚀 Auto-mode: Using default configuration"
-        NETWORK_TYPE="$DEFAULT_NETWORK"
-        RPC_TYPE="geth"
-        L1_RPC_URL="https://placeholder-l1-rpc-url"
-        L1_BEACON_URL="https://placeholder-l1-beacon-url"
-        CHAINDATA_BASE="./chaindata"
-        RPC_PORT="$DEFAULT_RPC_PORT"
-        WS_PORT="$DEFAULT_WS_PORT"
-        NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
-        GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
-        NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
-        print_warning "⚠️  L1 URLs will need to be configured after setup"
-        return 0
-    fi
-    
-    # Interactive mode
+    # Interactive mode (works even with curl | bash via /dev/tty)
     NETWORK_TYPE=$(prompt_input "1. Network type (testnet/mainnet) [default: $DEFAULT_NETWORK]: " "$DEFAULT_NETWORK" "validate_network")
     RPC_TYPE=$(prompt_input "2. RPC client type (geth/reth) [default: geth]: " "geth" "validate_rpc_type")
     
