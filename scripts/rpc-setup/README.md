@@ -41,14 +41,14 @@ The easiest way to deploy your X Layer RPC node:
 
 **Example 1: Mainnet Node (Production)**
 ```bash
-mkdir -p ~/xlayer-mainnet && cd ~/xlayer-mainnet
+mkdir -p /data/xlayer-mainnet && cd /data/xlayer-mainnet
 curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
 # Select: mainnet + geth
 ```
 
 **Example 2: Testnet Node (Development)**
 ```bash
-mkdir -p ~/xlayer-testnet && cd ~/xlayer-testnet
+mkdir -p /data/xlayer-testnet && cd /data/xlayer-testnet
 curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
 # Select: testnet + geth
 ```
