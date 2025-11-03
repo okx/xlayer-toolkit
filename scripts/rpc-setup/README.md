@@ -42,17 +42,20 @@ If you were previously running nodes on the legacy X Layer mainnet/testnet:
 
 The easiest way to deploy your X Layer RPC node:
 
+> **💡 Important**: Each directory manages **ONE node instance**. To run multiple nodes, use separate directories.
+
+**Example 1: Mainnet with op-geth (Recommended for Production)**
 ```bash
-# Download and run the setup script
+mkdir -p ~/xlayer-mainnet && cd ~/xlayer-mainnet
 curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
+# Select: mainnet + geth
 ```
 
-Or download first, then execute:
-
+**Example 2: Testnet with op-geth (For Testing)**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh -o one-click-setup.sh
-chmod +x one-click-setup.sh
-./one-click-setup.sh
+mkdir -p ~/xlayer-testnet && cd ~/xlayer-testnet
+curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
+# Select: testnet + geth
 ```
 
 **What the script does:**
@@ -94,9 +97,10 @@ cd xlayer-toolkit/scripts/rpc-setup
 ### Step 2: Run Setup
 
 ```bash
-chmod +x one-click-setup.sh
 ./one-click-setup.sh
 ```
+
+> **💡 Note**: To run multiple nodes, copy `rpc-setup/` to different directories.
 
 Follow the interactive prompts to configure your node.
 

@@ -666,11 +666,19 @@ init_geth() {
     local data_dir=$1
     local genesis_file=$2
     
+    # Convert to absolute paths
+    if [[ ! "$data_dir" = /* ]]; then
+        data_dir="$(pwd)/$data_dir"
+    fi
+    if [[ ! "$genesis_file" = /* ]]; then
+        genesis_file="$(pwd)/$genesis_file"
+    fi
+    
     print_info "Initializing op-geth... (This may take a while)"
     
     if ! docker run --rm \
-        -v "$(pwd)/$data_dir:/data" \
-        -v "$(pwd)/$genesis_file:/genesis.json" \
+        -v "$data_dir:/data" \
+        -v "$genesis_file:/genesis.json" \
         "${OP_GETH_IMAGE_TAG}" \
         --datadir /data \
         --gcmode=archive \
