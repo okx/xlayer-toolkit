@@ -89,6 +89,9 @@ load_network_config() {
     eval "ROLLUP_CONFIG=\${${prefix}_ROLLUP_CONFIG}"
     eval "GETH_CONFIG=\${${prefix}_GETH_CONFIG}"
     eval "RETH_CONFIG=\${${prefix}_RETH_CONFIG}"
+    eval "LEGACY_RPC_URL=\${${prefix}_LEGACY_RPC_URL}"
+    eval "LEGACY_CUTOFF_BLOCK=\${${prefix}_LEGACY_CUTOFF_BLOCK}"
+    eval "LEGACY_RPC_TIMEOUT=\${${prefix}_LEGACY_RPC_TIMEOUT}"
     
     # Validate that configuration was loaded
     if [ -z "$OP_STACK_IMAGE_TAG" ]; then
@@ -510,6 +513,11 @@ NODE_P2P_PORT=${NODE_P2P_PORT:-9223}
 
 # Sequencer HTTP URL
 SEQUENCER_HTTP_URL=$SEQUENCER_HTTP
+
+# Legacy RPC Configuration
+LEGACY_RPC_URL=$LEGACY_RPC_URL
+LEGACY_CUTOFF_BLOCK=$LEGACY_CUTOFF_BLOCK
+LEGACY_RPC_TIMEOUT=$LEGACY_RPC_TIMEOUT
 EOF
     
     print_success ".env file generated"
