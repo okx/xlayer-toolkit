@@ -1,15 +1,10 @@
 #!/bin/bash
 set -e
-# set -x
 
-BRANCH="zjg/reth"
+# Debug mode: set to true to cache genesis files locally for faster re-runs
+DEBUG=false
+BRANCH="reth"
 REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/scripts/rpc-setup"
-
-RED=$'\033[0;31m'
-GREEN=$'\033[0;32m'
-YELLOW=$'\033[1;33m'
-BLUE=$'\033[0;34m'
-NC=$'\033[0m' # No Color
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="$(pwd)"  # Working directory is where the user runs the script
@@ -68,10 +63,10 @@ NODE_RPC_PORT=""
 GETH_P2P_PORT=""
 NODE_P2P_PORT=""
 
-print_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
-print_success() { echo -e "${GREEN}✅ $1${NC}"; }
-print_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
-print_error() { echo -e "${RED}❌ $1${NC}"; }
+print_info() { echo -e "\033[0;34mℹ️  $1\033[0m"; }
+print_success() { echo -e "\033[0;32m✅ $1\033[0m"; }
+print_warning() { echo -e "\033[1;33m⚠️  $1\033[0m"; }
+print_error() { echo -e "\033[0;31m❌ $1\033[0m"; }
 print_prompt() { 
     printf "\033[0;34m%s\033[0m" "$1" > /dev/tty
 }
@@ -492,19 +487,38 @@ EOF
 
 download_genesis() {
     local genesis_url=$1
-    local local_genesis_path=$2
+    local network=$2
     
-    print_info "Preparing genesis file..."
+    # Unified genesis filename with network type
+    local genesis_file="genesis-${network}.tar.gz"
     
-    if [ -f "$local_genesis_path" ]; then
-        print_info "Using local genesis file: $local_genesis_path"
-        cp "$local_genesis_path" genesis.tar.gz
+    print_info "Preparing genesis file for $network..."
+    
+    # DEBUG mode: check if file already exists
+    if [ "$DEBUG" = "true" ] && [ -f "$genesis_file" ]; then
+        local file_size=$(du -h "$genesis_file" 2>/dev/null | cut -f1 || echo "unknown")
+        print_success "Using cached genesis: $genesis_file ($file_size)"
+        print_info "DEBUG mode: Skip download, reusing existing file"
+        return 0
+    fi
+    
+    # Download genesis file
+    if [ "$DEBUG" = "true" ]; then
+        print_info "DEBUG mode: Downloading (will be kept for next run)..."
     else
-        print_info "Downloading from $genesis_url..."
-        if ! wget -c "$genesis_url" -O genesis.tar.gz; then
-            print_error "Failed to download genesis file"
-            exit 1
-        fi
+        print_info "Downloading (will be cleaned up after use)..."
+    fi
+    
+    if ! wget -c "$genesis_url" -O "$genesis_file"; then
+        print_error "Failed to download genesis file"
+        rm -f "$genesis_file"  # Clean up failed download
+        exit 1
+    fi
+    
+    if [ "$DEBUG" = "true" ]; then
+        print_success "Downloaded and cached: $genesis_file"
+    else
+        print_success "Downloaded: $genesis_file"
     fi
 }
 
@@ -512,11 +526,14 @@ extract_genesis() {
     local target_dir=$1
     local target_file=$2
     
+    # Get genesis filename (consistent with download_genesis)
+    local genesis_file="genesis-${NETWORK_TYPE}.tar.gz"
+    
     print_info "Extracting genesis file..."
     
-    if ! tar -xzf genesis.tar.gz -C "$target_dir/"; then
+    if ! tar -xzf "$genesis_file" -C "$target_dir/"; then
         print_error "Failed to extract genesis file"
-        rm -f genesis.tar.gz
+        rm -f "$genesis_file"
         exit 1
     fi
     
@@ -527,11 +544,17 @@ extract_genesis() {
         mv "$target_dir/genesis.json" "$target_dir/$target_file"
     else
         print_error "Failed to find genesis.json in the archive"
-        rm -f genesis.tar.gz
+        rm -f "$genesis_file"
         exit 1
     fi
     
-    rm -f genesis.tar.gz
+    # Non-DEBUG mode: clean up temporary file
+    if [ "$DEBUG" != "true" ]; then
+        rm -f "$genesis_file"
+        print_info "Cleaned up temporary genesis file"
+    else
+        print_info "Kept genesis file for future use: $genesis_file"
+    fi
     
     if [ ! -f "$target_dir/$target_file" ]; then
         print_error "Genesis file not found after extraction"
@@ -606,12 +629,8 @@ initialize_node() {
     
     cd "$WORK_DIR" || exit 1
     
-    # Determine local genesis file path
-    local local_genesis
-    [ "$NETWORK_TYPE" = "testnet" ] && local_genesis="$LOCAL_TESTNET_GENESIS" || local_genesis="$LOCAL_MAINNET_GENESIS"
-    
     # Download and extract genesis
-    download_genesis "$GENESIS_URL" "$local_genesis"
+    download_genesis "$GENESIS_URL" "$NETWORK_TYPE"
     extract_genesis "$CONFIG_DIR" "$GENESIS_FILE"
     
     # Initialize execution client

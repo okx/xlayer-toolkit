@@ -5,3 +5,6 @@ scripts/rpc-setup/chaindata/
 
 # Environment files (contain user-specific configuration)
 scripts/rpc-setup/.env
+
+# Genesis files (DEBUG mode cache)
+scripts/rpc-setup/genesis-*.tar.gz
