@@ -39,18 +39,17 @@ The easiest way to deploy your X Layer RPC node using the setup script from [xla
 
 > **💡 Important**: Each directory manages **ONE node instance**. To run multiple nodes, use separate directories.
 
-**Example 1: Mainnet Node (Production)**
+**Deployment Steps:**
+
 ```bash
 mkdir -p /data/xlayer-mainnet && cd /data/xlayer-mainnet
 curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
-# Then interactively select: mainnet + geth + L1 URLs
-```
 
-**Example 2: Testnet Node (Development)**
-```bash
-mkdir -p /data/xlayer-testnet && cd /data/xlayer-testnet
-curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
-# Then interactively select: testnet + geth + L1 URLs
+# 3. Follow interactive prompts to configure:
+#    - Network type (mainnet/testnet)
+#    - RPC client (geth/reth)
+#    - L1 RPC and Beacon URLs
+#    - Optional: Custom ports
 ```
 
 **What the script does:**
@@ -71,7 +70,7 @@ The script will prompt you for:
 2. **RPC Type**: `geth` or `reth` (execution client)
 3. **L1 RPC URL**: Ethereum L1 RPC endpoint (e.g., QuickNode, Alchemy)
 4. **L1 Beacon URL**: Ethereum L1 Beacon API endpoint
-5. **Optional Settings**: Ports, data directory (defaults provided)
+5. **Optional Settings**: Custom ports (defaults provided)
 
 **After Installation:**
 

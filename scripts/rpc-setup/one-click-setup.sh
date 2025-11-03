@@ -2,7 +2,7 @@
 set -e
 
 # Debug mode: set to true to cache genesis files locally for faster re-runs
-DEBUG=false
+DEBUG=true
 BRANCH="reth"
 REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/scripts/rpc-setup"
 
@@ -368,28 +368,23 @@ get_user_input() {
         [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
     done
     
+    # Use current directory for data
+    CHAINDATA_BASE="./chaindata"
+    local full_path="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
+    
+    # Check existing data directory
+    echo ""
+    check_existing_data "$full_path"
+    
     # Optional configurations
     echo ""
     print_info "Optional configurations (press Enter to use defaults):"
     
-    local default_chaindata_base="./chaindata"
-    local default_full_path="${default_chaindata_base}/${NETWORK_TYPE}-${RPC_TYPE}"
-    CHAINDATA_BASE=$(prompt_input "5. Chaindata base directory [default: $default_chaindata_base]: " "$default_chaindata_base" "")
-    
-    # Show user the full path that will be created
-    local full_path="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
-    print_info "Will create directory: $full_path"
-    
-    # Check existing data directory after user specifies the path
-    echo ""
-    check_existing_data "$full_path"
-    echo ""
-    
-    RPC_PORT=$(prompt_input "6. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "")
-    WS_PORT=$(prompt_input "7. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "")
-    NODE_RPC_PORT=$(prompt_input "8. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "")
-    GETH_P2P_PORT=$(prompt_input "9. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "")
-    NODE_P2P_PORT=$(prompt_input "10. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "")
+    RPC_PORT=$(prompt_input "5. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "")
+    WS_PORT=$(prompt_input "6. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "")
+    NODE_RPC_PORT=$(prompt_input "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "")
+    GETH_P2P_PORT=$(prompt_input "8. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "")
+    NODE_P2P_PORT=$(prompt_input "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "")
     
     print_success "Configuration input completed"
 }
