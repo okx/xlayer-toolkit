@@ -82,12 +82,12 @@ After running the setup script, your deployment directory will contain:
 ├── docker-compose.yml              # Docker services definition
 ├── Makefile                        # Service management commands
 ├── network-presets.env             # Network-specific configurations
-├── one-click-setup.sh              # Setup script (downloaded)
-└── chaindata/                      # Data directory (created after init)
-    └── mainnet-geth/               # Example: mainnet + geth
+├── one-click-setup.sh              # Setup script
+└── chaindata/                      # Data directory
+    └── mainnet-geth/               # Network + Client subdirectory
         ├── data/                   # Blockchain data
-        │   ├── op-geth/            # Geth database
-        │   └── op-node/            # Op-node data
+        │   ├── op-geth/            # Execution client database
+        │   └── op-node/            # Consensus layer data
         ├── config/                 # Configuration files
         │   ├── genesis-mainnet.json
         │   ├── rollup-mainnet.json
@@ -98,7 +98,7 @@ After running the setup script, your deployment directory will contain:
             └── op-node.log
 ```
 
-**Note**: The `chaindata/` subdirectory structure (`mainnet-geth`, `testnet-reth`, etc.) is automatically created based on your network and RPC type selection during setup.
+**Note**: The subdirectory name (`mainnet-geth`, `testnet-reth`, etc.) is automatically generated based on your network and client selection. This allows you to preserve data when switching configurations in the same directory.
 
 ## 📊 Service Management
 
@@ -131,30 +131,6 @@ The `make run` command intelligently manages service startup:
 5. **Displays status** with connection details
 
 **Important**: First startup takes longer (5-15 minutes) due to genesis file loading.
-
-## 🗂️ Directory Structure
-
-```
-scripts/rpc-setup/
-├── one-click-setup.sh          # Main setup script
-├── network-presets.env         # Network configuration presets
-├── Makefile                    # Service management
-├── docker-compose.yml          # Service definitions
-├── .env                        # Generated environment variables
-└── chaindata/                  # Blockchain data directory
-    ├── mainnet-reth/           # Mainnet + Reth data
-    ├── mainnet-geth/           # Mainnet + Geth data
-    ├── testnet-reth/           # Testnet + Reth data
-    └── testnet-geth/           # Testnet + Geth data
-        ├── data/               # Blockchain state
-        │   ├── op-reth/       # or op-geth/
-        │   └── op-node/
-        ├── config/             # Runtime configs
-        │   ├── genesis.json
-        │   ├── rollup-*.json
-        │   └── jwt.txt
-        └── logs/               # Service logs
-```
 
 ## 🔧 Configuration Files
 
