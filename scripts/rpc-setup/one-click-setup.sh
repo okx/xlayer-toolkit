@@ -346,17 +346,11 @@ check_existing_data() {
             exit 1
         fi
     else
-        print_info "Keeping existing directory. Note: This may cause conflicts."
-        print_warning "If you encounter issues, please manually remove the directory and re-run setup."
         echo ""
-        print_prompt "Continue anyway? (yes/no) [default: no]: "
-        read -r continue_response </dev/tty
-        continue_response="${continue_response:-no}"
-        
-        if [[ ! "$continue_response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-            print_info "Setup cancelled by user"
-            exit 0
-        fi
+        print_error "Cannot proceed with existing data directory"
+        print_info "Please manually remove the directory and re-run setup:"
+        print_info "  rm -rf $target_dir"
+        exit 1
     fi
 }
 
