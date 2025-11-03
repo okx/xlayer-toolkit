@@ -1,319 +1,383 @@
-# X Layer RPC Node Setup
-
-Complete self-hosted X Layer RPC node deployment solution, supporting quick deployment and management of your own X Layer RPC endpoint.
+# 🚀 X Layer RPC Node Deployment Guide
 
 ## 📋 Overview
 
-X Layer is a Layer 2 network built on Optimism OP Stack. This project provides a comprehensive set of tools for deploying and managing your own X Layer RPC node.
+Deploy a self-hosted X Layer RPC node with support for both **op-geth** (Go-based) and **op-reth** (Rust-based) execution clients, providing complete L2 blockchain data access services.
 
-### Core Components
+## ⚠️ Important: Migration from Legacy Mainnet/Testnet
 
-- **Execution Layer Client** (choose one):
-  - **op-geth**: Go-based execution client (default, stable and battle-tested)
-  - **op-reth**: Rust-based execution client (high performance, lower memory footprint)
-- **op-node**: X Layer consensus layer client, connects to Ethereum L1 and manages L2 state
+If you were previously running nodes on the legacy X Layer mainnet/testnet:
 
-### Network Support
+- **Data incompatibility**: Previous blockchain data cannot be migrated to the current version
+- **Configuration changes**: Updated bootnodes, network parameters, and P2P configurations
+- **Fresh deployment required**: You must deploy a completely new node instance
+- **Recommended**: Use `op-geth` for production stability; `op-reth` is available for testing
 
-- **Testnet (Chain ID: 1952)**: Test network
-- **Mainnet (Chain ID: 196)**: Main network
+## 💻 System Requirements
+- **CPU**: 8+ cores recommended
+- **Memory**: Minimum 8GB, recommended 16GB+
+- **Storage**: Minimum 100GB SSD, recommended 500GB+
+- **Network**: Stable internet connection with sufficient bandwidth
+- **Operating System**: Linux (Ubuntu 20.04+ recommended), macOS 10.15+
+- **Docker**: 20.10+ 
+- **Docker Compose**: 2.0+
+- **Make**: GNU Make (for service management)
 
-## 🚀 Quick Start
+## 🎯 Execution Client Comparison
 
-### Method 1: One-Click Deployment (Recommended)
+| Feature | op-geth | op-reth |
+|---------|---------|---------|
+| **Language** | Go | Rust |
+| **Maturity** | Stable, production-ready | Testing phase |
+| **Memory Usage** | ~8-16GB | ~8-16GB |
+| **Sync Speed** | Standard | Faster |
+| **Network** | Mainnet + Testnet | Mainnet + Testnet |
+| **Status** | ✅ Recommended | ⚠️ Under testing |
 
-Use the one-click deployment script to automatically complete all configuration:
+**Recommendation**: Use **op-geth** for production deployments. **op-reth** is currently undergoing integration testing and should be used for testing purposes only.
 
-```bash
-# One-click installation and setup
-curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/main/scripts/rpc-setup/one-click-setup.sh -o one-click-setup.sh
-chmod +x one-click-setup.sh && ./one-click-setup.sh
-```
+## ⚡ Quick Deployment
 
-The script will prompt you to choose:
-- Network type: `testnet` or `mainnet`
-- RPC client type: `geth` (default) or `reth`
+### 🎯 One-Click Setup (Recommended)
 
-### Method 2: Step-by-Step Deployment
-
-If you want to manually control the deployment process:
-
-#### 1. Initialize Node
-
-```bash
-# Initialize testnet with op-geth (default)
-./init.sh testnet
-
-# Initialize testnet with op-reth
-./init.sh testnet reth
-
-# Or initialize mainnet with op-geth
-./init.sh mainnet
-
-# Or initialize mainnet with op-reth
-./init.sh mainnet reth
-```
-
-This will complete the following operations:
-- Download and extract Genesis file
-- Copy configuration files to corresponding network directories
-- Initialize execution client (op-geth or op-reth) database
-
-#### 2. Configure Environment Variables
-
-Copy and edit the environment variable template:
+The easiest way to deploy your X Layer RPC node:
 
 ```bash
-cp env.example .env
-vim .env
+# Download and run the setup script
+curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
 ```
 
-Edit the `.env` file and set the following required parameters:
+Or download first, then execute:
 
 ```bash
-L1_RPC_URL={your-l1-url}  # Ethereum L1 RPC endpoint
-L1_BEACON_URL={your-l1-beacon-url}  # Ethereum Beacon API endpoint
+curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh -o one-click-setup.sh
+chmod +x one-click-setup.sh
+./one-click-setup.sh
 ```
 
-#### 3. Start Node
+**What the script does:**
+- ✅ Checks all system dependencies (Docker, Make, etc.)
+- ✅ Detects if running from cloned repository or standalone
+- ✅ Downloads latest configuration files if needed
+- ✅ Interactively prompts for configuration parameters
+- ✅ Generates `.env` and all necessary config files
+- ✅ Downloads and initializes genesis data
+- ✅ Starts services with proper health checks
+- ✅ Displays connection details and management commands
+
+**Interactive Configuration:**
+
+The script will prompt you for:
+
+1. **Network Selection**: `testnet` or `mainnet`
+2. **RPC Type**: `geth` or `reth` (execution client)
+3. **L1 RPC URL**: Ethereum L1 RPC endpoint (e.g., QuickNode, Alchemy)
+4. **L1 Beacon URL**: Ethereum L1 Beacon API endpoint
+5. **Optional Settings**: Ports, data directory (defaults provided)
+
+**After Installation:**
+
+Your RPC node will be available at:
+- **HTTP RPC**: `http://localhost:8545`
+- **WebSocket**: `ws://localhost:8546`
+- **op-node RPC**: `http://localhost:9545`
+
+## 🛠️ Manual Setup (Advanced)
+
+### Step 1: Clone Repository
 
 ```bash
-# Start testnet node with op-geth (default)
-./start.sh testnet
-
-# Start testnet node with op-reth
-./start.sh testnet reth
-
-# Or start mainnet node with op-geth
-./start.sh mainnet
-
-# Or start mainnet node with op-reth
-./start.sh mainnet reth
+git clone https://github.com/okx/xlayer-toolkit.git
+cd xlayer-toolkit/scripts/rpc-setup
 ```
 
-**Note**: The RPC type must match what you used in the initialization step.
-
-#### 4. Stop Node
+### Step 2: Run Setup
 
 ```bash
-./stop.sh
+chmod +x one-click-setup.sh
+./one-click-setup.sh
 ```
 
-## 📁 Project Structure
+Follow the interactive prompts to configure your node.
 
-```
-rpc-setup/
-├── init.sh                 # Initialization script
-├── start.sh                # Start script
-├── stop.sh                 # Stop script
-├── one-click-setup.sh     # One-click deployment script
-├── env.example             # Environment variable template
-├── config/                 # Configuration directory
-│   ├── op-geth-config-testnet.toml   # Testnet op-geth config
-│   ├── op-geth-config-mainnet.toml   # Mainnet op-geth config
-│   ├── op-reth-config-testnet.toml   # Testnet op-reth config
-│   ├── op-reth-config-mainnet.toml   # Mainnet op-reth config
-│   ├── rollup-testnet.json           # Testnet rollup config
-│   └── rollup-mainnet.json           # Mainnet rollup config
-├── data-testnet-geth/      # Testnet Geth data (generated after init)
-├── data-testnet-reth/      # Testnet Reth data (generated after init)
-├── data-mainnet-geth/      # Mainnet Geth data (generated after init)
-├── data-mainnet-reth/      # Mainnet Reth data (generated after init)
-├── config-testnet-geth/    # Testnet Geth config (generated after init)
-├── config-testnet-reth/    # Testnet Reth config (generated after init)
-├── config-mainnet-geth/    # Mainnet Geth config (generated after init)
-├── config-mainnet-reth/    # Mainnet Reth config (generated after init)
-└── logs-testnet-geth/      # Testnet Geth logs
-    logs-testnet-reth/      # Testnet Reth logs
-    logs-mainnet-geth/      # Mainnet Geth logs
-    logs-mainnet-reth/      # Mainnet Reth logs
-```
-
-## 🔧 System Requirements
-
-### Minimum Requirements
-
-- **CPU**: 4 cores
-- **Memory**: 8 GB RAM
-- **Storage**: 50 GB available space (testnet), 300+ GB (mainnet)
-- **Network**: Stable internet connection (recommended upload bandwidth > 10 Mbps)
-
-### Software Dependencies
-
-- Docker 20.10+
-- Docker Compose 2.0+
-- wget
-- tar
-- openssl
-
-### Install Docker
-
-**Ubuntu/Debian:**
+### Step 3: Verify Installation
 
 ```bash
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
+# Check service status
+make status
+
+# View logs
+make logs
 ```
 
-**macOS:**
+## 📊 Service Management
+
+All services are managed via **Makefile** commands:
 
 ```bash
-brew install --cask docker
+# Start services (with health checks)
+make start
+
+# Alias for start
+make run
+
+# Stop all services
+make stop
+
+# Restart services
+make restart
+
+# View real-time logs
+make logs
+
+# View logs for specific service
+docker compose logs -f op-reth  # or op-geth, op-node
+
+# Check service status with connection info
+make status
+
+# Complete cleanup (remove all data and containers)
+make clean
 ```
 
-## 🌐 Port Configuration
+### Service Startup Behavior
 
-Default port configuration:
+The `make start` command intelligently manages service startup:
 
-| Service | Port | Protocol | Description |
-|---------|------|----------|-------------|
-| op-geth HTTP RPC | 8545 | HTTP | JSON-RPC API |
-| op-geth WebSocket | 8546 | WebSocket | WebSocket API |
-| op-geth Engine API | 8552 | HTTP | Consensus layer communication (internal) |
-| op-node RPC | 9545 | HTTP | Consensus layer API |
-| op-geth P2P | 30303 | TCP/UDP | Geth P2P network |
-| op-node P2P | 9223 | TCP/UDP | Consensus layer P2P network |
+1. **Reads configuration** from `.env` file
+2. **Starts execution client** first (op-reth or op-geth)
+3. **Waits for health check** to pass (up to 10 minutes for genesis loading)
+4. **Starts op-node** after execution client is ready
+5. **Displays status** with connection details
 
-## 📡 RPC API Endpoints
+**Important**: First startup takes longer (5-15 minutes) due to genesis file loading.
 
-After starting the node, you can access it through the following endpoints:
+## 🗂️ Directory Structure
 
-### HTTP RPC
+```
+scripts/rpc-setup/
+├── one-click-setup.sh          # Main setup script
+├── latest.cfg                  # Configuration defaults
+├── Makefile                    # Service management
+├── docker-compose.yml          # Service definitions
+├── .env                        # Generated environment variables
+└── chaindata/                  # Blockchain data directory
+    ├── mainnet-reth/           # Mainnet + Reth data
+    ├── mainnet-geth/           # Mainnet + Geth data
+    ├── testnet-reth/           # Testnet + Reth data
+    └── testnet-geth/           # Testnet + Geth data
+        ├── data/               # Blockchain state
+        │   ├── op-reth/       # or op-geth/
+        │   └── op-node/
+        ├── config/             # Runtime configs
+        │   ├── genesis.json
+        │   ├── rollup-*.json
+        │   └── jwt.txt
+        └── logs/               # Service logs
+```
+
+## 🔧 Configuration Files
+
+### `.env` File
+
+Generated by `one-click-setup.sh`, contains:
 
 ```bash
+NETWORK_TYPE=mainnet           # or testnet
+RPC_TYPE=reth                  # or geth
+
+# L1 Configuration
+L1_RPC_URL=https://...
+L1_BEACON_URL=https://...
+
+# Port Mappings
+RPC_PORT=8545
+WS_PORT=8546
+NODE_RPC_PORT=9545
+
+# Image Tags (auto-configured)
+OP_STACK_IMAGE_TAG=xlayer/op-node:0.0.9
+OP_GETH_IMAGE_TAG=xlayer/op-geth:0.0.6
+OP_RETH_IMAGE_TAG=xlayer/op-reth:release-testnet
+
+# Bootnode and P2P Configuration
+OP_NODE_BOOTNODE=enode://...
+OP_GETH_BOOTNODE=enode://...
+P2P_STATIC_PEERS=/ip4/...
+```
+
+### `latest.cfg`
+
+Centralized configuration for:
+- Network-specific settings (testnet/mainnet)
+- Docker image tags
+- Genesis file URLs
+- Bootnode addresses
+- P2P static peers
+
+## 📡 Network Endpoints
+
+### Service Ports
+
+| Service | Port | Protocol | Purpose |
+|---------|------|----------|---------|
+| op-reth/op-geth RPC | 8545 | HTTP | JSON-RPC API |
+| op-reth/op-geth WebSocket | 8546 | WebSocket | Real-time events |
+| op-node RPC | 9545 | HTTP | Consensus API |
+| op-reth/op-geth P2P | 30303 | TCP/UDP | Peer discovery |
+| op-node P2P | 9223 | TCP/UDP | Peer discovery |
+
+### RPC API Examples
+
+```bash
+# Check sync status
 curl -X POST http://localhost:8545 \
   -H "Content-Type: application/json" \
-  --data '{"method":"eth_blockNumber","params":[],"id":1,"jsonrpc":"2.0"}'
-```
+  -d '{"jsonrpc":"2.0","method":"eth_syncing","params":[],"id":1}'
 
-### WebSocket
-
-```javascript
-const ws = new WebSocket('ws://localhost:8546');
-```
-
-### Test Connection
-
-```bash
-# Get latest block number
-curl http://127.0.0.1:8545 \
-  -X POST \
+# Get latest block
+curl -X POST http://localhost:8545 \
   -H "Content-Type: application/json" \
-  --data '{"method":"eth_blockNumber","params":[],"id":1,"jsonrpc":"2.0"}'
+  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+
+# Check op-node sync status
+curl -X POST http://localhost:9545 \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"optimism_syncStatus","params":[],"id":1}'
+
+# Check P2P connections
+curl -X POST http://localhost:9545 \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","method":"opp2p_peerStats","params":[],"id":1}'
 ```
 
-## 📊 Monitoring and Logs
+## 🔄 Upgrade & Migration
 
-### Check Service Status
+### Upgrading to Latest Version
 
 ```bash
+# Stop services
+make stop
+
+# Pull latest changes
+git pull origin main
+
+# Re-run setup (will preserve existing .env)
+./one-click-setup.sh
+
+# Start services
+make start
+```
+
+### Switching Between Geth and Reth
+
+```bash
+# Stop current services
+make stop
+
+# Re-run setup and choose different RPC type
+./one-click-setup.sh
+
+# Start with new configuration
+make start
+```
+
+**Note**: Switching execution clients requires re-downloading genesis data.
+
+### Complete Reset
+
+```bash
+# Stop all services
+make stop
+
+# Remove all data
+make clean
+
+# Or manually:
+rm -rf chaindata/ .env
+
+# Re-initialize
+./one-click-setup.sh
+```
+
+## 🐛 Troubleshooting
+
+### Check System Requirements
+
+The setup script automatically checks dependencies. To manually verify:
+
+```bash
+# Check Docker
+docker --version
+docker compose version
+
+# Check Make
+make --version
+
+# Check other tools
+wget --version
+curl --version
+jq --version
+```
+
+### Service Won't Start
+
+```bash
+# Check logs
+make logs
+
+# Check specific service
+docker compose logs op-reth  # or op-geth, op-node
+
+# Verify .env file exists
+cat .env
+
+# Check service health
 docker compose ps
 ```
 
-### View Logs
+### Slow Initial Sync
+
+- **First startup**: Genesis loading takes 5-15 minutes
+- **Check progress**: `make logs` to see current block height
+
+### P2P Connection Issues
 
 ```bash
-# View all service logs
-docker compose logs -f
+# Check P2P peers
+curl -X POST http://localhost:9545 \
+  -d '{"jsonrpc":"2.0","method":"opp2p_peerStats","params":[],"id":1}'
 
-# View op-geth logs
-docker compose logs -f op-geth
-
-# View op-node logs
-docker compose logs -f op-node
+# Expected result: connected > 0
 ```
 
-### Persistent Logs
+### Port Conflicts
 
-Log files are saved in the following locations:
-- op-geth: `logs-{network}/op-geth/geth.log`
-- op-node: `logs-{network}/op-node/op-node.log`
-
-## 🛠️ Advanced Configuration
-
-### Choosing Between Geth and Reth
-
-**Use op-geth if:**
-- You prefer stability and proven track record
-- You need maximum compatibility
-- You're familiar with Geth's tooling
-
-**Use op-reth if:**
-- You want better performance and efficiency
-- You need lower memory consumption
-- You're interested in Rust-based infrastructure
-
-### Custom Ports
-
-Select custom ports in `one-click-setup.sh`, or directly modify port mapping in `start.sh`.
-
-### Modify P2P Settings
-
-**For op-geth**, edit P2P related parameters in configuration file:
-
-```toml
-[Node.P2P]
-MaxPeers = 30  # Maximum connections
-```
-
-**For op-reth**, edit in configuration file:
-
-```toml
-[p2p]
-max_outbound_peers = 30
-max_inbound_peers = 30
-```
-
-### Enable Debug Mode
-
-**For op-geth**, modify `--verbosity` parameter in `start.sh`:
-- `0` = Silent
-- `1` = Error
-- `2` = Warning  
-- `3` = Info
-- `4` = Debug
-- `5` = Trace
-
-**For op-reth**, modify `--log.level` parameter:
-- `error`, `warn`, `info`, `debug`, `trace`
-
-## 🔄 Update Node
-
-### Update Docker Images
+If ports are already in use, edit `.env` and change:
 
 ```bash
-# Stop node
-./stop.sh
-
-# Pull latest images
-docker pull xlayer/op-geth:latest
-docker pull xlayer/op-stack:latest
-
-# Restart
-./start.sh testnet  # or mainnet
+RPC_PORT=8545        # Change to available port
+WS_PORT=8546
+NODE_RPC_PORT=9545
 ```
 
-### Data Migration
+Then restart: `make restart`
 
-Usually no need to re-download data, but if you encounter issues:
+## 📚 Additional Resources
 
-```bash
-# Backup current data
-cp -r data-testnet data-testnet.backup
+- **Main Documentation**: [README.md](README.md)
+- **X Layer Official Site**: https://www.okx.com/xlayer
+- **GitHub Repository**: https://github.com/okx/xlayer-toolkit
+- **Discord Community**: [Join our Discord](https://discord.gg/xlayer)
 
-# Re-initialize (will delete existing data)
-./init.sh testnet
-```
+## 🆘 Support
 
-## ⚠️ Important Notes
+If you encounter issues:
 
-1. **Testnet**: Suitable for development and testing, data may be reset
-2. **Mainnet**: Production environment use, requires higher resource requirements
-3. **Backup**: Regularly backup data directory and configuration files
-4. **Monitoring**: Continuously monitor node status and sync progress
-5. **Client Choice**: Once initialized with a specific client (geth/reth), you should continue using the same client. Switching requires re-initialization
-6. **Reth Status**: op-reth is a newer client. While highly performant, it may have different compatibility characteristics than op-geth
+1. Check the [Troubleshooting](#-troubleshooting) section
+2. Review service logs: `make logs`
+3. Open an issue on [GitHub](https://github.com/okx/xlayer-toolkit/issues)
 
-## 📄 License
+---
 
-Please refer to the LICENSE file in the project root directory.
+**Thank you for building with X Layer!** 💪 🚀
