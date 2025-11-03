@@ -35,7 +35,7 @@ Deploy a self-hosted X Layer RPC node with support for both **op-geth** (Go-base
 
 ### 🎯 One-Click Setup (Recommended)
 
-The easiest way to deploy your X Layer RPC node:
+The easiest way to deploy your X Layer RPC node using the setup script from [xlayer-toolkit](https://github.com/okx/xlayer-toolkit):
 
 > **💡 Important**: Each directory manages **ONE node instance**. To run multiple nodes, use separate directories.
 
@@ -80,34 +80,33 @@ Your RPC node will be available at:
 - **WebSocket**: `ws://localhost:8546`
 - **op-node RPC**: `http://localhost:9545`
 
-## 🛠️ Manual Setup (Advanced)
+### 📁 Deployment Directory Structure
 
-### Step 1: Clone Repository
+After running the setup script, your deployment directory will contain:
 
-```bash
-git clone https://github.com/okx/xlayer-toolkit.git
-cd xlayer-toolkit/scripts/rpc-setup
+```
+/data/xlayer-mainnet/              # Your working directory
+├── .env                            # Environment configuration
+├── docker-compose.yml              # Docker services definition
+├── Makefile                        # Service management commands
+├── network-presets.env             # Network-specific configurations
+├── one-click-setup.sh              # Setup script (downloaded)
+└── chaindata/                      # Data directory (created after init)
+    └── mainnet-geth/               # Example: mainnet + geth
+        ├── data/                   # Blockchain data
+        │   ├── op-geth/            # Geth database
+        │   └── op-node/            # Op-node data
+        ├── config/                 # Configuration files
+        │   ├── genesis-mainnet.json
+        │   ├── rollup-mainnet.json
+        │   ├── op-geth-config-mainnet.toml
+        │   └── jwt.txt
+        └── logs/                   # Service logs
+            ├── geth.log
+            └── op-node.log
 ```
 
-### Step 2: Run Setup
-
-```bash
-./one-click-setup.sh
-```
-
-> **💡 Note**: To run multiple nodes, copy `rpc-setup/` to different directories.
-
-Follow the interactive prompts to configure your node.
-
-### Step 3: Verify Installation
-
-```bash
-# Check service status
-make status
-
-# View logs
-docker compose logs -f
-```
+**Note**: The `chaindata/` subdirectory structure (`mainnet-geth`, `testnet-reth`, etc.) is automatically created based on your network and RPC type selection during setup.
 
 ## 📊 Service Management
 
@@ -238,55 +237,6 @@ curl -X POST http://localhost:9545 \
 curl -X POST http://localhost:9545 \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"opp2p_peerStats","params":[],"id":1}'
-```
-
-## 🔄 Upgrade & Migration
-
-### Upgrading to Latest Version
-
-```bash
-# Stop services
-make stop
-
-# Pull latest changes
-git pull origin main
-
-# Re-run setup (will preserve existing .env)
-./one-click-setup.sh
-
-# Start services
-make run
-```
-
-### Switching Between Geth and Reth
-
-```bash
-# Stop current services
-make stop
-
-# Re-run setup and choose different RPC type
-./one-click-setup.sh
-
-# Start with new configuration
-make run
-```
-
-**Note**: Switching execution clients requires re-downloading genesis data.
-
-### Complete Reset
-
-```bash
-# Stop all services
-make stop
-
-# Remove all data
-make clean
-
-# Or manually:
-rm -rf chaindata/ .env
-
-# Re-initialize
-./one-click-setup.sh
 ```
 
 ## 🐛 Troubleshooting
