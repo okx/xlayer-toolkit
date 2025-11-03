@@ -2,16 +2,9 @@
 
 ## 📋 Overview
 
-Deploy a self-hosted X Layer RPC node with support for both **op-geth** (Go-based) and **op-reth** (Rust-based) execution clients, providing complete L2 blockchain data access services.
+Deploy a self-hosted X Layer RPC node with support for both **op-geth** (Go-based, **production-ready** ✅) and **op-reth** (Rust-based, testing phase ⚠️) execution clients, providing complete L2 blockchain data access services.
 
-## ⚠️ Important: Migration from Legacy Mainnet/Testnet
-
-If you were previously running nodes on the legacy X Layer mainnet/testnet:
-
-- **Data incompatibility**: Previous blockchain data cannot be migrated to the current version
-- **Configuration changes**: Updated bootnodes, network parameters, and P2P configurations
-- **Fresh deployment required**: You must deploy a completely new node instance
-- **Recommended**: Use `op-geth` for production stability; `op-reth` is available for testing
+**Recommendation**: Use **op-geth** for production deployments.
 
 ## 💻 System Requirements
 - **CPU**: 8+ cores recommended
@@ -36,6 +29,8 @@ If you were previously running nodes on the legacy X Layer mainnet/testnet:
 
 **Recommendation**: Use **op-geth** for production deployments. **op-reth** is currently undergoing integration testing and should be used for testing purposes only.
 
+> **⚠️ For existing node operators**: If you're upgrading from a previous version, please note that old blockchain data is incompatible. You'll need to deploy a fresh node instance.
+
 ## ⚡ Quick Deployment
 
 ### 🎯 One-Click Setup (Recommended)
@@ -44,14 +39,14 @@ The easiest way to deploy your X Layer RPC node:
 
 > **💡 Important**: Each directory manages **ONE node instance**. To run multiple nodes, use separate directories.
 
-**Example 1: Mainnet with op-geth (Recommended for Production)**
+**Example 1: Mainnet Node (Production)**
 ```bash
 mkdir -p ~/xlayer-mainnet && cd ~/xlayer-mainnet
 curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
 # Select: mainnet + geth
 ```
 
-**Example 2: Testnet with op-geth (For Testing)**
+**Example 2: Testnet Node (Development)**
 ```bash
 mkdir -p ~/xlayer-testnet && cd ~/xlayer-testnet
 curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
