@@ -2,7 +2,7 @@
 set -e
 
 # Debug mode: set to true to cache genesis files locally for faster re-runs
-DEBUG=false
+DEBUG=true
 BRANCH="reth"
 REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/scripts/rpc-setup"
 
