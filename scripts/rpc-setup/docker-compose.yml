@@ -16,10 +16,10 @@ services:
       - "${P2P_TCP_PORT:-30303}:30303"
       - "${P2P_UDP_PORT:-30303}:30303/udp"
     volumes:
-      - ./chaindata/${NETWORK_TYPE}-geth/data:/data
-      - ./chaindata/${NETWORK_TYPE}-geth/config/jwt.txt:/jwt.txt
-      - ./chaindata/${NETWORK_TYPE}-geth/config/op-geth-config-${NETWORK_TYPE}.toml:/config.toml
-      - ./chaindata/${NETWORK_TYPE}-geth/logs:/logs
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-geth/data:/data
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-geth/config/jwt.txt:/jwt.txt
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-geth/config/op-geth-config-${NETWORK_TYPE}.toml:/config.toml
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-geth/logs:/logs
     command:
       - --verbosity=3
       - --datadir=/data
@@ -49,11 +49,11 @@ services:
       - "${P2P_TCP_PORT:-30303}:30303"
       - "${P2P_UDP_PORT:-30303}:30303/udp"
     volumes:
-      - ./chaindata/${NETWORK_TYPE}-reth/data:/datadir
-      - ./chaindata/${NETWORK_TYPE}-reth/config/jwt.txt:/jwt.txt
-      - ./chaindata/${NETWORK_TYPE}-reth/config/genesis-${NETWORK_TYPE}.json:/genesis.json
-      - ./chaindata/${NETWORK_TYPE}-reth/config/op-reth-config-${NETWORK_TYPE}.toml:/config.toml
-      - ./chaindata/${NETWORK_TYPE}-reth/logs:/logs
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/data:/datadir
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/config/jwt.txt:/jwt.txt
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/config/genesis-${NETWORK_TYPE}.json:/genesis.json
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/config/op-reth-config-${NETWORK_TYPE}.toml:/config.toml
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/logs:/logs
     command:
       - node
       - --datadir=/datadir
@@ -95,10 +95,10 @@ services:
       - "${NODE_P2P_PORT:-9223}:9223"
       - "${NODE_P2P_PORT:-9223}:9223/udp"
     volumes:
-      - ./chaindata/${NETWORK_TYPE}-${RPC_TYPE}/data/op-node:/data
-      - ./chaindata/${NETWORK_TYPE}-${RPC_TYPE}/config/rollup-${NETWORK_TYPE}.json:/rollup.json
-      - ./chaindata/${NETWORK_TYPE}-${RPC_TYPE}/config/jwt.txt:/jwt.txt
-      - ./chaindata/${NETWORK_TYPE}-${RPC_TYPE}/logs:/logs
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-${RPC_TYPE}/data/op-node:/data
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-${RPC_TYPE}/config/rollup-${NETWORK_TYPE}.json:/rollup.json
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-${RPC_TYPE}/config/jwt.txt:/jwt.txt
+      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-${RPC_TYPE}/logs:/logs
     command:
       - /app/op-node/bin/op-node
       - --log.level=info

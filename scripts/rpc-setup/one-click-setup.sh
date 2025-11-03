@@ -56,7 +56,7 @@ NETWORK_TYPE=""
 RPC_TYPE=""
 L1_RPC_URL=""
 L1_BEACON_URL=""
-DATA_DIR=""
+CHAINDATA_BASE=""  # User-specified chaindata base directory (will create ${NETWORK_TYPE}-${RPC_TYPE} subdirectory)
 RPC_PORT=""
 WS_PORT=""
 NODE_RPC_PORT=""
@@ -93,7 +93,7 @@ load_network_config() {
     # Validate that configuration was loaded
     if [ -z "$OP_STACK_IMAGE_TAG" ]; then
         print_error "Failed to load configuration for network: $network"
-        exit 1
+            exit 1
     fi
 }
 
@@ -140,7 +140,7 @@ check_docker() {
         exit 1
     fi
 }
-
+    
 # Check required system tools
 check_required_tools() {
     local missing_required=()
@@ -252,9 +252,8 @@ download_config_files() {
     
     load_network_config "$NETWORK_TYPE"
     
-    # Determine CONFIG_DIR early
-    local chaindata_base="chaindata/${NETWORK_TYPE}-${RPC_TYPE}"
-    local config_dir="${chaindata_base}/config"
+    # Determine CONFIG_DIR early using user-specified CHAINDATA_BASE
+    local config_dir="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}/config"
     mkdir -p "$config_dir"
     
     local config_files=("config/$ROLLUP_CONFIG")
@@ -275,7 +274,7 @@ download_config_files() {
             print_info "Downloading $filename from GitHub..."
             if ! wget -q "$REPO_URL/$file" -O "$target"; then
                 print_error "Failed to get $file"
-                exit 1
+            exit 1
             fi
         fi
     done
@@ -319,7 +318,7 @@ validate_url() {
 }
 
 check_existing_data() {
-    local target_dir="chaindata/${NETWORK_TYPE}-${RPC_TYPE}"
+    local target_dir="$1"
     
     if [ ! -d "$target_dir" ]; then
         return 0
@@ -372,7 +371,7 @@ get_user_input() {
         RPC_TYPE="geth"
         L1_RPC_URL="https://placeholder-l1-rpc-url"
         L1_BEACON_URL="https://placeholder-l1-beacon-url"
-        DATA_DIR="chaindata/${NETWORK_TYPE}-${RPC_TYPE}/data"
+        CHAINDATA_BASE="./chaindata"
         RPC_PORT="$DEFAULT_RPC_PORT"
         WS_PORT="$DEFAULT_WS_PORT"
         NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
@@ -403,8 +402,19 @@ get_user_input() {
     echo ""
     print_info "Optional configurations (press Enter to use defaults):"
     
-    local default_data_dir="chaindata/${NETWORK_TYPE}-${RPC_TYPE}/data"
-    DATA_DIR=$(prompt_input "5. Data directory [default: $default_data_dir]: " "$default_data_dir" "")
+    local default_chaindata_base="./chaindata"
+    local default_full_path="${default_chaindata_base}/${NETWORK_TYPE}-${RPC_TYPE}"
+    CHAINDATA_BASE=$(prompt_input "5. Chaindata base directory [default: $default_chaindata_base]: " "$default_chaindata_base" "")
+    
+    # Show user the full path that will be created
+    local full_path="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
+    print_info "Will create directory: $full_path"
+    
+    # Check existing data directory after user specifies the path
+    echo ""
+    check_existing_data "$full_path"
+    echo ""
+    
     RPC_PORT=$(prompt_input "6. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "")
     WS_PORT=$(prompt_input "7. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "")
     NODE_RPC_PORT=$(prompt_input "8. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "")
@@ -454,16 +464,22 @@ generate_config_files() {
         EXEC_CLIENT="op-geth"
     fi
     
-    # Unified directory structure
-    CHAINDATA_BASE="chaindata/${NETWORK_TYPE}-${RPC_TYPE}"
-    DATA_DIR="${DATA_DIR:-${CHAINDATA_BASE}/data}"
-    CONFIG_DIR="${CHAINDATA_BASE}/config"
-    LOGS_DIR="${CHAINDATA_BASE}/logs"
+    # CHAINDATA_BASE is specified by user, create ${NETWORK_TYPE}-${RPC_TYPE} subdirectory
+    local full_chaindata_dir="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
+    DATA_DIR="${full_chaindata_dir}/data"
+    CONFIG_DIR="${full_chaindata_dir}/config"
+    LOGS_DIR="${full_chaindata_dir}/logs"
     GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
     
     # Create directory structure
-    mkdir -p "$CONFIG_DIR" "$DATA_DIR/op-node/p2p" \
-        "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node" "$LOGS_DIR/op-reth"
+    mkdir -p "$CONFIG_DIR" "$DATA_DIR/op-node/p2p" "$LOGS_DIR/op-node"
+    
+    # Create execution client specific directories
+    if [ "$RPC_TYPE" = "reth" ]; then
+        mkdir -p "$DATA_DIR/op-reth" "$LOGS_DIR/op-reth"
+    else
+        mkdir -p "$DATA_DIR/op-geth" "$LOGS_DIR/op-geth"
+    fi
     
     # Generate and verify JWT
     generate_or_verify_jwt "$CONFIG_DIR/jwt.txt"
@@ -494,6 +510,9 @@ generate_env_file() {
 # Network Configuration
 NETWORK_TYPE=$NETWORK_TYPE
 RPC_TYPE=$RPC_TYPE
+
+# Directory Configuration
+CHAINDATA_BASE=$CHAINDATA_BASE
 
 # L2 Engine URL (Docker Compose service name)
 L2_ENGINE_URL=$l2_engine_url
@@ -560,7 +579,7 @@ download_genesis() {
     
     if [ "$DEBUG" = "true" ]; then
         print_success "Downloaded and cached: $genesis_file"
-    else
+        else
         print_success "Downloaded: $genesis_file"
     fi
 }
@@ -622,8 +641,8 @@ prepare_reth_genesis() {
     
     if [ -z "$blkno" ]; then
         print_error "Failed to extract legacyXLayerBlock from genesis file"
-        exit 1
-    fi
+                exit 1
+            fi
     
     print_info "Setting genesis block number to $blkno (0x$(printf '%x' $blkno))"
     
@@ -637,7 +656,7 @@ prepare_reth_genesis() {
             sed -i '' 's/"number": "0x0"/"number": "0x'"$(printf '%x' $blkno)"'"/' "$genesis_file"
         else
             sed -i 's/"number": "0x0"/"number": "0x'"$(printf '%x' $blkno)"'"/' "$genesis_file"
-        fi
+    fi
     fi
     
     print_success "Genesis file prepared with block number $blkno"
@@ -686,10 +705,10 @@ initialize_node() {
     fi
     
     print_success "Node initialization completed"
-    print_info "Generated directories for $NETWORK_TYPE with $RPC_TYPE:"
-    print_info "  - $DATA_DIR: Blockchain data"
-    print_info "  - $CONFIG_DIR: Configuration files"
-    print_info "  - $LOGS_DIR: Log files"
+    print_info "Directory structure created at: ${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
+    print_info "  - data/: Blockchain data"
+    print_info "  - config/: Configuration files"
+    print_info "  - logs/: Log files"
 }
 
 start_services() {
@@ -729,9 +748,6 @@ main() {
     
     # User interaction
     get_user_input
-    
-    # Check if data directory already exists
-    check_existing_data
     
     # Setup process
     download_config_files
