@@ -44,13 +44,13 @@ The easiest way to deploy your X Layer RPC node:
 
 ```bash
 # Download and run the setup script
-curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/main/scripts/rpc-setup/one-click-setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
 ```
 
 Or download first, then execute:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/main/scripts/rpc-setup/one-click-setup.sh -o one-click-setup.sh
+curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh -o one-click-setup.sh
 chmod +x one-click-setup.sh
 ./one-click-setup.sh
 ```
@@ -260,7 +260,7 @@ curl -X POST http://localhost:9545 \
 make stop
 
 # Pull latest changes
-git pull origin main
+git pull origin reth
 
 # Re-run setup (will preserve existing .env)
 ./one-click-setup.sh
