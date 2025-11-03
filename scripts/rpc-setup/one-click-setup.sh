@@ -352,21 +352,24 @@ get_user_input() {
     echo ""
     
     # Interactive mode (works even with curl | bash via /dev/tty)
+    # Step 1: Network type
     NETWORK_TYPE=$(prompt_input "1. Network type (testnet/mainnet) [default: $DEFAULT_NETWORK]: " "$DEFAULT_NETWORK" "validate_network")
-    RPC_TYPE=$(prompt_input "2. RPC client type (geth/reth) [default: geth]: " "geth" "validate_rpc_type")
     
-    # L1 URLs (required)
+    # Step 2-3: L1 URLs (required)
     while true; do
-        print_prompt "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
+        print_prompt "2. L1 RPC URL (Ethereum L1 RPC endpoint): "
         read -r L1_RPC_URL </dev/tty
         [ -n "$L1_RPC_URL" ] && validate_url "$L1_RPC_URL" && break
     done
     
     while true; do
-        print_prompt "4. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
+        print_prompt "3. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
         read -r L1_BEACON_URL </dev/tty
         [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
     done
+    
+    # Step 4: RPC client type
+    RPC_TYPE=$(prompt_input "4. RPC client type (geth/reth) [default: geth]: " "geth" "validate_rpc_type")
     
     # Use current directory for data
     CHAINDATA_BASE="./chaindata"

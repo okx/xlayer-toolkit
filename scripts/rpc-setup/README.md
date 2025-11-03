@@ -42,35 +42,28 @@ The easiest way to deploy your X Layer RPC node using the setup script from [xla
 **Deployment Steps:**
 
 ```bash
+# 1. Create and enter your node directory
 mkdir -p /data/xlayer-mainnet && cd /data/xlayer-mainnet
-curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
 
-# 3. Follow interactive prompts to configure:
-#    - Network type (mainnet/testnet)
-#    - RPC client (geth/reth)
-#    - L1 RPC and Beacon URLs
-#    - Optional: Custom ports
+# 2. Run the setup script
+curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
 ```
+
+The script will interactively prompt you to configure:
+- Network type (mainnet/testnet)
+- L1 RPC URL (required)
+- L1 Beacon URL (required)
+- RPC client (geth/reth)
+- Optional: Custom ports
 
 **What the script does:**
 - ✅ Checks all system dependencies (Docker, Make, etc.)
-- ✅ Detects if running from cloned repository or standalone
-- ✅ Downloads latest configuration files if needed
-- ✅ Interactively prompts for configuration parameters
+- ✅ Interactively prompts for configuration
+- ✅ Downloads latest configuration files and genesis data
 - ✅ Generates `.env` and all necessary config files
-- ✅ Downloads and initializes genesis data
+- ✅ Initializes blockchain data
 - ✅ Starts services with proper health checks
 - ✅ Displays connection details and management commands
-
-**Interactive Configuration:**
-
-The script will prompt you for:
-
-1. **Network Selection**: `testnet` or `mainnet`
-2. **RPC Type**: `geth` or `reth` (execution client)
-3. **L1 RPC URL**: Ethereum L1 RPC endpoint (e.g., QuickNode, Alchemy)
-4. **L1 Beacon URL**: Ethereum L1 Beacon API endpoint
-5. **Optional Settings**: Custom ports (defaults provided)
 
 **After Installation:**
 
