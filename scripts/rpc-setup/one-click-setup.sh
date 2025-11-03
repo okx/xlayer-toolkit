@@ -23,20 +23,20 @@ detect_repository() {
     fi
 }
 
-# Load configuration from latest.cfg
+# Load configuration from network-presets.env
 load_configuration() {
-    local config_file="$WORK_DIR/latest.cfg"
+    local config_file="$WORK_DIR/network-presets.env"
     
-    # Try to get latest.cfg to current directory if not already present
+    # Try to get network-presets.env to current directory if not already present
     if [ ! -f "$config_file" ]; then
-        if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/latest.cfg" ]; then
+        if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/network-presets.env" ]; then
             # Copy from local repository
-            cp "$REPO_RPC_SETUP_DIR/latest.cfg" "$config_file"
+            cp "$REPO_RPC_SETUP_DIR/network-presets.env" "$config_file"
             print_info "Using configuration from local repository"
         else
             # Download from GitHub
             print_info "Downloading configuration file..."
-            local config_url="${REPO_URL}/latest.cfg"
+            local config_url="${REPO_URL}/network-presets.env"
             if ! wget -q "$config_url" -O "$config_file" 2>/dev/null; then
                 print_error "Failed to download configuration file from GitHub"
                 print_info "This script requires network-specific configuration (bootnodes, image tags, etc.)"

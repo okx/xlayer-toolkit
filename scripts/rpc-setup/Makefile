@@ -1,4 +1,4 @@
-.PHONY: help run stop restart status clean
+.PHONY: help run stop status
 
 # Default target
 help:
@@ -7,12 +7,11 @@ help:
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
 	@echo "  make run          - Start RPC node services"
-	@echo "  make stop         - Stop RPC node services"
-	@echo "  make restart      - Restart RPC node services"
+	@echo "  make stop         - Stop RPC node services (data preserved)"
 	@echo "  make status       - Check service status"
-	@echo "  make clean        - Stop and remove all containers"
 	@echo ""
 	@echo "  Note: Run ./one-click-setup.sh for first-time setup"
+	@echo "  Note: To delete data, manually run: rm -rf chaindata/ .env"
 	@echo "  Logs: Use 'docker compose logs' or 'docker compose logs -f'"
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -59,9 +58,6 @@ stop:
 	@docker compose down
 	@echo "✅ Services stopped"
 
-# Restart services
-restart: stop run
-
 # Check service status
 status:
 	@echo "📊 Service Status:"
@@ -83,10 +79,3 @@ status:
 		echo "  Op-Node:  http://localhost:$$NODE_PORT"; \
 		echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; \
 	fi
-
-# Clean up everything
-clean:
-	@echo "🧹 Cleaning up..."
-	@docker compose down -v
-	@echo "✅ Cleanup complete"
-

@@ -121,14 +121,8 @@ make run
 # Stop all services
 make stop
 
-# Restart services
-make restart
-
 # Check service status with connection info
 make status
-
-# Complete cleanup (remove all data and containers)
-make clean
 
 # View logs
 docker compose logs          # View all logs
@@ -153,7 +147,7 @@ The `make run` command intelligently manages service startup:
 ```
 scripts/rpc-setup/
 ├── one-click-setup.sh          # Main setup script
-├── latest.cfg                  # Configuration defaults
+├── network-presets.env         # Network configuration presets
 ├── Makefile                    # Service management
 ├── docker-compose.yml          # Service definitions
 ├── .env                        # Generated environment variables
@@ -202,9 +196,9 @@ OP_GETH_BOOTNODE=enode://...
 P2P_STATIC_PEERS=/ip4/...
 ```
 
-### `latest.cfg`
+### `network-presets.env`
 
-Centralized configuration for:
+Network configuration presets containing:
 - Network-specific settings (testnet/mainnet)
 - Docker image tags
 - Genesis file URLs
@@ -360,7 +354,7 @@ WS_PORT=8546
 NODE_RPC_PORT=9545
 ```
 
-Then restart: `make restart`
+Then restart: `make stop && make run`
 
 ## 📚 Additional Resources
 
