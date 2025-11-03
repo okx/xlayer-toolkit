@@ -472,13 +472,13 @@ generate_config_files() {
     GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
     
     # Create directory structure
-    mkdir -p "$CONFIG_DIR" "$DATA_DIR/op-node/p2p" "$LOGS_DIR/op-node"
+    mkdir -p "$CONFIG_DIR" "$LOGS_DIR" "$DATA_DIR/op-node/p2p"
     
-    # Create execution client specific directories
+    # Create execution client specific data directory
     if [ "$RPC_TYPE" = "reth" ]; then
-        mkdir -p "$DATA_DIR/op-reth" "$LOGS_DIR/op-reth"
+        mkdir -p "$DATA_DIR/op-reth"
     else
-        mkdir -p "$DATA_DIR/op-geth" "$LOGS_DIR/op-geth"
+        mkdir -p "$DATA_DIR/op-geth"
     fi
     
     # Generate and verify JWT
@@ -701,12 +701,18 @@ initialize_node() {
         print_success "op-reth setup completed!"
         print_info "Note: op-reth will auto-initialize on first startup"
     else
-        init_geth "$DATA_DIR" "$CONFIG_DIR/$GENESIS_FILE"
+        init_geth "$DATA_DIR/op-geth" "$CONFIG_DIR/$GENESIS_FILE"
     fi
     
     print_success "Node initialization completed"
     print_info "Directory structure created at: ${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
-    print_info "  - data/: Blockchain data"
+    print_info "  - data/"
+    if [ "$RPC_TYPE" = "reth" ]; then
+        print_info "    - op-reth/: Reth blockchain data"
+    else
+        print_info "    - op-geth/: Geth blockchain data"
+    fi
+    print_info "    - op-node/: Op-node data"
     print_info "  - config/: Configuration files"
     print_info "  - logs/: Log files"
 }
