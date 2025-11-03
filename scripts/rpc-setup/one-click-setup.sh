@@ -318,6 +318,49 @@ validate_url() {
     [[ "$1" =~ ^https?:// ]] || { print_error "Please enter a valid HTTP/HTTPS URL"; return 1; }
 }
 
+check_existing_data() {
+    local target_dir="chaindata/${NETWORK_TYPE}-${RPC_TYPE}"
+    
+    if [ ! -d "$target_dir" ]; then
+        return 0
+    fi
+    
+    print_warning "Existing data directory found: $target_dir"
+    
+    # Auto-mode: skip if not interactive
+    if [ ! -t 0 ]; then
+        print_info "Auto-mode: Keeping existing directory"
+        return 0
+    fi
+    
+    echo ""
+    print_prompt "Do you want to delete it and start fresh? (yes/no) [default: no]: "
+    read -r response </dev/tty
+    response="${response:-no}"
+    
+    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        print_info "Removing existing directory: $target_dir"
+        if rm -rf "$target_dir"; then
+            print_success "Directory removed successfully"
+        else
+            print_error "Failed to remove directory"
+            exit 1
+        fi
+    else
+        print_info "Keeping existing directory. Note: This may cause conflicts."
+        print_warning "If you encounter issues, please manually remove the directory and re-run setup."
+        echo ""
+        print_prompt "Continue anyway? (yes/no) [default: no]: "
+        read -r continue_response </dev/tty
+        continue_response="${continue_response:-no}"
+        
+        if [[ ! "$continue_response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+            print_info "Setup cancelled by user"
+            exit 0
+        fi
+    fi
+}
+
 get_user_input() {
     print_info "Please provide the following information:"
     echo ""
@@ -686,6 +729,9 @@ main() {
     
     # User interaction
     get_user_input
+    
+    # Check if data directory already exists
+    check_existing_data
     
     # Setup process
     download_config_files
