@@ -339,7 +339,6 @@ docker compose ps
 ### Slow Initial Sync
 
 - **First startup**: Genesis loading takes 5-15 minutes
-- **Health check**: Extended to 10 minutes (`start_period: 600s`)
 - **Check progress**: `make logs` to see current block height
 
 ### P2P Connection Issues
@@ -378,7 +377,6 @@ If you encounter issues:
 1. Check the [Troubleshooting](#-troubleshooting) section
 2. Review service logs: `make logs`
 3. Open an issue on [GitHub](https://github.com/okx/xlayer-toolkit/issues)
-4. Join our [Discord](https://discord.gg/xlayer) for community support
 
 ---
 
