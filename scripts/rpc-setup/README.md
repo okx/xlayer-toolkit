@@ -107,7 +107,7 @@ Follow the interactive prompts to configure your node.
 make status
 
 # View logs
-make logs
+docker compose logs -f
 ```
 
 ## 📊 Service Management
@@ -116,9 +116,6 @@ All services are managed via **Makefile** commands:
 
 ```bash
 # Start services (with health checks)
-make start
-
-# Alias for start
 make run
 
 # Stop all services
@@ -127,22 +124,21 @@ make stop
 # Restart services
 make restart
 
-# View real-time logs
-make logs
-
-# View logs for specific service
-docker compose logs -f op-reth  # or op-geth, op-node
-
 # Check service status with connection info
 make status
 
 # Complete cleanup (remove all data and containers)
 make clean
+
+# View logs
+docker compose logs          # View all logs
+docker compose logs -f       # Follow logs in real-time
+docker compose logs op-reth  # View specific service (op-reth, op-geth, op-node)
 ```
 
 ### Service Startup Behavior
 
-The `make start` command intelligently manages service startup:
+The `make run` command intelligently manages service startup:
 
 1. **Reads configuration** from `.env` file
 2. **Starts execution client** first (op-reth or op-geth)
@@ -266,7 +262,7 @@ git pull origin main
 ./one-click-setup.sh
 
 # Start services
-make start
+make run
 ```
 
 ### Switching Between Geth and Reth
@@ -279,7 +275,7 @@ make stop
 ./one-click-setup.sh
 
 # Start with new configuration
-make start
+make run
 ```
 
 **Note**: Switching execution clients requires re-downloading genesis data.
@@ -324,10 +320,13 @@ jq --version
 
 ```bash
 # Check logs
-make logs
+docker compose logs
 
 # Check specific service
 docker compose logs op-reth  # or op-geth, op-node
+
+# Follow logs in real-time
+docker compose logs -f
 
 # Verify .env file exists
 cat .env
@@ -339,7 +338,7 @@ docker compose ps
 ### Slow Initial Sync
 
 - **First startup**: Genesis loading takes 5-15 minutes
-- **Check progress**: `make logs` to see current block height
+- **Check progress**: `docker compose logs -f` to see current block height
 
 ### P2P Connection Issues
 
@@ -375,7 +374,7 @@ Then restart: `make restart`
 If you encounter issues:
 
 1. Check the [Troubleshooting](#-troubleshooting) section
-2. Review service logs: `make logs`
+2. Review service logs: `docker compose logs -f`
 3. Open an issue on [GitHub](https://github.com/okx/xlayer-toolkit/issues)
 
 ---

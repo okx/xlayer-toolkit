@@ -659,8 +659,8 @@ start_services() {
         exit 1
     fi
     
-    print_info "Running 'make start'..."
-    if ! make start; then
+    print_info "Running 'make run'..."
+    if ! make run; then
         print_error "Failed to start services"
         exit 1
     fi

@@ -1,4 +1,4 @@
-.PHONY: help start run stop restart logs status clean
+.PHONY: help run stop restart status clean
 
 # Default target
 help:
@@ -6,21 +6,19 @@ help:
 	@echo "  X Layer RPC Node - Makefile Commands"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo ""
-	@echo "  make run          - Start RPC node services (alias for start)"
-	@echo "  make start        - Start RPC node services"
+	@echo "  make run          - Start RPC node services"
 	@echo "  make stop         - Stop RPC node services"
 	@echo "  make restart      - Restart RPC node services"
-	@echo "  make logs         - View service logs"
-	@echo "  make logs-follow  - Follow service logs (Ctrl+C to exit)"
 	@echo "  make status       - Check service status"
 	@echo "  make clean        - Stop and remove all containers"
 	@echo ""
 	@echo "  Note: Run ./one-click-setup.sh for first-time setup"
+	@echo "  Logs: Use 'docker compose logs' or 'docker compose logs -f'"
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Start services based on RPC_TYPE from .env
-start:
+run:
 	@if [ ! -f .env ]; then \
 		echo "❌ Error: .env file not found. Please run ./one-click-setup.sh first"; \
 		exit 1; \
@@ -32,7 +30,7 @@ start:
 		echo "  Starting op-reth..."; \
 		docker compose up -d op-reth; \
 		echo "⏳ Waiting for op-reth to be ready (this may take several minutes for first start)..."; \
-		while [ "$$(docker compose ps op-reth --format json 2>/dev/null | grep -o '\"Health\":\"[^\"]*\"' | cut -d'"' -f4)" != "healthy" ]; do \
+		while [ "$$(docker compose ps op-reth --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d':' -f2 | tr -d '"')" != "healthy" ]; do \
 			sleep 10; \
 			printf "."; \
 		done; \
@@ -43,7 +41,7 @@ start:
 		echo "  Starting op-geth..."; \
 		docker compose up -d op-geth; \
 		echo "⏳ Waiting for op-geth to be ready (this may take several minutes for first start)..."; \
-		while [ "$$(docker compose ps op-geth --format json 2>/dev/null | grep -o '\"Health\":\"[^\"]*\"' | cut -d'"' -f4)" != "healthy" ]; do \
+		while [ "$$(docker compose ps op-geth --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d':' -f2 | tr -d '"')" != "healthy" ]; do \
 			sleep 10; \
 			printf "."; \
 		done; \
@@ -55,9 +53,6 @@ start:
 	@echo ""
 	@$(MAKE) status
 
-# Alias for start
-run: start
-
 # Stop all services
 stop:
 	@echo "🛑 Stopping X Layer RPC node..."
@@ -65,15 +60,7 @@ stop:
 	@echo "✅ Services stopped"
 
 # Restart services
-restart: stop start
-
-# View logs
-logs:
-	@docker compose logs
-
-# Follow logs
-logs-follow:
-	@docker compose logs -f
+restart: stop run
 
 # Check service status
 status:
