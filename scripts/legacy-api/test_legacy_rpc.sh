@@ -421,8 +421,42 @@ else
     SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
 fi
 
-# Test 5.3: Cross-boundary range (THE MOST IMPORTANT TEST!)
-log_info "Test 5.3: eth_getLogs (CROSS-BOUNDARY - Critical!)"
+# Test 5.3: Exact cutoff block
+log_info "Test 5.3: eth_getLogs (exact cutoff block)"
+response=$(rpc_call "eth_getLogs" "[{\"fromBlock\":\"$BOUNDARY_BLOCK_HEX\",\"toBlock\":\"$BOUNDARY_BLOCK_HEX\"}]")
+check_result "$response" "eth_getLogs (cutoff: $BOUNDARY_BLOCK_HEX)"
+
+# Test 5.4: Last legacy block (cutoff - 1)
+log_info "Test 5.4: eth_getLogs (last legacy block: cutoff - 1)"
+LAST_LEGACY=$((CUTOFF_BLOCK - 1))
+LAST_LEGACY_HEX=$(printf "0x%x" $LAST_LEGACY)
+response=$(rpc_call "eth_getLogs" "[{\"fromBlock\":\"$LAST_LEGACY_HEX\",\"toBlock\":\"$LAST_LEGACY_HEX\"}]")
+check_result "$response" "eth_getLogs (cutoff-1: $LAST_LEGACY_HEX)"
+
+# Test 5.5: First local block (cutoff + 1)
+log_info "Test 5.5: eth_getLogs (first local block: cutoff + 1)"
+FIRST_LOCAL=$((CUTOFF_BLOCK + 1))
+FIRST_LOCAL_HEX=$(printf "0x%x" $FIRST_LOCAL)
+response=$(rpc_call "eth_getLogs" "[{\"fromBlock\":\"$FIRST_LOCAL_HEX\",\"toBlock\":\"$FIRST_LOCAL_HEX\"}]")
+check_result "$response" "eth_getLogs (cutoff+1: $FIRST_LOCAL_HEX)"
+
+# Test 5.6: Minimal cross-boundary (cutoff-1 to cutoff)
+log_info "Test 5.6: eth_getLogs (minimal boundary: cutoff-1 to cutoff)"
+response=$(rpc_call "eth_getLogs" "[{\"fromBlock\":\"$LAST_LEGACY_HEX\",\"toBlock\":\"$BOUNDARY_BLOCK_HEX\"}]")
+check_result "$response" "eth_getLogs (cutoff-1 to cutoff)"
+
+# Test 5.7: Minimal cross-boundary (cutoff to cutoff+1)
+log_info "Test 5.7: eth_getLogs (minimal boundary: cutoff to cutoff+1)"
+response=$(rpc_call "eth_getLogs" "[{\"fromBlock\":\"$BOUNDARY_BLOCK_HEX\",\"toBlock\":\"$FIRST_LOCAL_HEX\"}]")
+check_result "$response" "eth_getLogs (cutoff to cutoff+1)"
+
+# Test 5.8: Minimal 3-block boundary (cutoff-1 to cutoff+1)
+log_info "Test 5.8: eth_getLogs (3-block boundary: cutoff-1 to cutoff+1)"
+response=$(rpc_call "eth_getLogs" "[{\"fromBlock\":\"$LAST_LEGACY_HEX\",\"toBlock\":\"$FIRST_LOCAL_HEX\"}]")
+check_result "$response" "eth_getLogs (cutoff-1 to cutoff+1)"
+
+# Test 5.9: Cross-boundary range (THE MOST IMPORTANT TEST!)
+log_info "Test 5.9: eth_getLogs (CROSS-BOUNDARY - Wide Range)"
 CROSS_FROM=$((CUTOFF_BLOCK - 50))
 CROSS_TO=$((CUTOFF_BLOCK + 50))
 CROSS_FROM_HEX=$(printf "0x%x" $CROSS_FROM)
