@@ -19,42 +19,95 @@ if [ "$NETWORK_TYPE" != "testnet" ] && [ "$NETWORK_TYPE" != "mainnet" ]; then
     exit 1
 fi
 
-# Check if mainnet is supported
-if [ "$NETWORK_TYPE" = "mainnet" ]; then
-    echo "❌ Error: Mainnet is not currently supported"
-    echo "Please use 'testnet' for now. Mainnet support will be available in future releases."
-    exit 1
-fi
+# Testnet configuration
+TESTNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
+TESTNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
 
-if [ ! -f .env ]; then
-    echo "❌ Error: .env file does not exist"
-    echo "Please copy env.example to .env and fill in the correct configuration"
-    exit 1
-fi
+# Mainnet configuration
+MAINNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
+MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.mainnet.tar.gz"
 
-# Load environment variables
-source .env
+# Load network-specific configuration
+case "$NETWORK_TYPE" in
+    testnet)
+        OP_GETH_IMAGE_TAG="$TESTNET_OP_GETH_IMAGE"
+        GENESIS_URL="$TESTNET_GENESIS_URL"
+        ;;
+    mainnet)
+        OP_GETH_IMAGE_TAG="$MAINNET_OP_GETH_IMAGE"
+        GENESIS_URL="$MAINNET_GENESIS_URL"
+        ;;
+    *)
+        echo "❌ Error: Unknown network type: $NETWORK_TYPE"
+        exit 1
+        ;;
+esac
 
 echo "🚀 Initializing X Layer Self-hosted RPC node for $NETWORK_TYPE network..."
 
-mkdir -p data
-mkdir -p config
+# Network-specific directories and files
+DATA_DIR="data-${NETWORK_TYPE}"
+CONFIG_DIR="config-${NETWORK_TYPE}"
+GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
+LOGS_DIR="logs-${NETWORK_TYPE}"
 
-if [ ! -f "config/genesis.json" ]; then
-  # Download the genesis file
-  echo "📥 Downloading genesis file..."
-  wget -c https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz -O merged.genesis.json.tar.gz
+mkdir -p "$DATA_DIR" "$CONFIG_DIR" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
 
-  # Extract the genesis file
-  echo "📦 Extracting genesis file..."
-  tar -xzf merged.genesis.json.tar.gz -C config/
-  mv config/merged.genesis.json config/genesis.json
+# Download the genesis file
+echo "📥 Downloading genesis file from $GENESIS_URL..."
+wget -c "$GENESIS_URL" -O genesis.tar.gz
 
-  # Clean up the downloaded archive
-  echo "🧹 Cleaning up downloaded archive..."
-  rm merged.genesis.json.tar.gz
+# Extract the genesis file
+echo "📦 Extracting genesis file..."
+tar -xzf genesis.tar.gz -C "$CONFIG_DIR/"
 
-  echo "✅ Genesis file extracted successfully to config/genesis.json"
+# Handle different genesis file names and rename to network-specific name
+if [ -f "$CONFIG_DIR/merged.genesis.json" ]; then
+    mv "$CONFIG_DIR/merged.genesis.json" "$CONFIG_DIR/$GENESIS_FILE"
+elif [ -f "$CONFIG_DIR/genesis.json" ]; then
+    mv "$CONFIG_DIR/genesis.json" "$CONFIG_DIR/$GENESIS_FILE"
+else
+    echo "❌ Error: Failed to find genesis.json in the archive"
+    exit 1
+fi
+
+# Clean up the downloaded archive
+echo "🧹 Cleaning up downloaded archive..."
+rm genesis.tar.gz
+
+# Check if genesis file exists
+if [ ! -f "$CONFIG_DIR/$GENESIS_FILE" ]; then
+    echo "❌ Error: Failed to extract genesis file"
+    exit 1
+fi
+
+echo "✅ Genesis file extracted successfully to $CONFIG_DIR/$GENESIS_FILE"
+
+# Determine config file names based on network
+if [ "$NETWORK_TYPE" = "testnet" ]; then
+    ROLLUP_CONFIG="rollup-testnet.json"
+    GETH_CONFIG="op-geth-config-testnet.toml"
+else
+    ROLLUP_CONFIG="rollup-mainnet.json"
+    GETH_CONFIG="op-geth-config-mainnet.toml"
+fi
+
+# Copy configuration files from config/ directory
+echo "📋 Copying configuration files..."
+if [ -f "config/$ROLLUP_CONFIG" ]; then
+    cp "config/$ROLLUP_CONFIG" "$CONFIG_DIR/"
+    echo "✅ Copied $ROLLUP_CONFIG"
+else
+    echo "❌ Error: Configuration file config/$ROLLUP_CONFIG does not exist"
+    exit 1
+fi
+
+if [ -f "config/$GETH_CONFIG" ]; then
+    cp "config/$GETH_CONFIG" "$CONFIG_DIR/"
+    echo "✅ Copied $GETH_CONFIG"
+else
+    echo "❌ Error: Configuration file config/$GETH_CONFIG does not exist"
+    exit 1
 fi
 
 # Prepare genesis file for Reth RPC
@@ -79,10 +132,10 @@ fi
 
 if [ "${L2_ENGINEKIND}" = "geth" ]; then
 # Initialize op-geth with the genesis file
-  echo "🔧 Initializing op-geth with genesis file... (It may take a while, please wait patiently.)"
-  docker run --rm \
-    -v "$(pwd)/data/op-geth:/data" \
-    -v "$(pwd)/config/genesis.json:/genesis.json" \
+echo "🔧 Initializing op-geth with genesis file... (It may take a while, please wait patiently.)"
+docker run --rm \
+    -v "$(pwd)/$DATA_DIR:/data" \
+    -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
     ${OP_GETH_IMAGE_TAG} \
     --datadir /data \
     --gcmode=archive \
@@ -95,6 +148,7 @@ fi
 
 echo "✅ X Layer RPC node initialization completed!"
 echo ""
-echo "📁 Generated directories:"
-echo "  - data/: Contains op-geth blockchain data"
-echo "  - config/: Contains configuration files"
+echo "📁 Generated directories for $NETWORK_TYPE:"
+echo "  - $DATA_DIR/: Contains op-geth blockchain data"
+echo "  - $CONFIG_DIR/: Contains configuration files (genesis, rollup, and geth config)"
+echo "  - $LOGS_DIR/: Contains log files"
