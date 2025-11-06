@@ -23,6 +23,7 @@ DEFAULT_NETWORK="testnet"
 DEFAULT_RPC_TYPE="geth"
 DEFAULT_DATA_DIR="./data"
 DEFAULT_RPC_PORT="8545"
+DEFAULT_ENGINE_API_PORT="8552"
 DEFAULT_WS_PORT="8546"
 DEFAULT_NODE_RPC_PORT="9545"
 DEFAULT_RPC_P2P_PORT="30303"
@@ -33,20 +34,24 @@ TESTNET_BOOTNODE_OP_NODE="enode://eaae9fe2fc758add65fe4cfd42918e898e16ab23294db8
 TESTNET_P2P_STATIC="/ip4/47.242.219.101/tcp/9223/p2p/16Uiu2HAkwUdbn9Q7UBKQYRsfjm9SQX5Yc2e96HUz2pyR3cw1FZLv,/ip4/47.242.235.15/tcp/9223/p2p/16Uiu2HAmThDG9xMpADbyGo1oCU8fndztwNg1PH6A7yp1BhCk5jfE"
 TESTNET_OP_STACK_IMAGE="xlayer/op-node:0.0.9"
 TESTNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
+TESTNET_OP_RETH_IMAGE="xlayer/op-reth:0.0.1"
 TESTNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
 TESTNET_SEQUENCER_HTTP="https://testrpc.xlayer.tech"
 TESTNET_ROLLUP_CONFIG="rollup-testnet.json"
 TESTNET_GETH_CONFIG="op-geth-config-testnet.toml"
+TESTNET_RETH_CONFIG="op-reth-config-testnet.toml"
 
 # Mainnet configuration
 MAINNET_BOOTNODE_OP_NODE="enode://c67d7f63c5483ab8311123d2997bfe6a8aac2b117a40167cf71682f8a3e37d3b86547c786559355c4c05ae0b1a7e7a1b8fde55050b183f96728d62e276467ce1@8.210.177.150:9223,enode://28e3e305b266e01226a7cc979ab692b22507784095157453ee0e34607bb3beac9a5b00f3e3d7d3ac36164612ca25108e6b79f75e3a9ecb54a0b3e7eb3e097d37@8.210.15.172:9223,enode://b5aa43622aad25c619650a0b7f8bb030161dfbfd5664233f92d841a33b404cea3ffffdc5bc8d6667c7dc212242a52f0702825c1e51612047f75c847ab96ef7a6@8.210.69.97:9223"
 MAINNET_P2P_STATIC="/ip4/47.242.38.0/tcp/9223/p2p/16Uiu2HAmH1AVhKWR29mb5s8Cubgsbh4CH1G86A6yoVtjrLWQgiY3,/ip4/8.210.153.12/tcp/9223/p2p/16Uiu2HAkuerkmQYMZxYiQYfQcPob9H7XHPwS7pd8opPTMEm2nsAp,/ip4/8.210.117.27/tcp/9223/p2p/16Uiu2HAmQEzn2WQj4kmWVrK9aQsfyQcETgXQKjcKGrTPsKcJBv7a"
 MAINNET_OP_STACK_IMAGE="xlayer/op-node:0.0.9"
 MAINNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
+MAINNET_OP_RETH_IMAGE="xlayer/op-reth:0.0.1"
 MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.mainnet.tar.gz"
 MAINNET_SEQUENCER_HTTP="https://rpc.xlayer.tech"
 MAINNET_ROLLUP_CONFIG="rollup-mainnet.json"
 MAINNET_GETH_CONFIG="op-geth-config-mainnet.toml"
+MAINNET_RETH_CONFIG="op-reth-config-mainnet.toml"
 
 # User input variables
 NETWORK_TYPE=""
@@ -106,20 +111,24 @@ load_network_config() {
             P2P_STATIC="$TESTNET_P2P_STATIC"
             OP_STACK_IMAGE_TAG="$TESTNET_OP_STACK_IMAGE"
             OP_GETH_IMAGE_TAG="$TESTNET_OP_GETH_IMAGE"
+            OP_RETH_IMAGE_TAG="$TESTNET_OP_RETH_IMAGE"
             GENESIS_URL="$TESTNET_GENESIS_URL"
             SEQUENCER_HTTP="$TESTNET_SEQUENCER_HTTP"
             ROLLUP_CONFIG="$TESTNET_ROLLUP_CONFIG"
             GETH_CONFIG="$TESTNET_GETH_CONFIG"
+            RETH_CONFIG="$TESTNET_RETH_CONFIG"
             ;;
         mainnet)
             OP_NODE_BOOTNODE="$MAINNET_BOOTNODE_OP_NODE"
             P2P_STATIC="$MAINNET_P2P_STATIC"
             OP_STACK_IMAGE_TAG="$MAINNET_OP_STACK_IMAGE"
             OP_GETH_IMAGE_TAG="$MAINNET_OP_GETH_IMAGE"
+            OP_RETH_IMAGE_TAG="$MAINNET_OP_RETH_IMAGE"
             GENESIS_URL="$MAINNET_GENESIS_URL"
             SEQUENCER_HTTP="$MAINNET_SEQUENCER_HTTP"
             ROLLUP_CONFIG="$MAINNET_ROLLUP_CONFIG"
             GETH_CONFIG="$MAINNET_GETH_CONFIG"
+            RETH_CONFIG="$MAINNET_RETH_CONFIG"
             ;;
         *)
             print_error "Unknown network type: $network"
@@ -174,7 +183,8 @@ download_config_files() {
     print_info "Downloading configuration files..."
 
     # Create temporary directory
-    mkdir -p "$TEMP_DIR"
+    mkdir -p "$TEMP_DIR/config"
+    mkdir -p "$TEMP_DIR/entrypoint"
 
     # Load network-specific configuration to know which files to download
     load_network_config "$NETWORK_TYPE"
@@ -183,6 +193,12 @@ download_config_files() {
     local config_files=(
         "config/$ROLLUP_CONFIG"
         "config/$GETH_CONFIG"
+        "config/$RETH_CONFIG"
+        "docker-compose.yml"
+        "entrypoint/reth-rpc.sh"
+        "init.sh"
+        "start.sh"
+        "stop.sh"
     )
 
     for file in "${config_files[@]}"; do
@@ -397,20 +413,17 @@ generate_config_files() {
 
     # Set bootnode configuration based on network type
     local BOOTNODE_OP_NODE
-    local BOOTNODE_OP_GETH
     local OP_STACK_IMAGE
     local OP_GETH_IMAGE
     local OP_RETH_IMAGE
 
     if [[ "$NETWORK_TYPE" == "mainnet" ]]; then
         BOOTNODE_OP_NODE="$MAINNET_BOOTNODE_OP_NODE"
-        BOOTNODE_OP_GETH="$MAINNET_BOOTNODE_OP_GETH"
         OP_STACK_IMAGE="$MAINNET_OP_STACK_IMAGE"
         OP_GETH_IMAGE="$MAINNET_OP_GETH_IMAGE"
         OP_RETH_IMAGE="$MAINNET_OP_RETH_IMAGE"
     else
         BOOTNODE_OP_NODE="$TESTNET_BOOTNODE_OP_NODE"
-        BOOTNODE_OP_GETH="$TESTNET_BOOTNODE_OP_GETH"
         OP_STACK_IMAGE="$TESTNET_OP_STACK_IMAGE"
         OP_GETH_IMAGE="$TESTNET_OP_GETH_IMAGE"
         OP_RETH_IMAGE="$TESTNET_OP_RETH_IMAGE"
@@ -423,7 +436,6 @@ L1_BEACON_URL=$L1_BEACON_URL
 
 # Bootnode Configuration
 OP_NODE_BOOTNODE=$BOOTNODE_OP_NODE
-OP_GETH_BOOTNODE=$BOOTNODE_OP_GETH
 
 # RPC Type
 L2_ENGINEKIND=$L2_ENGINEKIND
@@ -447,12 +459,15 @@ EOF
     # Copy configuration files from temp directory
     print_info "Copying configuration files..."
 
+    # Create necessary directories
+    mkdir -p config entrypoint
+
     # Verify and copy files
     local files_to_copy=(
-        "$TEMP_DIR/config/rollup.json:config/"
-        "$TEMP_DIR/config/op-geth-config-testnet.toml:config/"
+        "$TEMP_DIR/config/$ROLLUP_CONFIG:config/"
+        "$TEMP_DIR/config/$GETH_CONFIG:config/"
+        "$TEMP_DIR/config/$RETH_CONFIG:config/"
         "$TEMP_DIR/docker-compose.yml:."
-        "$TEMP_DIR/config/op-reth-config-testnet.toml:config/"
         "$TEMP_DIR/entrypoint/reth-rpc.sh:entrypoint/"
         "$TEMP_DIR/init.sh:."
         "$TEMP_DIR/start.sh:."

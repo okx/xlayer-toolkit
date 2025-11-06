@@ -45,6 +45,15 @@ esac
 
 echo "🚀 Initializing X Layer Self-hosted RPC node for $NETWORK_TYPE network..."
 
+# Load environment variables if .env exists
+if [ -f .env ]; then
+    source .env
+    echo "✅ Loaded environment variables from .env"
+else
+    echo "⚠️  Warning: .env file not found, using defaults"
+    L2_ENGINEKIND="${L2_ENGINEKIND:-geth}"
+fi
+
 # Network-specific directories and files
 DATA_DIR="data-${NETWORK_TYPE}"
 CONFIG_DIR="config-${NETWORK_TYPE}"
@@ -87,9 +96,11 @@ echo "✅ Genesis file extracted successfully to $CONFIG_DIR/$GENESIS_FILE"
 if [ "$NETWORK_TYPE" = "testnet" ]; then
     ROLLUP_CONFIG="rollup-testnet.json"
     GETH_CONFIG="op-geth-config-testnet.toml"
+    RETH_CONFIG="op-reth-config-testnet.toml"
 else
     ROLLUP_CONFIG="rollup-mainnet.json"
     GETH_CONFIG="op-geth-config-mainnet.toml"
+    RETH_CONFIG="op-reth-config-mainnet.toml"
 fi
 
 # Copy configuration files from config/ directory
@@ -110,6 +121,13 @@ else
     exit 1
 fi
 
+if [ -f "config/$RETH_CONFIG" ]; then
+    cp "config/$RETH_CONFIG" "$CONFIG_DIR/"
+    echo "✅ Copied $RETH_CONFIG"
+else
+    echo "⚠️  Warning: Configuration file config/$RETH_CONFIG does not exist (only needed for reth)"
+fi
+
 # Prepare genesis file for Reth RPC
 sed_inplace() {
   if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -119,15 +137,30 @@ sed_inplace() {
   fi
 }
 
-if [ ! -f "config/genesis-reth.json" ]; then
-  cp config/genesis.json config/genesis-reth.json
-  BLKNO=$(grep "legacyXLayerBlock" config/genesis.json | tr -d ', ' | cut -d ':' -f 2)
+GENESIS_FILE_RETH="genesis-reth-${NETWORK_TYPE}.json"
+if [ ! -f "$CONFIG_DIR/$GENESIS_FILE_RETH" ]; then
+  if [ ! -f "$CONFIG_DIR/$GENESIS_FILE" ]; then
+    echo "❌ Error: Genesis file $CONFIG_DIR/$GENESIS_FILE not found"
+    exit 1
+  fi
+
+  cp "$CONFIG_DIR/$GENESIS_FILE" "$CONFIG_DIR/$GENESIS_FILE_RETH"
+
+  # Try to use jq first for robust JSON parsing
+  if command -v jq &> /dev/null; then
+    BLKNO=$(jq -r '.config.legacyXLayerBlock // .legacyXLayerBlock // empty' "$CONFIG_DIR/$GENESIS_FILE" 2>/dev/null)
+  else
+    # Fallback to grep if jq is not available
+    BLKNO=$(grep "legacyXLayerBlock" "$CONFIG_DIR/$GENESIS_FILE" | tr -d ', ' | cut -d ':' -f 2 | tr -d '"')
+  fi
+
   if [ -z "$BLKNO" ]; then
     echo "❌ Error: Failed to extract legacyXLayerBlock from genesis.json"
     exit 1
   fi
-  sed_inplace 's/"number": "0x0"/"number": "'"$BLKNO"'"/' ./config/genesis-reth.json
-  echo "✅ Genesis file extracted successfully to config/genesis-reth.json"
+
+  sed_inplace 's/"number": "0x0"/"number": "'"$BLKNO"'"/' "$CONFIG_DIR/$GENESIS_FILE_RETH"
+  echo "✅ Genesis file for Reth created successfully at $CONFIG_DIR/$GENESIS_FILE_RETH"
 fi
 
 if [ "${L2_ENGINEKIND}" = "geth" ]; then
