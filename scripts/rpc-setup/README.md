@@ -223,7 +223,7 @@ Increase log verbosity:
 Modify `--verbosity` parameter in `start.sh`:
 - `0` = Silent
 - `1` = Error
-- `2` = Warning  
+- `2` = Warning
 - `3` = Info
 - `4` = Debug
 - `5` = Trace
