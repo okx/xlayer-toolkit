@@ -8,3 +8,9 @@ scripts/rpc-setup/.env
 
 # Genesis files (DEBUG mode cache)
 scripts/rpc-setup/genesis-*.tar.gz
+
+# X Layer genesis cache
+scripts/gen-min-genesis/.genesis_cache/
+scripts/gen-min-genesis/*.tar.gz
+scripts/gen-min-genesis/*.genesis.json
+scripts/gen-min-genesis/*.processing
