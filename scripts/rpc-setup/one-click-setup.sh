@@ -90,7 +90,6 @@ load_network_config() {
     eval "GETH_CONFIG=\${${prefix}_GETH_CONFIG}"
     eval "RETH_CONFIG=\${${prefix}_RETH_CONFIG}"
     eval "LEGACY_RPC_URL=\${${prefix}_LEGACY_RPC_URL}"
-    eval "LEGACY_CUTOFF_BLOCK=\${${prefix}_LEGACY_CUTOFF_BLOCK}"
     eval "LEGACY_RPC_TIMEOUT=\${${prefix}_LEGACY_RPC_TIMEOUT}"
     
     # Validate that configuration was loaded
@@ -516,7 +515,6 @@ SEQUENCER_HTTP_URL=$SEQUENCER_HTTP
 
 # Legacy RPC Configuration
 LEGACY_RPC_URL=$LEGACY_RPC_URL
-LEGACY_CUTOFF_BLOCK=$LEGACY_CUTOFF_BLOCK
 LEGACY_RPC_TIMEOUT=$LEGACY_RPC_TIMEOUT
 EOF
     

@@ -6,9 +6,8 @@ Based on [op-geth migration RPC implementation](https://github.com/okx/op-geth/p
 
 | Parameter | Description |
 |-----------|-------------|
-| `--legacy-rpc-url` | URL of the legacy Erigon RPC endpoint |
-| `--legacy-cutoff-block` | Block number where migration occurred. Blocks below this are fetched from legacy RPC |
-| `--legacy-rpc-timeout` | Timeout for legacy RPC requests in seconds |
+| `--rpc.legacy-url` | URL of the legacy Erigon RPC endpoint |
+| `--rpc.legacy-timeout` | Timeout for legacy RPC requests in seconds |
 
 ## API Implementation Status
 
@@ -39,3 +38,6 @@ Based on [op-geth migration RPC implementation](https://github.com/okx/op-geth/p
 | 23 | `eth_uninstallFilter` | ❌ | Real-time query only |
 | 24 | `eth_getBlockInternalTransactions` | 🔄 | TODO |
 | 25 | `eth_getInternalTransactions` | 🔄 | TODO |
+
+## integration testing
+https://github.com/okx/xlayer-toolkit/blob/zjg/reth-legacy/scripts/legacy-api/test_legacy_rpc.sh

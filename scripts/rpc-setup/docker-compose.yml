@@ -80,9 +80,8 @@ services:
           --disable-discovery \
           --max-outbound-peers=0 \
           --max-inbound-peers=0 \
-          --legacy-rpc-url=${LEGACY_RPC_URL} \
-          --legacy-cutoff-block=${LEGACY_CUTOFF_BLOCK} \
-          --legacy-rpc-timeout=${LEGACY_RPC_TIMEOUT} \
+          --rpc.legacy-url=${LEGACY_RPC_URL} \
+          --rpc.legacy-timeout=${LEGACY_RPC_TIMEOUT} \
           2>&1 | tee /logs/reth.log
     restart: unless-stopped
     healthcheck:
