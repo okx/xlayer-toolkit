@@ -604,42 +604,6 @@ extract_genesis() {
     print_success "Genesis file extracted to $target_dir/$target_file"
 }
 
-prepare_reth_genesis() {
-    local genesis_file=$1
-    
-    print_info "Preparing genesis file for op-reth..."
-    
-    # Extract legacyXLayerBlock value
-    local blkno
-    if command_exists jq; then
-        blkno=$(jq -r '.config.legacyXLayerBlock' "$genesis_file" 2>/dev/null || echo "")
-    else
-        blkno=$(grep "legacyXLayerBlock" "$genesis_file" | tr -d ', ' | cut -d ':' -f 2 || echo "")
-    fi
-    
-    if [ -z "$blkno" ]; then
-        print_error "Failed to extract legacyXLayerBlock from genesis file"
-                exit 1
-            fi
-    
-    print_info "Setting genesis block number to $blkno (0x$(printf '%x' $blkno))"
-    
-    # Update genesis file with correct block number
-    if command_exists jq; then
-        jq ".number = \"0x$(printf '%x' $blkno)\"" "$genesis_file" > "$genesis_file.tmp"
-        mv "$genesis_file.tmp" "$genesis_file"
-    else
-        # Fallback to sed
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' 's/"number": "0x0"/"number": "0x'"$(printf '%x' $blkno)"'"/' "$genesis_file"
-        else
-            sed -i 's/"number": "0x0"/"number": "0x'"$(printf '%x' $blkno)"'"/' "$genesis_file"
-    fi
-    fi
-    
-    print_success "Genesis file prepared with block number $blkno"
-}
-
 init_geth() {
     local data_dir=$1
     local genesis_file=$2
@@ -712,8 +676,6 @@ initialize_node() {
     
     # Initialize execution client
     if [ "$RPC_TYPE" = "reth" ]; then
-        # Note: op-reth init requires ORIGINAL genesis.json (without modification)
-        # The prepare_reth_genesis step is NOT needed for op-reth init
         init_reth "$DATA_DIR/op-reth" "$CONFIG_DIR/$GENESIS_FILE"
     else
         init_geth "$DATA_DIR/op-geth" "$CONFIG_DIR/$GENESIS_FILE"
