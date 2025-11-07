@@ -39,5 +39,13 @@ Based on [op-geth migration RPC implementation](https://github.com/okx/op-geth/p
 | 24 | `eth_getBlockInternalTransactions` | 🔄 | TODO |
 | 25 | `eth_getInternalTransactions` | 🔄 | TODO |
 
-## integration testing
-https://github.com/okx/xlayer-toolkit/blob/zjg/reth-legacy/scripts/legacy-api/test_legacy_rpc.sh
+## Integration Testing
+
+Run comprehensive tests:
+
+```bash
+cd scripts/dev-utils
+./test-legacy-rpc.sh [rpc_url]
+```
+
+See [test-legacy-rpc.sh](./test-legacy-rpc.sh) for the complete test suite (71 tests).
