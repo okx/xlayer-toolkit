@@ -52,7 +52,6 @@ services:
     volumes:
       - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/data/op-reth:/datadir
       - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/config/jwt.txt:/jwt.txt
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/config/genesis-${NETWORK_TYPE}.json:/genesis.json
       - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/config/op-reth-config-${NETWORK_TYPE}.toml:/config.toml
       - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/logs:/logs
     command:
@@ -60,7 +59,7 @@ services:
       - |
         exec op-reth node \
           --datadir=/datadir \
-          --chain=/genesis.json \
+          --chain=${CHAIN_NAME:-xlayer-mainnet} \
           --config=/config.toml \
           --http \
           --http.corsdomain=* \
@@ -89,7 +88,7 @@ services:
       interval: 10s
       timeout: 10s
       retries: 30
-      start_period: 600s
+      start_period: 30s
 
   op-node:
     image: "${OP_STACK_IMAGE_TAG}"
