@@ -5,8 +5,6 @@ Generate minimal XLayer genesis.json files by removing the `alloc` field from fu
 ## Why?
 
 **Problem**: Reth loads genesis on every startup, taking **~1 minute** because full genesis files are **huge** (over 1 GB):
-- Mainnet genesis: ~400 MB (compressed), >1 GB (in memory)
-- Testnet genesis: ~200 MB (compressed), >500 MB (in memory)
 
 **Solution**: This tool generates **minimal genesis** files (~1 KB) that can be embedded directly into Reth source code, reducing startup time from **1 minute to <1 second**.
 
