@@ -75,13 +75,6 @@ The script verifies that the minimal genesis matches the original (excluding `al
 - Block number correctly updated to cutoff point
 - Genesis hash components unchanged
 
-### Size Reduction & Performance
-
-| Network | Full Genesis | Minimal Genesis | Reduction | Reth Startup Time |
-|---------|--------------|-----------------|-----------|-------------------|
-| Mainnet | ~400 MB | ~1 KB | 99.9% | **1 min → <1 sec** |
-| Testnet | ~200 MB | ~1 KB | 99.9% | **1 min → <1 sec** |
-
 ## Next Steps
 
 After generating minimal genesis, extract genesis constants for Reth:
