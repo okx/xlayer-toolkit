@@ -77,17 +77,34 @@ The script verifies that the minimal genesis matches the original (excluding `al
 
 ## Next Steps
 
-After generating minimal genesis, extract genesis constants for Reth:
+After generating minimal genesis, you can:
+
+### 1. Initialize Reth with Full Genesis (for production nodes)
+```bash
+# Generate and cache the full genesis
+./gen-minimal-genesis.sh mainnet
+
+# Initialize Reth using Docker
+docker run --rm \
+    -v "$(pwd)/chaindata:/datadir" \
+    -v "$(pwd)/.genesis_cache/mainnet.genesis.json:/genesis.json" \
+    xlayer/op-reth:latest \
+    init \
+    --datadir /datadir \
+    --chain /genesis.json
+```
+
+### 2. Embed Minimal Genesis in Reth Source (to eliminate startup time)
 
 ```bash
 # 1. Generate minimal genesis
 ./gen-minimal-genesis.sh mainnet
 
-# 2. Extract constants using the cached FULL genesis
-op-reth --chain .genesis_cache/mainnet.genesis.json node --help 2>&1 | grep -A 10 'GENESIS CONSTANTS'
+# 2. Copy minimal genesis content to Reth chain spec
+# Located at: crates/optimism/chainspec/src/xlayer_mainnet.rs
+# This allows Reth to skip loading external genesis files
 
-# 3. Embed minimal genesis in Reth source code
-# src/xlayer_mainnet.rs
+# 3. The minimal genesis is now hardcoded, reducing startup from 1 min to <1 sec
 ```
 
 ## Source URLs
