@@ -7,7 +7,7 @@ Development and testing utilities for XLayer.
 | Tool | Description | Documentation |
 |------|-------------|---------------|
 | `test-legacy-rpc.sh` | Legacy RPC testing (71 tests) | [legacy-rpc.md](./legacy-rpc.md) |
-| `gen-minimal-genesis.sh` | Minimal genesis generator | [genesis-generator.md](./genesis-generator.md) |
+| `gen-minimal-genesis.sh` | Minimal genesis generator | [gen-minimal-genesis.md](./gen-minimal-genesis.md) |
 
 ## Quick Start
 
