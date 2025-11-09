@@ -100,11 +100,12 @@ docker run --rm \
 # 1. Generate minimal genesis
 ./gen-minimal-genesis.sh mainnet
 
-# 2. Copy minimal genesis content to Reth chain spec
-# Located at: crates/optimism/chainspec/src/xlayer_mainnet.rs
-# This allows Reth to skip loading external genesis files
+# 2. Copy minimal genesis to Reth genesis resources directory
+cp genesis/xlayer_mainnet.json /path/to/reth/crates/optimism/chainspec/res/genesis/
+cp genesis/xlayer_testnet.json /path/to/reth/crates/optimism/chainspec/res/genesis/
 
-# 3. The minimal genesis is now hardcoded, reducing startup from 1 min to <1 sec
+# 3. Rebuild Reth - genesis files are now embedded in binary
+# This reduces startup from 1 min to <1 sec
 ```
 
 ## Source URLs
