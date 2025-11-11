@@ -28,9 +28,9 @@ run:
 	if [ "$$RPC_TYPE" = "reth" ]; then \
 		echo "  Starting op-reth..."; \
 		docker compose up -d op-reth; \
-		echo "⏳ Waiting for op-reth to be ready (this may take several minutes for first start)..."; \
+		echo "⏳ Waiting for op-reth to be ready (fast startup mode enabled)..."; \
 		while [ "$$(docker compose ps op-reth --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d':' -f2 | tr -d '"')" != "healthy" ]; do \
-			sleep 10; \
+			sleep 5; \
 			printf "."; \
 		done; \
 		echo ""; \
