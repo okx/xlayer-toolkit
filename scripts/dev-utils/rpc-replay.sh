@@ -1,37 +1,11 @@
 #!/bin/bash
 set -e
 
-#######################################
-# X Layer RPC Replay Tool
-# Build and verify RPC node sync from scratch
-#######################################
-
-#######################################
-# Configuration Section
-# Fill in these variables for non-interactive mode
-# Leave empty for interactive prompts
-#######################################
-
 # Client type: "reth" or "geth"
 CLIENT_TYPE=""
-
-# Branch/tag for optimism repository (required)
-# Examples: "v1.9.0", "main", "develop"
 OPTIMISM_BRANCH=""
-
-# Branch/tag for reth repository (required if CLIENT_TYPE=reth)
-# Examples: "op-reth/v1.1.0", "main"
 RETH_BRANCH=""
-
-# Branch/tag for op-geth repository (required if CLIENT_TYPE=geth)
-# Examples: "v1.101408.0", "master"
 OP_GETH_BRANCH=""
-
-# L1 Ethereum endpoint (required)
-# This endpoint should support both execution layer RPC and beacon chain API
-# Examples: 
-#   - "https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
-#   - "https://ethereum.publicnode.com"
 L1_ENDPOINT=""
 
 # Network type (default: mainnet)
@@ -255,17 +229,18 @@ clone_or_update_repo() {
         
         # Reset repository
         log_info "Resetting repository..."
-        git fetch --all >> "$LOG_FILE" 2>&1
-        git reset --hard >> "$LOG_FILE" 2>&1
-        git clean -fdx >> "$LOG_FILE" 2>&1
+        git fetch --all 2>&1 | tee -a "$LOG_FILE"
+        git reset --hard 2>&1 | tee -a "$LOG_FILE"
+        git clean -fdx 2>&1 | tee -a "$LOG_FILE"
         
         log_success "Repository reset completed"
     else
         log_info "Cloning repository from $repo_url..."
+        log_info "This may take 5-10 minutes depending on network speed..."
         mkdir -p "$REPOS_DIR"
         cd "$REPOS_DIR"
         
-        if ! git clone "$repo_url" "$repo_name" >> "$LOG_FILE" 2>&1; then
+        if ! git clone --progress "$repo_url" "$repo_name" 2>&1 | tee -a "$LOG_FILE"; then
             log_error "Failed to clone $repo_name"
             exit 1
         fi
@@ -276,7 +251,7 @@ clone_or_update_repo() {
     
     # Checkout specified branch/tag
     log_info "Checking out $branch..."
-    if ! git checkout "$branch" >> "$LOG_FILE" 2>&1; then
+    if ! git checkout "$branch" 2>&1 | tee -a "$LOG_FILE"; then
         log_error "Failed to checkout $branch"
         exit 1
     fi
@@ -284,7 +259,7 @@ clone_or_update_repo() {
     # Pull latest changes if it's a branch
     if git show-ref --verify --quiet "refs/heads/$branch"; then
         log_info "Pulling latest changes..."
-        git pull origin "$branch" >> "$LOG_FILE" 2>&1
+        git pull origin "$branch" 2>&1 | tee -a "$LOG_FILE"
     fi
     
     # Get commit ID
@@ -394,19 +369,28 @@ update_network_presets() {
     cp "$config_file" "$backup_file"
     log_success "Backup created: $backup_file"
     
-    # Update image configuration (using temp file for better cross-platform compatibility)
+    # Update image configuration (using awk for better compatibility and special character handling)
     log_info "Updating image tags to local builds..."
     
     # Update OP_STACK_IMAGE
-    sed "s|^MAINNET_OP_STACK_IMAGE=.*|MAINNET_OP_STACK_IMAGE=\"$OP_STACK_IMAGE_TAG\"|" "$config_file" > "$temp_file"
+    awk -v new_tag="$OP_STACK_IMAGE_TAG" '
+        /^MAINNET_OP_STACK_IMAGE=/ { print "MAINNET_OP_STACK_IMAGE=\"" new_tag "\""; next }
+        { print }
+    ' "$config_file" > "$temp_file"
     mv "$temp_file" "$config_file"
     
     # Update client-specific image
     if [ "$CLIENT_TYPE" = "reth" ]; then
-        sed "s|^MAINNET_OP_RETH_IMAGE=.*|MAINNET_OP_RETH_IMAGE=\"$OP_RETH_IMAGE_TAG\"|" "$config_file" > "$temp_file"
+        awk -v new_tag="$OP_RETH_IMAGE_TAG" '
+            /^MAINNET_OP_RETH_IMAGE=/ { print "MAINNET_OP_RETH_IMAGE=\"" new_tag "\""; next }
+            { print }
+        ' "$config_file" > "$temp_file"
         mv "$temp_file" "$config_file"
     else
-        sed "s|^MAINNET_OP_GETH_IMAGE=.*|MAINNET_OP_GETH_IMAGE=\"$OP_GETH_IMAGE_TAG\"|" "$config_file" > "$temp_file"
+        awk -v new_tag="$OP_GETH_IMAGE_TAG" '
+            /^MAINNET_OP_GETH_IMAGE=/ { print "MAINNET_OP_GETH_IMAGE=\"" new_tag "\""; next }
+            { print }
+        ' "$config_file" > "$temp_file"
         mv "$temp_file" "$config_file"
     fi
     
