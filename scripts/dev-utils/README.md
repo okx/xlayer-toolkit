@@ -6,6 +6,7 @@ Development and testing utilities for XLayer.
 
 | Tool | Description | Documentation |
 |------|-------------|---------------|
+| `rpc-replay.sh` | Build and verify RPC from custom branches | [rpc-replay.md](./rpc-replay.md) |
 | `test-legacy-rpc.sh` | Legacy RPC testing (71 tests) | [legacy-rpc.md](./legacy-rpc.md) |
 | `gen-minimal-genesis.sh` | Minimal genesis generator | [gen-minimal-genesis.md](./gen-minimal-genesis.md) |
 
@@ -13,6 +14,9 @@ Development and testing utilities for XLayer.
 
 ```bash
 cd scripts/dev-utils
+
+# Build and verify RPC from custom branches
+./rpc-replay.sh
 
 # Test Legacy RPC
 ./test-legacy-rpc.sh [rpc_url]
