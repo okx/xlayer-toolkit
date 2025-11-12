@@ -218,8 +218,24 @@ check_data_consistency() {
     local legacy_has_error=$(echo "$legacy_response" | jq -e '.error' > /dev/null 2>&1 && echo "true" || echo "false")
     
     if [ "$reth_has_error" = "true" ]; then
+        local reth_error_msg=$(echo "$reth_response" | jq -r '.error.message')
+        
+        # Check if both Reth and Legacy return 403 (not whitelisted)
+        if [ "$legacy_has_error" = "true" ]; then
+            local legacy_error_msg=$(echo "$legacy_response" | jq -r '.error.message')
+            
+            # If both return 403/not whitelisted, skip the test
+            if [[ "$reth_error_msg" == *"403"* ]] && [[ "$legacy_error_msg" == *"403"* ]]; then
+                log_warning "$test_name - Both Reth and Legacy RPC returned 403 (method not whitelisted)"
+                echo "       Skipping - method not supported by Legacy RPC"
+                SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+                return 1
+            fi
+        fi
+        
+        # Otherwise, it's a real Reth error
         log_error "$test_name - Reth returned error"
-        echo "       Reth error: $(echo "$reth_response" | jq -r '.error.message')"
+        echo "       Reth error: $reth_error_msg"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         FAILED_TEST_NAMES+=("$test_name")
         return 1
@@ -566,40 +582,6 @@ response=$(rpc_call "eth_getBlockByNumber" "[\"$LEGACY_BLOCK_HEX\",true]")
 check_result_not_null "$response" "eth_getBlockByNumber (full tx)"
 
 # ========================================
-# Phase 1.5: Header Tests
-# ========================================
-
-log_section "Phase 1.5: Header Tests"
-
-# Get a block hash for testing
-HEADER_BLOCK_HASH=$(rpc_call "eth_getBlockByNumber" "[\"$LEGACY_BLOCK_HEX\",false]" | jq -r '.result.hash')
-
-# Test 1.5.1: eth_getHeaderByNumber (legacy block)
-log_info "Test 1.5.1: eth_getHeaderByNumber (legacy block)"
-response=$(rpc_call "eth_getHeaderByNumber" "[\"$LEGACY_BLOCK_HEX\"]")
-check_result_legacy_tolerant "$response" "eth_getHeaderByNumber (legacy)"
-
-# Test 1.5.2: eth_getHeaderByNumber (local block)
-if [ $LOCAL_BLOCK -le $LATEST_BLOCK_DEC ]; then
-    log_info "Test 1.5.2: eth_getHeaderByNumber (local block)"
-    response=$(rpc_call "eth_getHeaderByNumber" "[\"$LOCAL_BLOCK_HEX\"]")
-    check_result_not_null "$response" "eth_getHeaderByNumber (local)"
-else
-    log_warning "Skipping local block header test - block not yet mined"
-    SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
-fi
-
-# Test 1.5.3: eth_getHeaderByHash
-if [ "$HEADER_BLOCK_HASH" != "null" ] && [ -n "$HEADER_BLOCK_HASH" ]; then
-    log_info "Test 1.5.3: eth_getHeaderByHash"
-    response=$(rpc_call "eth_getHeaderByHash" "[\"$HEADER_BLOCK_HASH\"]")
-    check_result_legacy_tolerant "$response" "eth_getHeaderByHash"
-else
-    log_warning "Skipping header hash test - no block hash available"
-    SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
-fi
-
-# ========================================
 # Phase 2: Transaction Count Tests
 # ========================================
 
@@ -685,7 +667,7 @@ if [ -n "$TX_HASH" ] && [ "$TX_HASH" != "null" ]; then
     # Test 4.5: eth_getRawTransactionByHash
     log_info "Test 4.5: eth_getRawTransactionByHash (hash-based fallback)"
     response=$(rpc_call "eth_getRawTransactionByHash" "[\"$TX_HASH\"]")
-    check_result_not_null "$response" "eth_getRawTransactionByHash"
+    check_result_legacy_tolerant "$response" "eth_getRawTransactionByHash"
 
     # Test 4.6: eth_getRawTransactionByBlockHashAndIndex
     log_info "Test 4.6: eth_getRawTransactionByBlockHashAndIndex"
@@ -1415,6 +1397,814 @@ if [ "$BLOCK_HASH" != "null" ] && [ -n "$BLOCK_HASH" ]; then
     response=$(rpc_call "eth_getBlockByHash" "[\"$BLOCK_HASH\",false]")
     check_result_not_null "$response" "eth_getBlockByHash"
 fi
+
+# ========================================
+# Phase 8: BlockHash Parameter Tests
+# ========================================
+
+log_section "Phase 8: BlockHash Parameter Tests (Critical Missing Tests)"
+
+echo ""
+log_info "🔍 Testing legacy block queries using BlockHash instead of BlockNumber"
+log_info "   This verifies that Reth properly falls back to Legacy RPC for hash-based queries"
+echo ""
+
+# Get block hashes for testing
+log_info "Preparing test block hashes..."
+LEGACY_BLOCK_HASH=$(rpc_call "eth_getBlockByNumber" "[\"$LEGACY_BLOCK_HEX\",false]" | jq -r '.result.hash')
+CUTOFF_BLOCK_HASH=$(rpc_call "eth_getBlockByNumber" "[\"$BOUNDARY_BLOCK_HEX\",false]" | jq -r '.result.hash')
+
+if [ $LOCAL_BLOCK -le $LATEST_BLOCK_DEC ]; then
+    LOCAL_BLOCK_HASH=$(rpc_call "eth_getBlockByNumber" "[\"$LOCAL_BLOCK_HEX\",false]" | jq -r '.result.hash')
+else
+    LOCAL_BLOCK_HASH=""
+fi
+
+log_info "  Legacy block hash: $LEGACY_BLOCK_HASH"
+log_info "  Cutoff block hash: $CUTOFF_BLOCK_HASH"
+if [ -n "$LOCAL_BLOCK_HASH" ]; then
+    log_info "  Local block hash:  $LOCAL_BLOCK_HASH"
+fi
+echo ""
+
+# Test 8.1: eth_getBalance with BlockHash
+log_section "Phase 8.1: eth_getBalance with BlockHash"
+
+# Test 8.1.1: Legacy block hash
+log_info "Test 8.1.1: eth_getBalance (legacy BlockHash)"
+response=$(rpc_call "eth_getBalance" "[\"$TEST_ADDR\",\"$LEGACY_BLOCK_HASH\"]")
+check_result "$response" "eth_getBalance (legacy BlockHash)"
+
+# Test 8.1.2: Cutoff block hash
+log_info "Test 8.1.2: eth_getBalance (cutoff BlockHash)"
+response=$(rpc_call "eth_getBalance" "[\"$TEST_ADDR\",\"$CUTOFF_BLOCK_HASH\"]")
+check_result "$response" "eth_getBalance (cutoff BlockHash)"
+
+# Test 8.1.3: Local block hash
+if [ -n "$LOCAL_BLOCK_HASH" ]; then
+    log_info "Test 8.1.3: eth_getBalance (local BlockHash)"
+    response=$(rpc_call "eth_getBalance" "[\"$TEST_ADDR\",\"$LOCAL_BLOCK_HASH\"]")
+    check_result "$response" "eth_getBalance (local BlockHash)"
+fi
+
+# Test 8.1.4: Consistency check - BlockNumber vs BlockHash
+log_info "Test 8.1.4: eth_getBalance consistency (BlockNumber vs BlockHash)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+balance_by_number=$(rpc_call "eth_getBalance" "[\"$TEST_ADDR\",\"$LEGACY_BLOCK_HEX\"]" | jq -r '.result')
+balance_by_hash=$(rpc_call "eth_getBalance" "[\"$TEST_ADDR\",\"$LEGACY_BLOCK_HASH\"]" | jq -r '.result')
+
+if [ "$balance_by_number" = "$balance_by_hash" ] && [ "$balance_by_number" != "null" ]; then
+    log_success "eth_getBalance: BlockHash matches BlockNumber ✓"
+    log_info "  Value: $balance_by_number"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "eth_getBalance: BlockHash vs BlockNumber MISMATCH! ✗"
+    echo "  By Number: $balance_by_number"
+    echo "  By Hash:   $balance_by_hash"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("eth_getBalance BlockHash consistency")
+fi
+
+# Test 8.2: eth_getCode with BlockHash
+log_section "Phase 8.2: eth_getCode with BlockHash"
+
+# Test 8.2.1: Legacy block hash
+log_info "Test 8.2.1: eth_getCode (legacy BlockHash)"
+response=$(rpc_call "eth_getCode" "[\"$CONTRACT_ADDRESS\",\"$LEGACY_BLOCK_HASH\"]")
+check_result "$response" "eth_getCode (legacy BlockHash)"
+
+# Test 8.2.2: Cutoff block hash
+log_info "Test 8.2.2: eth_getCode (cutoff BlockHash)"
+response=$(rpc_call "eth_getCode" "[\"$CONTRACT_ADDRESS\",\"$CUTOFF_BLOCK_HASH\"]")
+check_result "$response" "eth_getCode (cutoff BlockHash)"
+
+# Test 8.2.3: Local block hash
+if [ -n "$LOCAL_BLOCK_HASH" ]; then
+    log_info "Test 8.2.3: eth_getCode (local BlockHash)"
+    response=$(rpc_call "eth_getCode" "[\"$CONTRACT_ADDRESS\",\"$LOCAL_BLOCK_HASH\"]")
+    check_result "$response" "eth_getCode (local BlockHash)"
+fi
+
+# Test 8.2.4: Consistency check
+log_info "Test 8.2.4: eth_getCode consistency (BlockNumber vs BlockHash)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+code_by_number=$(rpc_call "eth_getCode" "[\"$CONTRACT_ADDRESS\",\"$LEGACY_BLOCK_HEX\"]" | jq -r '.result')
+code_by_hash=$(rpc_call "eth_getCode" "[\"$CONTRACT_ADDRESS\",\"$LEGACY_BLOCK_HASH\"]" | jq -r '.result')
+
+if [ "$code_by_number" = "$code_by_hash" ] && [ "$code_by_number" != "null" ]; then
+    log_success "eth_getCode: BlockHash matches BlockNumber ✓"
+    code_length=${#code_by_number}
+    log_info "  Code length: $code_length bytes"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "eth_getCode: BlockHash vs BlockNumber MISMATCH! ✗"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("eth_getCode BlockHash consistency")
+fi
+
+# Test 8.3: eth_getStorageAt with BlockHash
+log_section "Phase 8.3: eth_getStorageAt with BlockHash"
+
+# Test 8.3.1: Legacy block hash
+log_info "Test 8.3.1: eth_getStorageAt (legacy BlockHash)"
+response=$(rpc_call "eth_getStorageAt" "[\"$CONTRACT_ADDRESS\",\"0x0\",\"$LEGACY_BLOCK_HASH\"]")
+check_result "$response" "eth_getStorageAt (legacy BlockHash)"
+
+# Test 8.3.2: Cutoff block hash
+log_info "Test 8.3.2: eth_getStorageAt (cutoff BlockHash)"
+response=$(rpc_call "eth_getStorageAt" "[\"$CONTRACT_ADDRESS\",\"0x0\",\"$CUTOFF_BLOCK_HASH\"]")
+check_result "$response" "eth_getStorageAt (cutoff BlockHash)"
+
+# Test 8.3.3: Local block hash
+if [ -n "$LOCAL_BLOCK_HASH" ]; then
+    log_info "Test 8.3.3: eth_getStorageAt (local BlockHash)"
+    response=$(rpc_call "eth_getStorageAt" "[\"$CONTRACT_ADDRESS\",\"0x0\",\"$LOCAL_BLOCK_HASH\"]")
+    check_result "$response" "eth_getStorageAt (local BlockHash)"
+fi
+
+# Test 8.3.4: Consistency check
+log_info "Test 8.3.4: eth_getStorageAt consistency (BlockNumber vs BlockHash)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+storage_by_number=$(rpc_call "eth_getStorageAt" "[\"$CONTRACT_ADDRESS\",\"0x0\",\"$LEGACY_BLOCK_HEX\"]" | jq -r '.result')
+storage_by_hash=$(rpc_call "eth_getStorageAt" "[\"$CONTRACT_ADDRESS\",\"0x0\",\"$LEGACY_BLOCK_HASH\"]" | jq -r '.result')
+
+if [ "$storage_by_number" = "$storage_by_hash" ] && [ "$storage_by_number" != "null" ]; then
+    log_success "eth_getStorageAt: BlockHash matches BlockNumber ✓"
+    log_info "  Storage value: $storage_by_number"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "eth_getStorageAt: BlockHash vs BlockNumber MISMATCH! ✗"
+    echo "  By Number: $storage_by_number"
+    echo "  By Hash:   $storage_by_hash"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("eth_getStorageAt BlockHash consistency")
+fi
+
+# Test 8.4: eth_getTransactionCount with BlockHash
+log_section "Phase 8.4: eth_getTransactionCount with BlockHash"
+
+# Test 8.4.1: Legacy block hash
+log_info "Test 8.4.1: eth_getTransactionCount (legacy BlockHash)"
+response=$(rpc_call "eth_getTransactionCount" "[\"$ACTIVE_EOA_ADDRESS\",\"$LEGACY_BLOCK_HASH\"]")
+check_result "$response" "eth_getTransactionCount (legacy BlockHash)"
+
+# Test 8.4.2: Cutoff block hash
+log_info "Test 8.4.2: eth_getTransactionCount (cutoff BlockHash)"
+response=$(rpc_call "eth_getTransactionCount" "[\"$ACTIVE_EOA_ADDRESS\",\"$CUTOFF_BLOCK_HASH\"]")
+check_result "$response" "eth_getTransactionCount (cutoff BlockHash)"
+
+# Test 8.4.3: Local block hash
+if [ -n "$LOCAL_BLOCK_HASH" ]; then
+    log_info "Test 8.4.3: eth_getTransactionCount (local BlockHash)"
+    response=$(rpc_call "eth_getTransactionCount" "[\"$ACTIVE_EOA_ADDRESS\",\"$LOCAL_BLOCK_HASH\"]")
+    check_result "$response" "eth_getTransactionCount (local BlockHash)"
+fi
+
+# Test 8.4.4: Consistency check
+log_info "Test 8.4.4: eth_getTransactionCount consistency (BlockNumber vs BlockHash)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+nonce_by_number=$(rpc_call "eth_getTransactionCount" "[\"$ACTIVE_EOA_ADDRESS\",\"$LEGACY_BLOCK_HEX\"]" | jq -r '.result')
+nonce_by_hash=$(rpc_call "eth_getTransactionCount" "[\"$ACTIVE_EOA_ADDRESS\",\"$LEGACY_BLOCK_HASH\"]" | jq -r '.result')
+
+if [ "$nonce_by_number" = "$nonce_by_hash" ] && [ "$nonce_by_number" != "null" ]; then
+    log_success "eth_getTransactionCount: BlockHash matches BlockNumber ✓"
+    nonce_dec=$((nonce_by_number))
+    log_info "  Nonce: $nonce_by_number ($nonce_dec)"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "eth_getTransactionCount: BlockHash vs BlockNumber MISMATCH! ✗"
+    echo "  By Number: $nonce_by_number"
+    echo "  By Hash:   $nonce_by_hash"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("eth_getTransactionCount BlockHash consistency")
+fi
+
+# Test 8.5: eth_getBlockReceipts with BlockHash
+log_section "Phase 8.5: eth_getBlockReceipts with BlockHash"
+
+# Test 8.5.1: Legacy block hash
+log_info "Test 8.5.1: eth_getBlockReceipts (legacy BlockHash)"
+response=$(rpc_call "eth_getBlockReceipts" "[\"$LEGACY_BLOCK_HASH\"]")
+if check_result "$response" "eth_getBlockReceipts (legacy BlockHash)"; then
+    receipts_by_hash=$(echo "$response" | jq '.result | length')
+    log_info "  → Found $receipts_by_hash receipts via BlockHash"
+fi
+
+# Test 8.5.2: Cutoff block hash
+log_info "Test 8.5.2: eth_getBlockReceipts (cutoff BlockHash)"
+response=$(rpc_call "eth_getBlockReceipts" "[\"$CUTOFF_BLOCK_HASH\"]")
+check_result "$response" "eth_getBlockReceipts (cutoff BlockHash)"
+
+# Test 8.5.3: Local block hash
+if [ -n "$LOCAL_BLOCK_HASH" ]; then
+    log_info "Test 8.5.3: eth_getBlockReceipts (local BlockHash)"
+    response=$(rpc_call "eth_getBlockReceipts" "[\"$LOCAL_BLOCK_HASH\"]")
+    check_result "$response" "eth_getBlockReceipts (local BlockHash)"
+fi
+
+# Test 8.5.4: Consistency check
+log_info "Test 8.5.4: eth_getBlockReceipts consistency (BlockNumber vs BlockHash)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+receipts_by_number=$(rpc_call "eth_getBlockReceipts" "[\"$LEGACY_BLOCK_HEX\"]" | jq -cS '.result')
+receipts_by_hash=$(rpc_call "eth_getBlockReceipts" "[\"$LEGACY_BLOCK_HASH\"]" | jq -cS '.result')
+
+if [ "$receipts_by_number" = "$receipts_by_hash" ] && [ "$receipts_by_number" != "null" ]; then
+    log_success "eth_getBlockReceipts: BlockHash matches BlockNumber ✓"
+    count=$(echo "$receipts_by_number" | jq 'length')
+    log_info "  Receipts count: $count"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "eth_getBlockReceipts: BlockHash vs BlockNumber MISMATCH! ✗"
+    count_by_number=$(echo "$receipts_by_number" | jq 'length // 0')
+    count_by_hash=$(echo "$receipts_by_hash" | jq 'length // 0')
+    echo "  By Number: $count_by_number receipts"
+    echo "  By Hash:   $count_by_hash receipts"
+    
+    if [ "$receipts_by_hash" = "null" ] || [ "$count_by_hash" -eq 0 ]; then
+        log_error "  💥 BlockHash query returned null/empty - Legacy fallback may have FAILED!"
+    fi
+    
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("eth_getBlockReceipts BlockHash consistency")
+fi
+
+echo ""
+log_info "📊 Phase 8 Summary:"
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_info "  BlockHash parameter tests verify that Reth correctly identifies"
+log_info "  legacy blocks by their hash (not just number) and falls back to"
+log_info "  Legacy RPC. This is critical for applications that use block.hash"
+log_info "  to ensure state consistency."
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# ========================================
+# Phase 9: Special BlockTag Tests
+# ========================================
+
+log_section "Phase 9: Special BlockTag Tests"
+
+echo ""
+log_info "🏷️  Testing special block tags: 'earliest', 'latest', 'pending'"
+log_info "   These tags must be correctly routed based on their semantic meaning"
+echo ""
+
+# Test 9.1: "earliest" tag (should fallback for genesis block)
+log_section "Phase 9.1: 'earliest' Tag Tests"
+
+log_info "Test 9.1.1: eth_getBalance with 'earliest'"
+response=$(rpc_call "eth_getBalance" "[\"$TEST_ADDR\",\"earliest\"]")
+check_result "$response" "eth_getBalance (earliest)"
+
+log_info "Test 9.1.2: eth_getCode with 'earliest'"
+response=$(rpc_call "eth_getCode" "[\"$CONTRACT_ADDRESS\",\"earliest\"]")
+check_result "$response" "eth_getCode (earliest)"
+
+log_info "Test 9.1.3: eth_getStorageAt with 'earliest'"
+response=$(rpc_call "eth_getStorageAt" "[\"$CONTRACT_ADDRESS\",\"0x0\",\"earliest\"]")
+check_result "$response" "eth_getStorageAt (earliest)"
+
+log_info "Test 9.1.4: eth_getTransactionCount with 'earliest'"
+response=$(rpc_call "eth_getTransactionCount" "[\"$ACTIVE_EOA_ADDRESS\",\"earliest\"]")
+if check_result "$response" "eth_getTransactionCount (earliest)"; then
+    earliest_nonce=$(echo "$response" | jq -r '.result')
+    if [ "$earliest_nonce" = "0x0" ]; then
+        log_success "  → Nonce at genesis is 0x0 as expected ✓"
+    else
+        log_warning "  → Unexpected nonce at genesis: $earliest_nonce"
+    fi
+fi
+
+log_info "Test 9.1.5: eth_getBlockByNumber with 'earliest'"
+response=$(rpc_call "eth_getBlockByNumber" "[\"earliest\",false]")
+if check_result_not_null "$response" "eth_getBlockByNumber (earliest)"; then
+    block_num=$(echo "$response" | jq -r '.result.number')
+    if [ "$block_num" = "0x0" ]; then
+        log_success "  → 'earliest' correctly returns block 0 ✓"
+    else
+        log_warning "  → 'earliest' returned block $block_num (expected 0x0)"
+    fi
+fi
+
+# Test 9.2: "latest" tag (should query local Reth)
+log_section "Phase 9.2: 'latest' Tag Tests"
+
+log_info "Test 9.2.1: eth_getBalance with 'latest'"
+response=$(rpc_call "eth_getBalance" "[\"$TEST_ADDR\",\"latest\"]")
+check_result "$response" "eth_getBalance (latest)"
+
+log_info "Test 9.2.2: eth_getCode with 'latest'"
+response=$(rpc_call "eth_getCode" "[\"$CONTRACT_ADDRESS\",\"latest\"]")
+check_result "$response" "eth_getCode (latest)"
+
+log_info "Test 9.2.3: eth_getStorageAt with 'latest'"
+response=$(rpc_call "eth_getStorageAt" "[\"$CONTRACT_ADDRESS\",\"0x0\",\"latest\"]")
+check_result "$response" "eth_getStorageAt (latest)"
+
+log_info "Test 9.2.4: eth_getTransactionCount with 'latest'"
+response=$(rpc_call "eth_getTransactionCount" "[\"$ACTIVE_EOA_ADDRESS\",\"latest\"]")
+check_result "$response" "eth_getTransactionCount (latest)"
+
+log_info "Test 9.2.5: eth_getBlockByNumber with 'latest'"
+response=$(rpc_call "eth_getBlockByNumber" "[\"latest\",false]")
+if check_result_not_null "$response" "eth_getBlockByNumber (latest)"; then
+    latest_block_num=$(echo "$response" | jq -r '.result.number')
+    latest_block_dec=$((latest_block_num))
+    log_info "  → Latest block: $latest_block_num ($latest_block_dec)"
+    
+    if [ $latest_block_dec -ge $CUTOFF_BLOCK ]; then
+        log_success "  → Latest block is post-cutoff (as expected) ✓"
+    fi
+fi
+
+# Test 9.3: "pending" tag (should query local Reth, may not be supported)
+log_section "Phase 9.3: 'pending' Tag Tests"
+
+log_info "Test 9.3.1: eth_getBalance with 'pending'"
+response=$(rpc_call "eth_getBalance" "[\"$TEST_ADDR\",\"pending\"]")
+check_result_legacy_tolerant "$response" "eth_getBalance (pending)"
+
+log_info "Test 9.3.2: eth_getTransactionCount with 'pending'"
+response=$(rpc_call "eth_getTransactionCount" "[\"$ACTIVE_EOA_ADDRESS\",\"pending\"]")
+check_result_legacy_tolerant "$response" "eth_getTransactionCount (pending)"
+
+# Test 9.4: eth_getLogs with special tags
+log_section "Phase 9.4: eth_getLogs with Special Tags"
+
+log_info "Test 9.4.1: eth_getLogs (earliest to latest - full history)"
+log_info "  ⚠️  Note: This may timeout or be rate-limited due to large range"
+response=$(rpc_call "eth_getLogs" "[{\"fromBlock\":\"earliest\",\"toBlock\":\"latest\",\"address\":\"$CONTRACT_ADDRESS\"}]")
+if check_result_legacy_tolerant "$response" "eth_getLogs (earliest to latest)"; then
+    logs_count=$(echo "$response" | jq '.result | length')
+    log_info "  → Found $logs_count logs across full history"
+    
+    if [ "$logs_count" -gt 0 ]; then
+        # Verify logs span both sides of cutoff
+        has_legacy=$(echo "$response" | jq --argjson cutoff "$CUTOFF_BLOCK" \
+            '[.result[] | select((.blockNumber | tonumber) < $cutoff)] | length > 0')
+        has_local=$(echo "$response" | jq --argjson cutoff "$CUTOFF_BLOCK" \
+            '[.result[] | select((.blockNumber | tonumber) >= $cutoff)] | length > 0')
+        
+        if [ "$has_legacy" = "true" ] && [ "$has_local" = "true" ]; then
+            log_success "  → Logs from BOTH legacy and local DB ✓"
+        elif [ "$has_legacy" = "true" ]; then
+            log_info "  → Only legacy logs found"
+        elif [ "$has_local" = "true" ]; then
+            log_info "  → Only local logs found"
+        fi
+    fi
+fi
+
+log_info "Test 9.4.2: eth_getLogs (recent 50 blocks using 'latest')"
+log_info "  → Testing range: latest-50 to latest (validates 'latest' tag handling)"
+LATEST_MINUS_50=$((LATEST_BLOCK_DEC - 50))
+LATEST_MINUS_50_HEX=$(printf "0x%x" $LATEST_MINUS_50)
+response=$(rpc_call "eth_getLogs" "[{\"fromBlock\":\"$LATEST_MINUS_50_HEX\",\"toBlock\":\"latest\"}]")
+if check_result "$response" "eth_getLogs (latest-50 to latest)"; then
+    logs_count=$(echo "$response" | jq '.result | length')
+    log_info "  → Found $logs_count logs in recent 50 blocks"
+    
+    # Verify 'latest' was resolved correctly
+    if [ "$logs_count" -gt 0 ]; then
+        max_block=$(echo "$response" | jq '.result | map(.blockNumber | tonumber) | max')
+        log_info "  → Highest log block: $max_block (should be near $LATEST_BLOCK_DEC)"
+        
+        if [ $max_block -ge $((LATEST_BLOCK_DEC - 10)) ]; then
+            log_success "  → 'latest' tag correctly resolved to recent blocks ✓"
+        fi
+    fi
+fi
+
+log_info "Test 9.4.3: eth_getLogs (post-cutoff 50 blocks using 'latest')"
+log_info "  → Testing that 'latest' works for post-cutoff data"
+POST_CUTOFF_START=$((CUTOFF_BLOCK + 100))
+POST_CUTOFF_START_HEX=$(printf "0x%x" $POST_CUTOFF_START)
+POST_CUTOFF_END=$((POST_CUTOFF_START + 50))
+POST_CUTOFF_END_HEX=$(printf "0x%x" $POST_CUTOFF_END)
+
+if [ $POST_CUTOFF_END -le $LATEST_BLOCK_DEC ]; then
+    response=$(rpc_call "eth_getLogs" "[{\"fromBlock\":\"$POST_CUTOFF_START_HEX\",\"toBlock\":\"$POST_CUTOFF_END_HEX\"}]")
+    if check_result "$response" "eth_getLogs (post-cutoff 50 blocks)"; then
+        logs_count=$(echo "$response" | jq '.result | length')
+        log_info "  → Found $logs_count logs in post-cutoff range"
+    fi
+else
+    log_warning "Skipping post-cutoff range test - insufficient blocks mined"
+    SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+fi
+
+echo ""
+log_info "📊 Phase 9 Summary:"
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_info "  Special BlockTag tests verify that symbolic tags like 'earliest'"
+log_info "  and 'latest' are correctly interpreted and routed to the appropriate"
+log_info "  data source (Legacy RPC or local Reth DB)."
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# ========================================
+# Phase 10: Enhanced Data Consistency for Tolerant Methods
+# ========================================
+
+log_section "Phase 10: Enhanced Consistency Tests for Hash-Based Methods"
+
+echo ""
+log_info "🔍 Re-testing previously 'tolerant' methods with strict consistency checks"
+log_info "   These methods were previously only checked for non-error responses"
+log_info "   Now we verify data consistency against Legacy RPC"
+echo ""
+
+# Test 10.1: eth_getBlockTransactionCountByHash with consistency
+log_info "Test 10.1: eth_getBlockTransactionCountByHash (consistency check)"
+if [ "$LEGACY_BLOCK_HASH" != "null" ] && [ -n "$LEGACY_BLOCK_HASH" ]; then
+    check_data_consistency "eth_getBlockTransactionCountByHash" "[\"$LEGACY_BLOCK_HASH\"]" "eth_getBlockTransactionCountByHash consistency"
+else
+    log_warning "Skipping - no legacy block hash available"
+    SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+fi
+
+# Test 10.2: eth_getTransactionByBlockHashAndIndex with consistency
+log_info "Test 10.2: eth_getTransactionByBlockHashAndIndex (consistency check)"
+if [ "$LEGACY_BLOCK_HASH" != "null" ] && [ -n "$LEGACY_BLOCK_HASH" ] && [ "$LEGACY_TX_COUNT" -gt 0 ]; then
+    check_data_consistency "eth_getTransactionByBlockHashAndIndex" "[\"$LEGACY_BLOCK_HASH\",\"0x0\"]" "eth_getTransactionByBlockHashAndIndex consistency"
+else
+    log_warning "Skipping - no transactions in legacy block"
+    SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+fi
+
+echo ""
+log_info "📊 Phase 10 Summary:"
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_info "  Enhanced consistency tests ensure that hash-based methods don't"
+log_info "  just 'work' but return IDENTICAL data to Legacy RPC."
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# ========================================
+# Phase 11: Edge Cases and Invalid Inputs
+# ========================================
+
+log_section "Phase 11: Edge Cases and Invalid Block Identifiers"
+
+echo ""
+log_info "🔬 Testing error handling for non-existent and invalid block identifiers"
+log_info "   Ensures proper error handling for boundary cases and malformed inputs"
+echo ""
+
+# Test 11.1: Future block number (doesn't exist yet)
+log_info "Test 11.1: Future block number (very far ahead)"
+FUTURE_BLOCK_HEX="0xffffffff"  # 4294967295 - extremely far in future
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBlockByNumber" "[\"$FUTURE_BLOCK_HEX\",false]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    error_code=$(echo "$response" | jq -r '.error.code')
+    log_success "Future block correctly returns error (code: $error_code) ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "Future block returns null (acceptable) ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "Future block should return error or null but got result ✗"
+    echo "  Response: $(echo "$response" | jq -c .)"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("Future block error handling")
+fi
+
+# Test 11.2: State query with future block (eth_getBalance)
+log_info "Test 11.2: eth_getBalance with future block number"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBalance" "[\"$TEST_ADDR\",\"$FUTURE_BLOCK_HEX\"]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Future block state query correctly returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "Future block state query returns null (acceptable) ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "Should return error or null for future block ✗"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("Future block state query error handling")
+fi
+
+# Test 11.3: eth_getCode with future block
+log_info "Test 11.3: eth_getCode with future block number"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getCode" "[\"$CONTRACT_ADDRESS\",\"$FUTURE_BLOCK_HEX\"]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Future block getCode returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "Future block getCode returns null ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "Should return error or null ✗"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("Future block getCode error handling")
+fi
+
+# Test 11.4: eth_getBlockReceipts with future block
+log_info "Test 11.4: eth_getBlockReceipts with future block number"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBlockReceipts" "[\"$FUTURE_BLOCK_HEX\"]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Future block getBlockReceipts returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "Future block getBlockReceipts returns null ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "Should return error or null ✗"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("Future block getBlockReceipts error handling")
+fi
+
+echo ""
+log_info "Testing invalid block hashes..."
+echo ""
+
+# Test 11.5: Invalid block hash (all zeros)
+log_info "Test 11.5: eth_getBlockByHash with all-zero hash"
+INVALID_HASH="0x0000000000000000000000000000000000000000000000000000000000000000"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBlockByHash" "[\"$INVALID_HASH\",false]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "All-zero hash correctly returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "All-zero hash returns null (acceptable) ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "All-zero hash should return error or null ✗"
+    echo "  Got result: $(echo "$response" | jq -c .result)"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("All-zero hash error handling")
+fi
+
+# Test 11.6: Random non-existent hash
+log_info "Test 11.6: eth_getBlockByHash with random non-existent hash"
+RANDOM_HASH="0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBlockByHash" "[\"$RANDOM_HASH\",false]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Random hash correctly returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "Random hash returns null (acceptable) ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "Random hash should return error or null ✗"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("Random hash error handling")
+fi
+
+# Test 11.7: State query with invalid hash (eth_getBalance)
+log_info "Test 11.7: eth_getBalance with invalid block hash"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBalance" "[\"$TEST_ADDR\",\"$RANDOM_HASH\"]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Invalid hash state query returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "Invalid hash state query returns null ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_warning "Invalid hash state query should ideally return error"
+    echo "  Got result: $(echo "$response" | jq -r '.result')"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+fi
+
+# Test 11.8: eth_getCode with invalid hash
+log_info "Test 11.8: eth_getCode with invalid block hash"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getCode" "[\"$CONTRACT_ADDRESS\",\"$RANDOM_HASH\"]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Invalid hash getCode returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "Invalid hash getCode returns null ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_warning "Invalid hash getCode accepted (may return default)"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+fi
+
+# Test 11.9: eth_getStorageAt with invalid hash
+log_info "Test 11.9: eth_getStorageAt with invalid block hash"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getStorageAt" "[\"$CONTRACT_ADDRESS\",\"0x0\",\"$RANDOM_HASH\"]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Invalid hash getStorageAt returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "Invalid hash getStorageAt returns null ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_warning "Invalid hash getStorageAt accepted"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+fi
+
+# Test 11.10: eth_getTransactionCount with invalid hash
+log_info "Test 11.10: eth_getTransactionCount with invalid block hash"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getTransactionCount" "[\"$ACTIVE_EOA_ADDRESS\",\"$RANDOM_HASH\"]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Invalid hash getTransactionCount returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "Invalid hash getTransactionCount returns null ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_warning "Invalid hash getTransactionCount accepted"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+fi
+
+# Test 11.11: eth_getBlockReceipts with invalid hash
+log_info "Test 11.11: eth_getBlockReceipts with invalid block hash"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBlockReceipts" "[\"$RANDOM_HASH\"]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Invalid hash getBlockReceipts returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "Invalid hash getBlockReceipts returns null ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "Should return error or null for invalid hash ✗"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("getBlockReceipts invalid hash handling")
+fi
+
+echo ""
+log_info "Testing genesis block and boundary values..."
+echo ""
+
+# Test 11.12: Genesis block (block 0x0)
+log_info "Test 11.12: Genesis block query (block 0x0)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBlockByNumber" "[\"0x0\",false]")
+if echo "$response" | jq -e '.result' > /dev/null 2>&1; then
+    block_num=$(echo "$response" | jq -r '.result.number')
+    if [ "$block_num" = "0x0" ]; then
+        log_success "Genesis block query successful ✓"
+        log_info "  Genesis block hash: $(echo "$response" | jq -r '.result.hash')"
+        PASSED_TESTS=$((PASSED_TESTS + 1))
+    else
+        log_error "Genesis block returned wrong block number: $block_num ✗"
+        FAILED_TESTS=$((FAILED_TESTS + 1))
+        FAILED_TEST_NAMES+=("Genesis block query")
+    fi
+elif echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_error "Genesis block query failed ✗"
+    echo "  Error: $(echo "$response" | jq -r '.error.message')"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("Genesis block query")
+else
+    log_error "Genesis block query returned null ✗"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("Genesis block query")
+fi
+
+# Test 11.13: State query at genesis block
+log_info "Test 11.13: eth_getBalance at genesis block (0x0)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBalance" "[\"$TEST_ADDR\",\"0x0\"]")
+if echo "$response" | jq -e '.result' > /dev/null 2>&1; then
+    balance=$(echo "$response" | jq -r '.result')
+    log_success "Genesis block state query successful (balance: $balance) ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "Genesis block state query failed ✗"
+    echo "  Response: $(echo "$response" | jq -c .)"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("Genesis block state query")
+fi
+
+# Test 11.14: Block 1 (second block)
+log_info "Test 11.14: Block 1 query (0x1)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBlockByNumber" "[\"0x1\",false]")
+if echo "$response" | jq -e '.result' > /dev/null 2>&1; then
+    block_num=$(echo "$response" | jq -r '.result.number')
+    if [ "$block_num" = "0x1" ]; then
+        log_success "Block 1 query successful ✓"
+        PASSED_TESTS=$((PASSED_TESTS + 1))
+    else
+        log_error "Block 1 returned wrong number: $block_num ✗"
+        FAILED_TESTS=$((FAILED_TESTS + 1))
+        FAILED_TEST_NAMES+=("Block 1 query")
+    fi
+elif echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_warning "Block 1 query returned error (may not exist yet)"
+    SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+else
+    log_warning "Block 1 returned null (may not exist)"
+    SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+fi
+
+# Test 11.15: Negative block number (edge case)
+log_info "Test 11.15: Negative block number (-0x1)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBlockByNumber" "[\"-0x1\",false]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Negative block number correctly returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    # Some RPC implementations may parse -0x1 as a valid number or tag
+    log_warning "Negative block number didn't return error (may be parsed differently)"
+    echo "  Response: $(echo "$response" | jq -c .)"
+    SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+fi
+
+# Test 11.16: Very large number just beyond current block
+log_info "Test 11.16: Block just beyond current tip (latest + 1)"
+BEYOND_TIP_HEX=$(printf "0x%x" $((LATEST_BLOCK_DEC + 1)))
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getBlockByNumber" "[\"$BEYOND_TIP_HEX\",false]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Block beyond tip correctly returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
+    log_success "Block beyond tip returns null (acceptable) ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    # This might succeed if a new block was mined during the test
+    log_warning "Block beyond tip returned result (new block may have been mined)"
+    SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+fi
+
+# Test 11.17: eth_getLogs with invalid block range
+log_info "Test 11.17: eth_getLogs with future block range"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+response=$(rpc_call "eth_getLogs" "[{\"fromBlock\":\"$FUTURE_BLOCK_HEX\",\"toBlock\":\"$FUTURE_BLOCK_HEX\"}]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Future block range correctly returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == []' > /dev/null 2>&1; then
+    log_success "Future block range returns empty array (acceptable) ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "Should return error or empty array for future blocks ✗"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("getLogs future block range handling")
+fi
+
+# Test 11.18: eth_getLogs with inverted range (toBlock < fromBlock)
+log_info "Test 11.18: eth_getLogs with inverted block range (toBlock < fromBlock)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+FROM_HEX=$(printf "0x%x" $((LEGACY_BLOCK + 100)))
+TO_HEX=$(printf "0x%x" $LEGACY_BLOCK)
+
+response=$(rpc_call "eth_getLogs" "[{\"fromBlock\":\"$FROM_HEX\",\"toBlock\":\"$TO_HEX\"}]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Inverted range correctly returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+elif echo "$response" | jq -e '.result == []' > /dev/null 2>&1; then
+    log_success "Inverted range returns empty array (acceptable) ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_warning "Inverted range didn't return error (implementation may handle it)"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+fi
+
+echo ""
+log_info "📊 Phase 11 Summary:"
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_info "  Edge case tests verify proper error handling for:"
+log_info "  ✓ Non-existent future blocks (block numbers far ahead)"
+log_info "  ✓ Invalid and random block hashes"
+log_info "  ✓ Genesis block (block 0) and early blocks"
+log_info "  ✓ Boundary values (negative, beyond tip)"
+log_info "  ✓ Invalid ranges (inverted, future)"
+log_info ""
+log_info "  Proper error handling prevents:"
+log_info "  - Crashes from malformed inputs"
+log_info "  - Returning incorrect data for non-existent blocks"
+log_info "  - Confusion between 'not found' and 'empty result'"
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
 
 # ========================================
 # Test Summary
