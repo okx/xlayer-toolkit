@@ -19,7 +19,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="$(pwd)"
 RPC_SETUP_DIR="${SCRIPT_DIR}/../rpc-setup"
 REPOS_DIR="${WORK_DIR}/replay-repos"
-LOG_FILE="${WORK_DIR}/replay-$(date +%Y-%m-%d-%H%M%S).log"
+LOG_FILE="${WORK_DIR}/replay-$(date +%Y%m%d).log"
+
+# Clear previous log file if exists
+if [ -f "$LOG_FILE" ]; then
+    > "$LOG_FILE"
+fi
 
 # Repository URLs
 OPTIMISM_REPO="https://github.com/okx/optimism"
@@ -221,50 +226,52 @@ clone_or_update_repo() {
     local branch=$3
     local repo_path="${REPOS_DIR}/${repo_name}"
     
-    log_info "Processing repository: $repo_name"
+    # Redirect all log output to stderr so it doesn't pollute the return value
+    log_info "Processing repository: $repo_name" >&2
     
     if [ -d "$repo_path" ]; then
-        log_warning "Repository exists, resetting to clean state..."
+        log_warning "Repository exists, resetting to clean state..." >&2
         cd "$repo_path"
         
-        # Reset repository
-        log_info "Resetting repository..."
-        git fetch --all 2>&1 | tee -a "$LOG_FILE"
-        git reset --hard 2>&1 | tee -a "$LOG_FILE"
-        git clean -fdx 2>&1 | tee -a "$LOG_FILE"
+        # Reset repository (redirect to log file only, not stdout)
+        log_info "Resetting repository..." >&2
+        git fetch --all >> "$LOG_FILE" 2>&1
+        git reset --hard >> "$LOG_FILE" 2>&1
+        git clean -fdx >> "$LOG_FILE" 2>&1
         
-        log_success "Repository reset completed"
+        log_success "Repository reset completed" >&2
     else
-        log_info "Cloning repository from $repo_url..."
-        log_info "This may take 5-10 minutes depending on network speed..."
+        log_info "Cloning repository from $repo_url..." >&2
+        log_info "This may take 5-10 minutes depending on network speed..." >&2
         mkdir -p "$REPOS_DIR"
         cd "$REPOS_DIR"
         
-        if ! git clone --progress "$repo_url" "$repo_name" 2>&1 | tee -a "$LOG_FILE"; then
-            log_error "Failed to clone $repo_name"
+        # Clone with progress display (redirect to stderr for visibility)
+        if ! git clone --progress "$repo_url" "$repo_name" 2>&1 | tee -a "$LOG_FILE" >&2; then
+            log_error "Failed to clone $repo_name" >&2
             exit 1
         fi
         
         cd "$repo_path"
-        log_success "Repository cloned"
+        log_success "Repository cloned" >&2
     fi
     
     # Checkout specified branch/tag
-    log_info "Checking out $branch..."
-    if ! git checkout "$branch" 2>&1 | tee -a "$LOG_FILE"; then
-        log_error "Failed to checkout $branch"
+    log_info "Checking out $branch..." >&2
+    if ! git checkout "$branch" >> "$LOG_FILE" 2>&1; then
+        log_error "Failed to checkout $branch" >&2
         exit 1
     fi
     
     # Pull latest changes if it's a branch
     if git show-ref --verify --quiet "refs/heads/$branch"; then
-        log_info "Pulling latest changes..."
-        git pull origin "$branch" 2>&1 | tee -a "$LOG_FILE"
+        log_info "Pulling latest changes..." >&2
+        git pull origin "$branch" >> "$LOG_FILE" 2>&1
     fi
     
-    # Get commit ID
+    # Get commit ID and return it (ONLY this goes to stdout)
     local commit_id=$(git rev-parse --short HEAD)
-    log_success "Repository ready at commit: $commit_id"
+    log_success "Repository ready at commit: $commit_id" >&2
     
     cd "$WORK_DIR"
     echo "$commit_id"
@@ -311,7 +318,7 @@ build_docker_image() {
         exit 1
     fi
     
-    local build_cmd="docker build --no-cache -t $image_tag -f $dockerfile $build_context"
+    local build_cmd="docker build -t $image_tag -f $dockerfile $build_context"
     log_info "Build command: $build_cmd"
     
     # Show real-time progress and write to log
@@ -361,13 +368,7 @@ update_network_presets() {
     log_step "Step 5: Updating network configuration"
     
     local config_file="${RPC_SETUP_DIR}/network-presets.env"
-    local backup_file="${config_file}.backup-$(date +%Y%m%d-%H%M%S)"
     local temp_file="${config_file}.tmp"
-    
-    # Backup original config file
-    log_info "Backing up configuration file..."
-    cp "$config_file" "$backup_file"
-    log_success "Backup created: $backup_file"
     
     # Update image configuration (using awk for better compatibility and special character handling)
     log_info "Updating image tags to local builds..."
@@ -418,6 +419,18 @@ start_node_with_expect() {
         exit 1
     fi
     
+    # Clean up existing chaindata directory
+    local chaindata_dir="${RPC_SETUP_DIR}/chaindata"
+    if [ -d "$chaindata_dir" ]; then
+        log_info "Cleaning up existing chaindata directory..."
+        if rm -rf "$chaindata_dir"; then
+            log_success "Chaindata directory removed"
+        else
+            log_error "Failed to remove chaindata directory: $chaindata_dir"
+            exit 1
+        fi
+    fi
+    
     # Check if port is already in use
     log_info "Checking if port 8545 is available..."
     if command_exists lsof; then
@@ -438,13 +451,16 @@ start_node_with_expect() {
     log_success "Port 8545 is available"
     
     log_info "Running one-click-setup.sh with automated input..."
+    log_info "Working directory: $RPC_SETUP_DIR"
     
     # Create expect script (with 1 hour timeout)
     local expect_script=$(cat <<EOF
 #!/usr/bin/expect -f
 set timeout 3600
 
-spawn bash $setup_script
+# Change to rpc-setup directory before running the script
+cd $RPC_SETUP_DIR
+spawn bash ./one-click-setup.sh
 
 # Network type
 expect "Network type*"
