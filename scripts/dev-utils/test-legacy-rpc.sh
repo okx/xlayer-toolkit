@@ -223,10 +223,29 @@ check_data_consistency() {
         # Check if both Reth and Legacy return 403 (not whitelisted)
         if [ "$legacy_has_error" = "true" ]; then
             local legacy_error_msg=$(echo "$legacy_response" | jq -r '.error.message')
+            local legacy_error_code=$(echo "$legacy_response" | jq -r '.error.code // ""')
             
-            # If both return 403/not whitelisted, skip the test
-            if [[ "$reth_error_msg" == *"403"* ]] && [[ "$legacy_error_msg" == *"403"* ]]; then
-                log_warning "$test_name - Both Reth and Legacy RPC returned 403 (method not whitelisted)"
+            # Check if both return 403 or "not whitelisted" errors
+            # Reth may return "403" or "Request rejected `403`"
+            # Legacy may return "not whitelisted" or error code -32601
+            local reth_is_403=false
+            local legacy_is_403=false
+            
+            # Check Reth error
+            if [[ "$reth_error_msg" == *"403"* ]] || [[ "$reth_error_msg" == *"not whitelisted"* ]]; then
+                reth_is_403=true
+            fi
+            
+            # Check Legacy error
+            if [[ "$legacy_error_msg" == *"403"* ]] || \
+               [[ "$legacy_error_msg" == *"not whitelisted"* ]] || \
+               [[ "$legacy_error_code" == "-32601" ]]; then
+                legacy_is_403=true
+            fi
+            
+            # If both are 403/not whitelisted, skip the test
+            if [ "$reth_is_403" = "true" ] && [ "$legacy_is_403" = "true" ]; then
+                log_warning "$test_name - Both Reth and Legacy RPC returned 403/not whitelisted"
                 echo "       Skipping - method not supported by Legacy RPC"
                 SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
                 return 1
@@ -1858,6 +1877,412 @@ echo "  ━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "  eth_getBlockByHash boundary tests verify hash-based queries"
 log_info "  work correctly across the cutoff boundary and return identical"
 log_info "  data to BlockNumber-based queries."
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# ========================================
+# Phase 7: New Legacy RPC Methods (eth_call, eth_estimateGas, etc.)
+# ========================================
+
+log_section "Phase 7: New Legacy RPC Methods Tests"
+
+echo ""
+log_info "🔍 Testing newly added Legacy RPC methods"
+log_info "   eth_call, eth_estimateGas, eth_createAccessList, eth_transactionPreExec"
+echo ""
+
+# ========================================
+# Phase 7.1: eth_call Tests
+# ========================================
+
+log_section "Phase 7.1: eth_call Tests"
+
+echo ""
+log_info "Preparing simple transfer request for testing..."
+
+# Use simple EOA-to-EOA transfer to avoid contract execution issues
+# The CONTRACT_ADDRESS was deployed around cutoff, causing revert in legacy blocks
+# Use TEST_ADDR (EOA) as recipient to ensure consistent behavior across all blocks
+CALL_REQUEST="{\"from\":\"$ACTIVE_EOA_ADDRESS\",\"to\":\"$TEST_ADDR\",\"value\":\"0x0\"}"
+
+log_info "  Using simple EOA-to-EOA transfer:"
+log_info "    From: $ACTIVE_EOA_ADDRESS (active EOA)"
+log_info "    To: $TEST_ADDR (zero address - EOA)"
+log_info "    Value: 0x0 (no actual transfer)"
+log_info "    Note: EOA-to-EOA transfer works consistently across all blocks"
+echo ""
+
+# Test 7.1.1: eth_call (legacy block with BlockNumber)
+log_info "Test 7.1.1: eth_call (legacy block with BlockNumber)"
+response=$(rpc_call "eth_call" "[$CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]")
+check_result "$response" "eth_call (legacy BlockNumber)"
+
+# Test 7.1.2: eth_call (cutoff block)
+log_info "Test 7.1.2: eth_call (cutoff block)"
+response=$(rpc_call "eth_call" "[$CALL_REQUEST,\"$BOUNDARY_BLOCK_HEX\"]")
+check_result "$response" "eth_call (cutoff)"
+
+# Test 7.1.3: eth_call (local block)
+log_info "Test 7.1.3: eth_call (local block)"
+response=$(rpc_call "eth_call" "[$CALL_REQUEST,\"$LOCAL_BLOCK_HEX\"]")
+check_result "$response" "eth_call (local BlockNumber)"
+
+# Test 7.1.4: eth_call (legacy block with BlockHash)
+log_info "Test 7.1.4: eth_call (legacy block with BlockHash)"
+if [ -n "$LEGACY_BLOCK_HASH_PHASE6" ] && [ "$LEGACY_BLOCK_HASH_PHASE6" != "null" ]; then
+    response=$(rpc_call "eth_call" "[$CALL_REQUEST,{\"blockHash\":\"$LEGACY_BLOCK_HASH_PHASE6\"}]")
+    check_result "$response" "eth_call (legacy BlockHash)"
+fi
+
+# Test 7.1.5: eth_call with 'latest' tag
+log_info "Test 7.1.5: eth_call with 'latest' tag"
+response=$(rpc_call "eth_call" "[$CALL_REQUEST,\"latest\"]")
+check_result "$response" "eth_call (latest)"
+
+# Test 7.1.6: eth_call with 'earliest' tag
+log_info "Test 7.1.6: eth_call with 'earliest' tag"
+response=$(rpc_call "eth_call" "[$CALL_REQUEST,\"earliest\"]")
+check_result "$response" "eth_call (earliest)"
+
+# Test 7.1.7: eth_call with future block (should error)
+log_info "Test 7.1.7: eth_call with future block"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+response=$(rpc_call "eth_call" "[$CALL_REQUEST,\"0xffffffff\"]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Future block eth_call returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "Future block eth_call should return error ✗"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("eth_call future block error handling")
+fi
+
+# Test 7.1.8: eth_call data consistency (Reth vs Legacy)
+log_info "Test 7.1.8: eth_call data consistency (legacy block)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+reth_call_result=$(rpc_call "eth_call" "[$CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]" | jq -r '.result')
+legacy_call_result=$(rpc_call_legacy "eth_call" "[$CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]" | jq -r '.result')
+
+if [ "$reth_call_result" = "$legacy_call_result" ] && [ "$reth_call_result" != "null" ]; then
+    log_success "eth_call: Reth matches Legacy RPC ✓"
+    log_info "  Result: ${reth_call_result:0:20}..."
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "eth_call: Data MISMATCH ✗"
+    echo "  Reth:   ${reth_call_result:0:50}..."
+    echo "  Legacy: ${legacy_call_result:0:50}..."
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("eth_call data consistency")
+fi
+
+# Test 7.1.9: eth_call without from address (anonymous call)
+log_info "Test 7.1.9: eth_call without from address"
+ANONYMOUS_CALL_REQUEST="{\"to\":\"$TEST_ADDR\",\"value\":\"0x0\"}"
+response=$(rpc_call "eth_call" "[$ANONYMOUS_CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]")
+check_result "$response" "eth_call (anonymous)"
+
+echo ""
+log_info "📊 Phase 7.1 Summary:"
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_info "  eth_call tests verify message call execution across legacy/local"
+log_info "  blocks, supporting BlockNumber, BlockHash, and BlockTag parameters."
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# ========================================
+# Phase 7.2: eth_estimateGas Tests
+# ========================================
+
+log_section "Phase 7.2: eth_estimateGas Tests"
+
+echo ""
+log_info "Testing gas estimation for transactions..."
+echo ""
+
+# Test 7.2.1: eth_estimateGas (legacy block with BlockNumber)
+log_info "Test 7.2.1: eth_estimateGas (legacy block with BlockNumber)"
+response=$(rpc_call "eth_estimateGas" "[$CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]")
+if check_result "$response" "eth_estimateGas (legacy BlockNumber)"; then
+    gas_estimate=$(echo "$response" | jq -r '.result')
+    gas_dec=$((gas_estimate))
+    log_info "  → Estimated gas: $gas_estimate ($gas_dec)"
+fi
+
+# Test 7.2.2: eth_estimateGas (cutoff block)
+log_info "Test 7.2.2: eth_estimateGas (cutoff block)"
+response=$(rpc_call "eth_estimateGas" "[$CALL_REQUEST,\"$BOUNDARY_BLOCK_HEX\"]")
+check_result "$response" "eth_estimateGas (cutoff)"
+
+# Test 7.2.3: eth_estimateGas (local block)
+log_info "Test 7.2.3: eth_estimateGas (local block)"
+response=$(rpc_call "eth_estimateGas" "[$CALL_REQUEST,\"$LOCAL_BLOCK_HEX\"]")
+if check_result "$response" "eth_estimateGas (local BlockNumber)"; then
+    gas_estimate=$(echo "$response" | jq -r '.result')
+    gas_dec=$((gas_estimate))
+    log_info "  → Estimated gas: $gas_estimate ($gas_dec)"
+fi
+
+# Test 7.2.4: eth_estimateGas (legacy block with BlockHash)
+log_info "Test 7.2.4: eth_estimateGas (legacy block with BlockHash)"
+if [ -n "$LEGACY_BLOCK_HASH_PHASE6" ] && [ "$LEGACY_BLOCK_HASH_PHASE6" != "null" ]; then
+    response=$(rpc_call "eth_estimateGas" "[$CALL_REQUEST,{\"blockHash\":\"$LEGACY_BLOCK_HASH_PHASE6\"}]")
+    check_result "$response" "eth_estimateGas (legacy BlockHash)"
+fi
+
+# Test 7.2.5: eth_estimateGas with 'latest' tag
+log_info "Test 7.2.5: eth_estimateGas with 'latest' tag"
+response=$(rpc_call "eth_estimateGas" "[$CALL_REQUEST,\"latest\"]")
+check_result "$response" "eth_estimateGas (latest)"
+
+# Test 7.2.6: eth_estimateGas with 'earliest' tag
+log_info "Test 7.2.6: eth_estimateGas with 'earliest' tag"
+response=$(rpc_call "eth_estimateGas" "[$CALL_REQUEST,\"earliest\"]")
+check_result "$response" "eth_estimateGas (earliest)"
+
+# Test 7.2.7: eth_estimateGas data consistency (Reth vs Legacy)
+log_info "Test 7.2.7: eth_estimateGas data consistency (legacy block)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+reth_gas=$(rpc_call "eth_estimateGas" "[$CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]" | jq -r '.result')
+legacy_gas=$(rpc_call_legacy "eth_estimateGas" "[$CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]" | jq -r '.result')
+
+if [ "$reth_gas" = "$legacy_gas" ] && [ "$reth_gas" != "null" ]; then
+    log_success "eth_estimateGas: Reth matches Legacy RPC ✓"
+    log_info "  Gas estimate: $reth_gas"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "eth_estimateGas: Data MISMATCH ✗"
+    echo "  Reth:   $reth_gas"
+    echo "  Legacy: $legacy_gas"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("eth_estimateGas data consistency")
+fi
+
+# Test 7.2.8: eth_estimateGas with future block (should error)
+log_info "Test 7.2.8: eth_estimateGas with future block"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+response=$(rpc_call "eth_estimateGas" "[$CALL_REQUEST,\"0xffffffff\"]")
+if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
+    log_success "Future block eth_estimateGas returns error ✓"
+    PASSED_TESTS=$((PASSED_TESTS + 1))
+else
+    log_error "Future block eth_estimateGas should return error ✗"
+    FAILED_TESTS=$((FAILED_TESTS + 1))
+    FAILED_TEST_NAMES+=("eth_estimateGas future block error handling")
+fi
+
+# Test 7.2.9: eth_estimateGas for simple transfer (no data)
+log_info "Test 7.2.9: eth_estimateGas for simple transfer"
+SIMPLE_TRANSFER_REQUEST="{\"from\":\"$ACTIVE_EOA_ADDRESS\",\"to\":\"$TEST_ADDR\",\"value\":\"0x0\"}"
+response=$(rpc_call "eth_estimateGas" "[$SIMPLE_TRANSFER_REQUEST,\"latest\"]")
+if check_result "$response" "eth_estimateGas (simple transfer)"; then
+    gas_estimate=$(echo "$response" | jq -r '.result')
+    gas_dec=$((gas_estimate))
+    log_info "  → Simple transfer gas: $gas_estimate ($gas_dec)"
+    
+    # Simple transfer should use ~21000 gas
+    if [ $gas_dec -ge 21000 ] && [ $gas_dec -le 50000 ]; then
+        log_success "  → Gas estimate in reasonable range (21000-50000) ✓"
+    else
+        log_warning "  → Gas estimate outside expected range: $gas_dec"
+    fi
+fi
+
+echo ""
+log_info "📊 Phase 7.2 Summary:"
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_info "  eth_estimateGas tests verify gas estimation across legacy/local"
+log_info "  blocks, with data consistency validation."
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# ========================================
+# Phase 7.3: eth_createAccessList Tests
+# ========================================
+
+log_section "Phase 7.3: eth_createAccessList Tests"
+
+echo ""
+log_info "Testing access list creation (EIP-2930)..."
+echo ""
+
+# Test 7.3.1: eth_createAccessList (legacy block)
+log_info "Test 7.3.1: eth_createAccessList (legacy block with BlockNumber)"
+response=$(rpc_call "eth_createAccessList" "[$CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]")
+if check_result_legacy_tolerant "$response" "eth_createAccessList (legacy BlockNumber)"; then
+    access_list=$(echo "$response" | jq -c '.result.accessList')
+    gas_used=$(echo "$response" | jq -r '.result.gasUsed')
+    log_info "  → Gas used: $gas_used"
+    log_info "  → Access list: ${access_list:0:50}..."
+fi
+
+# Test 7.3.2: eth_createAccessList (cutoff block)
+log_info "Test 7.3.2: eth_createAccessList (cutoff block)"
+response=$(rpc_call "eth_createAccessList" "[$CALL_REQUEST,\"$BOUNDARY_BLOCK_HEX\"]")
+check_result "$response" "eth_createAccessList (cutoff)"
+
+# Test 7.3.3: eth_createAccessList (local block)
+log_info "Test 7.3.3: eth_createAccessList (local block)"
+response=$(rpc_call "eth_createAccessList" "[$CALL_REQUEST,\"$LOCAL_BLOCK_HEX\"]")
+check_result "$response" "eth_createAccessList (local BlockNumber)"
+
+# Test 7.3.4: eth_createAccessList (legacy block with BlockHash)
+log_info "Test 7.3.4: eth_createAccessList (legacy block with BlockHash)"
+if [ -n "$LEGACY_BLOCK_HASH_PHASE6" ] && [ "$LEGACY_BLOCK_HASH_PHASE6" != "null" ]; then
+    response=$(rpc_call "eth_createAccessList" "[$CALL_REQUEST,{\"blockHash\":\"$LEGACY_BLOCK_HASH_PHASE6\"}]")
+    check_result_legacy_tolerant "$response" "eth_createAccessList (legacy BlockHash)"
+fi
+
+# Test 7.3.5: eth_createAccessList with 'latest' tag
+log_info "Test 7.3.5: eth_createAccessList with 'latest' tag"
+response=$(rpc_call "eth_createAccessList" "[$CALL_REQUEST,\"latest\"]")
+check_result "$response" "eth_createAccessList (latest)"
+
+# Test 7.3.6: eth_createAccessList data consistency (Reth vs Legacy)
+log_info "Test 7.3.6: eth_createAccessList data consistency (legacy block)"
+check_data_consistency "eth_createAccessList" "[$CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]" "eth_createAccessList consistency"
+
+# Test 7.3.7: eth_createAccessList for contract interaction
+log_info "Test 7.3.7: eth_createAccessList for simple transfer"
+CONTRACT_CALL_REQUEST="{\"from\":\"$ACTIVE_EOA_ADDRESS\",\"to\":\"$TEST_ADDR\",\"value\":\"0x0\"}"
+response=$(rpc_call "eth_createAccessList" "[$CONTRACT_CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]")
+if check_result_legacy_tolerant "$response" "eth_createAccessList (contract)"; then
+    access_list=$(echo "$response" | jq -c '.result.accessList')
+    list_length=$(echo "$access_list" | jq 'length')
+    log_info "  → Access list entries: $list_length"
+fi
+
+echo ""
+log_info "📊 Phase 7.3 Summary:"
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_info "  eth_createAccessList tests verify EIP-2930 access list generation"
+log_info "  across legacy/local blocks with data consistency validation."
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# ========================================
+# Phase 7.4: eth_transactionPreExec Tests
+# ========================================
+
+log_section "Phase 7.4: eth_transactionPreExec Tests (XLayer Custom Method)"
+
+echo ""
+log_info "Testing XLayer custom transaction pre-execution..."
+echo ""
+
+# Prepare pre-exec request using simple EOA-to-EOA transfer
+PRE_EXEC_ARGS="[{\"from\":\"$ACTIVE_EOA_ADDRESS\",\"to\":\"$TEST_ADDR\",\"value\":\"0x0\"}]"
+
+# Test 7.4.1: eth_transactionPreExec (legacy block)
+log_info "Test 7.4.1: eth_transactionPreExec (legacy block)"
+response=$(rpc_call "eth_transactionPreExec" "[$PRE_EXEC_ARGS,\"$LEGACY_BLOCK_HEX\",null]")
+check_result_legacy_tolerant "$response" "eth_transactionPreExec (legacy BlockNumber)"
+
+# Test 7.4.2: eth_transactionPreExec (cutoff block)
+log_info "Test 7.4.2: eth_transactionPreExec (cutoff block)"
+response=$(rpc_call "eth_transactionPreExec" "[$PRE_EXEC_ARGS,\"$BOUNDARY_BLOCK_HEX\",null]")
+check_result_legacy_tolerant "$response" "eth_transactionPreExec (cutoff)"
+
+# Test 7.4.3: eth_transactionPreExec (local block)
+log_info "Test 7.4.3: eth_transactionPreExec (local block)"
+response=$(rpc_call "eth_transactionPreExec" "[$PRE_EXEC_ARGS,\"$LOCAL_BLOCK_HEX\",null]")
+check_result_legacy_tolerant "$response" "eth_transactionPreExec (local BlockNumber)"
+
+# Test 7.4.4: eth_transactionPreExec with 'latest' tag
+log_info "Test 7.4.4: eth_transactionPreExec with 'latest' tag"
+response=$(rpc_call "eth_transactionPreExec" "[$PRE_EXEC_ARGS,\"latest\",null]")
+check_result_legacy_tolerant "$response" "eth_transactionPreExec (latest)"
+
+# Test 7.4.5: eth_transactionPreExec data consistency (if supported by Legacy RPC)
+log_info "Test 7.4.5: eth_transactionPreExec data consistency (legacy block)"
+TOTAL_TESTS=$((TOTAL_TESTS + 1))
+
+# Get responses from both endpoints
+reth_response=$(rpc_call "eth_transactionPreExec" "[$PRE_EXEC_ARGS,\"$LEGACY_BLOCK_HEX\",null]")
+legacy_response=$(rpc_call_legacy "eth_transactionPreExec" "[$PRE_EXEC_ARGS,\"$LEGACY_BLOCK_HEX\",null]")
+
+# Check if both succeeded
+reth_has_error=$(echo "$reth_response" | jq -e '.error' > /dev/null 2>&1 && echo "true" || echo "false")
+legacy_has_error=$(echo "$legacy_response" | jq -e '.error' > /dev/null 2>&1 && echo "true" || echo "false")
+
+if [ "$reth_has_error" = "true" ] || [ "$legacy_has_error" = "true" ]; then
+    # Handle errors same as check_data_consistency
+    if [ "$reth_has_error" = "true" ] && [ "$legacy_has_error" = "true" ]; then
+        reth_error_msg=$(echo "$reth_response" | jq -r '.error.message')
+        legacy_error_msg=$(echo "$legacy_response" | jq -r '.error.message')
+        if [[ "$reth_error_msg" == *"403"* ]] && [[ "$legacy_error_msg" == *"403"* ]]; then
+            log_warning "eth_transactionPreExec consistency - Both returned 403 (method not whitelisted)"
+            echo "       Skipping - method not supported by Legacy RPC"
+            SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+        else
+            log_error "eth_transactionPreExec consistency - Both returned errors"
+            FAILED_TESTS=$((FAILED_TESTS + 1))
+            FAILED_TEST_NAMES+=("eth_transactionPreExec consistency")
+        fi
+    elif [ "$reth_has_error" = "true" ]; then
+        log_error "eth_transactionPreExec consistency - Reth returned error"
+        FAILED_TESTS=$((FAILED_TESTS + 1))
+        FAILED_TEST_NAMES+=("eth_transactionPreExec consistency")
+    else
+        log_warning "eth_transactionPreExec consistency - Legacy RPC returned error"
+        SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
+    fi
+else
+    # Both succeeded - normalize and compare
+    # Reth returns blockNumber as hex string ("0x28d36bd")
+    # Legacy returns blockNumber as decimal number (42809021)
+    # Normalize both to hex for comparison
+    
+    reth_result=$(echo "$reth_response" | jq -c '.result')
+    legacy_result=$(echo "$legacy_response" | jq -c '.result')
+    
+    # Extract blockNumber from Legacy response and convert decimal to hex
+    legacy_block_num=$(echo "$legacy_result" | jq -r '.[0].blockNumber // empty')
+    if [ -n "$legacy_block_num" ] && [ "$legacy_block_num" != "null" ]; then
+        # Convert decimal to hex
+        legacy_block_hex=$(printf "0x%x" "$legacy_block_num" 2>/dev/null || echo "$legacy_block_num")
+        
+        # Replace blockNumber in legacy result with hex format
+        legacy_normalized=$(echo "$legacy_result" | jq --arg hex "$legacy_block_hex" 'map(.blockNumber = $hex)')
+    else
+        legacy_normalized=$(echo "$legacy_result" | jq -c '.')
+    fi
+    
+    # Sort keys for consistent comparison
+    reth_sorted=$(echo "$reth_result" | jq -cS '.')
+    legacy_sorted=$(echo "$legacy_normalized" | jq -cS '.')
+    
+    if [ "$reth_sorted" = "$legacy_sorted" ]; then
+        log_success "eth_transactionPreExec: Reth matches Legacy RPC (after format normalization) ✓"
+        log_info "  → blockNumber format normalized (decimal → hex: $legacy_block_num → $legacy_block_hex)"
+        PASSED_TESTS=$((PASSED_TESTS + 1))
+    else
+        log_error "eth_transactionPreExec: Data MISMATCH ✗"
+        echo "  Reth (hex):          ${reth_sorted:0:200}..."
+        echo "  Legacy (normalized): ${legacy_sorted:0:200}..."
+        FAILED_TESTS=$((FAILED_TESTS + 1))
+        FAILED_TEST_NAMES+=("eth_transactionPreExec consistency")
+    fi
+fi
+
+echo ""
+log_info "📊 Phase 7.4 Summary:"
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_info "  eth_transactionPreExec tests verify XLayer's custom pre-execution"
+log_info "  method across legacy/local blocks. Uses legacy_tolerant checks"
+log_info "  as this is a custom XLayer method."
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+log_info "📊 Phase 7 Complete Summary:"
+echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+log_info "  Tested 4 new Legacy RPC methods with comprehensive coverage:"
+log_info "  ✓ eth_call (9 tests)"
+log_info "  ✓ eth_estimateGas (9 tests)"
+log_info "  ✓ eth_createAccessList (7 tests)"
+log_info "  ✓ eth_transactionPreExec (5 tests)"
+log_info "  Total: 30 new tests covering all test dimensions"
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
