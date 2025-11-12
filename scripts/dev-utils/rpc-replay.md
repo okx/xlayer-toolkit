@@ -48,24 +48,80 @@ sudo apt-get install git docker.io curl jq expect
 
 ## Usage
 
-### Basic Usage
+### Two Modes of Operation
+
+#### Mode 1: Interactive Mode (Default)
+
+Run the script directly and answer prompts:
 
 ```bash
 cd /path/to/xlayer-toolkit
 ./scripts/dev-utils/rpc-replay.sh
 ```
 
+#### Mode 2: Non-Interactive Mode (Recommended for Long Runs)
+
+1. **Edit the configuration section** at the top of `rpc-replay.sh`:
+
+```bash
+vi scripts/dev-utils/rpc-replay.sh
+```
+
+2. **Fill in the configuration variables** (lines 15-39):
+
+```bash
+# Client type: "reth" or "geth"
+CLIENT_TYPE="reth"
+
+# Branch/tag for optimism repository
+OPTIMISM_BRANCH="v1.9.0"
+
+# Branch/tag for reth (if using reth)
+RETH_BRANCH="op-reth/v1.1.0"
+
+# L1 Ethereum endpoint (supports both RPC and Beacon API)
+L1_ENDPOINT="https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
+```
+
+3. **Run in background using screen**:
+
+```bash
+# Start new screen session
+screen -S rpc-replay
+
+# Run the script
+./scripts/dev-utils/rpc-replay.sh
+
+# Detach from session: Ctrl+A then D
+# The script continues running in background
+
+# Reattach later to check progress
+screen -r rpc-replay
+```
+
+Or **using tmux**:
+
+```bash
+# Start new tmux session
+tmux new -s rpc-replay
+
+# Run the script
+./scripts/dev-utils/rpc-replay.sh
+
+# Detach: Ctrl+B then D
+# Reattach: tmux attach -t rpc-replay
+```
+
 ### Interactive Prompts
 
-The script will prompt for:
+In interactive mode, the script will prompt for:
 
 1. **Client type** (`reth` or `geth`)
 2. **Optimism branch/tag** (e.g., `v1.9.0`, `main`)
 3. **Execution client branch/tag**:
    - For reth: `op-reth/v1.1.0`
    - For geth: `v1.101408.0`
-4. **L1 RPC URL** (Ethereum L1 endpoint)
-5. **L1 Beacon URL** (Ethereum beacon chain endpoint)
+4. **L1 Endpoint** (Ethereum L1 endpoint supporting both RPC and Beacon API)
 
 ### Example Session
 
@@ -91,8 +147,7 @@ Please provide the following information:
 1. Client type (reth/geth): reth
 2. Optimism branch/tag: v1.9.0
 3. Reth branch/tag: op-reth/v1.1.0
-4. L1 RPC URL: https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
-5. L1 Beacon URL: https://ethereum-beacon-api.publicnode.com
+4. L1 Endpoint (Ethereum RPC + Beacon): https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
 ✅ Input collection completed
 
 Step 3: Preparing source code repositories
@@ -204,8 +259,7 @@ Replay Summary
 ℹ️    Client Type: reth
 ℹ️    Optimism: v1.9.0
 ℹ️    Reth: op-reth/v1.1.0
-ℹ️    L1 RPC: https://eth-mainnet.g.alchemy.com/v2/...
-ℹ️    L1 Beacon: https://ethereum-beacon-api.publicnode.com
+ℹ️    L1 Endpoint: https://eth-mainnet.g.alchemy.com/v2/...
 
 ℹ️  Docker Images:
 ℹ️    op-stack:v1.9.0-a1b2c3d

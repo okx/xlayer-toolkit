@@ -6,6 +6,41 @@ set -e
 # Build and verify RPC node sync from scratch
 #######################################
 
+#######################################
+# Configuration Section
+# Fill in these variables for non-interactive mode
+# Leave empty for interactive prompts
+#######################################
+
+# Client type: "reth" or "geth"
+CLIENT_TYPE=""
+
+# Branch/tag for optimism repository (required)
+# Examples: "v1.9.0", "main", "develop"
+OPTIMISM_BRANCH=""
+
+# Branch/tag for reth repository (required if CLIENT_TYPE=reth)
+# Examples: "op-reth/v1.1.0", "main"
+RETH_BRANCH=""
+
+# Branch/tag for op-geth repository (required if CLIENT_TYPE=geth)
+# Examples: "v1.101408.0", "master"
+OP_GETH_BRANCH=""
+
+# L1 Ethereum endpoint (required)
+# This endpoint should support both execution layer RPC and beacon chain API
+# Examples: 
+#   - "https://eth-mainnet.g.alchemy.com/v2/YOUR_API_KEY"
+#   - "https://ethereum.publicnode.com"
+L1_ENDPOINT=""
+
+# Network type (default: mainnet)
+NETWORK_TYPE="mainnet"
+
+#######################################
+# End of Configuration Section
+#######################################
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="$(pwd)"
 RPC_SETUP_DIR="${SCRIPT_DIR}/../rpc-setup"
@@ -16,15 +51,6 @@ LOG_FILE="${WORK_DIR}/replay-$(date +%Y-%m-%d-%H%M%S).log"
 OPTIMISM_REPO="https://github.com/okx/optimism"
 RETH_REPO="https://github.com/okx/reth"
 OP_GETH_REPO="https://github.com/okx/op-geth"
-
-# User input variables
-CLIENT_TYPE=""
-OPTIMISM_BRANCH=""
-RETH_BRANCH=""
-OP_GETH_BRANCH=""
-L1_RPC_URL=""
-L1_BEACON_URL=""
-NETWORK_TYPE="mainnet"
 
 # Docker image tags
 OP_STACK_IMAGE_TAG=""
@@ -124,6 +150,49 @@ check_dependencies() {
 get_user_input() {
     log_step "Step 2: Collecting user input"
     
+    # Check if running in non-interactive mode (config filled in script)
+    if [ -n "$CLIENT_TYPE" ] && [ -n "$OPTIMISM_BRANCH" ] && [ -n "$L1_ENDPOINT" ]; then
+        
+        # Validate client-specific branch is set
+        if [ "$CLIENT_TYPE" = "reth" ] && [ -z "$RETH_BRANCH" ]; then
+            log_error "RETH_BRANCH is required when CLIENT_TYPE=reth"
+            log_error "Please fill in the configuration section at the top of the script"
+            exit 1
+        elif [ "$CLIENT_TYPE" = "geth" ] && [ -z "$OP_GETH_BRANCH" ]; then
+            log_error "OP_GETH_BRANCH is required when CLIENT_TYPE=geth"
+            log_error "Please fill in the configuration section at the top of the script"
+            exit 1
+        fi
+        
+        # Validate CLIENT_TYPE
+        if [[ ! "$CLIENT_TYPE" =~ ^(reth|geth)$ ]]; then
+            log_error "Invalid CLIENT_TYPE: $CLIENT_TYPE (must be 'reth' or 'geth')"
+            exit 1
+        fi
+        
+        # Validate URL
+        if [[ ! "$L1_ENDPOINT" =~ ^https?:// ]]; then
+            log_error "Invalid L1_ENDPOINT format (must start with http:// or https://)"
+            exit 1
+        fi
+        
+        log_info "Running in non-interactive mode (configuration from script)"
+        log "Client type: $CLIENT_TYPE"
+        log "Optimism branch: $OPTIMISM_BRANCH"
+        if [ "$CLIENT_TYPE" = "reth" ]; then
+            log "Reth branch: $RETH_BRANCH"
+        else
+            log "Op-geth branch: $OP_GETH_BRANCH"
+        fi
+        log "L1 Endpoint: $L1_ENDPOINT"
+        log_success "Configuration validated"
+        return 0
+    fi
+    
+    # Interactive mode
+    log_info "Configuration section is empty, entering interactive mode"
+    log_info "Tip: Fill in variables at the top of the script for non-interactive runs"
+    echo ""
     echo "Please provide the following information:"
     echo ""
     
@@ -154,22 +223,11 @@ get_user_input() {
         log "Op-geth branch: $OP_GETH_BRANCH"
     fi
     
-    # L1 RPC URL
+    # L1 Endpoint (both RPC and Beacon)
     while true; do
-        read -p "4. L1 RPC URL: " L1_RPC_URL
-        if [[ "$L1_RPC_URL" =~ ^https?:// ]]; then
-            log "L1 RPC URL: $L1_RPC_URL"
-            break
-        else
-            log_error "Please enter a valid HTTP/HTTPS URL"
-        fi
-    done
-    
-    # L1 Beacon URL
-    while true; do
-        read -p "5. L1 Beacon URL: " L1_BEACON_URL
-        if [[ "$L1_BEACON_URL" =~ ^https?:// ]]; then
-            log "L1 Beacon URL: $L1_BEACON_URL"
+        read -p "4. L1 Endpoint (Ethereum RPC + Beacon): " L1_ENDPOINT
+        if [[ "$L1_ENDPOINT" =~ ^https?:// ]]; then
+            log "L1 Endpoint: $L1_ENDPOINT"
             break
         else
             log_error "Please enter a valid HTTP/HTTPS URL"
@@ -410,11 +468,11 @@ send "mainnet\r"
 
 # L1 RPC URL
 expect "L1 RPC URL*"
-send "$L1_RPC_URL\r"
+send "$L1_ENDPOINT\r"
 
 # L1 Beacon URL
 expect "L1 Beacon URL*"
-send "$L1_BEACON_URL\r"
+send "$L1_ENDPOINT\r"
 
 # RPC client type
 expect "RPC client type*"
@@ -715,8 +773,7 @@ generate_report() {
     else
         log_info "  Op-geth: $OP_GETH_BRANCH"
     fi
-    log_info "  L1 RPC: $L1_RPC_URL"
-    log_info "  L1 Beacon: $L1_BEACON_URL"
+    log_info "  L1 Endpoint: $L1_ENDPOINT"
     echo ""
     
     log_info "Docker Images:"
