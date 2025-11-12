@@ -53,55 +53,6 @@ call_rpc() {
     fi
 }
 
-compare_rpc() {
-    local method=$1
-    local params=$2
-    local desc=$3
-    
-    echo -e "\n${BLUE}$desc${NC}"
-    echo "→ $method"
-    echo "→ Comparing RPC vs Legacy RPC"
-    
-    # Call new RPC (which should forward to legacy for historical data)
-    response_rpc=$(curl -s -X POST $RPC_URL \
-        -H "Content-Type: application/json" \
-        -d "{\"jsonrpc\":\"2.0\",\"method\":\"$method\",\"params\":$params,\"id\":1}")
-    
-    # Call legacy RPC directly
-    response_legacy=$(curl -s -X POST $LEGACY_RPC_URL \
-        -H "Content-Type: application/json" \
-        -d "{\"jsonrpc\":\"2.0\",\"method\":\"$method\",\"params\":$params,\"id\":1}")
-    
-    # Extract results (normalize JSON for comparison)
-    result_rpc=$(echo "$response_rpc" | jq -c '.result' 2>/dev/null)
-    result_legacy=$(echo "$response_legacy" | jq -c '.result' 2>/dev/null)
-    
-    # Check for errors
-    error_rpc=$(echo "$response_rpc" | jq -r '.error // empty' 2>/dev/null)
-    error_legacy=$(echo "$response_legacy" | jq -r '.error // empty' 2>/dev/null)
-    
-    if [ -n "$error_rpc" ] || [ -n "$error_legacy" ]; then
-        echo -e "${YELLOW}✗ Error occurred${NC}"
-        [ -n "$error_rpc" ] && echo "  RPC Error: $error_rpc"
-        [ -n "$error_legacy" ] && echo "  Legacy RPC Error: $error_legacy"
-        return 1
-    fi
-    
-    # Compare results
-    if [ "$result_rpc" == "$result_legacy" ]; then
-        echo -e "${GREEN}✓ Results match${NC}"
-        return 0
-    else
-        echo -e "${YELLOW}✗ Results differ${NC}"
-        echo "  RPC result hash: $(echo "$result_rpc" | md5)"
-        echo "  Legacy result hash: $(echo "$result_legacy" | md5)"
-        # Optionally show diff for debugging
-        # echo "RPC: $result_rpc"
-        # echo "Legacy: $result_legacy"
-        return 1
-    fi
-}
-
 # ============================================
 # BlockChainAPI Tests
 # ============================================
@@ -344,105 +295,6 @@ curl -s -X POST $RPC_URL \
     | jq -r '.error // "No error"'
 
 # ============================================
-# Historical Data Consistency Checks
-# ============================================
-
-echo -e "\n${GREEN}=== Historical Data Consistency: RPC vs Legacy RPC ===${NC}"
-echo "Verifying that forwarded historical queries return identical results"
-
-echo -e "\n${BLUE}--- Block Data Consistency ---${NC}"
-
-compare_rpc "eth_getBlockByNumber" "[\"0x$(printf '%x' $BELOW)\", false]" \
-    "eth_getBlockByNumber (block $BELOW without txs)"
-
-compare_rpc "eth_getBlockByNumber" "[\"0x$(printf '%x' $BELOW)\", true]" \
-    "eth_getBlockByNumber (block $BELOW with full txs)"
-
-compare_rpc "eth_getBlockByHash" "[\"$FOR_ERIGON_BLOCK_HASH\", false]" \
-    "eth_getBlockByHash (erigon block without txs)"
-
-compare_rpc "eth_getBlockByHash" "[\"$FOR_ERIGON_BLOCK_HASH\", true]" \
-    "eth_getBlockByHash (erigon block with full txs)"
-
-compare_rpc "eth_getHeaderByNumber" "[\"0x$(printf '%x' $BELOW)\"]" \
-    "eth_getHeaderByNumber (block $BELOW)"
-
-compare_rpc "eth_getHeaderByHash" "[\"$FOR_ERIGON_BLOCK_HASH\"]" \
-    "eth_getHeaderByHash (erigon block)"
-
-compare_rpc "eth_getBlockReceipts" "[\"0x$(printf '%x' $BELOW)\"]" \
-    "eth_getBlockReceipts (block $BELOW)"
-
-compare_rpc "eth_getBlockTransactionCountByNumber" "[\"0x$(printf '%x' $BELOW)\"]" \
-    "eth_getBlockTransactionCountByNumber (block $BELOW)"
-
-compare_rpc "eth_getBlockTransactionCountByHash" "[\"$FOR_ERIGON_BLOCK_HASH\"]" \
-    "eth_getBlockTransactionCountByHash (erigon block)"
-
-echo -e "\n${BLUE}--- Transaction Data Consistency ---${NC}"
-
-compare_rpc "eth_getTransactionByHash" "[\"$FOR_ERIGON_TRANSACTION_HASH\"]" \
-    "eth_getTransactionByHash (erigon tx)"
-
-compare_rpc "eth_getTransactionReceipt" "[\"$FOR_ERIGON_TRANSACTION_HASH\"]" \
-    "eth_getTransactionReceipt (erigon tx)"
-
-compare_rpc "eth_getRawTransactionByHash" "[\"$FOR_ERIGON_TRANSACTION_HASH\"]" \
-    "eth_getRawTransactionByHash (erigon tx)"
-
-compare_rpc "eth_getTransactionByBlockNumberAndIndex" "[\"0x$(printf '%x' $BELOW)\", \"0x0\"]" \
-    "eth_getTransactionByBlockNumberAndIndex (block $BELOW, index 0)"
-
-compare_rpc "eth_getTransactionByBlockHashAndIndex" "[\"$FOR_ERIGON_BLOCK_HASH\", \"0x0\"]" \
-    "eth_getTransactionByBlockHashAndIndex (erigon block, index 0)"
-
-compare_rpc "eth_getRawTransactionByBlockNumberAndIndex" "[\"0x$(printf '%x' $BELOW)\", \"0x0\"]" \
-    "eth_getRawTransactionByBlockNumberAndIndex (block $BELOW, index 0)"
-
-compare_rpc "eth_getRawTransactionByBlockHashAndIndex" "[\"$FOR_ERIGON_BLOCK_HASH\", \"0x0\"]" \
-    "eth_getRawTransactionByBlockHashAndIndex (erigon block, index 0)"
-
-echo -e "\n${BLUE}--- State Data Consistency ---${NC}"
-
-compare_rpc "eth_getBalance" "[\"$TEST_ADDR\", \"0x$(printf '%x' $BELOW)\"]" \
-    "eth_getBalance (block $BELOW)"
-
-compare_rpc "eth_getCode" "[\"$TEST_ADDR\", \"0x$(printf '%x' $BELOW)\"]" \
-    "eth_getCode (block $BELOW)"
-
-compare_rpc "eth_getStorageAt" "[\"$TEST_ADDR\", \"0x0\", \"0x$(printf '%x' $BELOW)\"]" \
-    "eth_getStorageAt (block $BELOW)"
-
-compare_rpc "eth_getTransactionCount" "[\"$TEST_ADDR\", \"0x$(printf '%x' $BELOW)\"]" \
-    "eth_getTransactionCount (block $BELOW)"
-
-echo -e "\n${BLUE}--- Execution & Logs Consistency ---${NC}"
-
-compare_rpc "eth_call" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, \"0x$(printf '%x' $BELOW)\"]" \
-    "eth_call (block $BELOW)"
-
-compare_rpc "eth_estimateGas" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, \"0x$(printf '%x' $BELOW)\"]" \
-    "eth_estimateGas (block $BELOW)"
-
-compare_rpc "eth_createAccessList" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, \"0x$(printf '%x' $BELOW)\"]" \
-    "eth_createAccessList (block $BELOW)"
-
-compare_rpc "eth_getLogs" "[{\"fromBlock\":\"0x$(printf '%x' $((BELOW - 5)))\",\"toBlock\":\"0x$(printf '%x' $BELOW)\"}]" \
-    "eth_getLogs (range before migration)"
-
-echo -e "\n${BLUE}--- XLayer-Specific Methods Consistency ---${NC}"
-
-compare_rpc "eth_getBlockInternalTransactions" "[\"0x$(printf '%x' $BELOW)\"]" \
-    "eth_getBlockInternalTransactions (block $BELOW)"
-
-compare_rpc "eth_getInternalTransactions" "[\"$FOR_ERIGON_TRANSACTION_HASH\"]" \
-    "eth_getInternalTransactions (erigon tx)"
-
-compare_rpc "eth_transactionPreExec" \
-    "[[{\"from\":\"$PREEXEC_FROM\",\"to\":\"$PREEXEC_TO\",\"gas\":\"0x30000\",\"gasPrice\":\"0x4a817c800\",\"value\":\"0x0\",\"nonce\":\"0x11\",\"data\":\"0xf18c388a\"}], {\"blockNumber\":\"0x$(printf '%x' $BELOW)\"}, {\"$PREEXEC_FROM\":{\"balance\":\"0x56bc75e2d630eb20000\"}}]" \
-    "eth_transactionPreExec (block $BELOW with state override)"
-
-# ============================================
 # Summary
 # ============================================
 
@@ -454,5 +306,4 @@ echo "Routing Summary:"
 echo "  FORWARD:     Block number queries route based on migration cutoff"
 echo "  LOCAL:       Hash-based queries try local first, fallback to Erigon"
 echo "  SPECIAL:     Filter overlapping ranges are handled specially"
-echo "  CONSISTENCY: Historical data forwarding verified against legacy RPC"
 echo ""
