@@ -226,20 +226,25 @@ check_data_consistency() {
             local legacy_error_code=$(echo "$legacy_response" | jq -r '.error.code // ""')
             
             # Check if both return 403 or "not whitelisted" errors
-            # Reth may return "403" or "Request rejected `403`"
-            # Legacy may return "not whitelisted" or error code -32601
+            # Reth may return "403" or "Request rejected `403`" or wrapped "-32601"
+            # Legacy may return "not whitelisted" or error code -32601 or -32000
             local reth_is_403=false
             local legacy_is_403=false
             
             # Check Reth error
-            if [[ "$reth_error_msg" == *"403"* ]] || [[ "$reth_error_msg" == *"not whitelisted"* ]]; then
+            # Reth might wrap Legacy's -32601 error in its own error message
+            if [[ "$reth_error_msg" == *"403"* ]] || \
+               [[ "$reth_error_msg" == *"not whitelisted"* ]] || \
+               [[ "$reth_error_msg" == *"-32601"* ]]; then
                 reth_is_403=true
             fi
             
             # Check Legacy error
             if [[ "$legacy_error_msg" == *"403"* ]] || \
                [[ "$legacy_error_msg" == *"not whitelisted"* ]] || \
-               [[ "$legacy_error_code" == "-32601" ]]; then
+               [[ "$legacy_error_msg" == *"-32601"* ]] || \
+               [[ "$legacy_error_code" == "-32601" ]] || \
+               [[ "$legacy_error_code" == "-32000" ]]; then
                 legacy_is_403=true
             fi
             
