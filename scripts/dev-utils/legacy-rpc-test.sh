@@ -3,7 +3,6 @@
 # Comprehensive RPC forwarding test
 # Usage: ./legacy-rpc-test.sh [migration_block]
 
-LEGACY_RPC_URL="http://localhost:18124"
 #RPC_URL="https://xlayerrpc.okx.com"
 RPC_URL="http://localhost:8545"
 MIGRATION_BLOCK=${1:-42810021}
