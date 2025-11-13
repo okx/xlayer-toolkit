@@ -15,8 +15,8 @@ Based on [op-geth migration RPC implementation](https://github.com/okx/op-geth/p
 |---|------------|--------|------|
 | 1 | `eth_getBlockByNumber` | ✅ | Supports BlockNumber, BlockTag |
 | 2 | `eth_getBlockByHash` | ✅ | Supports BlockHash |
-| 3 | `eth_getHeaderByNumber` | ⚠️ | Legacy RPC not whitelisted |
-| 4 | `eth_getHeaderByHash` | ⚠️ | Legacy RPC not whitelisted |
+| 3 | `eth_getHeaderByNumber` | ⚠️ | Legacy RPC not supported |
+| 4 | `eth_getHeaderByHash` | ⚠️ | Legacy RPC not supported |
 | 5 | `eth_getBlockReceipts` | ✅ | Supports BlockNumber, BlockHash, BlockTag |
 | 6 | `eth_getBlockTransactionCountByNumber` | ✅ | Supports BlockNumber, BlockTag |
 | 7 | `eth_getBlockTransactionCountByHash` | ✅ | Supports BlockHash |
