@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Comprehensive RPC forwarding test
-# Usage: ./sanity_check.sh [migration_block]
+# Usage: ./legacy-rpc-test.sh [migration_block]
 
 LEGACY_RPC_URL="http://localhost:18124"
 #RPC_URL="https://xlayerrpc.okx.com"
@@ -18,7 +18,8 @@ FOR_OP_TRANSACTION_HASH="0x9b52d72be301ae6928830be4a1cf25749f2d230a4bee940f1b55e
 PREEXEC_FROM="0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
 PREEXEC_TO="0x8ec198c4149280e4004a64531648640b862fb887"
 
-
+# Real contract address
+CONTRACT_ADDRESS="0x4AAaCCfe00090665Dd74C56Db013978891D142f4"
 
 echo "Testing RPC Forwarding (Migration Block: $MIGRATION_BLOCK)"
 echo "RPC URL: $RPC_URL"
@@ -105,23 +106,50 @@ call_rpc "eth_getStorageAt" "[\"$TEST_ADDR\", \"0x0\", \"latest\"]" \
 
 echo -e "\n${GREEN}=== BlockChainAPI: Call & Estimate ===${NC}"
 
+# eth_call tests
 call_rpc "eth_call" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, \"0x$(printf '%x' $BELOW)\"]" \
-    "eth_call (block $BELOW) → PROXY"
+    "eth_call (block number $BELOW) → PROXY"
+
+call_rpc "eth_call" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, {\"blockHash\":\"$FOR_ERIGON_BLOCK_HASH\"}]" \
+    "eth_call (erigon block hash) → fallback to PROXY"
 
 call_rpc "eth_call" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, \"latest\"]" \
     "eth_call (latest) → LOCAL"
 
+call_rpc "eth_call" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, {\"blockHash\":\"$FOR_OP_BLOCK_HASH\"}]" \
+    "eth_call (op-geth block hash) → LOCAL"
+
+# eth_estimateGas tests
 call_rpc "eth_estimateGas" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, \"0x$(printf '%x' $BELOW)\"]" \
-    "eth_estimateGas (block $BELOW) → PROXY"
+    "eth_estimateGas (block number $BELOW) → PROXY"
+
+call_rpc "eth_estimateGas" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, {\"blockHash\":\"$FOR_ERIGON_BLOCK_HASH\"}]" \
+    "eth_estimateGas (erigon block hash) → fallback to PROXY"
 
 call_rpc "eth_estimateGas" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, \"latest\"]" \
     "eth_estimateGas (latest) → LOCAL"
 
+call_rpc "eth_estimateGas" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, {\"blockHash\":\"$FOR_OP_BLOCK_HASH\"}]" \
+    "eth_estimateGas (op-geth block hash) → LOCAL"
+
+call_rpc "eth_estimateGas" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, \"0x$(printf '%x' $ABOVE)\"]" \
+    "eth_estimateGas (block number $ABOVE) → LOCAL"
+
+# eth_createAccessList tests
 call_rpc "eth_createAccessList" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, \"0x$(printf '%x' $BELOW)\"]" \
-    "eth_createAccessList (block $BELOW) → PROXY"
+    "eth_createAccessList (block number $BELOW) → PROXY"
+
+call_rpc "eth_createAccessList" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, {\"blockHash\":\"$FOR_ERIGON_BLOCK_HASH\"}]" \
+    "eth_createAccessList (erigon block hash) → fallback to PROXY"
 
 call_rpc "eth_createAccessList" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, \"latest\"]" \
     "eth_createAccessList (latest) → LOCAL"
+
+call_rpc "eth_createAccessList" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, {\"blockHash\":\"$FOR_OP_BLOCK_HASH\"}]" \
+    "eth_createAccessList (op-geth block hash) → LOCAL"
+
+call_rpc "eth_createAccessList" "[{\"to\":\"$TEST_ADDR\",\"data\":\"0x\"}, \"0x$(printf '%x' $ABOVE)\"]" \
+    "eth_createAccessList (block number $ABOVE) → LOCAL"
 
 echo -e "\n${GREEN}=== BlockChainAPI: Receipts ===${NC}"
 
@@ -135,11 +163,19 @@ echo -e "\n${GREEN}=== BlockChainAPI: TransactionPreExec (XLayer Specific) ===${
 
 call_rpc "eth_transactionPreExec" \
     "[[{\"from\":\"$PREEXEC_FROM\",\"to\":\"$PREEXEC_TO\",\"gas\":\"0x30000\",\"gasPrice\":\"0x4a817c800\",\"value\":\"0x0\",\"nonce\":\"0x11\",\"data\":\"0xf18c388a\"}], {\"blockNumber\":\"0x$(printf '%x' $BELOW)\"}, {\"$PREEXEC_FROM\":{\"balance\":\"0x56bc75e2d630eb20000\"}}]" \
-    "eth_transactionPreExec (block $BELOW with state override) → PROXY"
+    "eth_transactionPreExec (block number $BELOW with state override) → PROXY"
+
+call_rpc "eth_transactionPreExec" \
+    "[[{\"from\":\"$PREEXEC_FROM\",\"to\":\"$PREEXEC_TO\",\"gas\":\"0x30000\",\"gasPrice\":\"0x4a817c800\",\"value\":\"0x0\",\"nonce\":\"0x11\",\"data\":\"0xf18c388a\"}], {\"blockHash\":\"$FOR_ERIGON_BLOCK_HASH\"}, {\"$PREEXEC_FROM\":{\"balance\":\"0x56bc75e2d630eb20000\"}}]" \
+    "eth_transactionPreExec (erigon block hash with state override) → fallback to PROXY"
 
 call_rpc "eth_transactionPreExec" \
     "[[{\"from\":\"$PREEXEC_FROM\",\"to\":\"$PREEXEC_TO\",\"gas\":\"0x30000\",\"gasPrice\":\"0x4a817c800\",\"value\":\"0x0\",\"nonce\":\"0x11\",\"data\":\"0xf18c388a\"}], \"latest\", {\"$PREEXEC_FROM\":{\"balance\":\"0x56bc75e2d630eb20000\"}}]" \
     "eth_transactionPreExec (latest with state override) → LOCAL"
+
+call_rpc "eth_transactionPreExec" \
+    "[[{\"from\":\"$PREEXEC_FROM\",\"to\":\"$PREEXEC_TO\",\"gas\":\"0x30000\",\"gasPrice\":\"0x4a817c800\",\"value\":\"0x0\",\"nonce\":\"0x11\",\"data\":\"0xf18c388a\"}], {\"blockHash\":\"$FOR_OP_BLOCK_HASH\"}, {\"$PREEXEC_FROM\":{\"balance\":\"0x56bc75e2d630eb20000\"}}]" \
+    "eth_transactionPreExec (op-geth block hash with state override) → LOCAL"
 
 # ============================================
 # TransactionAPI Tests
@@ -238,12 +274,20 @@ call_rpc "eth_getLogs" "[{\"fromBlock\":\"0x$(printf '%x' $((BELOW - 5)))\",\"to
     "eth_getLogs (range before migration) → PROXY"
 
 # Test getLogs with range after migration
-call_rpc "eth_getLogs" "[{\"fromBlock\":\"0x$(printf '%x' $ABOVE)\",\"toBlock\":\"latest\"}]" \
+call_rpc "eth_getLogs" "[{\"fromBlock\":\"0x$(printf '%x' $MIGRATION_BLOCK)\",\"toBlock\":\"$ABOVE\"}]" \
     "eth_getLogs (range after migration) → LOCAL"
 
 # Test getLogs with overlapping range (should handle specially)
 call_rpc "eth_getLogs" "[{\"fromBlock\":\"0x$(printf '%x' $BELOW)\",\"toBlock\":\"0x$(printf '%x' $ABOVE)\"}]" \
     "eth_getLogs (overlapping range) → COMBINED"
+
+# Test getLogs with only contract address (no block range) - should run locally
+call_rpc "eth_getLogs" "[{\"address\":\"$CONTRACT_ADDRESS\"}]" \
+    "eth_getLogs (only contract address, no block range) → LOCAL"
+
+# Test getLogs with contract address and range before migration
+call_rpc "eth_getLogs" "[{\"address\":\"$CONTRACT_ADDRESS\",\"fromBlock\":\"0x$(printf '%x' $BELOW)\",\"toBlock\":\"0x$(printf '%x' $((BELOW + 5)))\"}]" \
+    "eth_getLogs (contract address with range before migration) → PROXY"
 
 echo -e "\n${GREEN}=== FilterAPI: Filter Management ===${NC}"
 
