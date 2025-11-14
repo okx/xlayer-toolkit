@@ -1,663 +1,767 @@
 #!/bin/bash
-# one-click-setup.sh
-# X Layer RPC Node One-Click Installation Script
-
 set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Debug mode: set to true to cache genesis files locally for faster re-runs
+DEBUG=true
+BRANCH="reth"
+REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/scripts/rpc-setup"
 
-# Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/main/scripts/rpc-setup"
-TEMP_DIR="/tmp/xlayer-setup-$$"
+WORK_DIR="$(pwd)"  # Working directory is where the user runs the script
 
-# Default values
-DEFAULT_NETWORK="testnet"
-DEFAULT_DATA_DIR="./data"
-DEFAULT_RPC_PORT="8545"
-DEFAULT_WS_PORT="8546"
-DEFAULT_NODE_RPC_PORT="9545"
-DEFAULT_GETH_P2P_PORT="30303"
-DEFAULT_NODE_P2P_PORT="9223"
+# Repository detection
+IN_REPO=false
+REPO_ROOT=""
+REPO_RPC_SETUP_DIR=""
 
-# Testnet configuration
-TESTNET_BOOTNODE_OP_NODE="enode://eaae9fe2fc758add65fe4cfd42918e898e16ab23294db88f0dcdbcab2773e75bbea6bfdaa42b3ed502dfbee1335c242c602078c4aa009264e4705caa20d3dca7@8.210.181.50:9223"
-TESTNET_P2P_STATIC="/ip4/47.242.219.101/tcp/9223/p2p/16Uiu2HAkwUdbn9Q7UBKQYRsfjm9SQX5Yc2e96HUz2pyR3cw1FZLv,/ip4/47.242.235.15/tcp/9223/p2p/16Uiu2HAmThDG9xMpADbyGo1oCU8fndztwNg1PH6A7yp1BhCk5jfE"
-TESTNET_OP_STACK_IMAGE="xlayer/op-node:0.0.9"
-TESTNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
-TESTNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.tar.gz"
-TESTNET_SEQUENCER_HTTP="https://testrpc.xlayer.tech"
-TESTNET_ROLLUP_CONFIG="rollup-testnet.json"
-TESTNET_GETH_CONFIG="op-geth-config-testnet.toml"
+# Detect if running from repository (check if docker-compose.yml exists in SCRIPT_DIR)
+detect_repository() {
+    if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
+        IN_REPO=true
+        REPO_RPC_SETUP_DIR="$SCRIPT_DIR"
+        REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+    fi
+}
 
-# Mainnet configuration
-MAINNET_BOOTNODE_OP_NODE="enode://c67d7f63c5483ab8311123d2997bfe6a8aac2b117a40167cf71682f8a3e37d3b86547c786559355c4c05ae0b1a7e7a1b8fde55050b183f96728d62e276467ce1@8.210.177.150:9223,enode://28e3e305b266e01226a7cc979ab692b22507784095157453ee0e34607bb3beac9a5b00f3e3d7d3ac36164612ca25108e6b79f75e3a9ecb54a0b3e7eb3e097d37@8.210.15.172:9223,enode://b5aa43622aad25c619650a0b7f8bb030161dfbfd5664233f92d841a33b404cea3ffffdc5bc8d6667c7dc212242a52f0702825c1e51612047f75c847ab96ef7a6@8.210.69.97:9223"
-MAINNET_P2P_STATIC="/ip4/47.242.38.0/tcp/9223/p2p/16Uiu2HAmH1AVhKWR29mb5s8Cubgsbh4CH1G86A6yoVtjrLWQgiY3,/ip4/8.210.153.12/tcp/9223/p2p/16Uiu2HAkuerkmQYMZxYiQYfQcPob9H7XHPwS7pd8opPTMEm2nsAp,/ip4/8.210.117.27/tcp/9223/p2p/16Uiu2HAmQEzn2WQj4kmWVrK9aQsfyQcETgXQKjcKGrTPsKcJBv7a"
-MAINNET_OP_STACK_IMAGE="xlayer/op-node:0.0.9"
-MAINNET_OP_GETH_IMAGE="xlayer/op-geth:0.0.6"
-MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.mainnet.tar.gz"
-MAINNET_SEQUENCER_HTTP="https://rpc.xlayer.tech"
-MAINNET_ROLLUP_CONFIG="rollup-mainnet.json"
-MAINNET_GETH_CONFIG="op-geth-config-mainnet.toml"
+# Load configuration from network-presets.env
+load_configuration() {
+    local config_file="$WORK_DIR/network-presets.env"
+    
+    # Try to get network-presets.env to current directory if not already present
+    if [ ! -f "$config_file" ]; then
+        if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/network-presets.env" ]; then
+            # Copy from local repository
+            cp "$REPO_RPC_SETUP_DIR/network-presets.env" "$config_file"
+            print_info "Using configuration from local repository"
+        else
+            # Download from GitHub
+            print_info "Downloading configuration file..."
+            local config_url="${REPO_URL}/network-presets.env"
+            if ! wget -q "$config_url" -O "$config_file" 2>/dev/null; then
+                print_error "Failed to download configuration file from GitHub"
+                print_info "This script requires network-specific configuration (bootnodes, image tags, etc.)"
+                print_info "Please ensure you have internet connectivity or run from within the repository"
+                exit 1
+            fi
+        fi
+    fi
+    
+    # Source the config file (will override built-in defaults)
+    source "$config_file"
+    print_success "Configuration loaded successfully"
+}
 
-# User input variables
+# User input variables (runtime values, not in config file)
 NETWORK_TYPE=""
+RPC_TYPE=""
 L1_RPC_URL=""
 L1_BEACON_URL=""
-DATA_DIR=""
+CHAINDATA_BASE=""  # User-specified chaindata base directory (will create ${NETWORK_TYPE}-${RPC_TYPE} subdirectory)
 RPC_PORT=""
 WS_PORT=""
 NODE_RPC_PORT=""
 GETH_P2P_PORT=""
 NODE_P2P_PORT=""
 
-# Function to print colored output
-print_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
+print_info() { echo -e "\033[0;34mℹ️  $1\033[0m"; }
+print_success() { echo -e "\033[0;32m✅ $1\033[0m"; }
+print_warning() { echo -e "\033[1;33m⚠️  $1\033[0m"; }
+print_error() { echo -e "\033[0;31m❌ $1\033[0m"; }
+print_prompt() { 
+    printf "\033[0;34m%s\033[0m" "$1" > /dev/tty
 }
 
-print_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-print_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-print_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
-
-print_header() {
-    echo -e "${BLUE}"
-    echo "=========================================="
-    echo "  X Layer RPC Node One-Click Setup"
-    echo "=========================================="
-    echo -e "${NC}"
-}
-
-# Function to load network-specific configuration
+# Load network-specific configuration dynamically
 load_network_config() {
     local network=$1
+    # Convert to uppercase using tr (more compatible)
+    local prefix=$(echo "$network" | tr '[:lower:]' '[:upper:]')
     
-    case "$network" in
-        testnet)
-            OP_NODE_BOOTNODE="$TESTNET_BOOTNODE_OP_NODE"
-            P2P_STATIC="$TESTNET_P2P_STATIC"
-            OP_STACK_IMAGE_TAG="$TESTNET_OP_STACK_IMAGE"
-            OP_GETH_IMAGE_TAG="$TESTNET_OP_GETH_IMAGE"
-            GENESIS_URL="$TESTNET_GENESIS_URL"
-            SEQUENCER_HTTP="$TESTNET_SEQUENCER_HTTP"
-            ROLLUP_CONFIG="$TESTNET_ROLLUP_CONFIG"
-            GETH_CONFIG="$TESTNET_GETH_CONFIG"
-            ;;
-        mainnet)
-            OP_NODE_BOOTNODE="$MAINNET_BOOTNODE_OP_NODE"
-            P2P_STATIC="$MAINNET_P2P_STATIC"
-            OP_STACK_IMAGE_TAG="$MAINNET_OP_STACK_IMAGE"
-            OP_GETH_IMAGE_TAG="$MAINNET_OP_GETH_IMAGE"
-            GENESIS_URL="$MAINNET_GENESIS_URL"
-            SEQUENCER_HTTP="$MAINNET_SEQUENCER_HTTP"
-            ROLLUP_CONFIG="$MAINNET_ROLLUP_CONFIG"
-            GETH_CONFIG="$MAINNET_GETH_CONFIG"
-            ;;
-        *)
-            print_error "Unknown network type: $network"
+    # Dynamically set variables based on network prefix
+    eval "OP_NODE_BOOTNODE=\${${prefix}_BOOTNODE_OP_NODE}"
+    eval "OP_GETH_BOOTNODE=\${${prefix}_GETH_BOOTNODE}"
+    eval "P2P_STATIC=\${${prefix}_P2P_STATIC}"
+    eval "OP_STACK_IMAGE_TAG=\${${prefix}_OP_STACK_IMAGE}"
+    eval "OP_GETH_IMAGE_TAG=\${${prefix}_OP_GETH_IMAGE}"
+    eval "OP_RETH_IMAGE_TAG=\${${prefix}_OP_RETH_IMAGE}"
+    eval "GENESIS_URL=\${${prefix}_GENESIS_URL}"
+    eval "SEQUENCER_HTTP=\${${prefix}_SEQUENCER_HTTP}"
+    eval "ROLLUP_CONFIG=\${${prefix}_ROLLUP_CONFIG}"
+    eval "GETH_CONFIG=\${${prefix}_GETH_CONFIG}"
+    eval "RETH_CONFIG=\${${prefix}_RETH_CONFIG}"
+    eval "LEGACY_RPC_URL=\${${prefix}_LEGACY_RPC_URL}"
+    eval "LEGACY_RPC_TIMEOUT=\${${prefix}_LEGACY_RPC_TIMEOUT}"
+    
+    # Validate that configuration was loaded
+    if [ -z "$OP_STACK_IMAGE_TAG" ]; then
+        print_error "Failed to load configuration for network: $network"
             exit 1
-            ;;
-    esac
+    fi
 }
 
+# Check if a command exists
+command_exists() {
+    command -v "$1" &> /dev/null
+}
 
-# Function to check system requirements
-check_system_requirements() {
-    print_info "Checking system requirements..."
+# Check Docker and Docker Compose
+check_docker() {
+    print_info "Checking Docker environment..."
     
     # Check Docker
-    if ! command -v docker &> /dev/null; then
+    if command_exists docker; then
+        local docker_version=$(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        echo "  ✓ docker ($docker_version)"
+    else
+        echo "  ✗ docker (missing)"
         print_error "Docker is not installed. Please install Docker 20.10+ first."
         print_info "Visit: https://docs.docker.com/get-docker/"
         exit 1
     fi
     
     # Check Docker Compose
-    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+    if command_exists docker-compose; then
+        local compose_version=$(docker-compose --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        echo "  ✓ docker-compose ($compose_version)"
+    elif docker compose version &> /dev/null; then
+        local compose_version=$(docker compose version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        echo "  ✓ docker compose ($compose_version)"
+    else
+        echo "  ✗ docker compose (missing)"
         print_error "Docker Compose is not installed. Please install Docker Compose 2.0+ first."
         print_info "Visit: https://docs.docker.com/compose/install/"
         exit 1
     fi
     
     # Check Docker daemon
-    if ! docker info &> /dev/null; then
+    if docker info &> /dev/null; then
+        echo "  ✓ docker daemon (running)"
+    else
+        echo "  ✗ docker daemon (not running)"
         print_error "Docker daemon is not running. Please start Docker first."
         exit 1
     fi
+}
     
-    # Check required tools
-    REQUIRED_TOOLS=("wget" "tar" "openssl")
-    for tool in "${REQUIRED_TOOLS[@]}"; do
-        if ! command -v "$tool" &> /dev/null; then
-            print_error "$tool is not installed. Please install it first."
+# Check required system tools
+check_required_tools() {
+    local missing_required=()
+    local missing_optional=()
+    
+    # Required tools
+    local required_tools=("wget" "tar" "openssl" "curl" "sed" "make")
+    
+    # Optional tools (script works without them but with degraded functionality)
+    local optional_tools=("jq")
+    
+    print_info "Checking required tools..."
+    for tool in "${required_tools[@]}"; do
+        if command_exists "$tool"; then
+            echo "  ✓ $tool"
+        else
+            missing_required+=("$tool")
+            echo "  ✗ $tool (missing)"
+        fi
+    done
+    
+    print_info "Checking optional tools..."
+    for tool in "${optional_tools[@]}"; do
+        if command_exists "$tool"; then
+            echo "  ✓ $tool"
+        else
+            missing_optional+=("$tool")
+            echo "  ⚠ $tool (optional, recommended)"
+        fi
+    done
+    
+    # Exit if required tools are missing
+    if [ ${#missing_required[@]} -gt 0 ]; then
+        print_error "Missing required tools: ${missing_required[*]}"
+        print_info "Please install them first. Example:"
+        echo "  # macOS:"
+        echo "  brew install ${missing_required[*]}"
+        echo ""
+        echo "  # Ubuntu/Debian:"
+        echo "  sudo apt-get install ${missing_required[*]}"
+        exit 1
+    fi
+    
+    # Warn if optional tools are missing
+    if [ ${#missing_optional[@]} -gt 0 ]; then
+        print_warning "Optional tools not found: ${missing_optional[*]}"
+        print_info "The script will work but some features may be slower"
+    fi
+}
+
+check_system_requirements() {
+    print_info "Checking system requirements..."
+    check_docker
+    check_required_tools
+    print_success "All system requirements satisfied"
+}
+
+# Get file from repository or download from GitHub
+get_file_from_source() {
+    local file=$1
+    local target_path="$WORK_DIR/$file"
+    
+    # If file already exists in work directory, skip
+    if [ -f "$target_path" ]; then
+        print_info "✓ Using existing $file"
+        return 0
+    fi
+    
+    # Try to copy from local repository
+    if [ "$IN_REPO" = true ]; then
+        local source_path="$REPO_RPC_SETUP_DIR/$file"
+        if [ -f "$source_path" ]; then
+            cp "$source_path" "$target_path"
+            print_success "Copied $file from local repository"
+            return 0
+        fi
+    fi
+    
+    # Download from GitHub
+    local url="${REPO_URL}/${file}"
+    print_info "Downloading $file from GitHub..."
+    if wget -q "$url" -O "$target_path"; then
+        print_success "Downloaded $file"
+        return 0
+    else
+        print_error "Failed to get $file"
+        return 1
+    fi
+}
+
+check_required_files() {
+    print_info "Checking required files..."
+    
+    local files=("Makefile" "docker-compose.yml")
+    
+    for file in "${files[@]}"; do
+        if ! get_file_from_source "$file"; then
+            print_error "Failed to get required file: $file"
             exit 1
         fi
     done
     
-    print_success "System requirements check completed"
+    print_success "Required files ready"
 }
 
-# Function to download configuration files
+# Get configuration files based on network and RPC type
 download_config_files() {
-    print_info "Downloading configuration files..."
+    print_info "Getting configuration files..."
     
-    # Create temporary directory
-    mkdir -p "$TEMP_DIR"
-    
-    # Load network-specific configuration to know which files to download
     load_network_config "$NETWORK_TYPE"
     
-    # Download configuration files based on network
-    local config_files=(
-        "config/$ROLLUP_CONFIG"
-        "config/$GETH_CONFIG"
-    )
+    # Determine CONFIG_DIR early using user-specified CHAINDATA_BASE
+    local config_dir="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}/config"
+    mkdir -p "$config_dir"
+    
+    local config_files=("config/$ROLLUP_CONFIG")
+    
+    # Add execution client config
+    [ "$RPC_TYPE" = "reth" ] && config_files+=("config/$RETH_CONFIG") || config_files+=("config/$GETH_CONFIG")
     
     for file in "${config_files[@]}"; do
-        print_info "Downloading $file..."
-        if ! wget -q "$REPO_URL/$file" -O "$TEMP_DIR/$(basename "$file")"; then
-            print_error "Failed to download $file"
-            print_info "If this is a mainnet config file, make sure it exists in the repository"
+        local filename=$(basename "$file")
+        local target="$config_dir/$filename"
+        
+        # Try to copy from local repository first
+        if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/$file" ]; then
+            cp "$REPO_RPC_SETUP_DIR/$file" "$target"
+            print_info "✓ Copied $filename from local repository"
+        else
+            # Download from GitHub
+            print_info "Downloading $filename from GitHub..."
+            if ! wget -q "$REPO_URL/$file" -O "$target"; then
+                print_error "Failed to get $file"
             exit 1
+            fi
         fi
     done
     
-    print_success "Configuration files downloaded successfully"
+    print_success "Configuration files ready"
 }
 
-# Function to get user input
+# Generic input prompt with validation
+prompt_input() {
+    local prompt_text=$1
+    local default_value=$2
+    local validator=$3
+    local result
+    
+    while true; do
+        print_prompt "$prompt_text"
+        read -r input </dev/tty
+        result="${input:-$default_value}"
+        
+        # If validator function provided, call it
+        if [ -n "$validator" ] && ! $validator "$result"; then
+            continue
+        fi
+        
+        echo "$result"
+        return 0
+    done
+}
+
+# Validators
+validate_network() {
+    [[ "$1" =~ ^(testnet|mainnet)$ ]] || { print_error "Invalid network type"; return 1; }
+}
+
+validate_rpc_type() {
+    [[ "$1" =~ ^(geth|reth)$ ]] || { print_error "Invalid RPC type"; return 1; }
+}
+
+validate_url() {
+    [[ "$1" =~ ^https?:// ]] || { print_error "Please enter a valid HTTP/HTTPS URL"; return 1; }
+}
+
+check_existing_data() {
+    local target_dir="$1"
+    
+    if [ ! -d "$target_dir" ]; then
+        return 0
+    fi
+    
+    print_warning "Existing data directory found: $target_dir"
+    echo ""
+    print_prompt "Do you want to delete it and start fresh? (yes/no) [default: no]: "
+    read -r response </dev/tty
+    response="${response:-no}"
+    
+    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
+        print_info "Removing existing directory: $target_dir"
+        if rm -rf "$target_dir"; then
+            print_success "Directory removed successfully"
+        else
+            print_error "Failed to remove directory"
+            exit 1
+        fi
+    else
+        echo ""
+        print_error "Cannot proceed with existing data directory"
+        print_info "Please manually remove the directory and re-run setup:"
+        print_info "  rm -rf $target_dir"
+        exit 1
+    fi
+}
+
 get_user_input() {
     print_info "Please provide the following information:"
     echo ""
     
-    # Check if running from pipe (curl | bash) - use defaults
-    if [ ! -t 0 ]; then
-        print_info "🚀 Auto-mode: Using default configuration"
-        NETWORK_TYPE="$DEFAULT_NETWORK"
-        L1_RPC_URL="https://placeholder-l1-rpc-url"
-        L1_BEACON_URL="https://placeholder-l1-beacon-url"
-        DATA_DIR="data-${NETWORK_TYPE}"
-        RPC_PORT="$DEFAULT_RPC_PORT"
-        WS_PORT="$DEFAULT_WS_PORT"
-        NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
-        GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
-        NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
-        print_warning "⚠️  L1 URLs will need to be configured after setup"
-        return 0
-    fi
+    # Interactive mode (works even with curl | bash via /dev/tty)
+    # Step 1: Network type
+    NETWORK_TYPE=$(prompt_input "1. Network type (testnet/mainnet) [default: $DEFAULT_NETWORK]: " "$DEFAULT_NETWORK" "validate_network")
     
-    # Network type selection
+    # Step 2-3: L1 URLs (required)
     while true; do
-        echo -n "1. Network type (testnet/mainnet) [default: $DEFAULT_NETWORK]: "
-        read -r input
-        NETWORK_TYPE="${input:-$DEFAULT_NETWORK}"
-        
-        if [[ "$NETWORK_TYPE" == "testnet" || "$NETWORK_TYPE" == "mainnet" ]]; then
-            break
-        else
-            print_error "Invalid network type. Please enter 'testnet' or 'mainnet'"
-        fi
+        print_prompt "2. L1 RPC URL (Ethereum L1 RPC endpoint): "
+        read -r L1_RPC_URL </dev/tty
+        [ -n "$L1_RPC_URL" ] && validate_url "$L1_RPC_URL" && break
     done
     
-    # L1 RPC URL
     while true; do
-        echo -n "2. L1 RPC URL (Ethereum L1 RPC endpoint): "
-        read -r L1_RPC_URL
-        if [[ -n "$L1_RPC_URL" ]]; then
-            # Basic URL validation
-            if [[ "$L1_RPC_URL" =~ ^https?:// ]]; then
-                break
-            else
-                print_error "Please enter a valid HTTP/HTTPS URL"
-            fi
-        else
-            print_error "L1 RPC URL is required"
-        fi
+        print_prompt "3. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
+        read -r L1_BEACON_URL </dev/tty
+        [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
     done
     
-    # L1 Beacon URL
-    while true; do
-        echo -n "3. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
-        read -r L1_BEACON_URL
-        if [[ -n "$L1_BEACON_URL" ]]; then
-            # Basic URL validation
-            if [[ "$L1_BEACON_URL" =~ ^https?:// ]]; then
-                break
-            else
-                print_error "Please enter a valid HTTP/HTTPS URL"
-            fi
-        else
-            print_error "L1 Beacon URL is required"
-        fi
-    done
+    # Step 4: RPC client type
+    RPC_TYPE=$(prompt_input "4. RPC client type (geth/reth) [default: geth]: " "geth" "validate_rpc_type")
+    
+    # Use current directory for data
+    CHAINDATA_BASE="./chaindata"
+    local full_path="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
+    
+    # Check existing data directory
+    echo ""
+    check_existing_data "$full_path"
     
     # Optional configurations
     echo ""
     print_info "Optional configurations (press Enter to use defaults):"
     
-    # Set default data directory based on network type
-    DEFAULT_NETWORK_DATA_DIR="data-${NETWORK_TYPE}"
-    echo -n "4. Data directory [default: $DEFAULT_NETWORK_DATA_DIR]: "
-    read -r input
-    DATA_DIR="${input:-$DEFAULT_NETWORK_DATA_DIR}"
-    
-    echo -n "5. RPC port [default: $DEFAULT_RPC_PORT]: "
-    read -r input
-    RPC_PORT="${input:-$DEFAULT_RPC_PORT}"
-    
-    echo -n "6. WebSocket port [default: $DEFAULT_WS_PORT]: "
-    read -r input
-    WS_PORT="${input:-$DEFAULT_WS_PORT}"
-    
-    echo -n "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: "
-    read -r input
-    NODE_RPC_PORT="${input:-$DEFAULT_NODE_RPC_PORT}"
-    
-    echo -n "8. Geth P2P port [default: $DEFAULT_GETH_P2P_PORT]: "
-    read -r input
-    GETH_P2P_PORT="${input:-$DEFAULT_GETH_P2P_PORT}"
-    
-    echo -n "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: "
-    read -r input
-    NODE_P2P_PORT="${input:-$DEFAULT_NODE_P2P_PORT}"
+    RPC_PORT=$(prompt_input "5. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "")
+    WS_PORT=$(prompt_input "6. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "")
+    NODE_RPC_PORT=$(prompt_input "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "")
+    GETH_P2P_PORT=$(prompt_input "8. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "")
+    NODE_P2P_PORT=$(prompt_input "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "")
     
     print_success "Configuration input completed"
 }
 
-# Function to generate configuration files
+generate_or_verify_jwt() {
+    local jwt_file=$1
+    
+    print_info "Checking JWT secret..."
+    
+    # Generate if not exists
+    if [ ! -s "$jwt_file" ]; then
+        openssl rand -hex 32 | tr -d '\n' > "$jwt_file"
+        print_success "JWT secret generated"
+        return 0
+    fi
+    
+    # Verify existing JWT format (should be 64 hex characters)
+    local jwt_content=$(cat "$jwt_file" 2>/dev/null | tr -d '\n\r ' || echo "")
+    if [ ${#jwt_content} -ne 64 ]; then
+        print_warning "JWT file has incorrect format (expected 64 hex chars, got ${#jwt_content}), regenerating..."
+        openssl rand -hex 32 | tr -d '\n' > "$jwt_file"
+        print_success "JWT secret regenerated"
+    else
+        print_info "Using existing JWT secret"
+    fi
+}
+
 generate_config_files() {
     print_info "Generating configuration files..."
     
-    # Create working directory
-    WORK_DIR="$SCRIPT_DIR"
-    cd "$WORK_DIR"
-    
-    # Load network-specific configuration
+    cd "$WORK_DIR" || exit 1
     load_network_config "$NETWORK_TYPE"
     
-    # Network-specific directories (only set if not already set by user input)
-    DATA_DIR="${DATA_DIR:-data-${NETWORK_TYPE}}"
-    CONFIG_DIR="config-${NETWORK_TYPE}"
-    GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-    LOGS_DIR="logs-${NETWORK_TYPE}"
-    
-    # Create necessary directories
-    mkdir -p "$CONFIG_DIR" "$DATA_DIR/op-node/p2p" "$LOGS_DIR/op-geth" "$LOGS_DIR/op-node"
-    
-    # Generate JWT secret for this network
-    print_info "Generating JWT secret for $NETWORK_TYPE..."
-    if [ ! -s "$CONFIG_DIR/jwt.txt" ]; then
-        openssl rand -hex 32 | tr -d '\n' > "$CONFIG_DIR/jwt.txt"
-        print_success "JWT secret generated at $CONFIG_DIR/jwt.txt"
+    # Set execution client specific variables
+    if [ "$RPC_TYPE" = "reth" ]; then
+        EXEC_IMAGE_TAG="$OP_RETH_IMAGE_TAG"
+        EXEC_CONFIG="$RETH_CONFIG"
+        EXEC_CLIENT="op-reth"
     else
-        print_info "Using existing JWT secret from $CONFIG_DIR/jwt.txt"
+        EXEC_IMAGE_TAG="$OP_GETH_IMAGE_TAG"
+        EXEC_CONFIG="$GETH_CONFIG"
+        EXEC_CLIENT="op-geth"
     fi
     
-    # Verify JWT file format
-    JWT_CONTENT=$(cat "$CONFIG_DIR/jwt.txt" 2>/dev/null | tr -d '\n\r ' || echo "")
-    if [ ${#JWT_CONTENT} -ne 64 ]; then
-        print_warning "JWT file has incorrect format (expected 64 hex chars, got ${#JWT_CONTENT}), regenerating..."
-        openssl rand -hex 32 | tr -d '\n' > "$CONFIG_DIR/jwt.txt"
-        print_success "JWT secret regenerated"
+    # CHAINDATA_BASE is specified by user, create ${NETWORK_TYPE}-${RPC_TYPE} subdirectory
+    local full_chaindata_dir="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
+    DATA_DIR="${full_chaindata_dir}/data"
+    CONFIG_DIR="${full_chaindata_dir}/config"
+    LOGS_DIR="${full_chaindata_dir}/logs"
+    GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
+    
+    # Create directory structure
+    mkdir -p "$CONFIG_DIR" "$LOGS_DIR" "$DATA_DIR/op-node/p2p"
+    
+    # Create execution client specific data directory
+    if [ "$RPC_TYPE" = "reth" ]; then
+        mkdir -p "$DATA_DIR/op-reth"
+    else
+        mkdir -p "$DATA_DIR/op-geth"
     fi
+    
+    # Generate and verify JWT
+    generate_or_verify_jwt "$CONFIG_DIR/jwt.txt"
+    
+    # Note: Configuration files are already downloaded to CONFIG_DIR by download_config_files()
     
     # Generate .env file
+    generate_env_file
+    
+    print_success "Configuration files generated"
+}
+
+generate_env_file() {
     print_info "Generating .env file..."
+    
+    # Determine L2 engine URL based on RPC type (use service name, not container name)
+    local l2_engine_url
+    if [ "$RPC_TYPE" = "reth" ]; then
+        l2_engine_url="http://op-reth:8552"
+    else
+        l2_engine_url="http://op-geth:8552"
+    fi
+    
+    # Determine chain name based on network type
+    local chain_name="xlayer-${NETWORK_TYPE}"
+    
     cat > .env << EOF
-# X Layer $NETWORK_TYPE Configuration
+# X Layer RPC Node Configuration
+# Generated by one-click-setup.sh
+
+# Network Configuration
+NETWORK_TYPE=$NETWORK_TYPE
+RPC_TYPE=$RPC_TYPE
+CHAIN_NAME=$chain_name
+
+# Directory Configuration
+CHAINDATA_BASE=$CHAINDATA_BASE
+
+# L2 Engine URL (Docker Compose service name)
+L2_ENGINE_URL=$l2_engine_url
+
+# L1 Configuration
 L1_RPC_URL=$L1_RPC_URL
 L1_BEACON_URL=$L1_BEACON_URL
 
-# Bootnode Configuration (only for OP-Node)
+# Bootnode Configuration  
 OP_NODE_BOOTNODE=$OP_NODE_BOOTNODE
+OP_GETH_BOOTNODE=$OP_GETH_BOOTNODE
+P2P_STATIC_PEERS=$P2P_STATIC
 
 # Docker Image Tags
 OP_STACK_IMAGE_TAG=$OP_STACK_IMAGE_TAG
 OP_GETH_IMAGE_TAG=$OP_GETH_IMAGE_TAG
+OP_RETH_IMAGE_TAG=$OP_RETH_IMAGE_TAG
+
+# Port Configuration
+HTTP_RPC_PORT=${RPC_PORT:-8123}
+WEBSOCKET_PORT=${WS_PORT:-8546}
+ENGINE_API_PORT=8552
+NODE_RPC_PORT=${NODE_RPC_PORT:-9545}
+P2P_TCP_PORT=${GETH_P2P_PORT:-30303}
+P2P_UDP_PORT=${GETH_P2P_PORT:-30303}
+NODE_P2P_PORT=${NODE_P2P_PORT:-9223}
+
+# Sequencer HTTP URL
+SEQUENCER_HTTP_URL=$SEQUENCER_HTTP
+
+# Legacy RPC Configuration
+LEGACY_RPC_URL=$LEGACY_RPC_URL
+LEGACY_RPC_TIMEOUT=$LEGACY_RPC_TIMEOUT
 EOF
     
-    # Copy configuration files from temp directory
-    cp "$TEMP_DIR/$ROLLUP_CONFIG" "$CONFIG_DIR/"
-    cp "$TEMP_DIR/$GETH_CONFIG" "$CONFIG_DIR/"
-    
-    # Generate docker-compose.yml with custom ports
-    print_info "Generating docker-compose.yml with custom ports..."
-    cat > docker-compose.yml << EOF
-version: '3.8'
-
-networks:
-  xlayer-network:
-    name: xlayer-network
-
-services:
-  op-geth:
-    image: "\${OP_GETH_IMAGE_TAG}"
-    container_name: xlayer-${NETWORK_TYPE}-op-geth
-    entrypoint: geth
-    ports:
-      - "$RPC_PORT:8545"   # HTTP RPC
-      - "8552:8552"
-      - "$WS_PORT:7546"     # WebSocket
-      - "$GETH_P2P_PORT:30303" # P2P TCP
-      - "$GETH_P2P_PORT:30303/udp" # P2P UDP
-    volumes:
-      - ./$DATA_DIR:/data
-      - ./$CONFIG_DIR/jwt.txt:/jwt.txt
-      - ./$CONFIG_DIR/$GETH_CONFIG:/config.toml
-      - ./$LOGS_DIR/op-geth:/var/log/op-geth
-    command:
-      - --verbosity=3
-      - --datadir=/data
-      - --config=/config.toml
-      - --db.engine=pebble
-      - --gcmode=archive
-      - --rollup.enabletxpooladmission
-      - --rollup.sequencerhttp=$SEQUENCER_HTTP
-      - --log.file=/var/log/op-geth/geth.log
-    networks:
-      - xlayer-network
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
-      interval: 3s
-      timeout: 3s
-      retries: 10
-      start_period: 3s
-
-  op-node:
-    image: "\${OP_STACK_IMAGE_TAG}"
-    container_name: xlayer-${NETWORK_TYPE}-op-node
-    entrypoint: sh
-    networks:
-      - xlayer-network
-    ports:
-      - "$NODE_RPC_PORT:9545"
-    volumes:
-      - ./$DATA_DIR/op-node:/data
-      - ./$CONFIG_DIR/$ROLLUP_CONFIG:/rollup.json
-      - ./$CONFIG_DIR/jwt.txt:/jwt.txt
-      - ./$LOGS_DIR/op-node:/var/log/op-node
-    command:
-      - -c
-      - |
-        exec /app/op-node/bin/op-node \\
-          --log.level=info \\
-          --l2=http://op-geth:8552 \\
-          --l2.jwt-secret=/jwt.txt \\
-          --sequencer.enabled=false \\
-          --verifier.l1-confs=1 \\
-          --rollup.config=/rollup.json \\
-          --rpc.addr=0.0.0.0 \\
-          --rpc.port=9545 \\
-          --p2p.listen.tcp=$NODE_P2P_PORT \\
-          --p2p.listen.udp=$NODE_P2P_PORT \\
-          --p2p.peerstore.path=/data/p2p/opnode_peerstore_db \\
-          --p2p.discovery.path=/data/p2p/opnode_discovery_db \\
-          --p2p.bootnodes=$OP_NODE_BOOTNODE \\
-          --p2p.static=$P2P_STATIC \\
-          --rpc.enable-admin=true \\
-          --l1.trustrpc \\
-          --l1=\${L1_RPC_URL} \\
-          --l1.beacon=\${L1_BEACON_URL} \\
-          --l1.rpckind=standard \\
-          --conductor.enabled=false \\
-          --safedb.path=/data/safedb \\
-          2>&1 | tee /var/log/op-node/op-node.log
-    depends_on:
-      - op-geth
-EOF
-    
-    print_success "Configuration files generated successfully"
+    print_success ".env file generated"
 }
 
-# Function to initialize the node
-initialize_node() {
-    print_info "Initializing X Layer RPC node..."
+download_genesis() {
+    local genesis_url=$1
+    local network=$2
     
-    # Load network configuration
-    load_network_config "$NETWORK_TYPE"
+    # Unified genesis filename with network type
+    local genesis_file="genesis-${network}.tar.gz"
     
-    # Check if data directory already exists and has geth data
-    if [ -d "$DATA_DIR/geth" ]; then
-        print_warning "Data directory $DATA_DIR already contains a geth database."
-        print_warning "This might be initialized for a different network."
-        read -p "Do you want to remove the existing data and reinitialize? (y/N): " -r
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            print_info "Cleaning up old data directory..."
-            rm -rf "$DATA_DIR"
-            # Recreate necessary directories
-            mkdir -p "$DATA_DIR/op-node/p2p"
-            print_success "Old data removed"
-        else
-            print_info "Keeping existing data directory"
-        fi
+    print_info "Preparing genesis file for $network..."
+    
+    # DEBUG mode: check if file already exists
+    if [ "$DEBUG" = "true" ] && [ -f "$genesis_file" ]; then
+        local file_size=$(du -h "$genesis_file" 2>/dev/null | cut -f1 || echo "unknown")
+        print_success "Using cached genesis: $genesis_file ($file_size)"
+        print_info "DEBUG mode: Skip download, reusing existing file"
+        return 0
     fi
     
-    # Download the genesis file
-    print_info "Downloading genesis file from $GENESIS_URL..."
-    wget -c "$GENESIS_URL" -O genesis.tar.gz
+    # Download genesis file
+    if [ "$DEBUG" = "true" ]; then
+        print_info "DEBUG mode: Downloading (will be kept for next run)..."
+    else
+        print_info "Downloading (will be cleaned up after use)..."
+    fi
     
-    # Extract the genesis file
+    if ! wget -c "$genesis_url" -O "$genesis_file"; then
+        print_error "Failed to download genesis file"
+        rm -f "$genesis_file"  # Clean up failed download
+        exit 1
+    fi
+    
+    if [ "$DEBUG" = "true" ]; then
+        print_success "Downloaded and cached: $genesis_file"
+        else
+        print_success "Downloaded: $genesis_file"
+    fi
+}
+
+extract_genesis() {
+    local target_dir=$1
+    local target_file=$2
+    
+    # Get genesis filename (consistent with download_genesis)
+    local genesis_file="genesis-${NETWORK_TYPE}.tar.gz"
+    
     print_info "Extracting genesis file..."
-    tar -xzf genesis.tar.gz -C "$CONFIG_DIR/"
     
-    # Handle different genesis file names and rename to network-specific name
-    if [ -f "$CONFIG_DIR/merged.genesis.json" ]; then
-        mv "$CONFIG_DIR/merged.genesis.json" "$CONFIG_DIR/$GENESIS_FILE"
-    elif [ -f "$CONFIG_DIR/genesis.json" ]; then
-        mv "$CONFIG_DIR/genesis.json" "$CONFIG_DIR/$GENESIS_FILE"
+    if ! tar -xzf "$genesis_file" -C "$target_dir/"; then
+        print_error "Failed to extract genesis file"
+        rm -f "$genesis_file"
+        exit 1
+    fi
+    
+    # Handle different genesis file names
+    if [ -f "$target_dir/merged.genesis.json" ]; then
+        mv "$target_dir/merged.genesis.json" "$target_dir/$target_file"
+    elif [ -f "$target_dir/genesis.json" ]; then
+        mv "$target_dir/genesis.json" "$target_dir/$target_file"
     else
         print_error "Failed to find genesis.json in the archive"
+        rm -f "$genesis_file"
         exit 1
     fi
     
-    # Clean up the downloaded archive
-    print_info "Cleaning up downloaded archive..."
-    rm genesis.tar.gz
-    
-    # Check if genesis file exists
-    if [ ! -f "$CONFIG_DIR/$GENESIS_FILE" ]; then
-        print_error "Failed to extract genesis file"
-        exit 1
-    fi
-    
-    print_success "Genesis file extracted successfully to $CONFIG_DIR/$GENESIS_FILE"
-    
-    # Verify genesis file chain ID matches network configuration
-    print_info "Verifying genesis file chain ID..."
-    if command -v jq &> /dev/null; then
-        GENESIS_CHAIN_ID=$(jq -r '.config.chainId // .chainId' "$CONFIG_DIR/$GENESIS_FILE" 2>/dev/null || echo "")
-        if [ -n "$GENESIS_CHAIN_ID" ]; then
-            print_info "Genesis file chain ID: $GENESIS_CHAIN_ID"
-            # Validate against expected chain IDs
-            if [ "$NETWORK_TYPE" == "testnet" ] && [ "$GENESIS_CHAIN_ID" != "1952" ]; then
-                print_error "Genesis file chain ID mismatch! Expected 1952 (testnet), got $GENESIS_CHAIN_ID"
-                exit 1
-            elif [ "$NETWORK_TYPE" == "mainnet" ] && [ "$GENESIS_CHAIN_ID" != "196" ]; then
-                print_error "Genesis file chain ID mismatch! Expected 196 (mainnet), got $GENESIS_CHAIN_ID"
-                exit 1
-            fi
-            print_success "Genesis file chain ID verified"
-        else
-            print_warning "Could not read chain ID from genesis file, skipping verification"
-        fi
+    # Non-DEBUG mode: clean up temporary file
+    if [ "$DEBUG" != "true" ]; then
+        rm -f "$genesis_file"
+        print_info "Cleaned up temporary genesis file"
     else
-        print_warning "jq not found, skipping chain ID verification"
+        print_info "Kept genesis file for future use: $genesis_file"
     fi
     
-    # Initialize op-geth with the genesis file
-    print_info "Initializing op-geth with genesis file... (This may take a while, please wait patiently.)"
-    docker run --rm \
-        -v "$(pwd)/$DATA_DIR:/data" \
-        -v "$(pwd)/$CONFIG_DIR/$GENESIS_FILE:/genesis.json" \
-        "$OP_GETH_IMAGE_TAG" \
+    if [ ! -f "$target_dir/$target_file" ]; then
+        print_error "Genesis file not found after extraction"
+        exit 1
+    fi
+    
+    print_success "Genesis file extracted to $target_dir/$target_file"
+}
+
+init_geth() {
+    local data_dir=$1
+    local genesis_file=$2
+    
+    # Convert to absolute paths
+    if [[ ! "$data_dir" = /* ]]; then
+        data_dir="$(pwd)/$data_dir"
+    fi
+    if [[ ! "$genesis_file" = /* ]]; then
+        genesis_file="$(pwd)/$genesis_file"
+    fi
+    
+    print_info "Initializing op-geth... (This may take a while)"
+    
+    if ! docker run --rm \
+        -v "$data_dir:/data" \
+        -v "$genesis_file:/genesis.json" \
+        "${OP_GETH_IMAGE_TAG}" \
         --datadir /data \
         --gcmode=archive \
         --db.engine=pebble \
         --log.format json \
         init \
         --state.scheme=hash \
-        /genesis.json
-    
-    print_success "X Layer RPC node initialization completed"
-}
-
-# Function to start services
-start_services() {
-    print_info "Starting Docker services..."
-    
-    # Load network configuration to ensure CONFIG_DIR is set
-    load_network_config "$NETWORK_TYPE"
-    CONFIG_DIR="config-${NETWORK_TYPE}"
-    
-    # Verify JWT file exists
-    if [ ! -f "$CONFIG_DIR/jwt.txt" ]; then
-        print_error "JWT file not found at $CONFIG_DIR/jwt.txt"
-        print_info "Please run the setup script again to generate JWT secret"
+        /genesis.json; then
+        print_error "Failed to initialize op-geth"
         exit 1
     fi
     
-    # Start services
-    docker compose up -d
-    
-    # Wait for services to start
-    print_info "Waiting for services to start..."
-    sleep 15
-    
-    # Check service status
-    print_info "Checking service status..."
-    docker compose ps
-    
-    print_success "X Layer RPC node startup completed"
+    print_success "op-geth initialized successfully"
 }
 
-# Function to verify installation
-verify_installation() {
-    print_info "Verifying installation..."
+init_reth() {
+    local data_dir=$1
+    local genesis_file=$2
     
-    # Wait a bit more for services to be fully ready
-    sleep 10
-    
-    # Check if services are running
-    if ! docker compose ps | grep -q "Up"; then
-        print_error "Some services are not running properly"
-        print_info "Check logs with: docker compose logs"
-        return 1
+    # Convert to absolute paths
+    if [[ ! "$data_dir" = /* ]]; then
+        data_dir="$(pwd)/$data_dir"
+    fi
+    if [[ ! "$genesis_file" = /* ]]; then
+        genesis_file="$(pwd)/$genesis_file"
     fi
     
-    # Test RPC endpoint
-    print_info "Testing RPC endpoint..."
-    if curl -s -X POST \
-        -H "Content-Type: application/json" \
-        --data '{"method":"eth_blockNumber","params":[],"id":1,"jsonrpc":"2.0"}' \
-        "http://127.0.0.1:$RPC_PORT" > /dev/null; then
-        print_success "RPC endpoint is responding"
+    print_info "Initializing op-reth... (This may take a while)"
+    print_info "This is a one-time operation during setup"
+    
+    if ! docker run --rm \
+        -v "$data_dir:/datadir" \
+        -v "$genesis_file:/genesis.json" \
+        "${OP_RETH_IMAGE_TAG}" \
+        init \
+        --datadir /datadir \
+        --chain /genesis.json; then
+        print_error "Failed to initialize op-reth"
+        exit 1
+    fi
+    
+    print_success "op-reth initialized successfully"
+}
+
+initialize_node() {
+    print_info "Initializing X Layer RPC node..."
+    
+    cd "$WORK_DIR" || exit 1
+    
+    # Download and extract genesis
+    download_genesis "$GENESIS_URL" "$NETWORK_TYPE"
+    extract_genesis "$CONFIG_DIR" "$GENESIS_FILE"
+    
+    # Initialize execution client
+    if [ "$RPC_TYPE" = "reth" ]; then
+        init_reth "$DATA_DIR/op-reth" "$CONFIG_DIR/$GENESIS_FILE"
     else
-        print_warning "RPC endpoint test failed, but services are running"
+        init_geth "$DATA_DIR/op-geth" "$CONFIG_DIR/$GENESIS_FILE"
     fi
     
-    print_success "Installation verification completed"
-}
-
-# Function to display connection information
-display_connection_info() {
-    echo ""
-    print_success "🎉 X Layer RPC Node Setup Complete!"
-    echo ""
-    echo "📋 Connection Information:"
-    echo "========================"
-    echo ""
-    echo "🌐 RPC Endpoints:"
-    echo "  HTTP RPC: http://localhost:$RPC_PORT"
-    echo "  WebSocket: ws://localhost:$WS_PORT"
-    echo "  Node RPC: http://localhost:$NODE_RPC_PORT"
-    echo ""
-    echo "🔍 Service Management:"
-    echo "  View logs: docker compose logs -f"
-    echo "  View op-geth logs: docker compose logs -f op-geth"
-    echo "  View op-node logs: docker compose logs -f op-node"
-    echo "  Persisted logs (full): ./$LOGS_DIR/op-geth/ and ./$LOGS_DIR/op-node/"
-    echo "  Stop services: docker compose down"
-    echo "  Restart services: docker compose restart"
-    echo ""
-    echo "🧪 Test Commands:"
-    echo "  Test RPC: curl http://127.0.0.1:$RPC_PORT \\"
-    echo "    -X POST \\"
-    echo "    -H \"Content-Type: application/json\" \\"
-    echo "    --data '{\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1,\"jsonrpc\":\"2.0\"}'"
-    echo ""
-    echo "📁 Data Directory: $DATA_DIR"
-    echo "🌍 Network: $NETWORK_TYPE"
-    echo ""
+    print_success "Node initialization completed"
+    print_info "Directory structure created at: ${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
+    print_info "  - data/"
+    if [ "$RPC_TYPE" = "reth" ]; then
+        print_info "    - op-reth/: Reth blockchain data"
+    else
+        print_info "    - op-geth/: Geth blockchain data"
+    fi
+    print_info "    - op-node/: Op-node data"
+    print_info "  - config/: Configuration files"
+    print_info "  - logs/: Log files"
     
-    # Check if L1 URLs are placeholder values
-    if [[ "$L1_RPC_URL" == "https://placeholder-l1-rpc-url" ]]; then
-        echo "⚠️  IMPORTANT: Configure L1 RPC URLs to complete setup!"
-        echo "=========================================="
+    # Clean up genesis file after initialization (only for reth)
+    if [ "$RPC_TYPE" = "reth" ]; then
         echo ""
-        print_info "📝 Next Steps:"
-        print_info "1. Edit .env file: nano .env"
-        print_info "2. Update L1 URLs:"
-        echo "   L1_RPC_URL=https://your-ethereum-l1-rpc-endpoint"
-        echo "   L1_BEACON_URL=https://your-ethereum-l1-beacon-endpoint"
-        print_info "3. Restart: docker compose down && docker compose up -d"
-        echo ""
+        print_info "Cleaning up genesis file (no longer needed for reth startup)..."
+        
+        # Remove extracted genesis file
+        if [ -f "$CONFIG_DIR/$GENESIS_FILE" ]; then
+            rm -f "$CONFIG_DIR/$GENESIS_FILE"
+            print_success "Removed $GENESIS_FILE (6.8GB freed)"
+        fi
+        
+        # Remove genesis tarball if DEBUG mode is off
+        local genesis_tarball="genesis-${NETWORK_TYPE}.tar.gz"
+        if [ "$DEBUG" != "true" ] && [ -f "$genesis_tarball" ]; then
+            rm -f "$genesis_tarball"
+            print_info "Removed genesis tarball"
+        elif [ "$DEBUG" = "true" ] && [ -f "$genesis_tarball" ]; then
+            print_info "Kept genesis tarball for DEBUG mode: $genesis_tarball"
+        fi
+        
+        print_success "Optimization enabled: Fast startup mode"
+        print_info "Subsequent restarts will use built-in 'xlayer-${NETWORK_TYPE}' chain for <1s startup"
+        print_info "Genesis file cleaned up - 6.8GB disk space saved!"
+    fi
+}
+
+start_services() {
+    print_info "Starting Docker services..."
+    
+    cd "$WORK_DIR" || exit 1
+    
+    if [ ! -f "./Makefile" ]; then
+        print_error "Makefile not found in $WORK_DIR"
+        exit 1
     fi
     
-    print_info "Your X Layer RPC node is now running and ready to serve requests!"
-}
-
-# Function to cleanup temporary files
-cleanup() {
-    if [ -d "$TEMP_DIR" ]; then
-        rm -rf "$TEMP_DIR"
+    print_info "Running 'make run'..."
+    if ! make run; then
+        print_error "Failed to start services"
+        exit 1
     fi
+    
+    print_success "Services started successfully"
 }
 
-# Main execution
 main() {
-    # Set up cleanup trap
-    trap cleanup EXIT
+    echo "  X Layer RPC Node One-Click Setup"
+    detect_repository
+    if [ "$IN_REPO" = true ]; then
+        print_info "📂 Running from repository: $REPO_ROOT"
+    else
+        print_info "🌐 Running standalone mode (will download files from GitHub)"
+    fi
     
-    print_header
+    # Load configuration first
+    load_configuration
     
-    # Check system requirements
+    # System checks
     check_system_requirements
+    check_required_files
     
-    # Get user input FIRST (before downloading config files)
+    # User interaction
     get_user_input
     
-    # Download configuration files
+    # Setup process
     download_config_files
-    
-    # Generate configuration files
     generate_config_files
-    
-    # Initialize the node
     initialize_node
-    
-    # Start services
     start_services
-    
-    # Verify installation
-    verify_installation
-    
-    # Display connection information
-    display_connection_info
-    
-    print_success "Setup completed successfully!"
 }
 
 # Run main function
