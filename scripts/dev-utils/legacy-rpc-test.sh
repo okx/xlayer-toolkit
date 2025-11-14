@@ -48,6 +48,7 @@ call_rpc() {
     error=$(echo "$response" | jq -r '.error // empty' 2>/dev/null)
     if [ -n "$error" ]; then
         echo -e "${YELLOW}✗ Error: $error${NC}"
+        echo -e "${YELLOW}Request: {\"jsonrpc\":\"2.0\",\"method\":\"$method\",\"params\":$params,\"id\":1}${NC}"
     else
         echo -e "${GREEN}✓ Success${NC}"
     fi
@@ -273,7 +274,7 @@ call_rpc "eth_getLogs" "[{\"fromBlock\":\"0x$(printf '%x' $((BELOW - 5)))\",\"to
     "eth_getLogs (range before migration) → PROXY"
 
 # Test getLogs with range after migration
-call_rpc "eth_getLogs" "[{\"fromBlock\":\"0x$(printf '%x' $MIGRATION_BLOCK)\",\"toBlock\":\"$ABOVE\"}]" \
+call_rpc "eth_getLogs" "[{\"fromBlock\":\"0x$(printf '%x' $MIGRATION_BLOCK)\",\"toBlock\":\"0x$(printf '%x' $ABOVE)\"}]" \
     "eth_getLogs (range after migration) → LOCAL"
 
 # Test getLogs with overlapping range (should handle specially)
@@ -310,24 +311,24 @@ if [ "$FILTER_ID" != "null" ] && [ -n "$FILTER_ID" ]; then
         "eth_uninstallFilter (Erigon filter) → PROXY"
 fi
 
-# Create filter after migration
+# Create filter spanning migration block
 FILTER_ID_LOCAL=$(curl -s -X POST $RPC_URL \
     -H "Content-Type: application/json" \
-    -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_newFilter\",\"params\":[{\"fromBlock\":\"0x$(printf '%x' $ABOVE)\",\"toBlock\":\"latest\"}],\"id\":1}" \
+    -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_newFilter\",\"params\":[{\"fromBlock\":\"0x$(printf '%x' $MIGRATION_BLOCK)\",\"toBlock\":\"0x$(printf '%x' $ABOVE)\"}],\"id\":1}" \
     | jq -r '.result')
 
 if [ "$FILTER_ID_LOCAL" != "null" ] && [ -n "$FILTER_ID_LOCAL" ]; then
-    echo -e "\n${BLUE}eth_newFilter (range after migration) → LOCAL${NC}"
+    echo -e "\n${BLUE}eth_newFilter (range spanning migration block) → LOCAL${NC}"
     echo "→ Created filter: $FILTER_ID_LOCAL"
     
     call_rpc "eth_getFilterLogs" "[\"$FILTER_ID_LOCAL\"]" \
-        "eth_getFilterLogs (local filter) → LOCAL"
+        "eth_getFilterLogs (spanning filter) → LOCAL"
     
     call_rpc "eth_getFilterChanges" "[\"$FILTER_ID_LOCAL\"]" \
-        "eth_getFilterChanges (local filter) → LOCAL"
+        "eth_getFilterChanges (spanning filter) → LOCAL"
     
     call_rpc "eth_uninstallFilter" "[\"$FILTER_ID_LOCAL\"]" \
-        "eth_uninstallFilter (local filter) → LOCAL"
+        "eth_uninstallFilter (spanning filter) → LOCAL"
 fi
 
 # Test overlapping filter (should error)
