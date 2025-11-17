@@ -64,16 +64,6 @@ cd test
 ./scripts/profile-reth-perf.sh op-reth-seq 30
 ```
 
-### 4. Generate and View Flamegraph
-
-```bash
-# Generate interactive flamegraph
-./scripts/generate-flamegraph.sh op-reth-seq perf-TIMESTAMP.script
-
-# The SVG will open automatically in your browser
-# Or manually open: open ./profiling/op-reth-seq/perf-TIMESTAMP.svg
-```
-
 ## Detailed Usage
 
 ### Available Scripts
@@ -84,15 +74,6 @@ Captures a CPU profile using perf with full debug symbols.
 
 ```bash
 ./scripts/profile-reth-perf.sh [container_name] [duration_seconds]
-```
-
-**Examples:**
-```bash
-# Profile sequencer for 60 seconds
-./scripts/profile-reth-perf.sh op-reth-seq 60
-
-# Profile RPC node for 30 seconds
-./scripts/profile-reth-perf.sh op-reth-rpc 30
 ```
 
 **Output:**
@@ -136,12 +117,6 @@ export OP_RETH_LOCAL_DIRECTORY=/path/to/your/reth
 
 # Build profiling-enabled image
 ./scripts/build-reth-with-profiling.sh
-```
-
-The build script creates a Docker image with:
-```dockerfile
-ENV RUSTFLAGS="-C force-frame-pointers=yes -C debuginfo=2"
-RUN cargo build --bin op-reth --features "jemalloc asm-keccak" --release
 ```
 
 ## Analyzing Profiles
