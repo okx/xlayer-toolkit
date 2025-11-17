@@ -14,10 +14,10 @@ if [ "$SKIP_OP_STACK_BUILD" = "true" ]; then
     echo "⏭️  Skipping op-stack build"
 else
     if [ "$OP_STACK_LOCAL_DIRECTORY" = "" ]; then
-				echo "❌ Please set OP_STACK_LOCAL_DIRECTORY in .env"
+        echo "❌ Please set OP_STACK_LOCAL_DIRECTORY in .env"
         exit 1
     else
-			  echo "🔨 Building op-stack"
+        echo "🔨 Building op-stack"
         cd "$OP_STACK_LOCAL_DIRECTORY"
         docker build -t "$OP_STACK_IMAGE_TAG" -f ./Dockerfile-opstack .
     fi
