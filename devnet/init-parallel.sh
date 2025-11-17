@@ -1,7 +1,6 @@
 #!/bin/bash
-# Fully parallel build script - all three images build simultaneously
+# Fully parallel build script - all four images build simultaneously
 
-set -x
 set -e
 
 # Record start time
@@ -44,37 +43,61 @@ cleanup() {
 # Set up trap to catch Ctrl+C (SIGINT) and SIGTERM
 trap cleanup SIGINT SIGTERM
 
-BRANCH_NAME=${1:-""}
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OPTIMISM_DIR=$(git rev-parse --show-toplevel)
 
 [ ! -f .env ] && cp example.env .env
 
 source .env
 
+if [ "$OP_STACK_LOCAL_DIRECTORY" = "" ]; then
+    echo "❌ Please set OP_STACK_LOCAL_DIRECTORY in .env"
+    exit 1
+fi
+
+# Set OP_GETH_LOCAL_DIRECTORY if not set
 if [ "$OP_GETH_LOCAL_DIRECTORY" = "" ]; then
+    cd "$OP_STACK_LOCAL_DIRECTORY"
     git submodule update --init --recursive
-    OP_GETH_DIR="$OPTIMISM_DIR/op-geth"
+    OP_GETH_DIR="$OP_STACK_LOCAL_DIRECTORY/op-geth"
+    echo "📍 Using op-geth submodule of op-stack"
 else
     OP_GETH_DIR="$OP_GETH_LOCAL_DIRECTORY"
+    echo "📍 Using op-geth local directory: $OP_GETH_LOCAL_DIRECTORY"
 fi
 
 # Switch to specified branch if provided
-if [ -n "$BRANCH_NAME" ]; then
-    echo "Switching op-geth to branch: $BRANCH_NAME"
-    cd $OP_GETH_DIR
+if [ -n "$OP_GETH_BRANCH" ]; then
+    echo "🔄 Switching op-geth to branch: $OP_GETH_BRANCH"
+    cd "$OP_GETH_DIR"
     git fetch origin
-    git checkout "$BRANCH_NAME"
-    git pull origin "$BRANCH_NAME"
+    git checkout "$OP_GETH_BRANCH"
+    git pull origin "$OP_GETH_BRANCH"
     cd "$PWD_DIR"
 else
-    echo "Using op-geth default branch"
+    echo "📍 Using op-geth default branch"
 fi
 
-# TODO: need to further confirm why it fails if we do not add require in this contract
-cp $PWD_DIR/contracts/Transactor.sol $OPTIMISM_DIR/packages/contracts-bedrock/src/periphery/Transactor.sol
+# Set up op-reth if not skipping
+if [ "$SKIP_OP_RETH_BUILD" != "true" ]; then
+    if [ "$OP_RETH_LOCAL_DIRECTORY" = "" ]; then
+        echo "❌ Please set OP_RETH_LOCAL_DIRECTORY in .env"
+        exit 1
+    else
+        OP_RETH_DIR="$OP_RETH_LOCAL_DIRECTORY"
+        if [ -n "$OP_RETH_BRANCH" ]; then
+            echo "🔄 Switching op-reth to branch: $OP_RETH_BRANCH"
+            cd "$OP_RETH_DIR"
+            git fetch origin
+            git checkout "$OP_RETH_BRANCH"
+            git pull origin "$OP_RETH_BRANCH"
+            cd "$PWD_DIR"
+        else
+            echo "📍 Using op-reth branch: $(cd "$OP_RETH_DIR" && git branch --show-current)"
+        fi
+    fi
+fi
 
-cd $OPTIMISM_DIR
+cd "$OP_STACK_LOCAL_DIRECTORY"
 
 # Create log directory
 mkdir -p /tmp/docker-build-logs
@@ -82,7 +105,7 @@ mkdir -p /tmp/docker-build-logs
 echo "================================================"
 echo "FULLY PARALLEL BUILD MODE"
 echo "================================================"
-echo "Building op-geth, op-contracts, and op-stack simultaneously"
+echo "Building op-geth, op-contracts, op-stack, and op-reth simultaneously"
 echo "================================================"
 echo ""
 
@@ -91,16 +114,16 @@ BUILD_PIDS=()
 TAIL_PIDS=()
 
 # Start all builds in parallel
-echo "Starting parallel builds..."
+echo "🚀 Starting parallel builds..."
 
 # Build OP_CONTRACTS in background
-if [ $SKIP_OP_CONTRACTS_BUILD = "true" ]; then
-    echo "Skipping op-contracts build"
+if [ "$SKIP_OP_CONTRACTS_BUILD" = "true" ]; then
+    echo "⏭️  Skipping op-contracts build"
 else
-    echo "[1/3] Starting op-contracts build..."
+    echo "🔨 [1/4] Starting op-contracts build..."
     CONTRACTS_START=$(date +%s)
 
-    docker build -t $OP_CONTRACTS_IMAGE_TAG -f ./Dockerfile-contracts . > /tmp/docker-build-logs/op-contracts.log 2>&1 &
+    docker build -t "$OP_CONTRACTS_IMAGE_TAG" -f ./Dockerfile-contracts . > /tmp/docker-build-logs/op-contracts.log 2>&1 &
     CONTRACTS_PID=$!
     BUILD_PIDS+=("$CONTRACTS_PID:op-contracts:$CONTRACTS_START")
     ALL_PIDS+=($CONTRACTS_PID)
@@ -112,14 +135,14 @@ else
 fi
 
 # Build OP_GETH in background
-if [ $SKIP_OP_GETH_BUILD = "true" ]; then
-    echo "Skipping op-geth build"
+if [ "$SKIP_OP_GETH_BUILD" = "true" ]; then
+    echo "⏭️  Skipping op-geth build"
 else
-    echo "[2/3] Starting op-geth build..."
+    echo "🔨 [2/4] Starting op-geth build..."
     GETH_START=$(date +%s)
 
-    cd $OP_GETH_DIR
-    docker build -t $OP_GETH_IMAGE_TAG . > /tmp/docker-build-logs/op-geth.log 2>&1 &
+    cd "$OP_GETH_DIR"
+    docker build -t "$OP_GETH_IMAGE_TAG" . > /tmp/docker-build-logs/op-geth.log 2>&1 &
     GETH_PID=$!
     BUILD_PIDS+=("$GETH_PID:op-geth:$GETH_START")
     ALL_PIDS+=($GETH_PID)
@@ -129,17 +152,21 @@ else
     TAIL_PIDS+=($TAIL_GETH_PID)
     ALL_PIDS+=($TAIL_GETH_PID)
 
-    cd $OPTIMISM_DIR
+    cd "$OP_STACK_LOCAL_DIRECTORY"
 fi
 
 # Build OP_STACK in background
-if [ $SKIP_OP_STACK_BUILD = "true" ]; then
-    echo "Skipping op-stack build"
+if [ "$SKIP_OP_STACK_BUILD" = "true" ]; then
+    echo "⏭️  Skipping op-stack build"
 else
-    echo "[3/3] Starting op-stack build..."
+    if [ "$OP_STACK_LOCAL_DIRECTORY" = "" ]; then
+        echo "❌ Please set OP_STACK_LOCAL_DIRECTORY in .env"
+        exit 1
+    fi
+    echo "🔨 [3/4] Starting op-stack build..."
     STACK_START=$(date +%s)
 
-    docker build -t $OP_STACK_IMAGE_TAG -f ./Dockerfile-opstack . > /tmp/docker-build-logs/op-stack.log 2>&1 &
+    docker build -t "$OP_STACK_IMAGE_TAG" -f ./Dockerfile-opstack . > /tmp/docker-build-logs/op-stack.log 2>&1 &
     STACK_PID=$!
     BUILD_PIDS+=("$STACK_PID:op-stack:$STACK_START")
     ALL_PIDS+=($STACK_PID)
@@ -148,6 +175,31 @@ else
     TAIL_STACK_PID=$!
     TAIL_PIDS+=($TAIL_STACK_PID)
     ALL_PIDS+=($TAIL_STACK_PID)
+fi
+
+# Build OP_RETH in background
+if [ "$SKIP_OP_RETH_BUILD" = "true" ]; then
+    echo "⏭️  Skipping op-reth build"
+else
+    if [ "$OP_RETH_LOCAL_DIRECTORY" = "" ]; then
+        echo "❌ Please set OP_RETH_LOCAL_DIRECTORY in .env"
+        exit 1
+    fi
+    echo "🔨 [4/4] Starting op-reth build..."
+    RETH_START=$(date +%s)
+
+    cd "$OP_RETH_DIR"
+    docker build -t "$OP_RETH_IMAGE_TAG" -f ./DockerfileOp . > /tmp/docker-build-logs/op-reth.log 2>&1 &
+    RETH_PID=$!
+    BUILD_PIDS+=("$RETH_PID:op-reth:$RETH_START")
+    ALL_PIDS+=($RETH_PID)
+
+    tail -f /tmp/docker-build-logs/op-reth.log 2>/dev/null | sed 's/^/[op-reth] /' &
+    TAIL_RETH_PID=$!
+    TAIL_PIDS+=($TAIL_RETH_PID)
+    ALL_PIDS+=($TAIL_RETH_PID)
+
+    cd "$OP_STACK_LOCAL_DIRECTORY"
 fi
 
 # Wait for all builds to complete
@@ -181,6 +233,9 @@ if [ ${#BUILD_PIDS[@]} -gt 0 ]; then
                 elif [ "$name" = "op-stack" ] && [ -z "$STACK_END" ]; then
                     STACK_END=$(date +%s)
                     STACK_TIME=$((STACK_END - start_time))
+                elif [ "$name" = "op-reth" ] && [ -z "$RETH_END" ]; then
+                    RETH_END=$(date +%s)
+                    RETH_TIME=$((RETH_END - start_time))
                 fi
             fi
         done
@@ -246,6 +301,14 @@ if [ ${#BUILD_PIDS[@]} -gt 0 ]; then
         echo "❌ op-stack: Failed"
     fi
 
+    if [ -n "$RETH_END" ]; then
+        reth_min=$((RETH_TIME / 60))
+        reth_sec=$((RETH_TIME % 60))
+        echo "✅ op-reth: Success (${reth_min}m ${reth_sec}s)"
+    elif [ "$SKIP_OP_RETH_BUILD" != "true" ]; then
+        echo "❌ op-reth: Failed"
+    fi
+
     if [ $FAILED -ne 0 ]; then
         echo ""
         echo "ERROR: Some builds failed. Check logs at /tmp/docker-build-logs/"
@@ -266,6 +329,6 @@ echo "================================================"
 echo "Total time: ${TOTAL_MIN}m ${TOTAL_SEC}s"
 echo ""
 echo "Built images:"
-docker images | grep -E "(op-geth|op-stack|op-contracts)" | grep latest
+docker images | grep -E "(op-geth|op-stack|op-contracts|op-reth)" | grep -v "<none>" || echo "No images found"
 echo ""
 echo "================================================"
