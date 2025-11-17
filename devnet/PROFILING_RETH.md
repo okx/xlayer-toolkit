@@ -31,7 +31,6 @@ SEQ_TYPE=reth
 
 # Profiling configuration for op-reth
 RETH_PROFILING_ENABLED=true
-RETH_CPU_PROFILING=true
 
 # To build reth (init.sh)
 SKIP_OP_RETH_BUILD=false
