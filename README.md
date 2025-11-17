@@ -21,6 +21,20 @@ Complete self-hosted X Layer RPC node solution, supporting quick deployment and 
 
 **Detailed Documentation:** [scripts/rpc-setup/README.md](scripts/rpc-setup/README.md)
 
+### Development Network (Devnet)
+
+Complete local Optimism test environment for development and testing, supporting both Geth and Reth execution clients.
+
+**Key Features:**
+- ✅ Full OP Stack deployment (L1 + L2)
+- ✅ Support for op-geth and op-reth sequencers
+- ✅ High availability with op-conductor cluster
+- ✅ One-click deployment and step-by-step setup
+- ✅ Parallel and sequential Docker image builds
+- ✅ Dispute game and fault proof support
+- ✅ Gray upgrade simulation for zero-downtime updates
+
+**Detailed Documentation:** [devnet/README.md](devnet/README.md)
 
 ## 🤝 Contributing
 
