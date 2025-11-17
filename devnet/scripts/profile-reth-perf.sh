@@ -83,15 +83,19 @@ docker exec "$CONTAINER" sh -c 'rm -f /profiling/perf.data /profiling/perf.scrip
 if [ -f "$OUTPUT_DIR/perf-${TIMESTAMP}.script" ]; then
     SCRIPT_SIZE=$(du -h "$OUTPUT_DIR/perf-${TIMESTAMP}.script" | cut -f1)
     echo ""
-    echo "Done!"
-    echo ""
-    echo "Profile data saved:"
+    echo "Profile data collected successfully!"
     echo "  - perf.data: $OUTPUT_DIR/perf-${TIMESTAMP}.data"
     echo "  - perf.script: $OUTPUT_DIR/perf-${TIMESTAMP}.script ($SCRIPT_SIZE)"
     echo ""
-    echo "Next steps:"
-    echo "  1. Generate flamegraph: ./scripts/generate-flamegraph.sh $CONTAINER perf-${TIMESTAMP}.script"
-    echo "  2. View perf report: docker exec $CONTAINER perf report -i /profiling/perf.data"
+
+    # Generate flamegraph automatically
+    echo "[6/6] Generating flamegraph..."
+    if [ -x "./scripts/generate-flamegraph.sh" ]; then
+        ./scripts/generate-flamegraph.sh "$CONTAINER" "perf-${TIMESTAMP}.script"
+    else
+        echo "Warning: generate-flamegraph.sh not found or not executable"
+        echo "You can manually generate it with: ./scripts/generate-flamegraph.sh $CONTAINER perf-${TIMESTAMP}.script"
+    fi
 else
     echo "Error: Profile was not generated successfully"
     exit 1
