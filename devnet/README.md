@@ -13,8 +13,7 @@ Configure `example.env` (do not modify `.env` directly) and run `./clean.sh` to 
 
 **Notes:**
 - Always modify `example.env`, then run `./clean.sh` to sync to `.env`
-- For Reth configurations, `OP_RETH_LOCAL_DIRECTORY` must be an absolute path
-- Run `./init.sh` to build Docker images after configuration changes
+- Run `./init.sh` to build Docker images after configuration changes. By default, Docker images are not build locally.
 - `DB_ENGINE` can be `pebble` or `leveldb` (only required for Geth)
 
 ## Prerequisites
@@ -30,30 +29,20 @@ Configure `example.env` (do not modify `.env` directly) and run `./clean.sh` to 
 > ![solution](./images/docker.png)
 
 ### Initial Setup (First Time Only)
-1. Run `./init.sh` to initialize the environment (only needed once):
-   - Install all git submodules
-   - Build required Docker images
-   - Prepare base environment
+1. Run `./init.sh` to build Docker images locally. By default, Docker images are not built locally. You need to set the following variables to ``true`` in `example.env` and set the corresponding paths to build Docker images locally:
+```
+OP_STACK_LOCAL_DIRECTORY=<path to a clone of https://github.com/okx/optimism>
+OP_GETH_LOCAL_DIRECTORY=<path to a clone of https://github.com/okx/op-geth>
+OP_RETH_LOCAL_DIRECTORY=<path to a clone of https://github.com/okx/reth>
+OP_GETH_BRANCH=<default is dev>
+OP_RETH_BRANCH=<default is dev>
+SKIP_OP_STACK_BUILD=true
+SKIP_OP_CONTRACTS_BUILD=true
+SKIP_OP_GETH_BUILD=true
+SKIP_OP_RETH_BUILD=true
+```
 
 > Important: `init.sh` should only be run once during initial setup. Re-run only if you need to rebuild Docker images after code changes.
-
-> Important: by default, `op-reth` image is not built. `op-geth` is used as RPC by default. If you want to run a Reth RPC node, please set the following variables in `example.env`:
-```bash
-OP_RETH_LOCAL_DIRECTORY=<absolute path to your reth repository>
-OP_RETH_BRANCH=<reth repository branch (if not set, default branch is used)>
-SKIP_OP_RETH_BUILD=false
-# only support `geth` or `reth`
-SEQ_TYPE=reth
-RPC_TYPE=reth
-```
-
-For testing, we recommend using Reth v1.8.2, as follows:
-```bash
-git clone -b dev-1.8.2 https://github.com/okx/reth.git
-cd reth
-docker build -t op-reth:1.8.2 -f DockerfileOp .
-docker tag op-reth:1.8.2 op-reth:latest
-```
 
 ### Code Updates and Image Rebuilding (Optional)
 If you've updated the Optimism codebase and need to rebuild Docker images:
@@ -81,28 +70,41 @@ If you've updated the Optimism codebase and need to rebuild Docker images:
 
 ### Directory Structure
 ```
-test/
+devnet/
 ├── 0-all.sh            # One-click deployment script
 ├── init.sh             # Initialization script
+├── init-parallel.sh    # Parallel initialization script
 ├── clean.sh            # Environment cleanup script
 ├── 1-start-l1.sh       # L1 chain startup script
 ├── 2-deploy-op-contracts.sh  # Contract deployment script
 ├── 3-op-init.sh        # Environment initialization script
 ├── 4-op-start-service.sh    # Service startup script
+├── docker-compose.yml  # Docker Compose configuration
+├── Makefile            # Build automation
 ├── scripts/            # Utility scripts
-│   ├── transfer_leader.sh      # Leader transfer script
-│   ├── stop_leader_sequencer.sh # Sequencer stop script
-│   ├── active_sequencer.sh      # Check active sequencer
-│   ├── add_game_type.sh         # Add dispute game type
-│   ├── deposit-from-l1.sh      # L1 to L2 deposit script
-│   ├── deposit-from-banker.sh  # transfer ETH from banker script
-│   └── show-dev-accounts.sh   # Display dev accounts info
-|   └── mempool-rebroadcaster-secheduler.sh # Compares and rebroadcasts missing txs between reth and geth
+│   ├── transfer-leader.sh      # Leader transfer script
+│   ├── stop-leader-sequencer.sh # Sequencer stop script
+│   ├── active-sequencer.sh      # Check active sequencer
+│   ├── add-game-type.sh         # Add dispute game type
+│   ├── add-peers.sh             # Add peer connections
+│   ├── docker-install-start.sh # Docker installation helper
+│   ├── gray-upgrade-simulation.sh # Gray upgrade simulation
+│   ├── kill-rpc.sh              # Kill RPC node
+│   ├── mempool-rebroadcaster-scheduler.sh # Compares and rebroadcasts missing txs between reth and geth
+│   ├── replace-genesis.sh       # Replace genesis configuration
+│   ├── setup-cgt-function.sh    # Setup CGT functions
+│   ├── show-dev-accounts.sh     # Display dev accounts info
+│   ├── start-rpc.sh             # Start RPC node
+│   ├── stop-rpc.sh              # Stop RPC node
+│   ├── test-cgt.sh              # Test CGT functionality
+│   └── trusted-peers.sh         # Configure trusted peers
 ├── config-op/          # Configuration directory
-├── data/              # Data storage directory
-├── contracts/         # Smart contracts
-├── images/            # Documentation images
-├── example.env        # Environment template
+├── entrypoint/         # Container entrypoint scripts
+├── l1-geth/            # L1 Geth configuration and data
+├── saved-cannon-data/  # Pre-generated cannon/dispute game data
+├── contracts/          # Smart contracts
+├── images/             # Documentation images
+├── example.env         # Environment template
 ```
 
 ## Quick Start
