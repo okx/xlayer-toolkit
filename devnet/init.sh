@@ -13,12 +13,12 @@ source .env
 if [ "$SKIP_OP_STACK_BUILD" = "true" ]; then
     echo "⏭️  Skipping op-stack build"
 else
-		if [ "$OP_STACK_LOCAL_DIRECTORY" = "" ]; then
-				echo "Please set OP_STACK_LOCAL_DIRECTORY in .env"
-				exit 1
-		else
-				OPTIMISM_DIR="$OP_STACK_LOCAL_DIRECTORY"
-		fi
+    if [ "$OP_STACK_LOCAL_DIRECTORY" = "" ]; then
+        echo "Please set OP_STACK_LOCAL_DIRECTORY in .env"
+        exit 1
+    else
+        OPTIMISM_DIR="$OP_STACK_LOCAL_DIRECTORY"
+    fi
 fi
 
 if [ "$SKIP_OP_GETH_BUILD" = "true" ]; then
