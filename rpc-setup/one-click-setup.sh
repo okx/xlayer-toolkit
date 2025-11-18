@@ -1,8 +1,6 @@
 #!/bin/bash
 set -e
 
-# Debug mode: set to true to cache genesis files locally for faster re-runs
-DEBUG=true
 BRANCH="reth"
 REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/rpc-setup"
 
@@ -14,9 +12,10 @@ IN_REPO=false
 REPO_ROOT=""
 REPO_RPC_SETUP_DIR=""
 
-# Detect if running from repository (check if docker-compose.yml exists in SCRIPT_DIR)
+# Detect if running from repository (check if presets/ directory exists in SCRIPT_DIR)
+# This is more reliable than checking docker-compose.yml which might be downloaded
 detect_repository() {
-    if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
+    if [ -d "$SCRIPT_DIR/presets" ]; then
         IN_REPO=true
         REPO_RPC_SETUP_DIR="$SCRIPT_DIR"
         REPO_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -658,19 +657,19 @@ download_genesis() {
     
     print_info "Preparing genesis file for $network..."
     
-    # DEBUG mode: check if file already exists
-    if [ "$DEBUG" = "true" ] && [ -f "$genesis_file" ]; then
+    # Repository mode: check if file already exists (cache for faster re-runs)
+    if [ "$IN_REPO" = true ] && [ -f "$genesis_file" ]; then
         local file_size=$(du -h "$genesis_file" 2>/dev/null | cut -f1 || echo "unknown")
         print_success "Using cached genesis: $genesis_file ($file_size)"
-        print_info "DEBUG mode: Skip download, reusing existing file"
+        print_info "Repository mode: Skip download, reusing existing file"
         return 0
     fi
     
     # Download genesis file
-    if [ "$DEBUG" = "true" ]; then
-        print_info "DEBUG mode: Downloading (will be kept for next run)..."
+    if [ "$IN_REPO" = true ]; then
+        print_info "Repository mode: Downloading (will be kept for next run)..."
     else
-        print_info "Downloading (will be cleaned up after use)..."
+        print_info "Standalone mode: Downloading (will be cleaned up after use)..."
     fi
     
     if ! wget -c "$genesis_url" -O "$genesis_file"; then
@@ -679,9 +678,9 @@ download_genesis() {
         exit 1
     fi
     
-    if [ "$DEBUG" = "true" ]; then
+    if [ "$IN_REPO" = true ]; then
         print_success "Downloaded and cached: $genesis_file"
-        else
+    else
         print_success "Downloaded: $genesis_file"
     fi
 }
@@ -712,8 +711,8 @@ extract_genesis() {
         exit 1
     fi
     
-    # Non-DEBUG mode: clean up temporary file
-    if [ "$DEBUG" != "true" ]; then
+    # Standalone mode: clean up temporary file
+    if [ "$IN_REPO" = false ]; then
         rm -f "$genesis_file"
         print_info "Cleaned up temporary genesis file"
     else
@@ -835,13 +834,13 @@ initialize_node() {
             print_success "Removed $GENESIS_FILE (6.8GB freed)"
         fi
         
-        # Remove genesis tarball if DEBUG mode is off
+        # Remove genesis tarball in standalone mode
         local genesis_tarball="genesis-${NETWORK_TYPE}.tar.gz"
-        if [ "$DEBUG" != "true" ] && [ -f "$genesis_tarball" ]; then
+        if [ "$IN_REPO" = false ] && [ -f "$genesis_tarball" ]; then
             rm -f "$genesis_tarball"
             print_info "Removed genesis tarball"
-        elif [ "$DEBUG" = "true" ] && [ -f "$genesis_tarball" ]; then
-            print_info "Kept genesis tarball for DEBUG mode: $genesis_tarball"
+        elif [ "$IN_REPO" = true ] && [ -f "$genesis_tarball" ]; then
+            print_info "Kept genesis tarball for repository mode: $genesis_tarball"
         fi
         
         print_success "Optimization enabled: Fast startup mode"
@@ -938,16 +937,11 @@ main() {
 
 # Clean up downloaded files in standalone mode
 cleanup_standalone_files() {
-    if [ "$IN_REPO" = false ] && [ -f "$WORK_DIR/network-presets.env" ]; then
-        echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        print_info "Standalone mode: Downloaded configuration file detected"
-        echo ""
-        echo "  📄 network-presets.env (cached for faster re-runs)"
-        echo ""
-        echo "To clean up downloaded files, run:"
-        echo "  rm -f network-presets.env Makefile docker-compose.yml"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if [ "$IN_REPO" = false ]; then
+        if [ -f "$WORK_DIR/network-presets.env" ]; then
+            rm -f "$WORK_DIR/network-presets.env"
+            print_info "Cleaned up network-presets.env (already loaded into .env)"
+        fi
     fi
 }
 

@@ -48,16 +48,8 @@ The easiest way to deploy your X Layer RPC node using the setup script from [xla
 mkdir -p /data/xlayer-mainnet && cd /data/xlayer-mainnet
 curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/rpc-setup/one-click-setup.sh | bash
 
-# Or specify RPC client type (default is geth):
+# Or use reth (⚠️ Under testing):
 curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/rpc-setup/one-click-setup.sh | bash -s -- --rpc_type=reth
-
-# The script will interactively prompt you to configure:
-#    - Network type (mainnet/testnet) - interactive
-#    - L1 RPC URL (required)
-#    - L1 Beacon URL (required)
-#    - Optional: Custom ports (press Enter for defaults)
-#
-# Note: RPC client type can be specified via --rpc_type=geth|reth (default: geth)
 ```
 
 **What the script does:**
