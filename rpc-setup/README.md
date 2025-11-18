@@ -46,31 +46,52 @@ The easiest way to deploy your X Layer RPC node using the setup script from [xla
 #    Example for mainnet: /data/xlayer-mainnet
 #    Example for testnet: /data/xlayer-testnet
 mkdir -p /data/xlayer-mainnet && cd /data/xlayer-mainnet
-curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/scripts/rpc-setup/one-click-setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/rpc-setup/one-click-setup.sh | bash
+
+# Or specify RPC client type (default is geth):
+curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/rpc-setup/one-click-setup.sh | bash -s -- --rpc_type=reth
 
 # The script will interactively prompt you to configure:
-#    - Network type (mainnet/testnet)
+#    - Network type (mainnet/testnet) - interactive
 #    - L1 RPC URL (required)
 #    - L1 Beacon URL (required)
-#    - RPC client (geth/reth)
-#    - Optional: Custom ports
+#    - Optional: Custom ports (press Enter for defaults)
+#
+# Note: RPC client type can be specified via --rpc_type=geth|reth (default: geth)
 ```
 
 **What the script does:**
 - ✅ Checks all system dependencies (Docker, Make, etc.)
+- ✅ Detects existing configurations and offers to keep data
 - ✅ Interactively prompts for configuration
 - ✅ Downloads latest configuration files and genesis data
 - ✅ Generates `.env` and all necessary config files
-- ✅ Initializes blockchain data
+- ✅ Initializes blockchain data (skipped if keeping existing data)
 - ✅ Starts services with proper health checks
 - ✅ Displays connection details and management commands
 
 **After Installation:**
 
 Your RPC node will be available at:
-- **HTTP RPC**: `http://localhost:8545`
-- **WebSocket**: `ws://localhost:8546`
-- **op-node RPC**: `http://localhost:9545`
+- **HTTP RPC**: `http://localhost:8545` (or custom port from `.env`)
+- **WebSocket**: `ws://localhost:8546` (or custom port from `.env`)
+- **op-node RPC**: `http://localhost:9545` (or custom port from `.env`)
+
+**Switching Configurations:**
+
+To switch between configurations (e.g., from mainnet to testnet, or from geth to reth):
+
+```bash
+# Run the setup script again
+./one-click-setup.sh --rpc_type=reth
+
+# Select different network type when prompted
+# Choose [1] to keep existing data when detected
+# The script will generate a new .env pointing to the new configuration
+
+# Restart services
+make stop && make run
+```
 
 ### 📁 Deployment Directory Structure
 
@@ -81,24 +102,42 @@ After running the setup script, your deployment directory will contain:
 ├── .env                            # Environment configuration
 ├── docker-compose.yml              # Docker services definition
 ├── Makefile                        # Service management commands
-├── network-presets.env             # Network-specific configurations
-├── one-click-setup.sh              # Setup script
-└── chaindata/                      # Data directory
-    └── mainnet-geth/               # Network + Client subdirectory
-        ├── data/                   # Blockchain data
-        │   ├── op-geth/            # Execution client database
-        │   └── op-node/            # Consensus layer data
-        ├── config/                 # Configuration files
-        │   ├── genesis-mainnet.json
-        │   ├── rollup-mainnet.json
-        │   ├── op-geth-config-mainnet.toml
-        │   └── jwt.txt
-        └── logs/                   # Service logs
-            ├── geth.log
-            └── op-node.log
+├── one-click-setup.sh              # Setup script (downloaded)
+├── network-presets.env             # Network configs (cached in standalone mode, can be deleted)
+├── presets/                        # Configuration templates (in repository mode)
+│   ├── network-presets.env
+│   ├── op-geth-config-mainnet.toml
+│   ├── op-geth-config-testnet.toml
+│   ├── op-reth-config-mainnet.toml
+│   ├── op-reth-config-testnet.toml
+│   ├── rollup-mainnet.json
+│   └── rollup-testnet.json
+├── mainnet-geth/                   # Configuration-specific directory
+│   ├── data/                       # Blockchain data
+│   │   ├── op-geth/                # Execution client database
+│   │   └── op-node/                # Consensus layer data
+│   ├── config/                     # Runtime configuration files
+│   │   ├── genesis-mainnet.json    # (only for geth)
+│   │   ├── rollup-mainnet.json
+│   │   ├── op-geth-config-mainnet.toml
+│   │   └── jwt.txt
+│   └── logs/                       # Service logs
+│       ├── geth.log
+│       └── op-node.log
+├── mainnet-reth/                   # Another configuration (if created)
+├── testnet-geth/                   # Testnet configuration (if created)
+└── testnet-reth/                   # Testnet reth (if created)
 ```
 
-**Note**: The subdirectory name (`mainnet-geth`, `testnet-reth`, etc.) is automatically generated based on your network and client selection. This allows you to preserve data when switching configurations in the same directory.
+**Directory Structure Features:**
+
+- **Flat hierarchy**: Configuration directories (`mainnet-geth/`, `mainnet-reth/`, etc.) are at the root level
+- **Multiple configurations**: You can have multiple network/client combinations in the same directory
+- **Smart switching**: Re-running the script detects existing configurations and offers to:
+  - **Keep data** and update `.env` only (recommended for switching configurations)
+  - **Delete and re-initialize** (for fresh start)
+  - **Cancel** (exit without changes)
+- **Automatic naming**: Directory names follow the pattern `{network}-{rpc_type}` (e.g., `mainnet-geth`, `testnet-reth`)
 
 ## 📊 Service Management
 
@@ -136,40 +175,61 @@ The `make run` command intelligently manages service startup:
 
 ### `.env` File
 
-Generated by `one-click-setup.sh`, contains:
+Generated by `one-click-setup.sh`, contains the active configuration:
 
 ```bash
+# Network Configuration
 NETWORK_TYPE=mainnet           # or testnet
-RPC_TYPE=reth                  # or geth
+RPC_TYPE=geth                  # or reth
+CHAIN_NAME=xlayer-mainnet      # Chain identifier
+
+# Directory Configuration
+TARGET_DIR=mainnet-geth        # Current active configuration directory
 
 # L1 Configuration
 L1_RPC_URL=https://...
 L1_BEACON_URL=https://...
 
-# Port Mappings
-RPC_PORT=8545
-WS_PORT=8546
-NODE_RPC_PORT=9545
+# L2 Engine URL
+L2_ENGINE_URL=http://op-geth:8552  # or http://op-reth:8552
 
-# Image Tags (auto-configured)
+# Port Mappings
+HTTP_RPC_PORT=8545
+WEBSOCKET_PORT=8546
+ENGINE_API_PORT=8552
+NODE_RPC_PORT=9545
+P2P_TCP_PORT=30303
+P2P_UDP_PORT=30303
+NODE_P2P_PORT=9223
+
+# Image Tags (auto-configured from presets)
 OP_STACK_IMAGE_TAG=xlayer/op-node:0.0.9
 OP_GETH_IMAGE_TAG=xlayer/op-geth:0.0.6
-OP_RETH_IMAGE_TAG=xlayer/op-reth:release-testnet
+OP_RETH_IMAGE_TAG=xlayer/op-reth:load-genesis-fd6b19
 
 # Bootnode and P2P Configuration
 OP_NODE_BOOTNODE=enode://...
 OP_GETH_BOOTNODE=enode://...
 P2P_STATIC_PEERS=/ip4/...
+
+# Sequencer Configuration
+SEQUENCER_HTTP_URL=https://rpc.xlayer.tech
+
+# Legacy RPC Configuration (for reth)
+LEGACY_RPC_URL=https://rpc.xlayer.tech
+LEGACY_RPC_TIMEOUT=3s
 ```
 
-### `network-presets.env`
+### `presets/` Directory (Repository Mode)
 
-Network configuration presets containing:
-- Network-specific settings (testnet/mainnet)
-- Docker image tags
-- Genesis file URLs
-- Bootnode addresses
-- P2P static peers
+Contains template configurations for all network/client combinations:
+
+- `network-presets.env` - Network-specific settings, image tags, bootnode addresses
+- `op-geth-config-*.toml` - Geth execution client configurations
+- `op-reth-config-*.toml` - Reth execution client configurations
+- `rollup-*.json` - Rollup/consensus layer configurations
+
+**Note**: In standalone mode (running outside repository), `network-presets.env` is downloaded to the working directory.
 
 ## 📡 Network Endpoints
 

@@ -1,13 +1,10 @@
 /.vscode/openscaidentity
 
 # Chain data directory - contains all network and client data
-scripts/rpc-setup/chaindata/
-
-# Environment files (contain user-specific configuration)
-scripts/rpc-setup/.env
-
-# Genesis files (DEBUG mode cache)
-scripts/rpc-setup/genesis-*.tar.gz
+rpc-setup/*-geth/
+rpc-setup/*-reth/
+rpc-setup/.env
+rpc-setup/genesis-*.tar.gz
 
 # Development utilities cache and generated files
 scripts/dev-utils/.genesis_cache/

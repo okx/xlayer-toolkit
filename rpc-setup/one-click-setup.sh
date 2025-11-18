@@ -4,7 +4,7 @@ set -e
 # Debug mode: set to true to cache genesis files locally for faster re-runs
 DEBUG=true
 BRANCH="reth"
-REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/scripts/rpc-setup"
+REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/rpc-setup"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="$(pwd)"  # Working directory is where the user runs the script
@@ -19,24 +19,24 @@ detect_repository() {
     if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
         IN_REPO=true
         REPO_RPC_SETUP_DIR="$SCRIPT_DIR"
-        REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+        REPO_ROOT="$(dirname "$SCRIPT_DIR")"
     fi
 }
 
 # Load configuration from network-presets.env
 load_configuration() {
-    local config_file="$WORK_DIR/network-presets.env"
+    local config_file
     
-    # Try to get network-presets.env to current directory if not already present
-    if [ ! -f "$config_file" ]; then
-        if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/network-presets.env" ]; then
-            # Copy from local repository
-            cp "$REPO_RPC_SETUP_DIR/network-presets.env" "$config_file"
-            print_info "Using configuration from local repository"
-        else
-            # Download from GitHub
+    # If running from repository, use the file directly from presets/
+    if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/presets/network-presets.env" ]; then
+        config_file="$REPO_RPC_SETUP_DIR/presets/network-presets.env"
+        print_info "Using configuration from local repository"
+    else
+        # For standalone mode, download to work directory
+        config_file="$WORK_DIR/network-presets.env"
+        if [ ! -f "$config_file" ]; then
             print_info "Downloading configuration file..."
-            local config_url="${REPO_URL}/network-presets.env"
+            local config_url="${REPO_URL}/presets/network-presets.env"
             if ! wget -q "$config_url" -O "$config_file" 2>/dev/null; then
                 print_error "Failed to download configuration file from GitHub"
                 print_info "This script requires network-specific configuration (bootnodes, image tags, etc.)"
@@ -56,7 +56,8 @@ NETWORK_TYPE=""
 RPC_TYPE=""
 L1_RPC_URL=""
 L1_BEACON_URL=""
-CHAINDATA_BASE=""  # User-specified chaindata base directory (will create ${NETWORK_TYPE}-${RPC_TYPE} subdirectory)
+TARGET_DIR=""  # Target directory for configuration (${NETWORK_TYPE}-${RPC_TYPE})
+SKIP_INIT=0  # Flag to skip initialization if directory exists
 RPC_PORT=""
 WS_PORT=""
 NODE_RPC_PORT=""
@@ -68,7 +69,79 @@ print_success() { echo -e "\033[0;32m✅ $1\033[0m"; }
 print_warning() { echo -e "\033[1;33m⚠️  $1\033[0m"; }
 print_error() { echo -e "\033[0;31m❌ $1\033[0m"; }
 print_prompt() { 
-    printf "\033[0;34m%s\033[0m" "$1" > /dev/tty
+    # Try /dev/tty first, fallback to stdout
+    if ! printf "\033[0;34m%s\033[0m" "$1" > /dev/tty 2>/dev/null; then
+        printf "\033[0;34m%s\033[0m" "$1"
+    fi
+}
+
+# Show usage information
+show_usage() {
+    echo "Usage: $0 [options]"
+    echo ""
+    echo "Options:"
+    echo "  --rpc_type=<geth|reth>   RPC client type (default: geth)"
+    echo "  --help                   Show this help message"
+    echo ""
+    echo "Note: Network type (mainnet/testnet) will be prompted during setup"
+    echo ""
+    echo "Examples:"
+    echo "  $0                  # Use default geth (network type will be prompted)"
+    echo "  $0 --rpc_type=reth  # Use reth (network type will be prompted)"
+}
+
+# Parse command line arguments
+parse_arguments() {
+    for arg in "$@"; do
+        case $arg in
+            --rpc_type=*)
+                RPC_TYPE="${arg#*=}"
+                ;;
+            --help)
+                show_usage
+                exit 0
+                ;;
+            *)
+                print_error "Unknown argument: $arg"
+                show_usage
+                exit 1
+                ;;
+        esac
+    done
+    
+    # Set default for RPC_TYPE only
+    RPC_TYPE="${RPC_TYPE:-geth}"
+    
+    # Validate RPC_TYPE if provided
+    if ! validate_rpc_type "$RPC_TYPE"; then
+        exit 1
+    fi
+}
+
+# Check and display existing configurations
+check_existing_configurations() {
+    print_info "Checking existing configurations..."
+    echo ""
+    
+    local has_configs=false
+    
+    for config in mainnet-geth mainnet-reth testnet-geth testnet-reth; do
+        if [ -d "$config" ]; then
+            has_configs=true
+            local size=$(du -sh "$config" 2>/dev/null | cut -f1 || echo "unknown")
+            if [ "$config" = "$TARGET_DIR" ]; then
+                echo "  📦 $config ($size) ← Current"
+            else
+                echo "  📦 $config ($size)"
+            fi
+        fi
+    done
+    
+    if [ "$has_configs" = false ]; then
+        echo "  ℹ️  No existing configurations found"
+    fi
+    
+    echo ""
 }
 
 # Load network-specific configuration dynamically
@@ -254,14 +327,14 @@ download_config_files() {
     
     load_network_config "$NETWORK_TYPE"
     
-    # Determine CONFIG_DIR early using user-specified CHAINDATA_BASE
-    local config_dir="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}/config"
+    # Target directory config folder
+    local config_dir="${TARGET_DIR}/config"
     mkdir -p "$config_dir"
     
-    local config_files=("config/$ROLLUP_CONFIG")
+    local config_files=("presets/$ROLLUP_CONFIG")
     
     # Add execution client config
-    [ "$RPC_TYPE" = "reth" ] && config_files+=("config/$RETH_CONFIG") || config_files+=("config/$GETH_CONFIG")
+    [ "$RPC_TYPE" = "reth" ] && config_files+=("presets/$RETH_CONFIG") || config_files+=("presets/$GETH_CONFIG")
     
     for file in "${config_files[@]}"; do
         local filename=$(basename "$file")
@@ -290,11 +363,19 @@ prompt_input() {
     local default_value=$2
     local validator=$3
     local result
+    local input
     
     while true; do
         print_prompt "$prompt_text"
-        read -r input </dev/tty
-        result="${input:-$default_value}"
+        # Try to read from /dev/tty, fallback to stdin if it fails
+        if read -r input </dev/tty 2>/dev/null; then
+            result="${input:-$default_value}"
+        elif read -r input; then
+            result="${input:-$default_value}"
+        else
+            # If both fail, use default value
+            result="$default_value"
+        fi
         
         # If validator function provided, call it
         if [ -n "$validator" ] && ! $validator "$result"; then
@@ -323,73 +404,117 @@ check_existing_data() {
     local target_dir="$1"
     
     if [ ! -d "$target_dir" ]; then
-        return 0
+        print_info "Directory does not exist, will initialize: $target_dir"
+        return 0  # Continue with initialization
     fi
     
-    print_warning "Existing data directory found: $target_dir"
+    print_warning "Directory already exists: $target_dir"
     echo ""
-    print_prompt "Do you want to delete it and start fresh? (yes/no) [default: no]: "
-    read -r response </dev/tty
-    response="${response:-no}"
     
-    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-        print_info "Removing existing directory: $target_dir"
-        if rm -rf "$target_dir"; then
-            print_success "Directory removed successfully"
-        else
-            print_error "Failed to remove directory"
-            exit 1
-        fi
+    # Display directory information
+    local size=$(du -sh "$target_dir" 2>/dev/null | cut -f1 || echo "unknown")
+    echo "  📂 Location: $target_dir"
+    echo "  💾 Size: $size"
+    
+    # Check if initialized
+    if [ -d "$target_dir/data" ] && [ "$(ls -A "$target_dir/data" 2>/dev/null)" ]; then
+        echo "  ✅ Status: Initialized with data"
     else
-        echo ""
-        print_error "Cannot proceed with existing data directory"
-        print_info "Please manually remove the directory and re-run setup:"
-        print_info "  rm -rf $target_dir"
-        exit 1
+        echo "  ⚠️  Status: Empty or incomplete"
     fi
+    
+    echo ""
+    echo "Options:"
+    echo "  [1] Keep existing data and skip initialization (recommended)"
+    echo "  [2] Delete and re-initialize (will lose all data)"
+    echo "  [3] Cancel"
+    echo ""
+    
+    while true; do
+        print_prompt "Your choice [1/2/3, default: 1]: "
+        if ! read -r choice </dev/tty 2>/dev/null && ! read -r choice; then
+            choice="1"  # Default to keeping data if read fails
+        fi
+        choice="${choice:-1}"
+        
+        case $choice in
+            1)
+                print_success "Keeping existing data"
+                return 1  # Skip initialization
+                ;;
+            2)
+                print_warning "Deleting existing directory: $target_dir"
+                if rm -rf "$target_dir"; then
+                    print_success "Directory removed successfully"
+                    return 0  # Continue with initialization
+                else
+                    print_error "Failed to remove directory"
+                    exit 1
+                fi
+                ;;
+            3)
+                print_info "Setup cancelled by user"
+                exit 0
+                ;;
+            *)
+                print_error "Invalid choice. Please enter 1, 2, or 3"
+                ;;
+        esac
+    done
 }
 
 get_user_input() {
     print_info "Please provide the following information:"
     echo ""
     
-    # Interactive mode (works even with curl | bash via /dev/tty)
-    # Step 1: Network type
+    # Step 1: Network type (interactive)
     NETWORK_TYPE=$(prompt_input "1. Network type (testnet/mainnet) [default: $DEFAULT_NETWORK]: " "$DEFAULT_NETWORK" "validate_network")
+    
+    # Set target directory
+    TARGET_DIR="${NETWORK_TYPE}-${RPC_TYPE}"
     
     # Step 2-3: L1 URLs (required)
     while true; do
         print_prompt "2. L1 RPC URL (Ethereum L1 RPC endpoint): "
-        read -r L1_RPC_URL </dev/tty
+        if ! read -r L1_RPC_URL </dev/tty 2>/dev/null && ! read -r L1_RPC_URL; then
+            print_error "Failed to read input"
+            exit 1
+        fi
         [ -n "$L1_RPC_URL" ] && validate_url "$L1_RPC_URL" && break
     done
     
     while true; do
         print_prompt "3. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
-        read -r L1_BEACON_URL </dev/tty
+        if ! read -r L1_BEACON_URL </dev/tty 2>/dev/null && ! read -r L1_BEACON_URL; then
+            print_error "Failed to read input"
+            exit 1
+        fi
         [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
     done
     
-    # Step 4: RPC client type
-    RPC_TYPE=$(prompt_input "4. RPC client type (geth/reth) [default: geth]: " "geth" "validate_rpc_type")
-    
-    # Use current directory for data
-    CHAINDATA_BASE="./chaindata"
-    local full_path="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
-    
     # Check existing data directory
     echo ""
-    check_existing_data "$full_path"
+    # Temporarily disable set -e to capture return value safely
+    set +e
+    check_existing_data "$TARGET_DIR"
+    SKIP_INIT=$?  # Save return value: 0=initialize, 1=skip
+    set -e
     
-    # Optional configurations
+    # Optional configurations (always collect, regardless of SKIP_INIT)
     echo ""
-    print_info "Optional configurations (press Enter to use defaults):"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_info "Port Configuration (Step 2/2)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_info "Press Enter to use default values, or type new values:"
+    echo ""
     
-    RPC_PORT=$(prompt_input "5. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "")
-    WS_PORT=$(prompt_input "6. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "")
-    NODE_RPC_PORT=$(prompt_input "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "")
-    GETH_P2P_PORT=$(prompt_input "8. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "")
-    NODE_P2P_PORT=$(prompt_input "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "")
+    RPC_PORT=$(prompt_input "4. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
+    WS_PORT=$(prompt_input "5. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "") || WS_PORT="$DEFAULT_WS_PORT"
+    NODE_RPC_PORT=$(prompt_input "6. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
+    GETH_P2P_PORT=$(prompt_input "7. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
+    NODE_P2P_PORT=$(prompt_input "8. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
+    
+    print_info "Using ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT"
     
     print_success "Configuration input completed"
 }
@@ -434,11 +559,10 @@ generate_config_files() {
         EXEC_CLIENT="op-geth"
     fi
     
-    # CHAINDATA_BASE is specified by user, create ${NETWORK_TYPE}-${RPC_TYPE} subdirectory
-    local full_chaindata_dir="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
-    DATA_DIR="${full_chaindata_dir}/data"
-    CONFIG_DIR="${full_chaindata_dir}/config"
-    LOGS_DIR="${full_chaindata_dir}/logs"
+    # Use TARGET_DIR directly
+    DATA_DIR="${TARGET_DIR}/data"
+    CONFIG_DIR="${TARGET_DIR}/config"
+    LOGS_DIR="${TARGET_DIR}/logs"
     GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
     
     # Create directory structure
@@ -486,7 +610,7 @@ RPC_TYPE=$RPC_TYPE
 CHAIN_NAME=$chain_name
 
 # Directory Configuration
-CHAINDATA_BASE=$CHAINDATA_BASE
+TARGET_DIR=$TARGET_DIR
 
 # L2 Engine URL (Docker Compose service name)
 L2_ENGINE_URL=$l2_engine_url
@@ -662,6 +786,13 @@ init_reth() {
         exit 1
     fi
     
+    # Remove auto-generated reth.toml (we use custom config mounted as /config.toml)
+    local auto_config="$data_dir/reth.toml"
+    if [ -f "$auto_config" ]; then
+        rm -f "$auto_config"
+        print_info "Removed auto-generated reth.toml (using custom config instead)"
+    fi
+    
     print_success "op-reth initialized successfully"
 }
 
@@ -682,7 +813,7 @@ initialize_node() {
     fi
     
     print_success "Node initialization completed"
-    print_info "Directory structure created at: ${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
+    print_info "Directory structure created at: ${TARGET_DIR}"
     print_info "  - data/"
     if [ "$RPC_TYPE" = "reth" ]; then
         print_info "    - op-reth/: Reth blockchain data"
@@ -739,7 +870,11 @@ start_services() {
 }
 
 main() {
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  X Layer RPC Node One-Click Setup"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
     detect_repository
     if [ "$IN_REPO" = true ]; then
         print_info "📂 Running from repository: $REPO_ROOT"
@@ -747,21 +882,73 @@ main() {
         print_info "🌐 Running standalone mode (will download files from GitHub)"
     fi
     
-    # Load configuration first
+    # Parse command line arguments first (only rpc_type)
+    parse_arguments "$@"
+    
+    # Show selected RPC type
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_info "RPC Client: $RPC_TYPE"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Load configuration from network-presets.env
     load_configuration
     
     # System checks
     check_system_requirements
     check_required_files
     
-    # User interaction
+    # User interaction (network type, L1 URLs and ports)
+    # This also calls check_existing_data and sets SKIP_INIT
     get_user_input
     
-    # Setup process
-    download_config_files
-    generate_config_files
-    initialize_node
-    start_services
+    # Check existing configurations after network type is determined
+    echo ""
+    check_existing_configurations
+    
+    # Conditional initialization
+    if [ "$SKIP_INIT" -eq 0 ]; then
+        # Full initialization process
+        print_info "Performing full initialization..."
+        download_config_files
+        generate_config_files
+        initialize_node
+        start_services
+    else
+        # Skip initialization, only generate .env
+        print_info "Skipping initialization, updating configuration only..."
+        
+        # Ensure basic directory structure exists
+        mkdir -p "$TARGET_DIR/config" "$TARGET_DIR/logs" "$TARGET_DIR/data"
+        
+        # Load network config for .env generation
+        load_network_config "$NETWORK_TYPE"
+        
+        # Generate .env file
+        generate_env_file
+        
+        print_success "Configuration updated"
+        print_info "Ready to run: make run"
+    fi
+    
+    # Cleanup for standalone mode
+    cleanup_standalone_files
+}
+
+# Clean up downloaded files in standalone mode
+cleanup_standalone_files() {
+    if [ "$IN_REPO" = false ] && [ -f "$WORK_DIR/network-presets.env" ]; then
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        print_info "Standalone mode: Downloaded configuration file detected"
+        echo ""
+        echo "  📄 network-presets.env (cached for faster re-runs)"
+        echo ""
+        echo "To clean up downloaded files, run:"
+        echo "  rm -f network-presets.env Makefile docker-compose.yml"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    fi
 }
 
 # Run main function

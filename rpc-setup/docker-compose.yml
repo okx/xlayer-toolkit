@@ -3,93 +3,6 @@ networks:
     name: xlayer-network
 
 services:
-  op-geth:
-    image: "${OP_GETH_IMAGE_TAG}"
-    container_name: xlayer-${NETWORK_TYPE}-op-geth
-    entrypoint: geth
-    networks:
-      - xlayer-network
-    ports:
-      - "${HTTP_RPC_PORT:-8123}:8545"
-      - "${ENGINE_API_PORT:-8552}:8552"
-      - "${WEBSOCKET_PORT:-8546}:8546"
-      - "${P2P_TCP_PORT:-30303}:30303"
-      - "${P2P_UDP_PORT:-30303}:30303/udp"
-    volumes:
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-geth/data/op-geth:/data
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-geth/config/jwt.txt:/jwt.txt
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-geth/config/op-geth-config-${NETWORK_TYPE}.toml:/config.toml
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-geth/logs:/logs
-    command:
-      - --verbosity=3
-      - --datadir=/data
-      - --config=/config.toml
-      - --db.engine=pebble
-      - --gcmode=archive
-      - --rollup.enabletxpooladmission
-      - --rollup.sequencerhttp=${SEQUENCER_HTTP_URL}
-      - --log.file=/logs/geth.log
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
-      interval: 10s
-      timeout: 10s
-      retries: 30
-      start_period: 60s
-
-  op-reth:
-    image: "${OP_RETH_IMAGE_TAG}"
-    container_name: xlayer-${NETWORK_TYPE}-op-reth
-    entrypoint: sh
-    networks:
-      - xlayer-network
-    ports:
-      - "${HTTP_RPC_PORT:-8123}:8545"
-      - "${WEBSOCKET_PORT:-8546}:8546"
-      - "${ENGINE_API_PORT:-8552}:8552"
-      - "${P2P_TCP_PORT:-30303}:30303"
-      - "${P2P_UDP_PORT:-30303}:30303/udp"
-    volumes:
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/data/op-reth:/datadir
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/config/jwt.txt:/jwt.txt
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/config/op-reth-config-${NETWORK_TYPE}.toml:/config.toml
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-reth/logs:/logs
-    command:
-      - -c
-      - |
-        exec op-reth node \
-          --datadir=/datadir \
-          --chain=${CHAIN_NAME:-xlayer-mainnet} \
-          --config=/config.toml \
-          --http \
-          --http.corsdomain=* \
-          --http.port=8545 \
-          --http.addr=0.0.0.0 \
-          --http.api=web3,debug,eth,txpool,net,miner \
-          --ws \
-          --ws.addr=0.0.0.0 \
-          --ws.port=8546 \
-          --ws.origins=* \
-          --ws.api=debug,eth,txpool,net \
-          --authrpc.addr=0.0.0.0 \
-          --authrpc.port=8552 \
-          --authrpc.jwtsecret=/jwt.txt \
-          --rollup.disable-tx-pool-gossip \
-          --rollup.sequencer-http=${SEQUENCER_HTTP_URL} \
-          --disable-discovery \
-          --max-outbound-peers=0 \
-          --max-inbound-peers=0 \
-          --rpc.legacy-url=${LEGACY_RPC_URL} \
-          --rpc.legacy-timeout=${LEGACY_RPC_TIMEOUT} \
-          2>&1 | tee /logs/reth.log
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "--data", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
-      interval: 10s
-      timeout: 10s
-      retries: 30
-      start_period: 30s
-
   op-node:
     image: "${OP_STACK_IMAGE_TAG}"
     container_name: xlayer-${NETWORK_TYPE}-op-node
@@ -101,10 +14,10 @@ services:
       - "${NODE_P2P_PORT:-9223}:9223"
       - "${NODE_P2P_PORT:-9223}:9223/udp"
     volumes:
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-${RPC_TYPE}/data/op-node:/data
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-${RPC_TYPE}/config/rollup-${NETWORK_TYPE}.json:/rollup.json
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-${RPC_TYPE}/config/jwt.txt:/jwt.txt
-      - ${CHAINDATA_BASE:-./chaindata}/${NETWORK_TYPE}-${RPC_TYPE}/logs:/logs
+      - ./${TARGET_DIR}/data/op-node:/data
+      - ./${TARGET_DIR}/config/rollup-${NETWORK_TYPE}.json:/rollup.json
+      - ./${TARGET_DIR}/config/jwt.txt:/jwt.txt
+      - ./${TARGET_DIR}/logs:/logs
     command:
       - -c
       - |
@@ -133,3 +46,93 @@ services:
           2>&1 | tee /logs/op-node.log
     restart: unless-stopped
     # Note: Service startup order is controlled by Makefile
+
+  op-geth:
+    image: "${OP_GETH_IMAGE_TAG}"
+    container_name: xlayer-${NETWORK_TYPE}-op-geth
+    entrypoint: geth
+    networks:
+      - xlayer-network
+    ports:
+      - "${HTTP_RPC_PORT:-8123}:8545"
+      - "${ENGINE_API_PORT:-8552}:8552"
+      - "${WEBSOCKET_PORT:-8546}:8546"
+      - "${P2P_TCP_PORT:-30303}:30303"
+      - "${P2P_UDP_PORT:-30303}:30303/udp"
+    volumes:
+      - ./${TARGET_DIR}/data/op-geth:/data
+      - ./${TARGET_DIR}/config/jwt.txt:/jwt.txt
+      - ./${TARGET_DIR}/config/op-geth-config-${NETWORK_TYPE}.toml:/config.toml
+      - ./${TARGET_DIR}/logs:/logs
+    command:
+      - --verbosity=3
+      - --datadir=/data
+      - --config=/config.toml
+      - --db.engine=pebble
+      - --gcmode=archive
+      - --pp-rpc-url=${LEGACY_RPC_URL}
+      - --rollup.enabletxpooladmission
+      - --rollup.sequencerhttp=${SEQUENCER_HTTP_URL}
+      - --log.file=/logs/geth.log
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  op-reth:
+    image: "${OP_RETH_IMAGE_TAG}"
+    container_name: xlayer-${NETWORK_TYPE}-op-reth
+    entrypoint: sh
+    networks:
+      - xlayer-network
+    ports:
+      - "${HTTP_RPC_PORT:-8123}:8545"
+      - "${WEBSOCKET_PORT:-8546}:8546"
+      - "${ENGINE_API_PORT:-8552}:8552"
+      - "${P2P_TCP_PORT:-30303}:30303"
+      - "${P2P_UDP_PORT:-30303}:30303/udp"
+    volumes:
+      - ./${TARGET_DIR}/data/op-reth:/datadir
+      - ./${TARGET_DIR}/config/jwt.txt:/jwt.txt
+      - ./${TARGET_DIR}/config/op-reth-config-${NETWORK_TYPE}.toml:/config.toml
+      - ./${TARGET_DIR}/logs:/logs
+    command:
+      - -c
+      - |
+        exec op-reth node \
+          --datadir=/datadir \
+          --chain=${CHAIN_NAME:-xlayer-mainnet} \
+          --config=/config.toml \
+          --http \
+          --http.corsdomain=* \
+          --http.port=8545 \
+          --http.addr=0.0.0.0 \
+          --http.api=web3,debug,eth,txpool,net,miner \
+          --ws \
+          --ws.addr=0.0.0.0 \
+          --ws.port=8546 \
+          --ws.origins=* \
+          --ws.api=debug,eth,txpool,net \
+          --authrpc.addr=0.0.0.0 \
+          --authrpc.port=8552 \
+          --authrpc.jwtsecret=/jwt.txt \
+          --rollup.disable-tx-pool-gossip \
+          --rollup.sequencer-http=${SEQUENCER_HTTP_URL} \
+          --disable-discovery \
+          --max-outbound-peers=0 \
+          --max-inbound-peers=0 \
+          --rpc.legacy-url=${LEGACY_RPC_URL} \
+          --rpc.legacy-timeout=${LEGACY_RPC_TIMEOUT} \
+          --log.stdout.filter=info \
+          --log.file.directory=/logs/ \
+          --log.file.filter=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "--data", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
