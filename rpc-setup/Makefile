@@ -11,7 +11,7 @@ help:
 	@echo "  make status       - Check service status"
 	@echo ""
 	@echo "  Note: Run ./one-click-setup.sh for first-time setup"
-	@echo "  Note: To delete data, manually run: rm -rf chaindata/ .env"
+	@echo "  Note: To delete data, manually run: rm -rf <network>-<rpc>/ .env"
 	@echo "  Logs: Use 'docker compose logs' or 'docker compose logs -f'"
 	@echo ""
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

@@ -29,14 +29,14 @@ load_configuration() {
     
     # Try to get network-presets.env to current directory if not already present
     if [ ! -f "$config_file" ]; then
-        if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/preset-config/network-presets.env" ]; then
+        if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/presets/network-presets.env" ]; then
             # Copy from local repository
-            cp "$REPO_RPC_SETUP_DIR/preset-config/network-presets.env" "$config_file"
+            cp "$REPO_RPC_SETUP_DIR/presets/network-presets.env" "$config_file"
             print_info "Using configuration from local repository"
         else
             # Download from GitHub
             print_info "Downloading configuration file..."
-            local config_url="${REPO_URL}/preset-config/network-presets.env"
+            local config_url="${REPO_URL}/presets/network-presets.env"
             if ! wget -q "$config_url" -O "$config_file" 2>/dev/null; then
                 print_error "Failed to download configuration file from GitHub"
                 print_info "This script requires network-specific configuration (bootnodes, image tags, etc.)"
@@ -328,10 +328,10 @@ download_config_files() {
     local config_dir="${TARGET_DIR}/config"
     mkdir -p "$config_dir"
     
-    local config_files=("preset-config/$ROLLUP_CONFIG")
+    local config_files=("presets/$ROLLUP_CONFIG")
     
     # Add execution client config
-    [ "$RPC_TYPE" = "reth" ] && config_files+=("preset-config/$RETH_CONFIG") || config_files+=("preset-config/$GETH_CONFIG")
+    [ "$RPC_TYPE" = "reth" ] && config_files+=("presets/$RETH_CONFIG") || config_files+=("presets/$GETH_CONFIG")
     
     for file in "${config_files[@]}"; do
         local filename=$(basename "$file")

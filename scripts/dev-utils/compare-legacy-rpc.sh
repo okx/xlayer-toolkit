@@ -3,7 +3,7 @@
 # XLayer Mainnet Configuration
 CUTOFF_BLOCK="42810021"
 NETWORK_NAME="XLayer Mainnet"
-LEGACY_RPC_URL="https://xlayerrpc.okx.com/unlimited/abc"
+LEGACY_RPC_URL="https://xlayerrpc.okx.com/"
 EXPECTED_CHAIN_ID="0xc4"  # 196
 
 # Real transaction hashes for testing
