@@ -1,6 +1,6 @@
 # Stress Testing Guide for RPC/Sequencer
 
-This guide explains how to perform comprehensive stress tests on your local RPC node or sequencer using the Adventure tool.
+This guide explains how to perform comprehensive stress tests on your local RPC node or sequencer using the [Adventure](https://github.com/cuiweixie/adventure/tree/leo/contract-deploy) tool.
 
 ## Table of Contents
 
@@ -80,7 +80,7 @@ The Adventure tool provides **15+ different stress testing commands** to compreh
 
 1. **Direct Command Line** - Fine-grained control with CLI flags
    ```shell
-   adventure evm bench transfer -i http://localhost:8545 -c 100 -t 0
+   adventure evm bench transfer -i http://localhost:8123 -c 100 -t 0
    ```
 
 2. **Configuration Files** - Reproducible tests with JSON configs
@@ -102,11 +102,11 @@ The Adventure tool provides **15+ different stress testing commands** to compreh
 **Purpose:** Tests raw transaction processing capacity by sending native token transfers.
 
 ```shell
-adventure evm bench transfer -i http://localhost:8545 -c 100 -t 0
+adventure evm bench transfer -i http://localhost:8123 -c 100 -t 0
 ```
 
 **Parameters:**
-- `-i, --ips`: Comma-separated RPC endpoints (e.g., `http://localhost:8545,http://localhost:8546`)
+- `-i, --ips`: Comma-separated RPC endpoints (e.g., `http://localhost:8123,http://localhost:8546`)
 - `-c, --concurrency`: Number of concurrent goroutines (default: 1)
 - `-t, --sleep`: Sleep time in milliseconds between transactions per goroutine (default: 1000)
 - `-p, --private-key-file`: Path to private key file (optional, uses 2000 built-in accounts if omitted)
@@ -121,19 +121,19 @@ adventure evm bench transfer -i http://localhost:8545 -c 100 -t 0
 **Example scenarios:**
 ```shell
 # Low load baseline
-adventure evm bench transfer -i http://localhost:8545 -c 10 -t 1000
+adventure evm bench transfer -i http://localhost:8123 -c 10 -t 1000
 
 # Medium load test
-adventure evm bench transfer -i http://localhost:8545 -c 100 -t 100
+adventure evm bench transfer -i http://localhost:8123 -c 100 -t 100
 
 # Maximum throughput test
-adventure evm bench transfer -i http://localhost:8545 -c 500 -t 0
+adventure evm bench transfer -i http://localhost:8123 -c 500 -t 0
 
 # Multi-node load balancing
 adventure evm bench transfer -i http://node1:8545,http://node2:8545,http://node3:8545 -c 200 -t 0
 
 # Fixed recipient (tests account state hotspot)
-adventure evm bench transfer -i http://localhost:8545 -c 100 -f
+adventure evm bench transfer -i http://localhost:8123 -c 100 -f
 ```
 
 ---
@@ -145,7 +145,7 @@ adventure evm bench transfer -i http://localhost:8545 -c 100 -f
 **Prerequisites:** Requires deployment of test contracts from [github.com/okex/evm-performance](https://github.com/okex/evm-performance)
 
 ```shell
-adventure evm bench operate -i http://localhost:8545 -c 100 --opts 1,1,1,1,1 --times 10 --contract 0x... --id 0
+adventure evm bench operate -i http://localhost:8123 -c 100 --opts 1,1,1,1,1 --times 10 --contract 0x... --id 0
 ```
 
 **Parameters:**
@@ -168,16 +168,16 @@ adventure evm bench operate -i http://localhost:8545 -c 100 --opts 1,1,1,1,1 --t
 **Example scenarios:**
 ```shell
 # Light contract operations via Router
-adventure evm bench operate -i http://localhost:8545 -c 50 --opts 1,1,1,1,1 --times 1 --contract 0x... --id 0
+adventure evm bench operate -i http://localhost:8123 -c 50 --opts 1,1,1,1,1 --times 1 --contract 0x... --id 0
 
 # Heavy computational load
-adventure evm bench operate -i http://localhost:8545 -c 100 --opts 10,10,10,10,10 --times 100 --contract 0x... --id 0
+adventure evm bench operate -i http://localhost:8123 -c 100 --opts 10,10,10,10,10 --times 100 --contract 0x... --id 0
 
 # Direct contract stress test (bypass Router)
-adventure evm bench operate -i http://localhost:8545 -c 200 --direct --contract 0x... --opts 5,5,5,5,5 --times 50
+adventure evm bench operate -i http://localhost:8123 -c 200 --direct --contract 0x... --opts 5,5,5,5,5 --times 50
 
 # Extreme computational stress
-adventure evm bench operate -i http://localhost:8545 -c 300 --opts 100,100,100,100,100 --times 1000 --contract 0x... --id 0
+adventure evm bench operate -i http://localhost:8123 -c 300 --opts 100,100,100,100,100 --times 1000 --contract 0x... --id 0
 ```
 
 ---
@@ -187,7 +187,7 @@ adventure evm bench operate -i http://localhost:8545 -c 300 --opts 100,100,100,1
 **Purpose:** Tests read performance and query handling capacity across all standard Ethereum RPC methods.
 
 ```shell
-adventure evm bench query -i http://localhost:8545 -t 1000 -o 10,10,10,10,10,10,10,10,10
+adventure evm bench query -i http://localhost:8123 -t 1000 -o 10,10,10,10,10,10,10,10,10
 ```
 
 **Parameters:**
@@ -214,22 +214,22 @@ adventure evm bench query -i http://localhost:8545 -t 1000 -o 10,10,10,10,10,10,
 **Example scenarios:**
 ```shell
 # Balanced query load (5 goroutines/second per query type)
-adventure evm bench query -i http://localhost:8545 -t 1000 -o 5,5,5,5,5,5,5,5,5
+adventure evm bench query -i http://localhost:8123 -t 1000 -o 5,5,5,5,5,5,5,5,5
 
 # Heavy read load (20 goroutines/second per query type)
-adventure evm bench query -i http://localhost:8545 -t 100 -o 20,20,20,20,20,20,20,20,20
+adventure evm bench query -i http://localhost:8123 -t 100 -o 20,20,20,20,20,20,20,20,20
 
 # Focus on block queries
-adventure evm bench query -i http://localhost:8545 -t 500 -o 50,0,50,0,0,0,0,0,0
+adventure evm bench query -i http://localhost:8123 -t 500 -o 50,0,50,0,0,0,0,0,0
 
 # Focus on transaction receipts (common query pattern)
-adventure evm bench query -i http://localhost:8545 -t 500 -o 0,0,0,0,0,0,50,0,0
+adventure evm bench query -i http://localhost:8123 -t 500 -o 0,0,0,0,0,0,50,0,0
 
 # Stress eth_call (contract read calls)
-adventure evm bench query -i http://localhost:8545 -t 200 -o 0,0,0,0,0,0,0,0,100
+adventure evm bench query -i http://localhost:8123 -t 200 -o 0,0,0,0,0,0,0,0,100
 
 # Disable specific queries (set to 0)
-adventure evm bench query -i http://localhost:8545 -t 1000 -o 10,10,10,10,0,10,10,10,10
+adventure evm bench query -i http://localhost:8123 -t 1000 -o 10,10,10,10,0,10,10,10,10
 ```
 
 ---
@@ -241,7 +241,7 @@ adventure evm bench query -i http://localhost:8545 -t 1000 -o 10,10,10,10,0,10,1
 **Note:** Designed for OEC testnet but can be adapted for other chains.
 
 ```shell
-adventure evm bench wmt -i http://localhost:8545 -c 250
+adventure evm bench wmt -i http://localhost:8123 -c 250
 ```
 
 **Parameters:**
@@ -260,10 +260,10 @@ adventure evm bench wmt -i http://localhost:8545 -c 250
 **Example scenarios:**
 ```shell
 # Moderate DeFi load
-adventure evm bench wmt -i http://localhost:8545 -c 100
+adventure evm bench wmt -i http://localhost:8123 -c 100
 
 # High DeFi throughput
-adventure evm bench wmt -i http://localhost:8545 -c 250 -t 0
+adventure evm bench wmt -i http://localhost:8123 -c 250 -t 0
 
 # Multi-node DeFi stress
 adventure evm bench wmt -i http://node1:8545,http://node2:8545 -c 500
@@ -334,7 +334,7 @@ adventure evm bench multiwmt-token -f config/devnet/wmt-cList_10-con_1000-val_al
 **Flow:** `getBalance` → `transfer` → `getBalance` (verify balance decreased)
 
 ```shell
-adventure evm bench scenario -i http://localhost:8545 -c 100 -p /path/to/private_keys.txt
+adventure evm bench scenario -i http://localhost:8123 -c 100 -p /path/to/private_keys.txt
 ```
 
 **Parameters:**
@@ -354,13 +354,13 @@ adventure evm bench scenario -i http://localhost:8545 -c 100 -p /path/to/private
 **Example scenarios:**
 ```shell
 # Basic scenario test
-adventure evm bench scenario -i http://localhost:8545 -c 50 -p config/devnet/addr_50000_transfer
+adventure evm bench scenario -i http://localhost:8123 -c 50 -p config/devnet/addr_50000_transfer
 
 # High concurrency scenarios
-adventure evm bench scenario -i http://localhost:8545 -c 200 -p config/devnet/addr_50000_transfer -t 500
+adventure evm bench scenario -i http://localhost:8123 -c 200 -p config/devnet/addr_50000_transfer -t 500
 
 # Fixed recipient scenario
-adventure evm bench scenario -i http://localhost:8545 -c 100 -p config/devnet/addr_50000_transfer -f
+adventure evm bench scenario -i http://localhost:8123 -c 100 -p config/devnet/addr_50000_transfer -f
 ```
 
 ---
@@ -370,7 +370,7 @@ adventure evm bench scenario -i http://localhost:8545 -c 100 -p config/devnet/ad
 **Purpose:** Measures transaction submission performance and timing.
 
 ```shell
-adventure evm bench txrpc -i http://localhost:8545 -c 100
+adventure evm bench txrpc -i http://localhost:8123 -c 100
 ```
 
 **Parameters:**
@@ -389,10 +389,10 @@ adventure evm bench txrpc -i http://localhost:8545 -c 100
 **Example scenarios:**
 ```shell
 # Measure baseline transaction timing
-adventure evm bench txrpc -i http://localhost:8545 -c 100
+adventure evm bench txrpc -i http://localhost:8123 -c 100
 
 # High concurrency timing test
-adventure evm bench txrpc -i http://localhost:8545 -c 500
+adventure evm bench txrpc -i http://localhost:8123 -c 500
 
 # Multi-node timing comparison
 adventure evm bench txrpc -i http://node1:8545,http://node2:8545 -c 200
@@ -422,7 +422,7 @@ adventure evm bench txrlpencode -p /path/to/private_keys.txt
 **Example:**
 ```shell
 # Generate signed transactions for all accounts
-adventure evm bench txrlpencode -i http://localhost:8545 -p config/devnet/addr_50000_transfer
+adventure evm bench txrlpencode -i http://localhost:8123 -p config/devnet/addr_50000_transfer
 ```
 
 ---
@@ -440,7 +440,7 @@ adventure evm bench transfer --f ./config/poly_test/fork6_transfer.json
 **Config file structure** (`fork6_transfer.json`):
 ```json
 {
-  "rpc": ["http://127.0.0.1:8545"],
+  "rpc": ["http://127.0.0.1:8123"],
   "accountsFilePath": "./config/devnet/addr_20000_wmt",
   "concurrency": 20,
   "threshold": 50000,
@@ -455,7 +455,7 @@ The codebase includes additional commands for ERC20 token stress testing:
 #### 1. Deploy ERC20 Contract and Fund Accounts
 ```shell
 adventure evm bench erc20-init <amount_per_account_in_wei> \
-  -i http://127.0.0.1:8545 \
+  -i http://127.0.0.1:8123 \
   -a ./config/devnet/addr_20000_wmt \
   -s <funded_private_key>
 ```
@@ -466,19 +466,19 @@ adventure evm bench erc20-init <amount_per_account_in_wei> \
 ```shell
 # Fund each account with 1 ETH (requires ~20,000 ETH total for 20k accounts)
 adventure evm bench erc20-init 1000000000000000000 \
-  -i http://127.0.0.1:8545 \
+  -i http://127.0.0.1:8123 \
   -a ./config/devnet/addr_20000_wmt \
   -s <funded_private_key>
 
 # Fund each account with 0.1 ETH (requires ~2,000 ETH total for 20k accounts)
 adventure evm bench erc20-init 100000000000000000 \
-  -i http://127.0.0.1:8545 \
+  -i http://127.0.0.1:8123 \
   -a ./config/devnet/addr_20000_wmt \
   -s <funded_private_key>
 
 # Fund each account with 0.01 ETH (requires ~200 ETH total for 20k accounts)
 adventure evm bench erc20-init 10000000000000000 \
-  -i http://127.0.0.1:8545 \
+  -i http://127.0.0.1:8123 \
   -a ./config/devnet/addr_20000_wmt \
   -s <funded_private_key>
 ```
@@ -501,7 +501,7 @@ adventure evm bench erc20 --f ./config/poly_test/fork6_erc20.json --contract 0x.
 **Config file structure** (`fork6_erc20.json`):
 ```json
 {
-  "rpc": ["http://127.0.0.1:8545"],
+  "rpc": ["http://127.0.0.1:8123"],
   "accountsFilePath": "./config/devnet/addr_20000_wmt",
   "concurrency": 20,
   "threshold": 50000,
@@ -562,7 +562,7 @@ Before running the scripts, either:
 
 **Script internals:**
 - Uses private key: `815405dddb0e2a99b12af775fd2929e526704e1d1aea6a0b4e74dc33e2f7fcd2`
-- Runs: `adventure evm bench erc20-init 100000000000000000000 -i http://127.0.0.1:8545 -a ./config/devnet/addr_20000_wmt -s <private_key>`
+- Runs: `adventure evm bench erc20-init 100000000000000000000 -i http://127.0.0.1:8123 -a ./config/devnet/addr_20000_wmt -s <private_key>`
 - **WARNING:** The amount `100000000000000000000` (100 ETH per account) requires ~2,000,000 ETH total for 20,000 accounts!
 
 **To customize the script:**
@@ -697,7 +697,7 @@ Before running stress tests, ensure test accounts have sufficient funds.
 ### Method 1: Batch Transfer to Built-in Accounts
 
 ```shell
-adventure evm batch-transfer 10 -i http://localhost:8545 -s <funded_private_key>
+adventure evm batch-transfer 10 -i http://localhost:8123 -s <funded_private_key>
 ```
 
 - Sends 10 tokens to each of the 2000 built-in test accounts
@@ -707,12 +707,12 @@ adventure evm batch-transfer 10 -i http://localhost:8545 -s <funded_private_key>
 ### Method 2: Use Custom Accounts
 
 ```shell
-adventure evm batch-transfer 100 -i http://localhost:8545 -s <funded_private_key> -a /path/to/addresses.txt
+adventure evm batch-transfer 100 -i http://localhost:8123 -s <funded_private_key> -a /path/to/addresses.txt
 ```
 
 Then run stress tests with:
 ```shell
-adventure evm bench transfer -i http://localhost:8545 -c 100 -p /path/to/private_keys.txt
+adventure evm bench transfer -i http://localhost:8123 -c 100 -p /path/to/private_keys.txt
 ```
 
 ### Method 3: Use Helper Scripts
@@ -724,7 +724,7 @@ For ERC20 tokens, use the automated setup script:
 
 For native tokens, use batch-transfer:
 ```shell
-adventure evm batch-transfer 100 -i http://localhost:8545 -s <funded_private_key> -a ./config/devnet/addr_20000_wmt
+adventure evm batch-transfer 100 -i http://localhost:8123 -s <funded_private_key> -a ./config/devnet/addr_20000_wmt
 ```
 
 ## Test Duration
@@ -763,27 +763,27 @@ They will continuously send transactions in an infinite loop. You **must** manua
 
 **For basic throughput testing:**
 ```shell
-adventure evm bench transfer -i http://localhost:8545 -c 100 -t 0
+adventure evm bench transfer -i http://localhost:8123 -c 100 -t 0
 ```
 
 **For contract-heavy workloads:**
 ```shell
-adventure evm bench operate -i http://localhost:8545 -c 100 --opts 1,1,1,1,1 --times 10 --contract 0x...
+adventure evm bench operate -i http://localhost:8123 -c 100 --opts 1,1,1,1,1 --times 10 --contract 0x...
 ```
 
 **For read-heavy workloads:**
 ```shell
-adventure evm bench query -i http://localhost:8545 -t 1000 -o 10,10,10,10,10,10,10,10,10
+adventure evm bench query -i http://localhost:8123 -t 1000 -o 10,10,10,10,10,10,10,10,10
 ```
 
 **For DeFi workloads:**
 ```shell
-adventure evm bench wmt -i http://localhost:8545 -c 250
+adventure evm bench wmt -i http://localhost:8123 -c 250
 ```
 
 **For realistic user scenarios:**
 ```shell
-adventure evm bench scenario -i http://localhost:8545 -c 100 -p config/devnet/addr_50000_transfer
+adventure evm bench scenario -i http://localhost:8123 -c 100 -p config/devnet/addr_50000_transfer
 ```
 
 ---
@@ -792,7 +792,7 @@ adventure evm bench scenario -i http://localhost:8545 -c 100 -p config/devnet/ad
 
 #### Phase 1: Baseline (Low Load)
 ```shell
-adventure evm bench transfer -i http://localhost:8545 -c 10 -t 1000
+adventure evm bench transfer -i http://localhost:8123 -c 10 -t 1000
 ```
 - Establish baseline performance
 - Monitor CPU, memory, disk I/O
@@ -801,9 +801,9 @@ adventure evm bench transfer -i http://localhost:8545 -c 10 -t 1000
 #### Phase 2: Gradual Increase
 ```shell
 # Increase concurrency progressively
-adventure evm bench transfer -i http://localhost:8545 -c 50 -t 500
-adventure evm bench transfer -i http://localhost:8545 -c 100 -t 100
-adventure evm bench transfer -i http://localhost:8545 -c 200 -t 50
+adventure evm bench transfer -i http://localhost:8123 -c 50 -t 500
+adventure evm bench transfer -i http://localhost:8123 -c 100 -t 100
+adventure evm bench transfer -i http://localhost:8123 -c 200 -t 50
 ```
 - Find performance degradation points
 - Track transaction inclusion rate
@@ -811,7 +811,7 @@ adventure evm bench transfer -i http://localhost:8545 -c 200 -t 50
 
 #### Phase 3: Maximum Throughput
 ```shell
-adventure evm bench transfer -i http://localhost:8545 -c 500 -t 0
+adventure evm bench transfer -i http://localhost:8123 -c 500 -t 0
 ```
 - Determine maximum sustainable TPS
 - Identify bottlenecks
@@ -819,7 +819,7 @@ adventure evm bench transfer -i http://localhost:8545 -c 500 -t 0
 
 #### Phase 4: Query Load (Separate Test)
 ```shell
-adventure evm bench query -i http://localhost:8545 -t 100 -o 20,20,20,20,20,20,20,20,20
+adventure evm bench query -i http://localhost:8123 -t 100 -o 20,20,20,20,20,20,20,20,20
 ```
 - Test read path independently
 - Measure RPC response times
@@ -829,13 +829,13 @@ adventure evm bench query -i http://localhost:8545 -t 100 -o 20,20,20,20,20,20,2
 Run multiple stress tests simultaneously in separate terminals:
 ```shell
 # Terminal 1: Write load
-adventure evm bench transfer -i http://localhost:8545 -c 200 -t 0
+adventure evm bench transfer -i http://localhost:8123 -c 200 -t 0
 
 # Terminal 2: Read load
-adventure evm bench query -i http://localhost:8545 -t 500 -o 10,10,10,10,10,10,10,10,10
+adventure evm bench query -i http://localhost:8123 -t 500 -o 10,10,10,10,10,10,10,10,10
 
 # Terminal 3: Contract operations
-adventure evm bench operate -i http://localhost:8545 -c 50 --opts 5,5,5,5,5 --times 10 --contract 0x...
+adventure evm bench operate -i http://localhost:8123 -c 50 --opts 5,5,5,5,5 --times 10 --contract 0x...
 ```
 - Simulates realistic production load
 - Tests interaction between read and write paths
@@ -903,7 +903,7 @@ You should see all commands including `erc20-init`, `celt-init`, `xen`, `script`
 
 **Solution:** Fund the test accounts first:
 ```shell
-adventure evm batch-transfer 100 -i http://localhost:8545 -s <funded_private_key>
+adventure evm batch-transfer 100 -i http://localhost:8123 -s <funded_private_key>
 ```
 
 #### During setup scripts (e.g., `./1-setup.sh`):
@@ -923,7 +923,7 @@ adventure evm batch-transfer 100 -i http://localhost:8545 -s <funded_private_key
 cast send 0xC951181A1BC142Cf9d162C18f2233ea09931e6EA \
   --value 1000ether \
   --private-key <your_genesis_funded_private_key> \
-  --rpc-url http://localhost:8545
+  --rpc-url http://localhost:8123
 ```
 
 **Option 2: Edit the script** to use your own funded private key:
@@ -935,7 +935,7 @@ nano 1-setup.sh
 **Option 3: Run manually** with your own private key:
 ```shell
 adventure evm bench erc20-init 100000000000000000000 \
-  -i http://localhost:8545 \
+  -i http://localhost:8123 \
   -a ./config/devnet/addr_20000_wmt \
   -s <your_funded_private_key>
 ```
@@ -966,7 +966,7 @@ echo $GOPATH/bin
 export PATH=$PATH:$(go env GOPATH)/bin
 
 # Or use full path
-$GOPATH/bin/adventure evm bench transfer -i http://localhost:8545 -c 100
+$GOPATH/bin/adventure evm bench transfer -i http://localhost:8123 -c 100
 ```
 
 ## Tips
@@ -987,7 +987,7 @@ When testing OP Stack:
 
 Verify your endpoint:
 ```shell
-curl -X POST http://localhost:8545 -H "Content-Type: application/json" \
+curl -X POST http://localhost:8123 -H "Content-Type: application/json" \
   --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
 ```
 
@@ -1007,36 +1007,36 @@ export PATH=$PATH:$(go env GOPATH)/bin
 
 **Step 2: Verify RPC is accessible**
 ```shell
-curl -X POST http://localhost:8545 -H "Content-Type: application/json" \
+curl -X POST http://localhost:8123 -H "Content-Type: application/json" \
   --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
 ```
 
 **Step 3: Fund test accounts**
 ```shell
 # Get a funded private key from your genesis config
-adventure evm batch-transfer 100 -i http://localhost:8545 -s <your_funded_private_key>
+adventure evm batch-transfer 100 -i http://localhost:8123 -s <your_funded_private_key>
 ```
 
 **Step 4: Run baseline test (5 minutes)**
 ```shell
-adventure evm bench transfer -i http://localhost:8545 -c 10 -t 1000
+adventure evm bench transfer -i http://localhost:8123 -c 10 -t 1000
 # Monitor for 5 minutes, then Ctrl+C
 ```
 
 **Step 5: Increase load gradually**
 ```shell
 # Medium load (5 minutes)
-adventure evm bench transfer -i http://localhost:8545 -c 100 -t 100
+adventure evm bench transfer -i http://localhost:8123 -c 100 -t 100
 # Ctrl+C after 5 minutes
 
 # High load (5 minutes)
-adventure evm bench transfer -i http://localhost:8545 -c 500 -t 0
+adventure evm bench transfer -i http://localhost:8123 -c 500 -t 0
 # Ctrl+C after 5 minutes
 ```
 
 **Step 6: Test query performance**
 ```shell
-adventure evm bench query -i http://localhost:8545 -t 1000 -o 10,10,10,10,10,10,10,10,10
+adventure evm bench query -i http://localhost:8123 -t 1000 -o 10,10,10,10,10,10,10,10,10
 # Run for 5 minutes, then Ctrl+C
 ```
 
