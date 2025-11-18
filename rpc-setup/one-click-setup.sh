@@ -4,7 +4,7 @@ set -e
 # Debug mode: set to true to cache genesis files locally for faster re-runs
 DEBUG=true
 BRANCH="reth"
-REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/scripts/rpc-setup"
+REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/rpc-setup"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="$(pwd)"  # Working directory is where the user runs the script
@@ -19,7 +19,7 @@ detect_repository() {
     if [ -f "$SCRIPT_DIR/docker-compose.yml" ]; then
         IN_REPO=true
         REPO_RPC_SETUP_DIR="$SCRIPT_DIR"
-        REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+        REPO_ROOT="$(dirname "$SCRIPT_DIR")"
     fi
 }
 
