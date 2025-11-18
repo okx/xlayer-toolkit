@@ -33,3 +33,4 @@ devnet/l1-geth/execution/geth
 devnet/tmp
 devnet/data
 devnet/saved-cannon-data
+profiling/
