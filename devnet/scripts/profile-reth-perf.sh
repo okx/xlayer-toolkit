@@ -48,12 +48,57 @@ fi
 
 echo "Found op-reth process with PID: $RETH_PID"
 
-# Find the actual perf binary (may be version-specific)
-PERF_BIN=$(docker exec "$CONTAINER" sh -c 'which perf_5.10 2>/dev/null || find /usr/bin -name "perf_*" -type f | head -1')
-if [ -z "$PERF_BIN" ]; then
-    PERF_BIN="perf"
+# Find the best available perf binary
+KERNEL_VERSION=$(docker exec "$CONTAINER" uname -r | cut -d'.' -f1-2)
+echo "Container kernel version: $KERNEL_VERSION"
+
+# Get list of all available perf binaries in the container
+# Check both /usr/local/bin and /usr/bin
+AVAILABLE_PERFS=$(docker exec "$CONTAINER" sh -c 'ls /usr/local/bin/perf* /usr/bin/perf* 2>/dev/null | grep -E "perf_[0-9]" | sort -u || true')
+
+if [ -n "$AVAILABLE_PERFS" ]; then
+    echo "Available perf versions in container:"
+    echo "$AVAILABLE_PERFS" | while read -r p; do echo "  - $p"; done
+
+    # Try to find the best match for kernel version
+    # Priority: exact match > closest match > highest version
+    PERF_BIN=$(docker exec "$CONTAINER" sh -c "
+        # Try exact kernel version match in /usr/local/bin first
+        if [ -f /usr/local/bin/perf_${KERNEL_VERSION} ]; then
+            echo /usr/local/bin/perf_${KERNEL_VERSION}
+        elif [ -f /usr/bin/perf_${KERNEL_VERSION} ]; then
+            echo /usr/bin/perf_${KERNEL_VERSION}
+        else
+            # Use highest available version as fallback
+            find /usr/local/bin /usr/bin -name 'perf_*' -type f -o -type l 2>/dev/null | \
+            grep -E 'perf_[0-9]+\.[0-9]+' | sort -V | tail -1
+        fi
+    ")
+
+    if [ -n "$PERF_BIN" ]; then
+        PERF_VERSION=$(basename "$PERF_BIN" | sed 's/perf_//')
+        if [ "$PERF_VERSION" = "$KERNEL_VERSION" ]; then
+            echo "✓ Found exact match: perf_${PERF_VERSION} for kernel ${KERNEL_VERSION}"
+        else
+            echo "⚠ Using perf_${PERF_VERSION} for kernel ${KERNEL_VERSION} (closest available)"
+        fi
+    fi
+else
+    echo "No versioned perf binaries found, checking for generic 'perf'..."
 fi
-echo "Using perf binary: $PERF_BIN"
+
+# Final fallback to generic 'perf'
+if [ -z "$PERF_BIN" ]; then
+    PERF_BIN=$(docker exec "$CONTAINER" sh -c 'command -v perf 2>/dev/null || find /usr/local/bin /usr/bin -name "perf" -type f -o -type l 2>/dev/null | head -1 || echo ""')
+fi
+
+if [ -z "$PERF_BIN" ]; then
+    echo "Error: No perf binary found in container"
+    echo "Please rebuild the container with: ./scripts/build-reth-with-profiling.sh"
+    exit 1
+fi
+
+echo "Selected perf binary: $PERF_BIN"
 
 # Record profile with perf
 echo "[3/5] Recording CPU profile for ${DURATION}s with perf..."

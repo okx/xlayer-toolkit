@@ -29,7 +29,7 @@ cd "$RETH_SOURCE_DIR"
 # Create a temporary Dockerfile that builds everything in Docker
 cat > Dockerfile.profiling.tmp <<'EOF'
 # Multi-stage build: Build stage
-FROM rust:1.88-bullseye as builder
+FROM rust:1.88-bookworm AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -50,17 +50,45 @@ COPY . .
 RUN RUSTFLAGS="-C force-frame-pointers=yes -C target-cpu=native" cargo build --profile profiling --features jemalloc,asm-keccak --bin op-reth --manifest-path crates/optimism/bin/Cargo.toml
 
 # Runtime stage
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 # Install runtime dependencies and profiling tools
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
-    libssl1.1 \
+    libssl3 \
     procps \
-    linux-perf \
     binutils \
     && rm -rf /var/lib/apt/lists/*
+
+# Install perf from bookworm repos (supports newer kernels)
+# Debian Bookworm has better kernel support (5.10, 6.1, 6.3+)
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    linux-perf \
+    && rm -rf /var/lib/apt/lists/*
+
+# The linux-perf package installs versioned binaries in /usr/lib/linux-tools/
+# Find and symlink them to /usr/bin for easy access
+RUN echo "Setting up perf binaries..." && \
+    mkdir -p /usr/local/bin && \
+    # Find all installed perf binaries
+    find /usr/lib -name "perf" -type f 2>/dev/null | while read perf_path; do \
+        version=$(echo "$perf_path" | grep -oP '\d+\.\d+' | head -1); \
+        if [ -n "$version" ]; then \
+            echo "Found perf version $version at $perf_path"; \
+            ln -sf "$perf_path" "/usr/local/bin/perf_$version"; \
+        fi; \
+    done && \
+    # Create a generic perf symlink to the newest version
+    newest_perf=$(find /usr/lib -name "perf" -type f 2>/dev/null | head -1); \
+    if [ -n "$newest_perf" ]; then \
+        ln -sf "$newest_perf" /usr/local/bin/perf; \
+        echo "Created generic perf symlink to: $newest_perf"; \
+    fi && \
+    echo "" && \
+    echo "Installed perf binaries:" && \
+    ls -lh /usr/local/bin/perf* 2>/dev/null || echo "Warning: No perf binaries found"
 
 # Copy op-reth binary from builder stage
 COPY --from=builder /build/target/profiling/op-reth /usr/local/bin/op-reth
@@ -93,6 +121,9 @@ echo "=== Build Complete ==="
 echo "Image: $IMAGE_TAG"
 echo ""
 echo "The image includes:"
-echo "  - op-reth built with 'make profiling-op' (debug symbols + frame pointers)"
-echo "  - perf (linux-perf) for CPU profiling"
+echo "  - op-reth built with profiling support (debug symbols + frame pointers)"
+echo "  - perf tools for multiple kernel versions (5.10, 6.1, 6.10+)"
 echo "  - binutils (for addr2line symbol resolution)"
+echo ""
+echo "Note: The profiling script will auto-detect and use the matching perf version"
+echo "      for your container's kernel version."
