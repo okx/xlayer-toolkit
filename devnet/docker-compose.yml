@@ -303,7 +303,7 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=debug
-      - --l2=http://op-${SEQ_TYPE}-seq:8552
+      - --l2=http://${SEQ_L2_EXECUTION_CLIENT}:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
       - --sequencer.l1-confs=5
@@ -330,7 +330,7 @@ services:
       - --pprof.port=9091
       - --l2.enginekind=${SEQ_TYPE}
     depends_on:
-      - op-${SEQ_TYPE}-seq
+      - ${SEQ_L2_EXECUTION_CLIENT}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9545"]
       interval: 3s
@@ -375,6 +375,61 @@ services:
     depends_on:
       - op-${RPC_TYPE}-rpc
 
+  op-rpc2:
+    image: "${OP_STACK_IMAGE_TAG}"
+    container_name: op-rpc2
+    volumes:
+      - ./data/op-rpc2:/data
+      - ./config-op/rollup.json:/rollup.json
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./l1-geth/execution/genesis.json:/l1-genesis.json
+    ports:
+      - "9565:9545"
+    command:
+      - /app/op-node/bin/op-node
+      - --log.level=debug
+      - --l2=http://op-${RPC_TYPE}-rpc2:8552
+      - --l2.jwt-secret=/jwt.txt
+      - --sequencer.enabled=false
+      - --verifier.l1-confs=1
+      - --rollup.config=/rollup.json
+      - --rpc.addr=0.0.0.0
+      - --rpc.port=9545
+      - --p2p.listen.tcp=9223
+      - --p2p.listen.udp=9223
+      - --p2p.priv.raw=096648ce9102985f9a57a12fa8138c4892a881f7b99dc7e84ede99b7ba24ffe7
+      - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
+      - --p2p.discovery.path=/data/p2p/opnode_discovery_db
+      - --p2p.static=/dns4/op-seq/tcp/9223/p2p/16Uiu2HAkzHdkbmS2VrCsccLibsu7MvGHpmFUMJnMTkKifrtS5m65
+      - --p2p.no-discovery
+      - --rpc.enable-admin=true
+      - --l1=${L1_RPC_URL_IN_DOCKER}
+      - --l1.beacon=${L1_BEACON_URL_IN_DOCKER}
+      - --l1.rpckind=standard
+      - --rollup.l1-chain-config=/l1-genesis.json
+      - --safedb.path=/data/safedb
+      - --l2.enginekind=reth
+    depends_on:
+      - op-reth-rpc2
+
+  op-reth-rpc2:
+    image: "${OP_RETH_IMAGE_TAG}"
+    container_name: op-reth-rpc2
+    entrypoint: /entrypoint/reth-rpc.sh 1
+    env_file:
+      - .env
+    volumes:
+      - ./data/op-reth-rpc2:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/genesis-reth.json:/genesis.json
+      - ./config-op/test.reth.rpc.config.toml:/config.toml
+      - ./entrypoint:/entrypoint
+      - ./.env:/.env
+    ports:
+      - "8128:8545"
+      - "30309:30303"
+      - "30309:30303/udp"
+
   op-conductor:
     image: "${OP_STACK_IMAGE_TAG}"
     container_name: op-conductor
@@ -389,7 +444,7 @@ services:
       - --log.level=debug
       # already existed service
       - --node.rpc=http://op-seq:9545
-      - --execution.rpc=http://op-${SEQ_TYPE}-seq:8545
+      - --execution.rpc=http://${SEQ_L2_EXECUTION_CLIENT}:${SEQ_L2_EXECUTION_PORT}
       # Raft Config
       - --raft.server.id=conductor-1
       - --raft.storage.dir=/data/raft
@@ -406,6 +461,7 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
+      - --rollup-boost.enabled=${FLASHBLOCK_ENABLED:-false}
     depends_on:
       op-seq:
         condition: service_healthy
@@ -587,7 +643,7 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=info
-      - --l2=http://op-${SEQ_TYPE}-seq2:8552
+      - --l2=http://${SEQ_L2_EXECUTION_CLIENT}2:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
       - --sequencer.stopped
@@ -613,7 +669,7 @@ services:
       - --conductor.rpc=http://op-conductor2:8547
       - --l2.enginekind=${SEQ_TYPE}
     depends_on:
-      - op-${SEQ_TYPE}-seq2
+      - ${SEQ_L2_EXECUTION_CLIENT}2
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9545"]
       interval: 3s
@@ -635,7 +691,7 @@ services:
       - --log.level=debug
       # already existed service
       - --node.rpc=http://op-seq2:9545
-      - --execution.rpc=http://op-${SEQ_TYPE}-seq2:8545
+      - --execution.rpc=http://${SEQ_L2_EXECUTION_CLIENT}2:${SEQ_L2_EXECUTION_PORT}
       # Raft Config
       - --raft.server.id=conductor-2
       - --raft.storage.dir=/data/raft
@@ -652,6 +708,7 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
+      - --rollup-boost.enabled=${FLASHBLOCK_ENABLED:-false}
     depends_on:
       op-seq2:
         condition: service_healthy
@@ -780,3 +837,163 @@ services:
     command:
       - --geth-mempool-endpoint=http://op-geth-seq3:8545
       - --reth-mempool-endpoint=http://op-reth-seq:8545
+
+  rollup-boost:
+    image: xlayerdev/rollup-boost:latest
+    container_name: rollup-boost
+    volumes:
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./.env:/.env
+    ports:
+      - "10111:1111" # outbound flashblocks ws port
+      - "5555:5555" # debug server port
+    command:
+      - --external-state-root
+      - --l2-url=http://op-${SEQ_TYPE}-seq:8552
+      - --l2-jwt-path=/jwt.txt
+      - --l2-timeout=1000
+      - --builder-url=http://op-rbuilder:8552
+      - --builder-jwt-path=/jwt.txt
+      - --builder-timeout=1000
+      - --flashblocks
+      - --flashblocks-builder-url=ws://op-rbuilder:1111
+      - --flashblocks-host=0.0.0.0
+      - --flashblocks-port=1111
+      - --rpc-host=0.0.0.0
+      - --rpc-port=8552
+      - --tracing
+      - --log-level=info
+      - --debug-host=0.0.0.0
+      - --debug-server-port=5555
+    depends_on:
+      - op-rbuilder
+      - op-${SEQ_TYPE}-seq
+
+  op-rbuilder:
+    image: xlayerdev/op-rbuilder
+    container_name: op-rbuilder
+    volumes:
+      - ./data/op-rbuilder:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/genesis-reth.json:/genesis.json
+      - ./.env:/.env
+    ports:
+      - "8125:8545"
+      - "18552:8552"
+      - "30307:30303"
+      - "30307:30303/udp"
+    environment:
+      - FLASHBLOCKS_CALCULATE_STATE_ROOT=false
+    command:
+      - node
+      - --datadir=/datadir
+      - --chain=/genesis.json
+      - --http
+      - --http.corsdomain=*
+      - --http.port=8545
+      - --http.addr=0.0.0.0
+      - --http.api=web3,debug,eth,txpool,net,miner
+      - --disable-discovery
+      - --max-outbound-peers=10
+      - --max-inbound-peers=10
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8552
+      - --authrpc.jwtsecret=/jwt.txt
+      - --trusted-peers=${TRUSTED_PEERS}
+      - --tx-propagation-policy=all
+      - --txpool.max-account-slots=100000
+      - --txpool.pending-max-count=100000
+      - --txpool.queued-max-count=100000
+      - --txpool.basefee-max-count=100000
+      - --txpool.max-pending-txns=100000
+      - --txpool.max-new-txns=100000
+      - --flashblocks.enabled
+      - --flashblocks.addr=0.0.0.0
+      - --flashblocks.port=1111
+      - --flashblocks.block-time=200
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+  rollup-boost2:
+    image: xlayerdev/rollup-boost:latest
+    container_name: rollup-boost2
+    volumes:
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./.env:/.env
+    ports:
+      - "10112:1111" # outbound flashblocks ws port
+      - "5556:5555" # debug server port
+    command:
+      - --external-state-root
+      - --l2-url=http://op-${SEQ_TYPE}-seq2:8552
+      - --l2-jwt-path=/jwt.txt
+      - --l2-timeout=1000
+      - --builder-url=http://op-rbuilder2:8552
+      - --builder-jwt-path=/jwt.txt
+      - --builder-timeout=1000
+      - --flashblocks
+      - --flashblocks-builder-url=ws://op-rbuilder2:1111
+      - --flashblocks-host=0.0.0.0
+      - --flashblocks-port=1111
+      - --rpc-host=0.0.0.0
+      - --rpc-port=8552
+      - --tracing
+      - --log-level=info
+      - --debug-host=0.0.0.0
+      - --debug-server-port=5555
+    depends_on:
+      - op-rbuilder2
+      - op-${SEQ_TYPE}-seq2
+
+  op-rbuilder2:
+    image: xlayerdev/op-rbuilder
+    container_name: op-rbuilder2
+    volumes:
+      - ./data/op-rbuilder2:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/genesis-reth.json:/genesis.json
+      - ./.env:/.env
+    ports:
+      - "8126:8545"
+      - "19552:8552"
+      - "30308:30303"
+      - "30308:30303/udp"
+    environment:
+      - FLASHBLOCKS_CALCULATE_STATE_ROOT=false
+    command:
+      - node
+      - --datadir=/datadir
+      - --chain=/genesis.json
+      - --http
+      - --http.corsdomain=*
+      - --http.port=8545
+      - --http.addr=0.0.0.0
+      - --http.api=web3,debug,eth,txpool,net,miner
+      - --disable-discovery
+      - --max-outbound-peers=10
+      - --max-inbound-peers=10
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8552
+      - --authrpc.jwtsecret=/jwt.txt
+      - --trusted-peers=${TRUSTED_PEERS}
+      - --tx-propagation-policy=all
+      - --txpool.max-account-slots=100000
+      - --txpool.pending-max-count=100000
+      - --txpool.queued-max-count=100000
+      - --txpool.basefee-max-count=100000
+      - --txpool.max-pending-txns=100000
+      - --txpool.max-new-txns=100000
+      - --flashblocks.enabled
+      - --flashblocks.addr=0.0.0.0
+      - --flashblocks.port=1111
+      - --flashblocks.block-time=200
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
