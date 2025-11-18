@@ -90,9 +90,6 @@ services:
       - --authrpc.addr=0.0.0.0
       - --authrpc.jwtsecret=/execution/jwtsecret
       - --datadir=/execution
-      - --allow-insecure-unlock
-      - --unlock=0x123463a4b065722e99115d6c222f267d9cabb524
-      - --password=/execution/geth_password.txt
       - --nodiscover
       - --syncmode=full
       - --gcmode=archive
@@ -109,7 +106,6 @@ services:
     volumes:
       - ./l1-geth/execution:/execution
       - ./l1-geth/execution/jwtsecret:/execution/jwtsecret
-      - ./l1-geth/execution/geth_password.txt:/execution/geth_password.txt
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
       interval: 10s
