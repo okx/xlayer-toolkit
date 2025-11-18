@@ -29,14 +29,14 @@ load_configuration() {
     
     # Try to get network-presets.env to current directory if not already present
     if [ ! -f "$config_file" ]; then
-        if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/network-presets.env" ]; then
+        if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/preset-config/network-presets.env" ]; then
             # Copy from local repository
-            cp "$REPO_RPC_SETUP_DIR/network-presets.env" "$config_file"
+            cp "$REPO_RPC_SETUP_DIR/preset-config/network-presets.env" "$config_file"
             print_info "Using configuration from local repository"
         else
             # Download from GitHub
             print_info "Downloading configuration file..."
-            local config_url="${REPO_URL}/network-presets.env"
+            local config_url="${REPO_URL}/preset-config/network-presets.env"
             if ! wget -q "$config_url" -O "$config_file" 2>/dev/null; then
                 print_error "Failed to download configuration file from GitHub"
                 print_info "This script requires network-specific configuration (bootnodes, image tags, etc.)"
@@ -56,7 +56,8 @@ NETWORK_TYPE=""
 RPC_TYPE=""
 L1_RPC_URL=""
 L1_BEACON_URL=""
-CHAINDATA_BASE=""  # User-specified chaindata base directory (will create ${NETWORK_TYPE}-${RPC_TYPE} subdirectory)
+TARGET_DIR=""  # Target directory for configuration (${NETWORK_TYPE}-${RPC_TYPE})
+SKIP_INIT=0  # Flag to skip initialization if directory exists
 RPC_PORT=""
 WS_PORT=""
 NODE_RPC_PORT=""
@@ -69,6 +70,75 @@ print_warning() { echo -e "\033[1;33m⚠️  $1\033[0m"; }
 print_error() { echo -e "\033[0;31m❌ $1\033[0m"; }
 print_prompt() { 
     printf "\033[0;34m%s\033[0m" "$1" > /dev/tty
+}
+
+# Show usage information
+show_usage() {
+    echo "Usage: $0 [options]"
+    echo ""
+    echo "Options:"
+    echo "  --rpc_type=<geth|reth>   RPC client type (default: geth)"
+    echo "  --help                   Show this help message"
+    echo ""
+    echo "Note: Network type (mainnet/testnet) will be prompted during setup"
+    echo ""
+    echo "Examples:"
+    echo "  $0                  # Use default geth (network type will be prompted)"
+    echo "  $0 --rpc_type=reth  # Use reth (network type will be prompted)"
+}
+
+# Parse command line arguments
+parse_arguments() {
+    for arg in "$@"; do
+        case $arg in
+            --rpc_type=*)
+                RPC_TYPE="${arg#*=}"
+                ;;
+            --help)
+                show_usage
+                exit 0
+                ;;
+            *)
+                print_error "Unknown argument: $arg"
+                show_usage
+                exit 1
+                ;;
+        esac
+    done
+    
+    # Set default for RPC_TYPE only
+    RPC_TYPE="${RPC_TYPE:-geth}"
+    
+    # Validate RPC_TYPE if provided
+    if ! validate_rpc_type "$RPC_TYPE"; then
+        exit 1
+    fi
+}
+
+# Check and display existing configurations
+check_existing_configurations() {
+    print_info "Checking existing configurations..."
+    echo ""
+    
+    local has_configs=false
+    
+    for config in mainnet-geth mainnet-reth testnet-geth testnet-reth; do
+        if [ -d "$config" ]; then
+            has_configs=true
+            local size=$(du -sh "$config" 2>/dev/null | cut -f1 || echo "unknown")
+            if [ "$config" = "$TARGET_DIR" ]; then
+                echo "  📦 $config ($size) ← Current"
+            else
+                echo "  📦 $config ($size)"
+            fi
+        fi
+    done
+    
+    if [ "$has_configs" = false ]; then
+        echo "  ℹ️  No existing configurations found"
+    fi
+    
+    echo ""
 }
 
 # Load network-specific configuration dynamically
@@ -254,14 +324,14 @@ download_config_files() {
     
     load_network_config "$NETWORK_TYPE"
     
-    # Determine CONFIG_DIR early using user-specified CHAINDATA_BASE
-    local config_dir="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}/config"
+    # Target directory config folder
+    local config_dir="${TARGET_DIR}/config"
     mkdir -p "$config_dir"
     
-    local config_files=("config/$ROLLUP_CONFIG")
+    local config_files=("preset-config/$ROLLUP_CONFIG")
     
     # Add execution client config
-    [ "$RPC_TYPE" = "reth" ] && config_files+=("config/$RETH_CONFIG") || config_files+=("config/$GETH_CONFIG")
+    [ "$RPC_TYPE" = "reth" ] && config_files+=("preset-config/$RETH_CONFIG") || config_files+=("preset-config/$GETH_CONFIG")
     
     for file in "${config_files[@]}"; do
         local filename=$(basename "$file")
@@ -323,39 +393,72 @@ check_existing_data() {
     local target_dir="$1"
     
     if [ ! -d "$target_dir" ]; then
-        return 0
+        print_info "Directory does not exist, will initialize: $target_dir"
+        return 0  # Continue with initialization
     fi
     
-    print_warning "Existing data directory found: $target_dir"
+    print_warning "Directory already exists: $target_dir"
     echo ""
-    print_prompt "Do you want to delete it and start fresh? (yes/no) [default: no]: "
-    read -r response </dev/tty
-    response="${response:-no}"
     
-    if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-        print_info "Removing existing directory: $target_dir"
-        if rm -rf "$target_dir"; then
-            print_success "Directory removed successfully"
-        else
-            print_error "Failed to remove directory"
-            exit 1
-        fi
+    # Display directory information
+    local size=$(du -sh "$target_dir" 2>/dev/null | cut -f1 || echo "unknown")
+    echo "  📂 Location: $target_dir"
+    echo "  💾 Size: $size"
+    
+    # Check if initialized
+    if [ -d "$target_dir/data" ] && [ "$(ls -A "$target_dir/data" 2>/dev/null)" ]; then
+        echo "  ✅ Status: Initialized with data"
     else
-        echo ""
-        print_error "Cannot proceed with existing data directory"
-        print_info "Please manually remove the directory and re-run setup:"
-        print_info "  rm -rf $target_dir"
-        exit 1
+        echo "  ⚠️  Status: Empty or incomplete"
     fi
+    
+    echo ""
+    echo "Options:"
+    echo "  [1] Keep existing data and skip initialization (recommended)"
+    echo "  [2] Delete and re-initialize (will lose all data)"
+    echo "  [3] Cancel"
+    echo ""
+    
+    while true; do
+        print_prompt "Your choice [1/2/3, default: 1]: "
+        read -r choice </dev/tty
+        choice="${choice:-1}"
+        
+        case $choice in
+            1)
+                print_success "Keeping existing data"
+                return 1  # Skip initialization
+                ;;
+            2)
+                print_warning "Deleting existing directory: $target_dir"
+                if rm -rf "$target_dir"; then
+                    print_success "Directory removed successfully"
+                    return 0  # Continue with initialization
+                else
+                    print_error "Failed to remove directory"
+                    exit 1
+                fi
+                ;;
+            3)
+                print_info "Setup cancelled by user"
+                exit 0
+                ;;
+            *)
+                print_error "Invalid choice. Please enter 1, 2, or 3"
+                ;;
+        esac
+    done
 }
 
 get_user_input() {
     print_info "Please provide the following information:"
     echo ""
     
-    # Interactive mode (works even with curl | bash via /dev/tty)
-    # Step 1: Network type
+    # Step 1: Network type (interactive)
     NETWORK_TYPE=$(prompt_input "1. Network type (testnet/mainnet) [default: $DEFAULT_NETWORK]: " "$DEFAULT_NETWORK" "validate_network")
+    
+    # Set target directory
+    TARGET_DIR="${NETWORK_TYPE}-${RPC_TYPE}"
     
     # Step 2-3: L1 URLs (required)
     while true; do
@@ -370,26 +473,20 @@ get_user_input() {
         [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
     done
     
-    # Step 4: RPC client type
-    RPC_TYPE=$(prompt_input "4. RPC client type (geth/reth) [default: geth]: " "geth" "validate_rpc_type")
-    
-    # Use current directory for data
-    CHAINDATA_BASE="./chaindata"
-    local full_path="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
-    
     # Check existing data directory
     echo ""
-    check_existing_data "$full_path"
+    check_existing_data "$TARGET_DIR"
+    SKIP_INIT=$?  # Save return value: 0=initialize, 1=skip
     
     # Optional configurations
     echo ""
     print_info "Optional configurations (press Enter to use defaults):"
     
-    RPC_PORT=$(prompt_input "5. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "")
-    WS_PORT=$(prompt_input "6. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "")
-    NODE_RPC_PORT=$(prompt_input "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "")
-    GETH_P2P_PORT=$(prompt_input "8. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "")
-    NODE_P2P_PORT=$(prompt_input "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "")
+    RPC_PORT=$(prompt_input "4. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "")
+    WS_PORT=$(prompt_input "5. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "")
+    NODE_RPC_PORT=$(prompt_input "6. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "")
+    GETH_P2P_PORT=$(prompt_input "7. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "")
+    NODE_P2P_PORT=$(prompt_input "8. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "")
     
     print_success "Configuration input completed"
 }
@@ -434,11 +531,10 @@ generate_config_files() {
         EXEC_CLIENT="op-geth"
     fi
     
-    # CHAINDATA_BASE is specified by user, create ${NETWORK_TYPE}-${RPC_TYPE} subdirectory
-    local full_chaindata_dir="${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
-    DATA_DIR="${full_chaindata_dir}/data"
-    CONFIG_DIR="${full_chaindata_dir}/config"
-    LOGS_DIR="${full_chaindata_dir}/logs"
+    # Use TARGET_DIR directly
+    DATA_DIR="${TARGET_DIR}/data"
+    CONFIG_DIR="${TARGET_DIR}/config"
+    LOGS_DIR="${TARGET_DIR}/logs"
     GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
     
     # Create directory structure
@@ -486,7 +582,7 @@ RPC_TYPE=$RPC_TYPE
 CHAIN_NAME=$chain_name
 
 # Directory Configuration
-CHAINDATA_BASE=$CHAINDATA_BASE
+TARGET_DIR=$TARGET_DIR
 
 # L2 Engine URL (Docker Compose service name)
 L2_ENGINE_URL=$l2_engine_url
@@ -682,7 +778,7 @@ initialize_node() {
     fi
     
     print_success "Node initialization completed"
-    print_info "Directory structure created at: ${CHAINDATA_BASE}/${NETWORK_TYPE}-${RPC_TYPE}"
+    print_info "Directory structure created at: ${TARGET_DIR}"
     print_info "  - data/"
     if [ "$RPC_TYPE" = "reth" ]; then
         print_info "    - op-reth/: Reth blockchain data"
@@ -739,7 +835,11 @@ start_services() {
 }
 
 main() {
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  X Layer RPC Node One-Click Setup"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
     detect_repository
     if [ "$IN_REPO" = true ]; then
         print_info "📂 Running from repository: $REPO_ROOT"
@@ -747,21 +847,55 @@ main() {
         print_info "🌐 Running standalone mode (will download files from GitHub)"
     fi
     
-    # Load configuration first
+    # Parse command line arguments first (only rpc_type)
+    parse_arguments "$@"
+    
+    # Show selected RPC type
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_info "RPC Client: $RPC_TYPE"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    # Load configuration from network-presets.env
     load_configuration
     
     # System checks
     check_system_requirements
     check_required_files
     
-    # User interaction
+    # User interaction (network type, L1 URLs and ports)
+    # This also calls check_existing_data and sets SKIP_INIT
     get_user_input
     
-    # Setup process
-    download_config_files
-    generate_config_files
-    initialize_node
-    start_services
+    # Check existing configurations after network type is determined
+    echo ""
+    check_existing_configurations
+    
+    # Conditional initialization
+    if [ "$SKIP_INIT" -eq 0 ]; then
+        # Full initialization process
+        print_info "Performing full initialization..."
+        download_config_files
+        generate_config_files
+        initialize_node
+        start_services
+    else
+        # Skip initialization, only generate .env
+        print_info "Skipping initialization, updating configuration only..."
+        
+        # Ensure basic directory structure exists
+        mkdir -p "$TARGET_DIR/config" "$TARGET_DIR/logs" "$TARGET_DIR/data"
+        
+        # Load network config for .env generation
+        load_network_config "$NETWORK_TYPE"
+        
+        # Generate .env file
+        generate_env_file
+        
+        print_success "Configuration updated"
+        print_info "Ready to run: make run"
+    fi
 }
 
 # Run main function
