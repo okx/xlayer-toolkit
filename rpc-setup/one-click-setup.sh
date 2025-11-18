@@ -500,8 +500,6 @@ get_user_input() {
     SKIP_INIT=$?  # Save return value: 0=initialize, 1=skip
     set -e
     
-    echo "[DEBUG] After check_existing_data, SKIP_INIT=$SKIP_INIT" >&2
-    
     # Optional configurations (always collect, regardless of SKIP_INIT)
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
