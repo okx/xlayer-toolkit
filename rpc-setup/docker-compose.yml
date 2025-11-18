@@ -14,10 +14,10 @@ services:
       - "${NODE_P2P_PORT:-9223}:9223"
       - "${NODE_P2P_PORT:-9223}:9223/udp"
     volumes:
-      - ${TARGET_DIR}/data/op-node:/data
-      - ${TARGET_DIR}/config/rollup-${NETWORK_TYPE}.json:/rollup.json
-      - ${TARGET_DIR}/config/jwt.txt:/jwt.txt
-      - ${TARGET_DIR}/logs:/logs
+      - ./${TARGET_DIR}/data/op-node:/data
+      - ./${TARGET_DIR}/config/rollup-${NETWORK_TYPE}.json:/rollup.json
+      - ./${TARGET_DIR}/config/jwt.txt:/jwt.txt
+      - ./${TARGET_DIR}/logs:/logs
     command:
       - -c
       - |
@@ -60,10 +60,10 @@ services:
       - "${P2P_TCP_PORT:-30303}:30303"
       - "${P2P_UDP_PORT:-30303}:30303/udp"
     volumes:
-      - ${TARGET_DIR}/data/op-geth:/data
-      - ${TARGET_DIR}/config/jwt.txt:/jwt.txt
-      - ${TARGET_DIR}/config/op-geth-config-${NETWORK_TYPE}.toml:/config.toml
-      - ${TARGET_DIR}/logs:/logs
+      - ./${TARGET_DIR}/data/op-geth:/data
+      - ./${TARGET_DIR}/config/jwt.txt:/jwt.txt
+      - ./${TARGET_DIR}/config/op-geth-config-${NETWORK_TYPE}.toml:/config.toml
+      - ./${TARGET_DIR}/logs:/logs
     command:
       - --verbosity=3
       - --datadir=/data
@@ -94,10 +94,10 @@ services:
       - "${P2P_TCP_PORT:-30303}:30303"
       - "${P2P_UDP_PORT:-30303}:30303/udp"
     volumes:
-      - ${TARGET_DIR}/data/op-reth:/datadir
-      - ${TARGET_DIR}/config/jwt.txt:/jwt.txt
-      - ${TARGET_DIR}/config/op-reth-config-${NETWORK_TYPE}.toml:/config.toml
-      - ${TARGET_DIR}/logs:/logs
+      - ./${TARGET_DIR}/data/op-reth:/datadir
+      - ./${TARGET_DIR}/config/jwt.txt:/jwt.txt
+      - ./${TARGET_DIR}/config/op-reth-config-${NETWORK_TYPE}.toml:/config.toml
+      - ./${TARGET_DIR}/logs:/logs
     command:
       - -c
       - |

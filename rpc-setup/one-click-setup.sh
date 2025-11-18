@@ -25,16 +25,16 @@ detect_repository() {
 
 # Load configuration from network-presets.env
 load_configuration() {
-    local config_file="$WORK_DIR/network-presets.env"
+    local config_file
     
-    # Try to get network-presets.env to current directory if not already present
-    if [ ! -f "$config_file" ]; then
-        if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/presets/network-presets.env" ]; then
-            # Copy from local repository
-            cp "$REPO_RPC_SETUP_DIR/presets/network-presets.env" "$config_file"
-            print_info "Using configuration from local repository"
-        else
-            # Download from GitHub
+    # If running from repository, use the file directly from presets/
+    if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/presets/network-presets.env" ]; then
+        config_file="$REPO_RPC_SETUP_DIR/presets/network-presets.env"
+        print_info "Using configuration from local repository"
+    else
+        # For standalone mode, download to work directory
+        config_file="$WORK_DIR/network-presets.env"
+        if [ ! -f "$config_file" ]; then
             print_info "Downloading configuration file..."
             local config_url="${REPO_URL}/presets/network-presets.env"
             if ! wget -q "$config_url" -O "$config_file" 2>/dev/null; then
@@ -69,7 +69,10 @@ print_success() { echo -e "\033[0;32m✅ $1\033[0m"; }
 print_warning() { echo -e "\033[1;33m⚠️  $1\033[0m"; }
 print_error() { echo -e "\033[0;31m❌ $1\033[0m"; }
 print_prompt() { 
-    printf "\033[0;34m%s\033[0m" "$1" > /dev/tty
+    # Try /dev/tty first, fallback to stdout
+    if ! printf "\033[0;34m%s\033[0m" "$1" > /dev/tty 2>/dev/null; then
+        printf "\033[0;34m%s\033[0m" "$1"
+    fi
 }
 
 # Show usage information
@@ -360,11 +363,19 @@ prompt_input() {
     local default_value=$2
     local validator=$3
     local result
+    local input
     
     while true; do
         print_prompt "$prompt_text"
-        read -r input </dev/tty
-        result="${input:-$default_value}"
+        # Try to read from /dev/tty, fallback to stdin if it fails
+        if read -r input </dev/tty 2>/dev/null; then
+            result="${input:-$default_value}"
+        elif read -r input; then
+            result="${input:-$default_value}"
+        else
+            # If both fail, use default value
+            result="$default_value"
+        fi
         
         # If validator function provided, call it
         if [ -n "$validator" ] && ! $validator "$result"; then
@@ -421,7 +432,9 @@ check_existing_data() {
     
     while true; do
         print_prompt "Your choice [1/2/3, default: 1]: "
-        read -r choice </dev/tty
+        if ! read -r choice </dev/tty 2>/dev/null && ! read -r choice; then
+            choice="1"  # Default to keeping data if read fails
+        fi
         choice="${choice:-1}"
         
         case $choice in
@@ -463,30 +476,47 @@ get_user_input() {
     # Step 2-3: L1 URLs (required)
     while true; do
         print_prompt "2. L1 RPC URL (Ethereum L1 RPC endpoint): "
-        read -r L1_RPC_URL </dev/tty
+        if ! read -r L1_RPC_URL </dev/tty 2>/dev/null && ! read -r L1_RPC_URL; then
+            print_error "Failed to read input"
+            exit 1
+        fi
         [ -n "$L1_RPC_URL" ] && validate_url "$L1_RPC_URL" && break
     done
     
     while true; do
         print_prompt "3. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
-        read -r L1_BEACON_URL </dev/tty
+        if ! read -r L1_BEACON_URL </dev/tty 2>/dev/null && ! read -r L1_BEACON_URL; then
+            print_error "Failed to read input"
+            exit 1
+        fi
         [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
     done
     
     # Check existing data directory
     echo ""
+    # Temporarily disable set -e to capture return value safely
+    set +e
     check_existing_data "$TARGET_DIR"
     SKIP_INIT=$?  # Save return value: 0=initialize, 1=skip
+    set -e
     
-    # Optional configurations
+    echo "[DEBUG] After check_existing_data, SKIP_INIT=$SKIP_INIT" >&2
+    
+    # Optional configurations (always collect, regardless of SKIP_INIT)
     echo ""
-    print_info "Optional configurations (press Enter to use defaults):"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_info "Port Configuration (Step 2/2)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_info "Press Enter to use default values, or type new values:"
+    echo ""
     
-    RPC_PORT=$(prompt_input "4. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "")
-    WS_PORT=$(prompt_input "5. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "")
-    NODE_RPC_PORT=$(prompt_input "6. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "")
-    GETH_P2P_PORT=$(prompt_input "7. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "")
-    NODE_P2P_PORT=$(prompt_input "8. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "")
+    RPC_PORT=$(prompt_input "4. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
+    WS_PORT=$(prompt_input "5. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "") || WS_PORT="$DEFAULT_WS_PORT"
+    NODE_RPC_PORT=$(prompt_input "6. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
+    GETH_P2P_PORT=$(prompt_input "7. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
+    NODE_P2P_PORT=$(prompt_input "8. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
+    
+    print_info "Using ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT"
     
     print_success "Configuration input completed"
 }
@@ -895,6 +925,24 @@ main() {
         
         print_success "Configuration updated"
         print_info "Ready to run: make run"
+    fi
+    
+    # Cleanup for standalone mode
+    cleanup_standalone_files
+}
+
+# Clean up downloaded files in standalone mode
+cleanup_standalone_files() {
+    if [ "$IN_REPO" = false ] && [ -f "$WORK_DIR/network-presets.env" ]; then
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        print_info "Standalone mode: Downloaded configuration file detected"
+        echo ""
+        echo "  📄 network-presets.env (cached for faster re-runs)"
+        echo ""
+        echo "To clean up downloaded files, run:"
+        echo "  rm -f network-presets.env Makefile docker-compose.yml"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     fi
 }
 
