@@ -103,7 +103,7 @@ After running the setup script, your deployment directory will contain:
 ├── docker-compose.yml              # Docker services definition
 ├── Makefile                        # Service management commands
 ├── one-click-setup.sh              # Setup script (downloaded)
-├── network-presets.env             # Network configurations (downloaded in standalone mode)
+├── network-presets.env             # Network configs (cached in standalone mode, can be deleted)
 ├── presets/                        # Configuration templates (in repository mode)
 │   ├── network-presets.env
 │   ├── op-geth-config-mainnet.toml
