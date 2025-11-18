@@ -786,6 +786,13 @@ init_reth() {
         exit 1
     fi
     
+    # Remove auto-generated reth.toml (we use custom config mounted as /config.toml)
+    local auto_config="$data_dir/reth.toml"
+    if [ -f "$auto_config" ]; then
+        rm -f "$auto_config"
+        print_info "Removed auto-generated reth.toml (using custom config instead)"
+    fi
+    
     print_success "op-reth initialized successfully"
 }
 

@@ -125,7 +125,14 @@ services:
           --max-inbound-peers=0 \
           --rpc.legacy-url=${LEGACY_RPC_URL} \
           --rpc.legacy-timeout=${LEGACY_RPC_TIMEOUT} \
-          2>&1 | tee /logs/reth.log
+          --log.stdout.format=terminal \
+          --log.stdout.filter=info \
+          --log.file.directory=/logs/ \
+          --log.file.name=reth.log \
+          --log.file.format=terminal \
+          --log.file.filter=info \
+          --log.file.max-size=200 \
+          --log.file.max-files=5
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "--data", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
