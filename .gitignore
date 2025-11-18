@@ -15,3 +15,24 @@ scripts/dev-utils/genesis/
 scripts/dev-utils/*.tar.gz
 scripts/dev-utils/*.genesis.json
 scripts/dev-utils/*.processing
+# Ignore test files
+devnet/.env
+devnet/l1-geth/consensus/beacondata
+devnet/l1-geth/consensus/validatordata
+devnet/config-op/genesis.json
+devnet/config-op/genesis-reth.json
+devnet/config-op/genesis.json.gz
+devnet/config-op/genesis-reth.json
+devnet/config-op/gen.test.geth.rpc.config.toml
+devnet/config-op/gen.test.reth.rpc.config.toml
+devnet/config-op/implementations.json
+devnet/config-op/intent.toml
+devnet/config-op/rollup.json
+devnet/config-op/state.json
+devnet/config-op/superchain.json
+devnet/l1-geth/consensus/genesis.ssz
+devnet/l1-geth/execution/geth/genesis.json
+devnet/l1-geth/execution/geth
+devnet/tmp
+devnet/data
+devnet/saved-cannon-data

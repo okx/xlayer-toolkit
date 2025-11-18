@@ -38,11 +38,20 @@ cd scripts/rpc-setup
 
 ## 🛠️ System Requirements
 
-- **OS**: Linux (Ubuntu 24.04+ recommended)
-- **Memory**: 16GB RAM minimum (32GB+ recommended for RPC nodes)
-- **Storage**: 100GB+ available disk space (SSD recommended)
-- **Docker**: 20.10+
-- **Docker Compose**: 2.0+
+### Development Network (Devnet)
+
+Complete local Optimism test environment for development and testing, supporting both Geth and Reth execution clients.
+
+**Key Features:**
+- ✅ Full OP Stack deployment (L1 + L2)
+- ✅ Support for op-geth and op-reth sequencers
+- ✅ High availability with op-conductor cluster
+- ✅ One-click deployment and step-by-step setup
+- ✅ Parallel and sequential Docker image builds
+- ✅ Dispute game and fault proof support
+- ✅ Gray upgrade simulation for zero-downtime updates
+
+**Detailed Documentation:** [devnet/README.md](devnet/README.md)
 
 ## 📞 Support and Resources
 
