@@ -46,8 +46,8 @@ WORKDIR /build
 COPY . .
 
 # Build op-reth with profiling support using the Makefile target
-# This sets: RUSTFLAGS="-C force-frame-pointers=yes -C debuginfo=2" and builds with --profile profiling
-RUN make profiling-op
+# RUN make profiling-op
+RUN RUSTFLAGS="-C force-frame-pointers=yes -C target-cpu=native" cargo build --profile profiling --features jemalloc,asm-keccak --bin op-reth --manifest-path crates/optimism/bin/Cargo.toml
 
 # Runtime stage
 FROM debian:bullseye-slim

@@ -61,7 +61,7 @@ echo "Collecting call graph data with symbols..."
 
 docker exec "$CONTAINER" sh -c "
     cd /profiling && \
-    $PERF_BIN record -F 999 -p $RETH_PID -g --call-graph fp -o perf.data -- sleep ${DURATION}
+    $PERF_BIN record -F 999 -e cycles:u -p $RETH_PID -g --call-graph fp -o perf.data -- sleep ${DURATION}
 "
 
 # Generate perf script output with symbols
