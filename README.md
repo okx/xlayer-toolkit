@@ -15,7 +15,7 @@ A comprehensive collection of tools and scripts for deploying and managing X Lay
 
 ## 📦 Available Tools
 
-### [RPC Node Setup](scripts/rpc-setup/README.md)
+### [RPC Node Setup](rpc-setup/README.md)
 
 Deploy your own X Layer RPC node with support for both Geth and Reth execution clients.
 
@@ -30,11 +30,11 @@ Deploy your own X Layer RPC node with support for both Geth and Reth execution c
 
 **Quick Start:**
 ```bash
-cd scripts/rpc-setup
+cd rpc-setup
 ./one-click-setup.sh
 ```
 
-[📖 Full RPC Setup Documentation →](scripts/rpc-setup/README.md)
+[📖 Full RPC Setup Documentation →](rpc-setup/README.md)
 
 ## 🛠️ System Requirements
 
