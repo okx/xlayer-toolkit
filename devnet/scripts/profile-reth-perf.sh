@@ -100,6 +100,10 @@ fi
 
 echo "Selected perf binary: $PERF_BIN"
 
+# Print perf version for verification
+PERF_VERSION_OUTPUT=$(docker exec "$CONTAINER" sh -c "$PERF_BIN --version 2>&1" || echo "Unable to get version")
+echo "Perf version: $PERF_VERSION_OUTPUT"
+
 # Record profile with perf
 echo "[3/5] Recording CPU profile for ${DURATION}s with perf..."
 echo "Collecting call graph data with symbols..."
