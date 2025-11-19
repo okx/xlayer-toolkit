@@ -32,6 +32,8 @@ else
     exit 1
   else
     echo "🔨 Building op-stack"
+    cd "$OP_STACK_LOCAL_DIRECTORY"
+    git submodule update --init --recursive
     build_and_tag_image "op-stack" "$OP_STACK_IMAGE_TAG" "$OP_STACK_LOCAL_DIRECTORY" "Dockerfile-opstack"
   fi
 fi
@@ -77,6 +79,7 @@ else
   else
     echo "🔨 Building $OP_CONTRACTS_IMAGE_TAG..."
     cd "$OP_STACK_LOCAL_DIRECTORY"
+    git submodule update --init --recursive
     build_and_tag_image "op-contracts" "$OP_CONTRACTS_IMAGE_TAG" "$OP_STACK_LOCAL_DIRECTORY" "Dockerfile-contracts"
   fi
 fi
