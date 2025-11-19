@@ -103,6 +103,7 @@ if [ "$SKIP_OP_RETH_BUILD" != "true" ]; then
 fi
 
 cd "$OP_STACK_LOCAL_DIRECTORY"
+git submodule update --init --recursive
 
 # Create log directory
 mkdir -p /tmp/docker-build-logs
