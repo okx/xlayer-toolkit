@@ -39,7 +39,6 @@ This script will:
 * L1 RPC URL - Ethereum L1 RPC endpoint
 * L1 Beacon URL - Ethereum L1 Beacon RPC endpoint
 * Optional: Custom port mappings
-* Optional: Data directory location
 
 **After installation, your RPC node will be available at:**
 
