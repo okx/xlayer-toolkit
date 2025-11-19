@@ -46,10 +46,10 @@ The easiest way to deploy your X Layer RPC node using the setup script from [xla
 #    Example for mainnet: /data/xlayer-mainnet
 #    Example for testnet: /data/xlayer-testnet
 mkdir -p /data/xlayer-mainnet && cd /data/xlayer-mainnet
-curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/rpc-setup/one-click-setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/main/rpc-setup/one-click-setup.sh | bash
 
 # Or use reth (⚠️ Under testing):
-curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/reth/rpc-setup/one-click-setup.sh | bash -s -- --rpc_type=reth
+curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/main/rpc-setup/one-click-setup.sh | bash -s -- --rpc_type=reth
 ```
 
 **What the script does:**

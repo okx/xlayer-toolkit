@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-BRANCH="reth"
+BRANCH="main"
 REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/rpc-setup"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -712,12 +712,12 @@ extract_genesis() {
     fi
     
     # Standalone mode: clean up temporary file
-    if [ "$IN_REPO" = false ]; then
-        rm -f "$genesis_file"
-        print_info "Cleaned up temporary genesis file"
-    else
-        print_info "Kept genesis file for future use: $genesis_file"
-    fi
+    # if [ "$IN_REPO" = false ]; then
+    #     rm -f "$genesis_file"
+    #     print_info "Cleaned up temporary genesis file"
+    # else
+    #     print_info "Kept genesis file for future use: $genesis_file"
+    # fi
     
     if [ ! -f "$target_dir/$target_file" ]; then
         print_error "Genesis file not found after extraction"
