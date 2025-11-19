@@ -14,14 +14,15 @@ This guide will help you quickly deploy an X Layer self-hosted RPC node, providi
 
 ## ⚡ Quick Deployment
 
-### 🎯 Option 1: One-Click Installation (Recommended)
-
 The easiest way to deploy your X Layer RPC node with minimal configuration:
 
 ```bash
 # Create your node directory and run setup
 mkdir -p /data/xlayer-mainnet && cd /data/xlayer-mainnet
-curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/main/rpc-setup/one-click-setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/okx/xlayer-toolkit/main/rpc-setup/one-click-setup.sh -o one-click-setup.sh
+chmod +x one-click-setup.sh 
+# Run setup script (geth client)
+./one-click-setup.sh
 ```
 
 This script will:
@@ -45,33 +46,17 @@ This script will:
 * HTTP RPC: `http://localhost:8545`
 * WebSocket: `ws://localhost:8546`
 
-### 🎯 Option 2: Repository Mode (Advanced Users))
-
-For users working with the repository directly:
-
-```bash
-# Clone the repository
-git clone https://github.com/okx/xlayer-toolkit.git
-cd xlayer-toolkit/rpc-setup
-
-# Run setup script (will use local presets/)
-./one-click-setup.sh
-
-# Or specify parameters directly (⚠️ Under testing)
-./one-click-setup.sh --rpc_type=reth
-```
-
 ## 📊 Service Management
 
 ```bash
-# Start services
-make run
+# Check service status
+make status
 
 # Stop services (preserves data)
 make stop
 
-# Check service status
-make status
+# Restart services
+make run
 
 # View logs
 docker compose logs -f
