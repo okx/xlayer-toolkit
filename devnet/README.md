@@ -29,7 +29,7 @@ Configure `example.env` (do not modify `.env` directly) and run `./clean.sh` to 
 > ![solution](./images/docker.png)
 
 ### Initial Setup (First Time Only)
-1. Run `./init.sh` to build Docker images locally. By default, Docker images are not built locally. You need to set the following variables to ``true`` in `example.env` and set the corresponding paths to build Docker images locally:
+1. Run `./init.sh` or `./init-parallel.sh` to build Docker images locally. By default, Docker images are not built locally. You need to set the following variables to ``true`` in `example.env` and set the corresponding paths to build Docker images locally:
 ```
 OP_STACK_LOCAL_DIRECTORY=<path to a clone of https://github.com/okx/optimism>
 OP_GETH_LOCAL_DIRECTORY=<path to a clone of https://github.com/okx/op-geth>
@@ -63,6 +63,9 @@ If you've updated the Optimism codebase and need to rebuild Docker images:
 3. **Rebuild images**:
    ```bash
    ./init.sh  # Rebuilds all Docker images
+
+   # Or in parallel (add -v for verbose output)
+   ./init-parallel.sh
 
    # Or rebuild specific images only (optional)
    source .env && cd .. && docker build -t ${OP_STACK_IMAGE_TAG} -f Dockerfile-opstack . && cd -

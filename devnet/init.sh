@@ -10,6 +10,19 @@ PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source .env
 
+function build_and_tag_image() {
+    local image_base_name=$1
+    local image_tag=$2
+    local build_dir=$3
+    local dockerfile=$4
+
+    cd "$build_dir"
+    GITTAG=$(git rev-parse --short HEAD)
+    docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
+    docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
+    echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
+}
+
 if [ "$SKIP_OP_STACK_BUILD" = "true" ]; then
     echo "⏭️  Skipping op-stack build"
 else
@@ -18,8 +31,7 @@ else
         exit 1
     else
         echo "🔨 Building op-stack"
-        cd "$OP_STACK_LOCAL_DIRECTORY"
-        docker build -t "$OP_STACK_IMAGE_TAG" -f ./Dockerfile-opstack .
+        build_and_tag_image "op-stack" "$OP_STACK_IMAGE_TAG" "$OP_STACK_LOCAL_DIRECTORY" "Dockerfile-opstack"
     fi
 fi
 
@@ -50,8 +62,7 @@ else
     fi
 
     echo "🔨 Building $OP_GETH_IMAGE_TAG"
-    cd "$OP_GETH_DIR"
-    docker build -t "$OP_GETH_IMAGE_TAG" .
+    build_and_tag_image "op-geth" "$OP_GETH_IMAGE_TAG" "$OP_GETH_DIR" "Dockerfile"
 fi
 
 # Build OP_CONTRACTS image if not skipping
@@ -64,7 +75,7 @@ else
     else
         echo "🔨 Building $OP_CONTRACTS_IMAGE_TAG..."
         cd "$OP_STACK_LOCAL_DIRECTORY"
-        docker build -t "$OP_CONTRACTS_IMAGE_TAG" -f ./Dockerfile-contracts .
+        build_and_tag_image "op-contracts" "$OP_CONTRACTS_IMAGE_TAG" "$OP_STACK_LOCAL_DIRECTORY" "Dockerfile-contracts"
     fi
 fi
 
@@ -94,7 +105,7 @@ else
             ./scripts/build-reth-with-profiling.sh
         else
             echo "Building standard op-reth image..."
-            docker build -t $OP_RETH_IMAGE_TAG -f ./DockerfileOp .
+            build_and_tag_image "op-reth" "$OP_RETH_IMAGE_TAG" "$OP_RETH_LOCAL_DIRECTORY" "DockerfileOp"
         fi
 
         cd "$OP_STACK_LOCAL_DIRECTORY"

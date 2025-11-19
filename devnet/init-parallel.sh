@@ -49,6 +49,11 @@ PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source .env
 
+VERBOSE=false
+if [ "$1" = "-v" ]; then
+    VERBOSE=true
+fi
+
 if [ "$OP_STACK_LOCAL_DIRECTORY" = "" ]; then
     echo "❌ Please set OP_STACK_LOCAL_DIRECTORY in .env"
     exit 1
@@ -113,6 +118,30 @@ echo ""
 BUILD_PIDS=()
 TAIL_PIDS=()
 
+function build_and_tag_image() {
+    local image_base_name=$1
+    local image_tag=$2
+    local build_dir=$3
+    local dockerfile=$4
+
+    cd "$build_dir"
+    GITTAG=$(git rev-parse --short HEAD)
+    START_TIME=$(date +%s)
+
+    echo "🔨 Building ${image_base_name}..."
+    docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" . > /tmp/docker-build-logs/${image_base_name}.log 2>&1 &
+    PID=$!
+    BUILD_PIDS+=("$PID:${image_base_name}:$START_TIME")
+    ALL_PIDS+=($PID)
+
+    if $VERBOSE; then
+        tail -f /tmp/docker-build-logs/${image_base_name}.log 2>/dev/null | sed "s/^/[${image_base_name}] /" &
+        TAIL_PID=$!
+        TAIL_PIDS+=($TAIL_PID)
+        ALL_PIDS+=($TAIL_PID)
+    fi
+}
+
 # Start all builds in parallel
 echo "🚀 Starting parallel builds..."
 
@@ -121,17 +150,7 @@ if [ "$SKIP_OP_CONTRACTS_BUILD" = "true" ]; then
     echo "⏭️  Skipping op-contracts build"
 else
     echo "🔨 [1/4] Starting op-contracts build..."
-    CONTRACTS_START=$(date +%s)
-
-    docker build -t "$OP_CONTRACTS_IMAGE_TAG" -f ./Dockerfile-contracts . > /tmp/docker-build-logs/op-contracts.log 2>&1 &
-    CONTRACTS_PID=$!
-    BUILD_PIDS+=("$CONTRACTS_PID:op-contracts:$CONTRACTS_START")
-    ALL_PIDS+=($CONTRACTS_PID)
-
-    tail -f /tmp/docker-build-logs/op-contracts.log 2>/dev/null | sed 's/^/[op-contracts] /' &
-    TAIL_CONTRACTS_PID=$!
-    TAIL_PIDS+=($TAIL_CONTRACTS_PID)
-    ALL_PIDS+=($TAIL_CONTRACTS_PID)
+    build_and_tag_image "op-contracts" "$OP_CONTRACTS_IMAGE_TAG" "$OP_STACK_LOCAL_DIRECTORY" "Dockerfile-contracts"
 fi
 
 # Build OP_GETH in background
@@ -139,20 +158,7 @@ if [ "$SKIP_OP_GETH_BUILD" = "true" ]; then
     echo "⏭️  Skipping op-geth build"
 else
     echo "🔨 [2/4] Starting op-geth build..."
-    GETH_START=$(date +%s)
-
-    cd "$OP_GETH_DIR"
-    docker build -t "$OP_GETH_IMAGE_TAG" . > /tmp/docker-build-logs/op-geth.log 2>&1 &
-    GETH_PID=$!
-    BUILD_PIDS+=("$GETH_PID:op-geth:$GETH_START")
-    ALL_PIDS+=($GETH_PID)
-
-    tail -f /tmp/docker-build-logs/op-geth.log 2>/dev/null | sed 's/^/[op-geth] /' &
-    TAIL_GETH_PID=$!
-    TAIL_PIDS+=($TAIL_GETH_PID)
-    ALL_PIDS+=($TAIL_GETH_PID)
-
-    cd "$OP_STACK_LOCAL_DIRECTORY"
+    build_and_tag_image "op-geth" "$OP_GETH_IMAGE_TAG" "$OP_GETH_DIR" "Dockerfile"
 fi
 
 # Build OP_STACK in background
@@ -164,17 +170,7 @@ else
         exit 1
     fi
     echo "🔨 [3/4] Starting op-stack build..."
-    STACK_START=$(date +%s)
-
-    docker build -t "$OP_STACK_IMAGE_TAG" -f ./Dockerfile-opstack . > /tmp/docker-build-logs/op-stack.log 2>&1 &
-    STACK_PID=$!
-    BUILD_PIDS+=("$STACK_PID:op-stack:$STACK_START")
-    ALL_PIDS+=($STACK_PID)
-
-    tail -f /tmp/docker-build-logs/op-stack.log 2>/dev/null | sed 's/^/[op-stack] /' &
-    TAIL_STACK_PID=$!
-    TAIL_PIDS+=($TAIL_STACK_PID)
-    ALL_PIDS+=($TAIL_STACK_PID)
+    build_and_tag_image "op-stack" "$OP_STACK_IMAGE_TAG" "$OP_STACK_LOCAL_DIRECTORY" "Dockerfile-opstack"
 fi
 
 # Build OP_RETH in background
@@ -186,28 +182,17 @@ else
         exit 1
     fi
     echo "🔨 [4/4] Starting op-reth build..."
-    RETH_START=$(date +%s)
-
-    cd "$OP_RETH_DIR"
-    docker build -t "$OP_RETH_IMAGE_TAG" -f ./DockerfileOp . > /tmp/docker-build-logs/op-reth.log 2>&1 &
-    RETH_PID=$!
-    BUILD_PIDS+=("$RETH_PID:op-reth:$RETH_START")
-    ALL_PIDS+=($RETH_PID)
-
-    tail -f /tmp/docker-build-logs/op-reth.log 2>/dev/null | sed 's/^/[op-reth] /' &
-    TAIL_RETH_PID=$!
-    TAIL_PIDS+=($TAIL_RETH_PID)
-    ALL_PIDS+=($TAIL_RETH_PID)
-
-    cd "$OP_STACK_LOCAL_DIRECTORY"
+    build_and_tag_image "op-reth" "$OP_RETH_IMAGE_TAG" "$OP_RETH_LOCAL_DIRECTORY" "DockerfileOp"
 fi
 
 # Wait for all builds to complete
 if [ ${#BUILD_PIDS[@]} -gt 0 ]; then
-    echo ""
-    echo "Building in parallel... (live output below)"
-    echo "================================================"
-    echo ""
+    if $VERBOSE; then
+        echo ""
+        echo "Building in parallel... (live output below)"
+        echo "================================================"
+        echo ""
+    fi
 
     # Disable debug output for monitoring loop to reduce noise
     set +x
@@ -248,7 +233,7 @@ if [ ${#BUILD_PIDS[@]} -gt 0 ]; then
     done
 
     # Re-enable debug output
-    set -x
+    # set -x
 
     # Now wait for exit codes
     FAILED=0
