@@ -21,20 +21,6 @@ run: stop
 	fi
 	./0-all.sh
 
-.PHONY: min-run
-min-run: stop
-	@mkdir -p tmp
-	@echo "🚀 Starting minimal run mode (without proposer/challenger/monitor)"
-	@echo "OP_GETH_BRANCH: $(OP_GETH_BRANCH)"
-	@if [ -n "$(OP_GETH_BRANCH)" ]; then \
-		echo "Initializing with branch: $(OP_GETH_BRANCH)"; \
-		MIN_RUN=true ./init.sh $(OP_GETH_BRANCH); \
-	else \
-		echo "Initializing with default branch"; \
-		MIN_RUN=true ./init.sh; \
-	fi
-	MIN_RUN=true ./0-all.sh
-
 .PHONY: run-geth-test
 run-geth-test:
 	@echo "OP_GETH_LOCAL_DIRECTORY: $$OP_GETH_LOCAL_DIRECTORY"
