@@ -832,10 +832,17 @@ extract_snapshot() {
     local target_dir=$1
     local snapshot_file="geth-testnet.tar.gz"
     
-    # Check if already extracted
+    # Check if already extracted in current directory
     if [ -d "xlayerdata" ] && [ -d "xlayerdata/op-geth" ] && [ -d "xlayerdata/op-node" ]; then
-        print_info "Snapshot already extracted, using existing xlayerdata directory"
+        print_success "Found existing xlayerdata directory, skipping extraction"
     else
+        # Check if snapshot file exists before extracting
+        if [ ! -f "$snapshot_file" ]; then
+            print_error "Snapshot file not found: $snapshot_file"
+            print_info "Please run download_snapshot() first"
+            exit 1
+        fi
+        
         print_info "Extracting snapshot (this may take a while)..."
         
         if ! tar -xzf "$snapshot_file"; then
@@ -847,6 +854,15 @@ extract_snapshot() {
             print_error "Snapshot extraction failed: xlayerdata directory not found"
             exit 1
         fi
+        
+        print_success "Snapshot extracted successfully"
+    fi
+    
+    # Check if target directory already has data
+    if [ -d "$target_dir/op-geth" ] && [ "$(ls -A "$target_dir/op-geth" 2>/dev/null)" ] && \
+       [ -d "$target_dir/op-node" ] && [ "$(ls -A "$target_dir/op-node" 2>/dev/null)" ]; then
+        print_success "Target directory already has snapshot data, skipping copy"
+        return 0
     fi
     
     # Copy snapshot data to target directory structure
