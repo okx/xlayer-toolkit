@@ -845,7 +845,7 @@ extract_snapshot() {
         
         print_info "Extracting snapshot (this may take a while)..."
         
-        if ! tar -xzf "$snapshot_file"; then
+        if ! tar -zxvf "$snapshot_file"; then
             print_error "Failed to extract snapshot file"
             exit 1
         fi
