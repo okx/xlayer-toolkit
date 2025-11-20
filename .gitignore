@@ -1,5 +1,17 @@
 /.vscode/openscaidentity
 
+# Chain data directory - contains all network and client data
+rpc-setup/*-geth/
+rpc-setup/*-reth/
+rpc-setup/.env
+rpc-setup/genesis-*.tar.gz
+
+# Development utilities cache and generated files
+scripts/dev-utils/.genesis_cache/
+scripts/dev-utils/genesis/
+scripts/dev-utils/*.tar.gz
+scripts/dev-utils/*.genesis.json
+scripts/dev-utils/*.processing
 # Ignore test files
 devnet/.env
 devnet/l1-geth/consensus/beacondata
@@ -21,5 +33,4 @@ devnet/l1-geth/execution/geth
 devnet/tmp
 devnet/data
 devnet/saved-cannon-data
-
 profiling/
