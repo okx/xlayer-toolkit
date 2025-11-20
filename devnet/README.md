@@ -130,6 +130,16 @@ Run `./0-all.sh` to automatically:
 
 > Note: For first-time setup, we recommend following the step-by-step deployment process to better understand each component and troubleshoot any potential issues.
 
+### Fast Verify Deployment
+```bash
+# Send test transaction
+cast send 0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 \
+  --value 1 \
+  --gas-price 2000000000 \
+  --private-key 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
+  --rpc-url http://localhost:8123
+```
+
 ### Step-by-Step Deployment
 For more granular control or troubleshooting, follow the steps below.
 
@@ -247,8 +257,9 @@ This method simulates a sequencer failure scenario, enabling comprehensive testi
 # Emulate the whole gray upgrade process to achieve 0 downtime
 ./scripts/gray-upgrade-simulation.sh
 # Meanwhile, open another terminal window to load test
+# Use account with L2 genesis balance
 polycli loadtest --rpc-url http://localhost:8124 \
-  --private-key "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356" \
+  --private-key "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" \
   --verbosity 700 --requests 50000  -c 1 --rate-limit -1
 ```
 
