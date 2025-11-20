@@ -142,7 +142,7 @@ cast send 0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 \
   --value 1 \
   --gas-price 2000000000 \
   --private-key 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
-  --rpc-url http://localhost:8123
+  --rpc-url http://localhost:8124
 ```
 
 ### Step-by-Step Deployment
