@@ -110,8 +110,7 @@ VM="0x${VM_RAW: -40}"
 ANCHOR_STATE_REGISTRY=$(cast call --rpc-url $L1_RPC_URL $PERMISSIONED_GAME "anchorStateRegistry()")
 L2_CHAIN_ID=$(cast call --rpc-url $L1_RPC_URL $PERMISSIONED_GAME "l2ChainId()")
 
-# Call the function to add game type 1 (permissioned)
-"$SCRIPTS_DIR/add-game-type.sh" 1 true $TEMP_CLOCK_EXTENSION $TEMP_MAX_CLOCK_DURATION $ABSOLUTE_PRESTATE
+echo "✅ Game type 1 (permissioned) already deployed by op-deployer at: $PERMISSIONED_GAME"
 
 export GAME_TYPE=1
 docker compose up -d op-proposer
@@ -142,7 +141,38 @@ fi
 echo "🛑 Stopping op-proposer..."
 docker compose stop op-proposer
 
-echo "⏰ Sleeping for ($TEMP_MAX_CLOCK_DURATION seconds)..."
+echo "⏰ Waiting for op-batcher to submit batch data to L1..."
+echo "   (This ensures resolve-claim has the necessary batch data)"
+BATCH_SUBMITTED=false
+MAX_WAIT=300  # Maximum 5 minutes wait
+WAIT_COUNT=0
+INITIAL_BATCH_COUNT=$(docker compose logs op-batcher 2>&1 | grep -c "Transaction successfully published" || echo "0")
+
+echo "   Initial batch count: $INITIAL_BATCH_COUNT"
+
+while [ "$BATCH_SUBMITTED" = false ] && [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+    sleep 5
+    WAIT_COUNT=$((WAIT_COUNT + 5))
+    
+    # Check if batcher has submitted new batches
+    CURRENT_BATCH_COUNT=$(docker compose logs op-batcher 2>&1 | grep -c "Transaction successfully published" || echo "0")
+    
+    if [ "$CURRENT_BATCH_COUNT" -gt "$INITIAL_BATCH_COUNT" ]; then
+        echo "   ✅ New batch submitted! (Count: $INITIAL_BATCH_COUNT -> $CURRENT_BATCH_COUNT)"
+        BATCH_SUBMITTED=true
+    else
+        echo "   ⏳ Waiting for batch submission... ($WAIT_COUNT/$MAX_WAIT seconds, batches: $CURRENT_BATCH_COUNT)"
+    fi
+done
+
+if [ "$BATCH_SUBMITTED" = false ]; then
+    echo "   ⚠️  No new batch detected after $MAX_WAIT seconds"
+    echo "   📝 Recent batcher logs:"
+    docker compose logs op-batcher 2>&1 | tail -10
+    echo "   ⏭️  Continuing anyway (batch might be in progress)..."
+fi
+
+echo "⏰ Additional wait for clock duration ($TEMP_MAX_CLOCK_DURATION seconds)..."
 sleep $TEMP_MAX_CLOCK_DURATION
 
 echo "🔧 Executing dispute resolution sequence using op-challenger..."
