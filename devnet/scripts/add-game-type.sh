@@ -132,8 +132,10 @@ add_game_type_via_safe() {
 
     echo "Creating addGameType calldata..."
 
-    # Build game type parameters array (simplified)
-    GAME_PARAMS="[(\"$SALT_MIXER\",$SYSTEM_CONFIG_PROXY_ADDRESS,$PROXY_ADMIN,0x0000000000000000000000000000000000000000,$GAME_TYPE,$ABSOLUTE_PRESTATE,$MAX_GAME_DEPTH,$SPLIT_DEPTH,$CLOCK_EXTENSION_VAL,$MAX_CLOCK_DURATION_VAL,$INITIAL_BOND,$VM,$IS_PERMISSIONED)]"
+    # Build game type parameters array
+    # AddGameInput: (saltMixer, systemConfig, delayedWETH, gameType, absolutePrestate, maxGameDepth, splitDepth, clockExtension, maxClockDuration, initialBond, vm, permissioned)
+    # Pass 0x0 for delayedWETH to let OPCM deploy a new one automatically
+    GAME_PARAMS="[(\"$SALT_MIXER\",$SYSTEM_CONFIG_PROXY_ADDRESS,0x0000000000000000000000000000000000000000,$GAME_TYPE,$ABSOLUTE_PRESTATE,$MAX_GAME_DEPTH,$SPLIT_DEPTH,$CLOCK_EXTENSION_VAL,$MAX_CLOCK_DURATION_VAL,$INITIAL_BOND,$VM,$IS_PERMISSIONED)]"
 
     echo "Parameters prepared for addGameType"
 
@@ -143,7 +145,7 @@ add_game_type_via_safe() {
     echo "From: $(cast wallet address --private-key $DEPLOYER_PRIVATE_KEY)"
 
     # Simplified DELEGATECALL - build calldata first, then call
-    ADDGAMETYPE_CALLDATA=$(cast calldata 'addGameType((string,address,address,address,uint32,bytes32,uint256,uint256,uint64,uint64,uint256,address,bool)[])' "$GAME_PARAMS")
+    ADDGAMETYPE_CALLDATA=$(cast calldata 'addGameType((string,address,address,uint32,bytes32,uint256,uint256,uint64,uint64,uint256,address,bool)[])' "$GAME_PARAMS")
 
 
     # Execute transaction via Safe's execTransaction with proper signature
@@ -301,12 +303,14 @@ add_game_type_via_transactor() {
     echo "Creating addGameType calldata..."
 
     # Build game type parameters array
-    GAME_PARAMS="[(\"$SALT_MIXER\",$SYSTEM_CONFIG_PROXY_ADDRESS,$PROXY_ADMIN,0x0000000000000000000000000000000000000000,$GAME_TYPE,$ABSOLUTE_PRESTATE,$MAX_GAME_DEPTH,$SPLIT_DEPTH,$CLOCK_EXTENSION_VAL,$MAX_CLOCK_DURATION_VAL,$INITIAL_BOND,$VM,$IS_PERMISSIONED)]"
+    # AddGameInput: (saltMixer, systemConfig, delayedWETH, gameType, absolutePrestate, maxGameDepth, splitDepth, clockExtension, maxClockDuration, initialBond, vm, permissioned)
+    # Pass 0x0 for delayedWETH to let OPCM deploy a new one automatically
+    GAME_PARAMS="[(\"$SALT_MIXER\",$SYSTEM_CONFIG_PROXY_ADDRESS,0x0000000000000000000000000000000000000000,$GAME_TYPE,$ABSOLUTE_PRESTATE,$MAX_GAME_DEPTH,$SPLIT_DEPTH,$CLOCK_EXTENSION_VAL,$MAX_CLOCK_DURATION_VAL,$INITIAL_BOND,$VM,$IS_PERMISSIONED)]"
 
     echo "Parameters prepared for addGameType"
 
     # Build calldata for addGameType
-    ADDGAMETYPE_CALLDATA=$(cast calldata 'addGameType((string,address,address,address,uint32,bytes32,uint256,uint256,uint64,uint64,uint256,address,bool)[])' "$GAME_PARAMS")
+    ADDGAMETYPE_CALLDATA=$(cast calldata 'addGameType((string,address,address,uint32,bytes32,uint256,uint256,uint64,uint64,uint256,address,bool)[])' "$GAME_PARAMS")
 
     echo "Executing DELEGATECALL via Transactor..."
     echo "TRANSACTOR address: $TRANSACTOR"
