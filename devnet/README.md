@@ -113,10 +113,15 @@ devnet/
 ## Quick Start
 
 ### One-Click Deployment
-Run `./0-all.sh` to automatically:
-- Initialize the environment
-- Start all required components
-- Complete all configurations and deployments
+
+```bash
+make run
+```
+
+This command automatically:
+- Cleans up previous deployment
+- Builds Docker images
+- Deploys complete environment
 
 ⚠️ **Important Notes**:
 
