@@ -90,6 +90,24 @@ fi
 
 docker compose up -d op-batcher
 
+# Check if MIN_RUN mode is enabled
+if [ "$MIN_RUN" = "true" ]; then
+    echo "⚡ MIN_RUN mode enabled: Skipping dispute game setup"
+    echo "✅ Essential services started:"
+    echo "   - Sequencer (op-${SEQ_TYPE}-seq)"
+    echo "   - Op Node (op-seq)"
+    echo "   - Op Batcher (op-batcher)"
+    if [ "$LAUNCH_RPC_NODE" = "true" ]; then
+        echo "   - RPC Node (op-${RPC_TYPE}-rpc)"
+    fi
+    echo ""
+    echo "⚠️  Skipped services (not required for minimal run):"
+    echo "   - op-proposer"
+    echo "   - op-challenger"
+    echo "   - op-dispute-mon"
+    exit 0
+fi
+
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd $PWD_DIR
 EXPORT_DIR="$PWD_DIR/data/cannon-data"
