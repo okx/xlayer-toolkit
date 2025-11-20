@@ -1,0 +1,25 @@
+FROM alpine:3.20 AS deps
+RUN apk add --no-cache git && \
+    git config --global --add safe.directory "*"
+
+WORKDIR /src
+COPY . .
+
+RUN git submodule update --init --recursive
+
+FROM ghcr.io/foundry-rs/foundry:latest
+WORKDIR /app/contracts
+
+# Copy dependencies and source files from deps stage
+COPY --from=deps /src/contracts/lib ./lib
+COPY --from=deps /src/contracts/foundry.toml .
+COPY --from=deps /src/contracts/src ./src
+COPY --from=deps /src/contracts/script ./script
+COPY --from=deps /src/contracts/test ./test
+
+# Build with cache mounts
+RUN --mount=type=cache,target=/root/.foundry \
+    --mount=type=cache,target=/root/.cache \
+    forge build --force
+
+ENTRYPOINT ["forge", "script"]

@@ -91,3 +91,23 @@ else
     fi
 fi
 
+# Build OP_SUCCINCT image if not skipping
+if [ "$SKIP_OP_SUCCINCT_BUILD" = "true" ]; then
+    echo "⏭️  Skipping op-succinct build"
+else
+    if [ "$OP_SUCCINCT_DIRECTORY" = "" ]; then
+        echo "❌ Please set OP_SUCCINCT_DIRECTORY in .env"
+        exit 1
+    else
+        cd "$OP_SUCCINCT_DIRECTORY"
+
+        echo "🔨 Building $OP_SUCCINCT_CONTRACTS_IAMGE_TAG"
+        docker build -t "$OP_SUCCINCT_CONTRACTS_IAMGE_TAG" -f "$PWD_DIR/op-succinct/Dockerfile.contract" "$OP_SUCCINCT_DIRECTORY"
+
+        echo "🔨 Building $OP_SUCCINCT_PROPOSER_IMAGE_TAG"
+        docker build -t "$OP_SUCCINCT_PROPOSER_IMAGE_TAG" -f ./fault-proof/Dockerfile.proposer .
+
+        echo "🔨 Building $OP_SUCCINCT_CHALLENGER_IMAGE_TAG"
+        docker build -t "$OP_SUCCINCT_CHALLENGER_IMAGE_TAG" -f ./fault-proof/Dockerfile.challenger .
+    fi
+fi
