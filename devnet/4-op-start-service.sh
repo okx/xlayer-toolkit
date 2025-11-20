@@ -90,6 +90,15 @@ fi
 
 docker compose up -d op-batcher
 
+# Check if MIN_RUN mode is enabled
+if [ "$MIN_RUN" = "true" ]; then
+    set +x
+    echo ""
+    echo "🎉 MIN_RUN deployment completed successfully!"
+    echo ""
+    exit 0
+fi
+
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd $PWD_DIR
 EXPORT_DIR="$PWD_DIR/data/cannon-data"
