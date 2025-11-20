@@ -141,6 +141,7 @@ fi
 echo "🛑 Stopping op-proposer..."
 docker compose stop op-proposer
 
+echo "⏰ Sleeping for ($TEMP_MAX_CLOCK_DURATION seconds)..."
 sleep $TEMP_MAX_CLOCK_DURATION
 
 echo "🔧 Executing dispute resolution sequence using op-challenger..."
