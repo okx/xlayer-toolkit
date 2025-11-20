@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-BRANCH="main"
+# TODO: Change back to "main" after merging to main branch
+BRANCH="geth-testnet-snapshot"
 REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/rpc-setup"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
