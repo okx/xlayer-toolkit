@@ -257,9 +257,8 @@ This method simulates a sequencer failure scenario, enabling comprehensive testi
 # Emulate the whole gray upgrade process to achieve 0 downtime
 ./scripts/gray-upgrade-simulation.sh
 # Meanwhile, open another terminal window to load test
-# Use account with L2 genesis balance
 polycli loadtest --rpc-url http://localhost:8124 \
-  --private-key "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" \
+  --private-key "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356" \
   --verbosity 700 --requests 50000  -c 1 --rate-limit -1
 ```
 
