@@ -92,19 +92,24 @@ docker compose up -d op-batcher
 
 # Check if MIN_RUN mode is enabled
 if [ "$MIN_RUN" = "true" ]; then
-    echo "⚡ MIN_RUN mode enabled: Skipping dispute game setup"
-    echo "✅ Essential services started:"
-    echo "   - Sequencer (op-${SEQ_TYPE}-seq)"
-    echo "   - Op Node (op-seq)"
-    echo "   - Op Batcher (op-batcher)"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "🎉 MIN_RUN Mode: Deployment Completed Successfully!"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "✅ Core services are running:"
+    echo "   • Sequencer: op-${SEQ_TYPE}-seq"
+    echo "   • Op Node: op-seq"
+    echo "   • Op Batcher: op-batcher"
     if [ "$LAUNCH_RPC_NODE" = "true" ]; then
-        echo "   - RPC Node (op-${RPC_TYPE}-rpc)"
+        echo "   • RPC Node: op-${RPC_TYPE}-rpc"
     fi
     echo ""
-    echo "⚠️  Skipped services (not required for minimal run):"
-    echo "   - op-proposer"
-    echo "   - op-challenger"
-    echo "   - op-dispute-mon"
+    echo "💡 L2 RPC Endpoint: ${L2_RPC_URL}"
+    echo ""
+    echo "📝 Note: Dispute game services (proposer/challenger/monitor) are"
+    echo "   disabled in MIN_RUN mode for faster startup."
+    echo ""
     exit 0
 fi
 
