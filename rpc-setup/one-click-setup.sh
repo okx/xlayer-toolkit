@@ -1247,7 +1247,9 @@ main() {
         generate_env_file
         
         print_success "Configuration updated"
-        print_info "Ready to run: make run"
+        
+        # Auto-start services after configuration update
+        start_services
     fi
     
     # Cleanup for standalone mode
