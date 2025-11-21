@@ -598,34 +598,25 @@ generate_config_files() {
     
     # Use different directory structure for snapshot mode
     if [ "$SYNC_MODE" = "snapshot" ]; then
-        # Snapshot mode: flat structure
-        CONFIG_DIR="${TARGET_DIR}/config"
-        LOGS_DIR="${TARGET_DIR}/logs"
+        # Snapshot mode: use TARGET_DIR directory directly (all files already in snapshot)
+        CONFIG_DIR="${TARGET_DIR}/config"  # Not used in snapshot mode, but kept for compatibility
+        LOGS_DIR="${TARGET_DIR}/logs"  # Not used in snapshot mode, logs are in snapshot data
         GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
         DATA_DIR="${TARGET_DIR}/data"  # Not used in snapshot mode, but set for compatibility
         
-        # Create directory structure for snapshot mode
-        mkdir -p "$CONFIG_DIR" "$LOGS_DIR" "${TARGET_DIR}/op-geth" "${TARGET_DIR}/op-node"
-        
-        # Generate and verify JWT (for snapshot mode, JWT goes to op-node directory)
-        generate_or_verify_jwt "${TARGET_DIR}/op-node/jwt.txt"
-        
-        # Copy rollup config to op-node directory for snapshot mode
-        if [ -f "$CONFIG_DIR/$ROLLUP_CONFIG" ]; then
-            cp "$CONFIG_DIR/$ROLLUP_CONFIG" "${TARGET_DIR}/op-node/rollup.json"
+        # Ensure snapshot directory exists (should be created by extract_snapshot)
+        if [ ! -d "$TARGET_DIR" ]; then
+            print_error "Snapshot directory not found: $TARGET_DIR. Please run extract_snapshot first."
+            exit 1
         fi
         
-        # Copy geth config to op-geth directory for snapshot mode
-        if [ -f "$CONFIG_DIR/$GETH_CONFIG" ]; then
-            cp "$CONFIG_DIR/$GETH_CONFIG" "${TARGET_DIR}/op-geth/config.toml"
+        # Create logs directory for op-node if it doesn't exist (op-node needs it for log output)
+        if [ ! -d "$TARGET_DIR/op-node/logs" ]; then
+            mkdir -p "$TARGET_DIR/op-node/logs"
+            print_info "Created logs directory for op-node"
         fi
         
-        # Generate JWT for op-geth as well (use same JWT as op-node)
-        if [ -f "${TARGET_DIR}/op-node/jwt.txt" ]; then
-            cp "${TARGET_DIR}/op-node/jwt.txt" "${TARGET_DIR}/op-geth/jwt.txt"
-        else
-            generate_or_verify_jwt "${TARGET_DIR}/op-geth/jwt.txt"
-        fi
+        print_info "Using snapshot data directory: $TARGET_DIR (all configs, data and logs included)"
     else
         # Genesis mode: nested structure
         DATA_DIR="${TARGET_DIR}/data"
@@ -802,17 +793,24 @@ extract_genesis() {
 download_snapshot() {
     local snapshot_url="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/xlayerdata_new.tar.gz"
     local snapshot_file="geth-testnet.tar.gz"
+    local target_dir=$1  # Target directory (e.g., testnet-geth)
     
-    # Check if snapshot already exists
-    if [ -f "$snapshot_file" ]; then
-        local file_size=$(du -h "$snapshot_file" 2>/dev/null | cut -f1 || echo "unknown")
-        print_success "Using existing snapshot: $snapshot_file ($file_size)"
+    # Check if target directory already exists (data already extracted)
+    if [ -n "$target_dir" ] && [ -d "$target_dir" ] && [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
+        print_success "Target directory already exists: $target_dir, skipping download"
         return 0
     fi
     
-    # Check if extracted snapshot directory exists
+    # Check if snapshot file already exists
+    if [ -f "$snapshot_file" ]; then
+        local file_size=$(du -h "$snapshot_file" 2>/dev/null | cut -f1 || echo "unknown")
+        print_success "Using existing snapshot file: $snapshot_file ($file_size)"
+        return 0
+    fi
+    
+    # Check if xlayerdata exists (from previous extraction, not yet renamed)
     if [ -d "xlayerdata" ] && [ -d "xlayerdata/op-geth" ] && [ -d "xlayerdata/op-node" ]; then
-        print_success "Using existing snapshot directory: xlayerdata"
+        print_success "Found existing xlayerdata directory, skipping download"
         return 0
     fi
     
@@ -832,68 +830,44 @@ extract_snapshot() {
     local target_dir=$1
     local snapshot_file="geth-testnet.tar.gz"
     
-    # Check if already extracted in current directory
-    if [ -d "xlayerdata" ] && [ -d "xlayerdata/op-geth" ] && [ -d "xlayerdata/op-node" ]; then
-        print_success "Found existing xlayerdata directory, skipping extraction"
-    else
-        # Check if snapshot file exists before extracting
-        if [ ! -f "$snapshot_file" ]; then
-            print_error "Snapshot file not found: $snapshot_file"
-            print_info "Please run download_snapshot() first"
-            exit 1
-        fi
-        
-        print_info "Extracting snapshot (this may take a while)..."
-        
-        if ! tar -zxvf "$snapshot_file"; then
-            print_error "Failed to extract snapshot file"
-            exit 1
-        fi
-        
-        if [ ! -d "xlayerdata" ]; then
-            print_error "Snapshot extraction failed: xlayerdata directory not found"
-            exit 1
-        fi
-        
-        print_success "Snapshot extracted successfully"
-    fi
-    
-    # Check if target directory already has data
-    if [ -d "$target_dir/op-geth" ] && [ "$(ls -A "$target_dir/op-geth" 2>/dev/null)" ] && \
-       [ -d "$target_dir/op-node" ] && [ "$(ls -A "$target_dir/op-node" 2>/dev/null)" ]; then
-        print_success "Target directory already has snapshot data, skipping copy"
+    # Check if already extracted and renamed to target directory
+    if [ -d "$target_dir" ] && [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
+        print_success "Found existing snapshot directory: $target_dir"
         return 0
     fi
     
-    # Copy snapshot data to target directory structure
-    print_info "Setting up snapshot directory structure..."
-    
-    # Create target directory structure
-    mkdir -p "$target_dir/op-geth" "$target_dir/op-node"
-    
-    # Copy op-geth data (use rsync if available for better performance, otherwise cp)
-    if [ -d "xlayerdata/op-geth" ]; then
-        print_info "Copying op-geth data (this may take a while)..."
-        if command_exists rsync; then
-            rsync -a xlayerdata/op-geth/ "$target_dir/op-geth/" 2>/dev/null || cp -r xlayerdata/op-geth/* "$target_dir/op-geth/" 2>/dev/null || true
-        else
-            cp -r xlayerdata/op-geth/* "$target_dir/op-geth/" 2>/dev/null || true
-        fi
-        print_success "op-geth data copied"
+    # Check if xlayerdata exists (from previous extraction, not yet renamed)
+    if [ -d "xlayerdata" ] && [ -d "xlayerdata/op-geth" ] && [ -d "xlayerdata/op-node" ]; then
+        print_info "Found xlayerdata directory, renaming to $target_dir..."
+        mv xlayerdata "$target_dir"
+        print_success "Renamed xlayerdata to $target_dir"
+        return 0
     fi
     
-    # Copy op-node data
-    if [ -d "xlayerdata/op-node" ]; then
-        print_info "Copying op-node data..."
-        if command_exists rsync; then
-            rsync -a xlayerdata/op-node/ "$target_dir/op-node/" 2>/dev/null || cp -r xlayerdata/op-node/* "$target_dir/op-node/" 2>/dev/null || true
-        else
-            cp -r xlayerdata/op-node/* "$target_dir/op-node/" 2>/dev/null || true
-        fi
-        print_success "op-node data copied"
+    # Check if snapshot file exists before extracting
+    if [ ! -f "$snapshot_file" ]; then
+        print_error "Snapshot file not found: $snapshot_file"
+        print_info "Please run download_snapshot() first"
+        exit 1
     fi
     
-    print_success "Snapshot extracted and set up successfully"
+    print_info "Extracting snapshot (this may take a while)..."
+    
+    if ! tar -zxvf "$snapshot_file"; then
+        print_error "Failed to extract snapshot file"
+        exit 1
+    fi
+    
+    if [ ! -d "xlayerdata" ]; then
+        print_error "Snapshot extraction failed: xlayerdata directory not found"
+        exit 1
+    fi
+    
+    # Rename xlayerdata to target directory name (e.g., testnet-geth)
+    print_info "Renaming xlayerdata to $target_dir..."
+    mv xlayerdata "$target_dir"
+    
+    print_success "Snapshot extracted and renamed to $target_dir"
 }
 
 init_geth() {
@@ -971,15 +945,13 @@ initialize_node() {
     
     if [ "$SYNC_MODE" = "snapshot" ]; then
         # Snapshot mode: download and extract snapshot
-        download_snapshot
+        download_snapshot "$TARGET_DIR"
         extract_snapshot "$TARGET_DIR"
         
         print_success "Node initialization completed (snapshot mode)"
-        print_info "Directory structure created at: ${TARGET_DIR}"
-        print_info "  - op-geth/: Geth blockchain data (from snapshot)"
-        print_info "  - op-node/: Op-node data (from snapshot)"
-        print_info "  - config/: Configuration files"
-        print_info "  - logs/: Log files"
+        print_info "Using snapshot data directory: $TARGET_DIR"
+        print_info "  - $TARGET_DIR/op-geth/: Geth blockchain data (from snapshot)"
+        print_info "  - $TARGET_DIR/op-node/: Op-node data (from snapshot)"
     else
         # Genesis mode: download and extract genesis, then initialize
         download_genesis "$GENESIS_URL" "$NETWORK_TYPE"
@@ -1059,7 +1031,7 @@ services:
       - ./${TARGET_DIR}/op-node:/data
       - ./${TARGET_DIR}/op-node/rollup.json:/rollup.json
       - ./${TARGET_DIR}/op-node/jwt.txt:/jwt.txt
-      - ./${TARGET_DIR}/logs:/logs
+      - ./${TARGET_DIR}/op-node/logs:/logs
     command:
       - -c
       - |
@@ -1104,14 +1076,13 @@ services:
       - ./${TARGET_DIR}/op-geth:/data
       - ./${TARGET_DIR}/op-geth/jwt.txt:/jwt.txt
       - ./${TARGET_DIR}/op-geth/config.toml:/config.toml
-      - ./${TARGET_DIR}/logs:/logs
+      - ./${TARGET_DIR}/op-geth/data/logs:/logs
     command:
       - --verbosity=3
       - --datadir=/data
       - --config=/config.toml
       - --db.engine=pebble
       - --gcmode=archive
-      - --pp-rpc-url=${LEGACY_RPC_URL}
       - --rollup.enabletxpooladmission
       - --rollup.sequencerhttp=${SEQUENCER_HTTP_URL}
       - --log.file=/logs/geth.log
@@ -1262,7 +1233,8 @@ main() {
         
         # Ensure basic directory structure exists
         if [ "$SYNC_MODE" = "snapshot" ]; then
-            mkdir -p "$TARGET_DIR/config" "$TARGET_DIR/logs" "$TARGET_DIR/op-geth" "$TARGET_DIR/op-node"
+            # xlayerdata directory should already exist from snapshot extraction, no need to create other dirs
+            :
         else
             mkdir -p "$TARGET_DIR/config" "$TARGET_DIR/logs" "$TARGET_DIR/data"
         fi
