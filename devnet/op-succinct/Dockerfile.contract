@@ -7,6 +7,16 @@ COPY . .
 
 RUN git submodule update --init --recursive
 
+# Update sp1-contracts to v5.0.0 and fix solidity version compatibility
+RUN cd contracts/lib/sp1-contracts && \
+    git fetch --tags && \
+    git checkout v5.0.0 && \
+    cd - && \
+    sed -i 's/pragma solidity \^0.8.20;/pragma solidity >=0.8.15;/' \
+    contracts/lib/sp1-contracts/contracts/src/ISP1Verifier.sol && \
+    sed -i 's/pragma solidity \^0.8.20;/pragma solidity >=0.8.15;/' \
+    contracts/lib/sp1-contracts/contracts/src/SP1MockVerifier.sol
+
 FROM ghcr.io/foundry-rs/foundry:latest
 WORKDIR /app/contracts
 
@@ -17,7 +27,22 @@ COPY --from=deps /src/contracts/src ./src
 COPY --from=deps /src/contracts/script ./script
 COPY --from=deps /src/contracts/test ./test
 
+# Copy custom deployment scripts from xlayer-toolkit
+# These are project-specific and not part of op-succinct upstream
+COPY deployment/*.sol ./script/fp/
+
+# Verify script files were copied
+RUN ls -la /app/contracts/script/ && \
+    if [ ! -d "/app/contracts/script/fp" ]; then \
+        echo "ERROR: script/fp directory not found!"; \
+        exit 1; \
+    fi
+
 # Build with cache mounts
 RUN --mount=type=cache,target=/root/.foundry \
     --mount=type=cache,target=/root/.cache \
     forge build
+
+# Reset ENTRYPOINT to allow normal command execution
+ENTRYPOINT []
+CMD ["/bin/sh"]

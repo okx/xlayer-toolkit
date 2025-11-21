@@ -45,6 +45,21 @@ if [ -z "$OP_SUCCINCT_PROPOSER_IMAGE_TAG" ] || [ -z "$OP_SUCCINCT_CHALLENGER_IMA
     exit 1
 fi
 
+# Check if Docker images exist
+if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${OP_SUCCINCT_PROPOSER_IMAGE_TAG}$"; then
+    echo "❌ Error: Docker image $OP_SUCCINCT_PROPOSER_IMAGE_TAG not found"
+    echo "   Please run: ./init.sh"
+    exit 1
+fi
+
+if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${OP_SUCCINCT_CHALLENGER_IMAGE_TAG}$"; then
+    echo "❌ Error: Docker image $OP_SUCCINCT_CHALLENGER_IMAGE_TAG not found"
+    echo "   Please run: ./init.sh"
+    exit 1
+fi
+
+echo "✅ Docker images verified"
+
 echo ""
 echo "🚀 OP-Succinct Setup"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -60,6 +75,17 @@ echo ""
 echo "📁 Preparing environment files..."
 cp ./op-succinct/example.env.proposer ./op-succinct/.env.proposer
 cp ./op-succinct/example.env.challenger ./op-succinct/.env.challenger
+
+# Set NETWORK_PRIVATE_KEY from main .env if available
+if [ -n "$OP_SUCCINCT_NETWORK_PRIVATE_KEY" ]; then
+    # Ensure 0x prefix is present
+    NETWORK_KEY="$OP_SUCCINCT_NETWORK_PRIVATE_KEY"
+    if [[ ! "$NETWORK_KEY" =~ ^0x ]]; then
+        NETWORK_KEY="0x$NETWORK_KEY"
+    fi
+    sed -i "s|^NETWORK_PRIVATE_KEY=.*|NETWORK_PRIVATE_KEY=$NETWORK_KEY|" ./op-succinct/.env.proposer
+fi
+
 echo "   ✓ Environment files prepared"
 echo ""
 

@@ -768,7 +768,7 @@ services:
     container_name: op-succinct-proposer
     volumes:
       - ./op-succinct/.env.proposer:/app/.env
-      - ./l1-geth/execution/genesis.json:/app/configs/L1/1337.json
+      - ./l1-geth/execution/genesis-raw.json:/app/configs/L1/1337.json
     ports:
       - "9000:9000"
     command:

@@ -102,7 +102,15 @@ else
         cd "$OP_SUCCINCT_DIRECTORY"
 
         echo "🔨 Building $OP_SUCCINCT_CONTRACTS_IAMGE_TAG"
+        
+        # Copy custom deployment scripts to op-succinct (will be cleaned after build)
+        mkdir -p "$OP_SUCCINCT_DIRECTORY/deployment"
+        cp "$PWD_DIR/op-succinct/deployment/"*.sol "$OP_SUCCINCT_DIRECTORY/deployment/" 2>/dev/null || true
+        
         docker build -t "$OP_SUCCINCT_CONTRACTS_IAMGE_TAG" -f "$PWD_DIR/op-succinct/Dockerfile.contract" "$OP_SUCCINCT_DIRECTORY"
+        
+        # Clean up custom scripts from op-succinct to keep it pristine
+        rm -rf "$OP_SUCCINCT_DIRECTORY/deployment"
 
         echo "🔨 Building $OP_SUCCINCT_PROPOSER_IMAGE_TAG"
         docker build -t "$OP_SUCCINCT_PROPOSER_IMAGE_TAG" -f ./fault-proof/Dockerfile.proposer .
