@@ -14,6 +14,8 @@ scripts/dev-utils/*.genesis.json
 scripts/dev-utils/*.processing
 # Ignore test files
 devnet/.env
+devnet/op-succinct/.env.proposer
+devnet/op-succinct/.env.challenger
 devnet/l1-geth/consensus/beacondata
 devnet/l1-geth/consensus/validatordata
 devnet/config-op/genesis.json
