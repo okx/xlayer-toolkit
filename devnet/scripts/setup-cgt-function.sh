@@ -16,6 +16,9 @@ setup_cgt() {
   local CONFIG_DIR=$2
   local L1_RPC_URL=$3
 
+  echo "🔧 Setting up Custom Gas Token (CGT) configuration..."
+  echo ""
+
   # Check if OKB_TOKEN_ADDRESS is already set in environment
   if [ -n "$OKB_TOKEN_ADDRESS" ]; then
     echo "📝 Step 1: Using existing OKB token..."
@@ -51,7 +54,6 @@ setup_cgt() {
     forge script scripts/DeployMockOKB.s.sol:DeployMockOKB \
       --rpc-url "$L1_RPC_URL" \
       --private-key "$DEPLOYER_PRIVATE_KEY" \
-      --legacy \
       --broadcast 2>&1 | tee $MOCK_OKB_OUTPUT_FILE
     MOCK_OKB_EXIT_CODE=$?
     set -e
@@ -106,7 +108,6 @@ setup_cgt() {
   forge script scripts/SetupCustomGasToken.s.sol:SetupCustomGasToken \
     --rpc-url "$L1_RPC_URL" \
     --private-key "$DEPLOYER_PRIVATE_KEY" \
-    --legacy \
     --broadcast 2>&1 | tee $FORGE_OUTPUT_FILE
   FORGE_EXIT_CODE=$?
   set -e
