@@ -16,8 +16,7 @@ devnet/config-op/rollup.json
 devnet/config-op/state.json
 devnet/config-op/superchain.json
 devnet/l1-geth/consensus/genesis.ssz
-devnet/l1-geth/execution/geth/genesis.json
-devnet/l1-geth/execution/geth
+devnet/l1-geth/execution
 devnet/tmp
 devnet/data
 devnet/saved-cannon-data
