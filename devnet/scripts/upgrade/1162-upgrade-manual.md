@@ -126,8 +126,7 @@ echo "Deployed contract: ${NEW_GAME_ADDRESS}"
 
 ```bash
 DEPLOYED_PRESTATE=$(cast call --rpc-url "${L1_RPC_URL}" "${NEW_GAME_ADDRESS}" 'absolutePrestate()')
-echo "Deployed prestate: ${DEPLOYED_PRESTATE}"
-echo "Expected:          ${NEW_HASH}"
+echo -e "Deployed prestate: ${DEPLOYED_PRESTATE}\nExpected:          ${NEW_HASH}"
 ```
 
 **Manual Check:** The two hashes should match!
@@ -160,8 +159,7 @@ Expected: `Status: 0x1` (success)
 
 ```bash
 GAME1_IMPL=$(cast call --rpc-url "${L1_RPC_URL}" "${DISPUTE_GAME_FACTORY_ADDRESS}" "gameImpls(uint32)(address)" 1)
-echo "Game type 1 impl: ${GAME1_IMPL}"
-echo "Expected:         ${NEW_GAME_ADDRESS}"
+echo -e "Game type 1 impl: ${GAME1_IMPL}\nExpected:         ${NEW_GAME_ADDRESS}"
 ```
 
 **Manual Check:** The two addresses should match (case-insensitive)!
@@ -169,6 +167,5 @@ Verify game type 1 on L1:
 ```bash
 GAME1_IMPL=$(cast call --rpc-url "${L1_RPC_URL}" "${DISPUTE_GAME_FACTORY_ADDRESS}" "gameImpls(uint32)(address)" 1)
 GAME1_PRESTATE=$(cast call --rpc-url "${L1_RPC_URL}" "${GAME1_IMPL}" 'absolutePrestate()')
-echo "Game type 1 prestate: ${GAME1_PRESTATE}"
-echo "Expected v8 hash:     ${NEW_HASH}"
+echo -e "Game type 1 prestate: ${GAME1_PRESTATE}\nExpected v8 hash:     ${NEW_HASH}"
 ```
