@@ -36,3 +36,6 @@ devnet/saved-cannon-data
 devnet/init.log
 devnet/l1-geth/
 profiling/
+
+scripts/upgrade/genesis*.gz
+scripts/upgrade/*-output
