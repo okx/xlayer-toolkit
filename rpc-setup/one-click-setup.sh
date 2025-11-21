@@ -1073,7 +1073,7 @@ services:
       - "${P2P_TCP_PORT:-30303}:30303"
       - "${P2P_UDP_PORT:-30303}:30303/udp"
     volumes:
-      - ./${TARGET_DIR}/op-geth:/data
+      - ./${TARGET_DIR}/op-geth/data:/data
       - ./${TARGET_DIR}/op-geth/jwt.txt:/jwt.txt
       - ./${TARGET_DIR}/op-geth/config.toml:/config.toml
       - ./${TARGET_DIR}/op-geth/data/logs:/logs
