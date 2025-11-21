@@ -12,14 +12,21 @@ X Layer is a Layer 2 blockchain network built on Optimism OP Stack. This project
 
 Complete self-hosted X Layer RPC node solution, supporting quick deployment and management of dedicated RPC nodes.
 
-**Key Features:**
+**Quick Start:**
+```bash
+cd rpc-setup
+./one-click-setup.sh
+```
+
+**Key Features**:
 - ✅ Support for Testnet and Mainnet
 - ✅ One-click deployment scripts
+- ✅ Support geth and reth client
 - ✅ Docker containerized deployment
 - ✅ Automatic initialization and synchronization
 - ✅ Complete logging
 
-**Detailed Documentation:** [scripts/rpc-setup/README.md](scripts/rpc-setup/README.md)
+[📖 Full Documentation →](rpc-setup/README.md)
 
 
 ## 🤝 Contributing
