@@ -964,6 +964,15 @@ initialize_node() {
         download_snapshot "$TARGET_DIR"
         extract_snapshot "$TARGET_DIR"
         
+        # Remove EnableInnerTx = true from config.toml
+        # todo：remove this logic
+        local config_file="$TARGET_DIR/op-geth/config.toml"
+        if [ -f "$config_file" ]; then
+            print_info "Removing EnableInnerTx = true from config.toml..."
+            sed -i '/^EnableInnerTx = true$/d' "$config_file"
+            print_success "Updated config.toml"
+        fi
+        
         # Ensure op-node logs directory exists (needed for log output)
         if [ ! -d "$TARGET_DIR/op-node/logs" ]; then
             mkdir -p "$TARGET_DIR/op-node/logs"
