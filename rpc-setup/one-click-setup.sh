@@ -599,6 +599,7 @@ generate_config_files() {
     # Use different directory structure for snapshot mode
     if [ "$SYNC_MODE" = "snapshot" ]; then
         # Snapshot mode: use TARGET_DIR directory directly (all files already in snapshot)
+        # No need to create any directories or copy config files - everything is in snapshot
         CONFIG_DIR="${TARGET_DIR}/config"  # Not used in snapshot mode, but kept for compatibility
         LOGS_DIR="${TARGET_DIR}/logs"  # Not used in snapshot mode, logs are in snapshot data
         GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
@@ -608,12 +609,6 @@ generate_config_files() {
         if [ ! -d "$TARGET_DIR" ]; then
             print_error "Snapshot directory not found: $TARGET_DIR. Please run extract_snapshot first."
             exit 1
-        fi
-        
-        # Create logs directory for op-node if it doesn't exist (op-node needs it for log output)
-        if [ ! -d "$TARGET_DIR/op-node/logs" ]; then
-            mkdir -p "$TARGET_DIR/op-node/logs"
-            print_info "Created logs directory for op-node"
         fi
         
         print_info "Using snapshot data directory: $TARGET_DIR (all configs, data and logs included)"
@@ -830,20 +825,28 @@ extract_snapshot() {
     local target_dir=$1
     local snapshot_file="geth-testnet.tar.gz"
     
-    # Check if already extracted and renamed to target directory
+    # Priority 1: Check if target directory already exists with valid data
+    # If it exists, skip everything (no download, no extract, no rename)
     if [ -d "$target_dir" ] && [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
-        print_success "Found existing snapshot directory: $target_dir"
+        print_success "Found existing snapshot directory: $target_dir, skipping extraction"
         return 0
     fi
     
-    # Check if xlayerdata exists (from previous extraction, not yet renamed)
+    # Priority 2: Check if xlayerdata exists (from previous extraction, not yet renamed)
+    # If it exists, just rename it to target directory
     if [ -d "xlayerdata" ] && [ -d "xlayerdata/op-geth" ] && [ -d "xlayerdata/op-node" ]; then
         print_info "Found xlayerdata directory, renaming to $target_dir..."
+        if [ -d "$target_dir" ]; then
+            print_error "Target directory $target_dir already exists but doesn't contain valid snapshot data"
+            print_info "Please remove $target_dir and try again"
+            exit 1
+        fi
         mv xlayerdata "$target_dir"
         print_success "Renamed xlayerdata to $target_dir"
         return 0
     fi
     
+    # Priority 3: Extract from snapshot file (only if target directory and xlayerdata don't exist)
     # Check if snapshot file exists before extracting
     if [ ! -f "$snapshot_file" ]; then
         print_error "Snapshot file not found: $snapshot_file"
@@ -864,10 +867,23 @@ extract_snapshot() {
     fi
     
     # Rename xlayerdata to target directory name (e.g., testnet-geth)
-    print_info "Renaming xlayerdata to $target_dir..."
-    mv xlayerdata "$target_dir"
-    
-    print_success "Snapshot extracted and renamed to $target_dir"
+    # At this point, target_dir should not exist (we checked at Priority 1)
+    # But double-check to be safe
+    if [ -d "$target_dir" ]; then
+        print_warning "Target directory $target_dir already exists (this shouldn't happen)"
+        if [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
+            print_info "Target directory already contains snapshot data, using existing directory"
+            rm -rf xlayerdata
+        else
+            print_error "Target directory exists but doesn't contain valid snapshot data"
+            print_info "Please remove $target_dir and try again"
+            exit 1
+        fi
+    else
+        print_info "Renaming xlayerdata to $target_dir..."
+        mv xlayerdata "$target_dir"
+        print_success "Snapshot extracted and renamed to $target_dir"
+    fi
 }
 
 init_geth() {
@@ -944,9 +960,15 @@ initialize_node() {
     cd "$WORK_DIR" || exit 1
     
     if [ "$SYNC_MODE" = "snapshot" ]; then
-        # Snapshot mode: download and extract snapshot
+        # Snapshot mode: download and extract snapshot (just rename xlayerdata to TARGET_DIR)
         download_snapshot "$TARGET_DIR"
         extract_snapshot "$TARGET_DIR"
+        
+        # Ensure op-node logs directory exists (needed for log output)
+        if [ ! -d "$TARGET_DIR/op-node/logs" ]; then
+            mkdir -p "$TARGET_DIR/op-node/logs"
+            print_info "Created logs directory for op-node"
+        fi
         
         print_success "Node initialization completed (snapshot mode)"
         print_info "Using snapshot data directory: $TARGET_DIR"
@@ -1224,19 +1246,24 @@ main() {
     if [ "$SKIP_INIT" -eq 0 ]; then
         # Full initialization process
         print_info "Performing full initialization..."
-        download_config_files
-        generate_config_files
-        initialize_node
+        if [ "$SYNC_MODE" = "snapshot" ]; then
+            # Snapshot mode: only extract snapshot, then generate .env file
+            initialize_node
+            load_network_config "$NETWORK_TYPE"  # Load network config for .env generation
+            generate_env_file
+        else
+            # Genesis mode: download config files and initialize
+            download_config_files
+            generate_config_files
+            initialize_node
+        fi
         start_services
     else
         # Skip initialization, only generate .env
         print_info "Skipping initialization, updating configuration only..."
         
-        # Ensure basic directory structure exists
-        if [ "$SYNC_MODE" = "snapshot" ]; then
-            # xlayerdata directory should already exist from snapshot extraction, no need to create other dirs
-            :
-        else
+        # Ensure basic directory structure exists (only for genesis mode)
+        if [ "$SYNC_MODE" != "snapshot" ]; then
             mkdir -p "$TARGET_DIR/config" "$TARGET_DIR/logs" "$TARGET_DIR/data"
         fi
         
