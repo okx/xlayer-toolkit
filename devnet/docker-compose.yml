@@ -835,78 +835,46 @@ services:
       - --reth-mempool-endpoint=http://op-reth-seq:8545
 
   rollup-boost:
-    image: xlayerdev/rollup-boost:latest
+    image: xlayerdev/rollup-boost:v0.1.1
     container_name: rollup-boost
+    entrypoint: /entrypoint/rollup-boost.sh
+    env_file:
+      - .env
     volumes:
       - ./config-op/jwt.txt:/jwt.txt
+      - ./entrypoint:/entrypoint
       - ./.env:/.env
     ports:
       - "10111:1111" # outbound flashblocks ws port
       - "5555:5555" # debug server port
-    command:
-      - --external-state-root
-      - --l2-url=http://op-${SEQ_TYPE}-seq:8552
-      - --l2-jwt-path=/jwt.txt
-      - --l2-timeout=1000
-      - --builder-url=http://op-rbuilder:8552
-      - --builder-jwt-path=/jwt.txt
-      - --builder-timeout=1000
-      - --flashblocks
-      - --flashblocks-builder-url=ws://op-rbuilder:1111
-      - --flashblocks-host=0.0.0.0
-      - --flashblocks-port=1111
-      - --rpc-host=0.0.0.0
-      - --rpc-port=8552
-      - --tracing
-      - --log-level=info
-      - --debug-host=0.0.0.0
-      - --debug-server-port=5555
     depends_on:
       - op-rbuilder
       - op-${SEQ_TYPE}-seq
 
   op-rbuilder:
-    image: xlayerdev/op-rbuilder
+    image: xlayerdev/op-rbuilder:v0.1.1
     container_name: op-rbuilder
+    entrypoint: /entrypoint/op-rbuilder.sh
+    env_file:
+      - .env
+    # Enable privileged mode for perf profiling
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
     volumes:
       - ./data/op-rbuilder:/datadir
       - ./config-op/jwt.txt:/jwt.txt
       - ./config-op/genesis-reth.json:/genesis.json
+      - ./entrypoint:/entrypoint
       - ./.env:/.env
     ports:
       - "8125:8545"
       - "18552:8552"
       - "30307:30303"
       - "30307:30303/udp"
-    environment:
-      - FLASHBLOCKS_CALCULATE_STATE_ROOT=false
-    command:
-      - node
-      - --datadir=/datadir
-      - --chain=/genesis.json
-      - --http
-      - --http.corsdomain=*
-      - --http.port=8545
-      - --http.addr=0.0.0.0
-      - --http.api=web3,debug,eth,txpool,net,miner
-      - --disable-discovery
-      - --max-outbound-peers=10
-      - --max-inbound-peers=10
-      - --authrpc.addr=0.0.0.0
-      - --authrpc.port=8552
-      - --authrpc.jwtsecret=/jwt.txt
-      - --trusted-peers=${TRUSTED_PEERS}
-      - --tx-propagation-policy=all
-      - --txpool.max-account-slots=100000
-      - --txpool.pending-max-count=100000
-      - --txpool.queued-max-count=100000
-      - --txpool.basefee-max-count=100000
-      - --txpool.max-pending-txns=100000
-      - --txpool.max-new-txns=100000
-      - --flashblocks.enabled
-      - --flashblocks.addr=0.0.0.0
-      - --flashblocks.port=1111
-      - --flashblocks.block-time=200
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
       interval: 3s
@@ -915,78 +883,46 @@ services:
       start_period: 3s
 
   rollup-boost2:
-    image: xlayerdev/rollup-boost:latest
+    image: xlayerdev/rollup-boost:v0.1.1
     container_name: rollup-boost2
+    entrypoint: /entrypoint/rollup-boost.sh 2
+    env_file:
+      - .env
     volumes:
       - ./config-op/jwt.txt:/jwt.txt
+      - ./entrypoint:/entrypoint
       - ./.env:/.env
     ports:
       - "10112:1111" # outbound flashblocks ws port
       - "5556:5555" # debug server port
-    command:
-      - --external-state-root
-      - --l2-url=http://op-${SEQ_TYPE}-seq2:8552
-      - --l2-jwt-path=/jwt.txt
-      - --l2-timeout=1000
-      - --builder-url=http://op-rbuilder2:8552
-      - --builder-jwt-path=/jwt.txt
-      - --builder-timeout=1000
-      - --flashblocks
-      - --flashblocks-builder-url=ws://op-rbuilder2:1111
-      - --flashblocks-host=0.0.0.0
-      - --flashblocks-port=1111
-      - --rpc-host=0.0.0.0
-      - --rpc-port=8552
-      - --tracing
-      - --log-level=info
-      - --debug-host=0.0.0.0
-      - --debug-server-port=5555
     depends_on:
       - op-rbuilder2
       - op-${SEQ_TYPE}-seq2
 
   op-rbuilder2:
-    image: xlayerdev/op-rbuilder
+    image: xlayerdev/op-rbuilder:v0.1.1
     container_name: op-rbuilder2
+    entrypoint: /entrypoint/op-rbuilder.sh
+    env_file:
+      - .env
+    # Enable privileged mode for perf profiling
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
     volumes:
       - ./data/op-rbuilder2:/datadir
       - ./config-op/jwt.txt:/jwt.txt
       - ./config-op/genesis-reth.json:/genesis.json
+      - ./entrypoint:/entrypoint
       - ./.env:/.env
     ports:
       - "8126:8545"
       - "19552:8552"
       - "30308:30303"
       - "30308:30303/udp"
-    environment:
-      - FLASHBLOCKS_CALCULATE_STATE_ROOT=false
-    command:
-      - node
-      - --datadir=/datadir
-      - --chain=/genesis.json
-      - --http
-      - --http.corsdomain=*
-      - --http.port=8545
-      - --http.addr=0.0.0.0
-      - --http.api=web3,debug,eth,txpool,net,miner
-      - --disable-discovery
-      - --max-outbound-peers=10
-      - --max-inbound-peers=10
-      - --authrpc.addr=0.0.0.0
-      - --authrpc.port=8552
-      - --authrpc.jwtsecret=/jwt.txt
-      - --trusted-peers=${TRUSTED_PEERS}
-      - --tx-propagation-policy=all
-      - --txpool.max-account-slots=100000
-      - --txpool.pending-max-count=100000
-      - --txpool.queued-max-count=100000
-      - --txpool.basefee-max-count=100000
-      - --txpool.max-pending-txns=100000
-      - --txpool.max-new-txns=100000
-      - --flashblocks.enabled
-      - --flashblocks.addr=0.0.0.0
-      - --flashblocks.port=1111
-      - --flashblocks.block-time=200
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
       interval: 3s
