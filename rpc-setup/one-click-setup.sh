@@ -1008,7 +1008,7 @@ generate_docker_compose() {
     print_info "Generating docker-compose.yml..."
     
     cd "$WORK_DIR" || exit 1
-    
+
     if [ "$SYNC_MODE" = "snapshot" ]; then
         # Generate snapshot mode docker-compose.yml
         cat > docker-compose.yml << 'EOF'
@@ -1083,6 +1083,7 @@ services:
       - --config=/config.toml
       - --db.engine=pebble
       - --gcmode=archive
+      - --pp-rpc-url=${LEGACY_RPC_URL}
       - --rollup.enabletxpooladmission
       - --rollup.sequencerhttp=${SEQUENCER_HTTP_URL}
       - --log.file=/logs/geth.log
