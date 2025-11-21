@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
-import {AccessManager} from "../src/fp/AccessManager.sol";
+import {AccessManager} from "../../src/fp/AccessManager.sol";
 import {IDisputeGameFactory} from "interfaces/dispute/IDisputeGameFactory.sol";
 
 contract DeployAccessManager is Script {
