@@ -368,6 +368,7 @@ services:
       - --rollup.l1-chain-config=/l1-genesis.json
       - --safedb.path=/data/safedb
       - --l2.enginekind=${RPC_TYPE}
+      - --syncmode=execution-layer
     depends_on:
       - op-${RPC_TYPE}-rpc
 
@@ -537,7 +538,7 @@ services:
       - --log.level=debug
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
-      - --l2-eth-rpc=http://op-${RPC_TYPE}-seq:8545
+      - --l2-eth-rpc=http://op-${SEQ_TYPE}-seq:8545
       - --rollup-rpc=http://op-seq:9545
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
       - --cannon-bin=/app/cannon/bin/cannon

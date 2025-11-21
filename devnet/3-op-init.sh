@@ -225,6 +225,13 @@ echo "✅ Finished init op-$SEQ_TYPE-seq and op-$RPC_TYPE-rpc."
 # genesis.json is too large to embed in go, so we compress it now and decompress it in go code
 gzip -c config-op/genesis.json > config-op/genesis.json.gz
 
+# Check if MIN_RUN mode is enabled
+if [ "$MIN_RUN" = "true" ]; then
+    echo "⚡ MIN_RUN mode enabled: Skipping op-program prestate build"
+    echo "✅ Initialization completed for minimal run (no dispute game support)"
+    exit 0
+fi
+
 # Ensure prestate files exist and devnetL1.json is consistent before deploying contracts
 EXPORT_DIR="$PWD_DIR/data/cannon-data"
 SAVED_CANNON_DATA_DIR="$PWD_DIR/saved-cannon-data"
