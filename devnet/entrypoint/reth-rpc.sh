@@ -5,7 +5,7 @@ set -e
 source /.env
 
 # Read the first argument (1 or 0), default to 0 if not provided
-DISABLE_FLASHBLOCKS=${1:-0}
+DISABLE_FLASHBLOCKS=${DISABLE_FLASHBLOCKS:-"false"}
 
 # Build the command with common arguments
 CMD="op-reth node \
@@ -37,9 +37,10 @@ CMD="op-reth node \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000"
 
-# For flashblocks architecture
-if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$DISABLE_FLASHBLOCKS" = "0" ]; then
+# For flashblocks architecture. Enable flashblocks RPC
+if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$DISABLE_FLASHBLOCKS" = "false" ]; then
     CMD="$CMD --flashblocks-url=ws://rollup-boost:1111"
+    echo "Flashblocks RPC enabled"
 fi
 
 exec $CMD

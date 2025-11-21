@@ -412,7 +412,9 @@ services:
   op-reth-rpc2:
     image: "${OP_RETH_IMAGE_TAG}"
     container_name: op-reth-rpc2
-    entrypoint: /entrypoint/reth-rpc.sh 1
+    environment:
+      - DISABLE_FLASHBLOCKS=true
+    entrypoint: "/entrypoint/reth-rpc.sh"
     env_file:
       - .env
     volumes:
