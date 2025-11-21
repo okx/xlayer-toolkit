@@ -10,6 +10,7 @@ Configure `example.env` (do not modify `.env` directly) and run `./clean.sh` to 
 | **Reth as Sequencer** | `SEQ_TYPE=reth`<br>`SKIP_OP_RETH_BUILD=false`<br>`OP_RETH_LOCAL_DIRECTORY=/absolute/path/to/reth/repository`<br>`OP_RETH_BRANCH=dev` |
 | **Geth as RPC** | `RPC_TYPE=geth`<br>`LAUNCH_RPC_NODE=true`<br>`SKIP_OP_RETH_BUILD=true`<br>`DB_ENGINE=pebble` |
 | **Reth as RPC** | `RPC_TYPE=reth`<br>`LAUNCH_RPC_NODE=true`<br>`SKIP_OP_RETH_BUILD=false`<br>`OP_RETH_LOCAL_DIRECTORY=/absolute/path/to/reth/repository`<br>`OP_RETH_BRANCH=dev` |
+| **OP-Succinct Enabled** | `OP_SUCCINCT_ENABLE=true`<br>`OP_SUCCINCT_MOCK_MODE=true` (for testing)<br>`OP_SUCCINCT_FAST_FINALITY_MODE=true` (skip challenger) |
 
 **Notes:**
 - Always modify `example.env`, then run `./clean.sh` to sync to `.env`
@@ -79,6 +80,7 @@ devnet/
 ├── 2-deploy-op-contracts.sh  # Contract deployment script
 ├── 3-op-init.sh        # Environment initialization script
 ├── 4-op-start-service.sh    # Service startup script
+├── 5-run-op-succinct.sh # OP-Succinct components setup script
 ├── docker-compose.yml  # Docker Compose configuration
 ├── Makefile            # Build automation
 ├── scripts/            # Utility scripts
@@ -87,6 +89,7 @@ devnet/
 │   ├── active-sequencer.sh      # Check active sequencer
 │   ├── add-game-type.sh         # Add dispute game type
 │   ├── add-peers.sh             # Add peer connections
+│   ├── deploy-op-succinct.sh    # OP-Succinct contracts deployment script
 │   ├── docker-install-start.sh # Docker installation helper
 │   ├── gray-upgrade-simulation.sh # Gray upgrade simulation
 │   ├── kill-rpc.sh              # Kill RPC node
@@ -170,7 +173,15 @@ Run `./4-op-start-service.sh`:
   - op-dispute-mon: Dispute monitoring
   - op-conductor: Sequencer HA management
 
-### 5. Conductor Management
+### 5. OP-Succinct Setup (Optional)
+Run `./5-run-op-succinct.sh`:
+- Only runs if `OP_SUCCINCT_ENABLE=true` in `.env`
+- Deploys OP-Succinct contracts (AccessManager, Verifier, FaultDisputeGame)
+- Starts services:
+  - op-succinct-proposer: ZK validity proof proposer
+  - op-succinct-challenger: Optional challenger (disabled if `OP_SUCCINCT_FAST_FINALITY_MODE=true`)
+
+### 6. Conductor Management
 The test environment includes a 3-node conductor cluster for sequencer high availability (HA).
 
 #### Architecture

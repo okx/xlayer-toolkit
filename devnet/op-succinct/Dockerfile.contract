@@ -20,6 +20,4 @@ COPY --from=deps /src/contracts/test ./test
 # Build with cache mounts
 RUN --mount=type=cache,target=/root/.foundry \
     --mount=type=cache,target=/root/.cache \
-    forge build --force
-
-ENTRYPOINT ["forge", "script"]
+    forge build

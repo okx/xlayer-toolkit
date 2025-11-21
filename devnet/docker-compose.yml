@@ -762,3 +762,26 @@ services:
     command:
       - --geth-mempool-endpoint=http://op-geth-seq3:8545
       - --reth-mempool-endpoint=http://op-reth-seq:8545
+
+  op-succinct-proposer:
+    image: "${OP_SUCCINCT_PROPOSER_IMAGE_TAG}"
+    container_name: op-succinct-proposer
+    volumes:
+      - ./op-succinct/.env.proposer:/app/.env
+      - ./l1-geth/execution/genesis.json:/app/configs/L1/1337.json
+    ports:
+      - "9000:9000"
+    command:
+      - proposer 
+      - --env-file=/app/.env
+
+  op-succinct-challenger:
+    image: "${OP_SUCCINCT_CHALLENGER_IMAGE_TAG}"
+    container_name: op-succinct-challenger
+    volumes:
+      - ./op-succinct/.env.challenger:/app/.env
+    ports:
+      - "9001:9001"
+    command:
+      - challenger 
+      - --env-file=/app/.env
