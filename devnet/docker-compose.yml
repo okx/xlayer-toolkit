@@ -784,6 +784,7 @@ services:
     volumes:
       - ./op-succinct/.env.proposer:/app/.env
       - ./l1-geth/execution/genesis.json:/app/configs/L1/1337.json
+      - ./config-op/rollup.json:/app/configs/L2/196.json
     ports:
       - "9000:9000"
     command:

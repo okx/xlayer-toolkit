@@ -77,7 +77,7 @@ deploy_access_manager() {
         -v "$PROJECT_DIR/op-succinct/deployment:/app/contracts/script/fp" \
         -e DISPUTE_GAME_FACTORY_ADDRESS="$DISPUTE_GAME_FACTORY_ADDRESS" \
         -w /app/contracts \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         -c "forge script script/fp/DeployAccessManager.s.sol:DeployAccessManager \
           --broadcast \
           --legacy \
@@ -107,7 +107,7 @@ deploy_sp1_mock_verifier() {
         --network "$DOCKER_NETWORK" \
         -v "$PROJECT_DIR/op-succinct/deployment:/app/contracts/script/fp" \
         -w /app/contracts \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         -c "forge script script/fp/DeploySP1MockVerifier.s.sol:DeploySP1MockVerifier \
           --broadcast \
           --legacy \
@@ -136,7 +136,7 @@ check_required_env_vars() {
         "DEPLOYER_PRIVATE_KEY"
         "DOCKER_NETWORK"
         "L1_RPC_URL_IN_DOCKER"
-        "OP_SUCCINCT_CONTRACTS_IAMGE_TAG"
+        "OP_SUCCINCT_CONTRACTS_IMAGE_TAG"
     )
     
     for var in "${REQUIRED_VARS[@]}"; do
@@ -206,7 +206,7 @@ setup_op_succinct_fdg() {
         --network "$DOCKER_NETWORK" \
         -v "$PROJECT_DIR/op-succinct/deployment:/app/contracts/script/fp" \
         -w /app/contracts \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         -c "forge create --json --broadcast --legacy \
           --rpc-url $L1_RPC_URL_IN_DOCKER \
           --private-key $DEPLOYER_PRIVATE_KEY \
@@ -240,11 +240,11 @@ setup_op_succinct_fdg() {
     echo "📝 Registering game type $GAME_TYPE..."
     SET_IMPL_CALLDATA=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         -c "cast calldata 'setImplementation(uint32,address)' $GAME_TYPE $NEW_GAME_ADDRESS")
     TRANSACTOR_OUTPUT=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         -c "cast send \
           --rpc-url $L1_RPC_URL_IN_DOCKER \
           --private-key $DEPLOYER_PRIVATE_KEY \
@@ -266,7 +266,7 @@ setup_op_succinct_fdg() {
     # Step 3: Verify registration
     REGISTERED_IMPL=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         -c "cast call \
           --rpc-url $L1_RPC_URL_IN_DOCKER \
           --legacy \
@@ -287,7 +287,7 @@ setup_op_succinct_fdg() {
     echo "📝 Setting respected game type to $GAME_TYPE..."
     ASR_OUTPUT=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         -c "cast send \
           --rpc-url $L1_RPC_URL_IN_DOCKER \
           --private-key $DEPLOYER_PRIVATE_KEY \
@@ -308,4 +308,6 @@ setup_op_succinct_fdg() {
     
     sed_inplace "s/^GAME_IMPLEMENTATION=.*/GAME_IMPLEMENTATION=$NEW_GAME_ADDRESS/" "$PROPOSER_ENV"
     echo "✅ Updated .env.proposer"
+
+    export NEW_GAME_ADDRESS
 }

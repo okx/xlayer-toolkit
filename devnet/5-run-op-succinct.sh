@@ -33,6 +33,11 @@ if [ "$OP_SUCCINCT_ENABLE" != "true" ]; then
     exit 0
 fi
 
+if [ "$MIN_RUN" == "true" ]; then
+    echo "❌ Error: Min Run is enabled, skipping..."
+    exit 0
+fi
+
 # Validate sequencer and RPC configuration
 if [ "$SEQ_TYPE" != "reth" ] || [ "$RPC_TYPE" != "geth" ]; then
     echo "❌ Error: OP-Succinct requires reth sequencer and geth RPC"
@@ -78,9 +83,9 @@ echo ""
 echo "✅ Contract Deployment Complete"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📍 Deployed Addresses:"
-echo "   • Verifier:     $VERIFIER_ADDRESS"
+echo "   • Verifier:      $VERIFIER_ADDRESS"
 echo "   • AccessManager: $ACCESS_MANAGER_ADDRESS"
-echo "   • Game:         $GAME_IMPLEMENTATION"
+echo "   • Game:          $NEW_GAME_ADDRESS"
 echo ""
 
 # ============================================================================
