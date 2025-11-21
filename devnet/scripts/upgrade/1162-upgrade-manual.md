@@ -16,7 +16,7 @@ cd scripts/upgrade
 jq -r '.pre' prestate-proof-mt64.json
 ```
 
-### Step 7: Upload to Server
+### Step 2: Upload to Server
 Upload `prestate-v8.tar.gz` to server's devnet directory
 
 ```bash
@@ -25,6 +25,30 @@ cp -r new-prestate-output/*  cannon-data/
 ```
 
 ### Step 8: Update L1 Contracts
+#### Summary
+
+**Goal**: Upgrade game type 1 (PermissionedDisputeGame) on L1 from v7 prestate to v8 prestate
+
+**Workflow Overview**:
+```
+Phase 1: Prepare Parameters (8.1-8.3)
+  └─ Read config from old contract → Extract bytecode → Encode constructor (params + v8 hash)
+
+Phase 2: Deploy New Contract (8.4-8.5)
+  └─ 💰 Deploy new PermissionedDisputeGame to L1 → Verify prestate = v8 hash
+
+Phase 3: Update Factory Contract (8.6-8.8)
+  └─ Encode calldata → 💰 Update game type 1 via Transactor → Verify success
+```
+
+**On-chain Transactions** (require gas):
+- **8.4**: Deploy new contract (~2-5M gas)
+- **8.7**: Update DisputeGameFactory.gameImpls[1] (~50-100K gas)
+
+**Other Steps**: Local operations or on-chain reads, no gas required
+
+---
+
 #### 8.1 Get Reference Game Parameters
 
 ```bash
@@ -55,12 +79,12 @@ echo "ASR: ${ASR}"
 echo "L2_CHAIN_ID: ${L2_CHAIN_ID}"
 ```
 
-#### 8.2 Get FaultDisputeGame Bytecode
+#### 8.2 Get PermissionedDisputeGame Bytecode
 
 ```bash
 BYTECODE=$(docker run --rm "${OP_STACK_IMAGE_TAG}" bash -c "
     cd /app/packages/contracts-bedrock && \
-    forge inspect src/dispute/FaultDisputeGame.sol:FaultDisputeGame bytecode
+    forge inspect src/dispute/PermissionedDisputeGame.sol:PermissionedDisputeGame bytecode
 ")
 ```
 
@@ -76,7 +100,7 @@ Expected: several thousand characters
 ```bash
 CONSTRUCTOR_ARGS=$(cast abi-encode \
     "constructor(uint32,bytes32,uint256,uint256,uint64,uint64,address,address,address,uint256)" \
-    0 "${NEW_HASH}" "${MAX_GAME_DEPTH}" "${SPLIT_DEPTH}" \
+    1 "${NEW_HASH}" "${MAX_GAME_DEPTH}" "${SPLIT_DEPTH}" \
     "${CLOCK_EXT}" "${MAX_CLOCK}" "${VM}" "${WETH}" "${ASR}" "${L2_CHAIN_ID}")
 ```
 
@@ -85,7 +109,7 @@ Verify encoding:
 echo "Constructor args: ${CONSTRUCTOR_ARGS:0:100}..."
 ```
 
-#### 8.4 Deploy New FaultDisputeGame Contract
+#### 8.4 Deploy New PermissionedDisputeGame Contract
 
 ```bash
 TX_OUTPUT=$(cast send --rpc-url "${L1_RPC_URL}" --private-key "${DEPLOYER_PRIVATE_KEY}" \
@@ -110,11 +134,11 @@ echo "Expected:          ${NEW_HASH}"
 
 #### 8.6 Prepare setImplementation Calldata
 ```bash
-SET_IMPL_CALLDATA=$(cast calldata "setImplementation(uint32,address,bytes)" 0 "${NEW_GAME_ADDRESS}" "0x")
+SET_IMPL_CALLDATA=$(cast calldata "setImplementation(uint32,address,bytes)" 1 "${NEW_GAME_ADDRESS}" "0x")
 echo "Calldata: ${SET_IMPL_CALLDATA:0:100}..."
 ```
 
-#### 8.7 Update Game Type 0 Implementation
+#### 8.7 Update Game Type 1 Implementation (Permissioned)
 
 ```bash
 TX_OUTPUT=$(cast send --rpc-url "${L1_RPC_URL}" --private-key "${DEPLOYER_PRIVATE_KEY}" \
@@ -132,160 +156,19 @@ echo "TX Hash: ${TX_HASH}"
 
 Expected: `Status: 0x1` (success)
 
-#### 8.8 Verify Game Type 0 Update
+#### 8.8 Verify Game Type 1 Update
 
 ```bash
-GAME0_IMPL=$(cast call --rpc-url "${L1_RPC_URL}" "${DISPUTE_GAME_FACTORY_ADDRESS}" "gameImpls(uint32)(address)" 0)
-echo "Game type 0 impl: ${GAME0_IMPL}"
+GAME1_IMPL=$(cast call --rpc-url "${L1_RPC_URL}" "${DISPUTE_GAME_FACTORY_ADDRESS}" "gameImpls(uint32)(address)" 1)
+echo "Game type 1 impl: ${GAME1_IMPL}"
 echo "Expected:         ${NEW_GAME_ADDRESS}"
 ```
 
 **Manual Check:** The two addresses should match (case-insensitive)!
-Verify game type 0 on L1:
+Verify game type 1 on L1:
 ```bash
-GAME0_IMPL=$(cast call --rpc-url "${L1_RPC_URL}" "${DISPUTE_GAME_FACTORY_ADDRESS}" "gameImpls(uint32)(address)" 0)
-GAME0_PRESTATE=$(cast call --rpc-url "${L1_RPC_URL}" "${GAME0_IMPL}" 'absolutePrestate()')
-echo "Game type 0 prestate: ${GAME0_PRESTATE}"
+GAME1_IMPL=$(cast call --rpc-url "${L1_RPC_URL}" "${DISPUTE_GAME_FACTORY_ADDRESS}" "gameImpls(uint32)(address)" 1)
+GAME1_PRESTATE=$(cast call --rpc-url "${L1_RPC_URL}" "${GAME1_IMPL}" 'absolutePrestate()')
+echo "Game type 1 prestate: ${GAME1_PRESTATE}"
 echo "Expected v8 hash:     ${NEW_HASH}"
-```
-
-**Manual Check:** The two hashes should match!
-
----
-## Rollback Procedure
-
-### If You Need to Rollback
-
-Find latest backup:
-```bash
-BACKUP_DIR=$(ls -dt data/cannon-data.backup.* 2>/dev/null | head -1)
-echo "Latest backup: $BACKUP_DIR"
-```
-
-Stop services:
-```bash
-docker compose stop op-challenger op-proposer
-```
-
-Restore backup:
-```bash
-rm -rf data/cannon-data
-cp -r "$BACKUP_DIR" data/cannon-data
-```
-
-Revert GAME_TYPE (if changed):
-```bash
-sed -i "s/^GAME_TYPE=.*/GAME_TYPE=1/" .env
-```
-
-Restart services:
-```bash
-docker compose up -d op-challenger op-proposer
-```
-
-**⚠️ Important:** L1 contracts cannot be easily rolled back!
-- If you updated L1, you need to:
-  1. Deploy a new FaultDisputeGame with v7 prestate hash
-  2. Call `setImplementation(0, v7_address, "0x")` via Transactor
-  3. This will cost additional gas
-
----
-
-## Troubleshooting
-
-### Mac: File download fails
-
-**Solution:**
-- Verify you have access to server's devnet directory
-- Check the file paths on server:
-  - `config-op/rollup.json`
-  - `config-op/genesis.json.gz`
-  - `l1-geth/execution/genesis.json`
-- Use your available file transfer method (Web UI, FTP, etc.)
-
-### Mac: prestate build fails
-
-Check Docker:
-```bash
-docker info
-```
-
-Check image:
-```bash
-docker images | grep op-stack
-```
-
-Check genesis files:
-```bash
-ls -lh genesis-from-server/
-```
-
-### Server: L1 transaction fails
-
-Check deployer balance:
-```bash
-source .env
-DEPLOYER_ADDRESS=$(cast wallet address --private-key "${DEPLOYER_PRIVATE_KEY}")
-cast balance --rpc-url "${L1_RPC_URL}" "${DEPLOYER_ADDRESS}"
-```
-
-Check L1 node:
-```bash
-cast block-number --rpc-url "${L1_RPC_URL}"
-```
-
-### Server: Service restart fails
-
-Check service status:
-```bash
-docker compose ps -a
-```
-
-Check logs:
-```bash
-docker compose logs --tail 100 op-challenger
-docker compose logs --tail 100 op-proposer
-```
-
-Force recreate:
-```bash
-docker compose up -d --force-recreate op-challenger op-proposer
-```
-
----
-
-## Quick Reference Commands
-
-### Mac Commands
-
-```bash
-# Check version
-gunzip -c prestate-v8-output/prestate-mt64.bin.gz | od -An -t u1 -N 1 | xargs
-
-# Check hash
-jq -r '.pre' prestate-v8-output/prestate-proof-mt64.json
-```
-
-### Server Commands
-
-```bash
-# Check old version
-gunzip -c saved-cannon-data/prestate-mt64.bin.gz | od -An -t u1 -N 1 | xargs
-
-# Check old hash
-jq -r '.pre' saved-cannon-data/prestate-proof-mt64.json
-
-# Check new version
-gunzip -c data/cannon-data/prestate-mt64.bin.gz | od -An -t u1 -N 1 | xargs
-
-# Check logs
-docker logs op-challenger --tail 50 | grep -i "pre-state"
-docker logs op-proposer --tail 50 | grep -i "proposing"
-
-# Check L1 game type 0
-source .env
-cast call --rpc-url "${L1_RPC_URL}" "${DISPUTE_GAME_FACTORY_ADDRESS}" "gameImpls(uint32)(address)" 0
-
-# Check service status
-docker compose ps op-challenger op-proposer
 ```
