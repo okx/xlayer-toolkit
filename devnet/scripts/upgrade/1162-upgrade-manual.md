@@ -37,13 +37,13 @@ Phase 1: Prepare Parameters (8.1-8.3)
 Phase 2: Deploy New Contract (8.4-8.5)
   └─ 💰 Deploy new PermissionedDisputeGame to L1 → Verify prestate = v8 hash
 
-Phase 3: Update Factory Contract (8.6-8.8)
-  └─ Encode calldata → 💰 Update game type 1 via Transactor → Verify success
+Phase 3: Update Factory Contract (8.6-8.7)
+  └─ 💰 Update game type 1 via Transactor → Verify success
 ```
 
 **On-chain Transactions** (require gas):
 - **8.4**: Deploy new contract (~2-5M gas)
-- **8.7**: Update DisputeGameFactory.gameImpls[1] (~50-100K gas)
+- **8.6**: Update DisputeGameFactory.gameImpls[1] (~50-100K gas)
 
 **Other Steps**: Local operations or on-chain reads, no gas required
 
@@ -54,9 +54,7 @@ Phase 3: Update Factory Contract (8.6-8.8)
 ```bash
 REF_GAME=$(cast call --rpc-url "${L1_RPC_URL}" "${DISPUTE_GAME_FACTORY_ADDRESS}" 'gameImpls(uint32)(address)' 1)
 echo "Reference game: ${REF_GAME}"
-```
 
-```bash
 MAX_GAME_DEPTH=$(cast call --rpc-url "${L1_RPC_URL}" "${REF_GAME}" 'maxGameDepth()')
 SPLIT_DEPTH=$(cast call --rpc-url "${L1_RPC_URL}" "${REF_GAME}" 'splitDepth()')
 CLOCK_EXT=$(cast call --rpc-url "${L1_RPC_URL}" "${REF_GAME}" 'clockExtension()(uint64)')
@@ -65,10 +63,7 @@ VM=$(cast call --rpc-url "${L1_RPC_URL}" "${REF_GAME}" 'vm()(address)')
 WETH=$(cast call --rpc-url "${L1_RPC_URL}" "${REF_GAME}" 'weth()(address)')
 ASR=$(cast call --rpc-url "${L1_RPC_URL}" "${REF_GAME}" 'anchorStateRegistry()(address)')
 L2_CHAIN_ID=$(cast call --rpc-url "${L1_RPC_URL}" "${REF_GAME}" 'l2ChainId()')
-```
 
-Verify parameters:
-```bash
 echo "MAX_GAME_DEPTH: ${MAX_GAME_DEPTH}"
 echo "SPLIT_DEPTH: ${SPLIT_DEPTH}"
 echo "CLOCK_EXT: ${CLOCK_EXT}"
@@ -86,14 +81,8 @@ BYTECODE=$(docker run --rm "${OP_STACK_IMAGE_TAG}" bash -c "
     cd /app/packages/contracts-bedrock && \
     forge inspect src/dispute/PermissionedDisputeGame.sol:PermissionedDisputeGame bytecode
 ")
+echo "Bytecode length: ${#BYTECODE} (expected: several thousand)"
 ```
-
-Verify bytecode:
-```bash
-echo "Bytecode length: ${#BYTECODE}"
-```
-
-Expected: several thousand characters
 
 #### 8.3 Encode Constructor Arguments
 
@@ -102,10 +91,6 @@ CONSTRUCTOR_ARGS=$(cast abi-encode \
     "constructor(uint32,bytes32,uint256,uint256,uint64,uint64,address,address,address,uint256)" \
     1 "${NEW_HASH}" "${MAX_GAME_DEPTH}" "${SPLIT_DEPTH}" \
     "${CLOCK_EXT}" "${MAX_CLOCK}" "${VM}" "${WETH}" "${ASR}" "${L2_CHAIN_ID}")
-```
-
-Verify encoding:
-```bash
 echo "Constructor args: ${CONSTRUCTOR_ARGS:0:100}..."
 ```
 
@@ -114,10 +99,6 @@ echo "Constructor args: ${CONSTRUCTOR_ARGS:0:100}..."
 ```bash
 TX_OUTPUT=$(cast send --rpc-url "${L1_RPC_URL}" --private-key "${DEPLOYER_PRIVATE_KEY}" \
     --legacy --create "${BYTECODE}${CONSTRUCTOR_ARGS:2}" --json)
-```
-
-Extract contract address:
-```bash
 NEW_GAME_ADDRESS=$(echo "$TX_OUTPUT" | jq -r '.contractAddress')
 echo "Deployed contract: ${NEW_GAME_ADDRESS}"
 ```
@@ -131,41 +112,24 @@ echo -e "Deployed prestate: ${DEPLOYED_PRESTATE}\nExpected:          ${NEW_HASH}
 
 **Manual Check:** The two hashes should match!
 
-#### 8.6 Prepare setImplementation Calldata
+#### 8.6 Update Game Type 1 Implementation (Permissioned)
+
 ```bash
 SET_IMPL_CALLDATA=$(cast calldata "setImplementation(uint32,address,bytes)" 1 "${NEW_GAME_ADDRESS}" "0x")
-echo "Calldata: ${SET_IMPL_CALLDATA:0:100}..."
-```
-
-#### 8.7 Update Game Type 1 Implementation (Permissioned)
-
-```bash
 TX_OUTPUT=$(cast send --rpc-url "${L1_RPC_URL}" --private-key "${DEPLOYER_PRIVATE_KEY}" \
     --legacy --json "${TRANSACTOR}" "CALL(address,bytes,uint256)" \
     "${DISPUTE_GAME_FACTORY_ADDRESS}" "${SET_IMPL_CALLDATA}" 0)
+echo "TX Status: $(echo "$TX_OUTPUT" | jq -r '.status') (expected: 0x1)"
 ```
 
-Check transaction status:
-```bash
-TX_STATUS=$(echo "$TX_OUTPUT" | jq -r '.status')
-TX_HASH=$(echo "$TX_OUTPUT" | jq -r '.transactionHash')
-echo "Status: ${TX_STATUS}"
-echo "TX Hash: ${TX_HASH}"
-```
-
-Expected: `Status: 0x1` (success)
-
-#### 8.8 Verify Game Type 1 Update
+#### 8.7 Verify Game Type 1 Update
 
 ```bash
 GAME1_IMPL=$(cast call --rpc-url "${L1_RPC_URL}" "${DISPUTE_GAME_FACTORY_ADDRESS}" "gameImpls(uint32)(address)" 1)
 echo -e "Game type 1 impl: ${GAME1_IMPL}\nExpected:         ${NEW_GAME_ADDRESS}"
-```
 
-**Manual Check:** The two addresses should match (case-insensitive)!
-Verify game type 1 on L1:
-```bash
-GAME1_IMPL=$(cast call --rpc-url "${L1_RPC_URL}" "${DISPUTE_GAME_FACTORY_ADDRESS}" "gameImpls(uint32)(address)" 1)
 GAME1_PRESTATE=$(cast call --rpc-url "${L1_RPC_URL}" "${GAME1_IMPL}" 'absolutePrestate()')
 echo -e "Game type 1 prestate: ${GAME1_PRESTATE}\nExpected v8 hash:     ${NEW_HASH}"
 ```
+
+**Manual Check:** Both addresses and prestate hash should match!
