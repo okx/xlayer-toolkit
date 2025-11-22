@@ -4,7 +4,7 @@ set -e
 
 source /.env
 
-exec /app/rbuilder node \
+exec op-rbuilder node \
       --datadir=/datadir \
       --chain=/genesis.json \
       --http \

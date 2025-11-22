@@ -6,7 +6,7 @@ source /.env
 
 INDEX=${1:-""}
 
-exec /app/entrypoint \
+exec rollup-boost \
       --external-state-root \
       --l2-url=http://op-"${SEQ_TYPE}"-seq"${INDEX}":8552 \
       --l2-jwt-path=/jwt.txt \
