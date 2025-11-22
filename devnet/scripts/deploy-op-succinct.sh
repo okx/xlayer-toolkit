@@ -43,8 +43,10 @@ if [ -z "$OP_SUCCINCT_CONTRACTS_IAMGE_TAG" ]; then
 fi
 
 echo "🚀 Deploying AccessManager..."
+# Mount local deployment scripts into container
 ACCESS_MANAGER_OUTPUT=$(docker run --rm \
     --network "$DOCKER_NETWORK" \
+    -v "$PWD_DIR/op-succinct/deployment:/app/contracts/script/fp" \
     -e DISPUTE_GAME_FACTORY_ADDRESS="$DISPUTE_GAME_FACTORY_ADDRESS" \
     -w /app/contracts \
     "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
@@ -68,9 +70,10 @@ echo "✅ AccessManager: $ACCESS_MANAGER_ADDRESS"
 # Deploy Verifier (Mock or Real based on OP_SUCCINCT_MOCK_MODE)
 if [ "${OP_SUCCINCT_MOCK_MODE:-true}" = "true" ]; then
     echo "🚀 Deploying SP1MockVerifier..."
+    # Mount local deployment scripts into container
     VERIFIER_OUTPUT=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
-        \
+        -v "$PWD_DIR/op-succinct/deployment:/app/contracts/script/fp" \
         -w /app/contracts \
         "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
         forge script script/fp/DeploySP1MockVerifier.s.sol:DeploySP1MockVerifier \
