@@ -151,7 +151,7 @@ docker run --rm \
       --artifacts-locator file:///app/packages/contracts-bedrock/forge-artifacts \
       --l1-rpc-url $L1_RPC_URL_IN_DOCKER \
       --outfile /deployments/implementations.json \
-      --mips-version "7" \
+      --mips-version "8" \
       --private-key $DEPLOYER_PRIVATE_KEY \
       --protocol-versions-proxy $PROTOCOL_VERSIONS_PROXY \
       --superchain-config-proxy $SUPERCHAIN_CONFIG_PROXY \
@@ -175,6 +175,11 @@ echo " ✅ Updated chain id in intent.toml: $CHAIN_ID_UINT256"
 # Update intent.toml
 sed_inplace "s/l1ProxyAdminOwner = .*/l1ProxyAdminOwner = \"$L1_PROXY_ADMIN_OWNER\"/" "$CONFIG_DIR/intent.toml"
 echo " ✅ Updated intent.toml with $OWNER_TYPE owner: $L1_PROXY_ADMIN_OWNER"
+
+# Update dispute game clock parameters from .env
+sed_inplace "s/faultGameClockExtension = .*/faultGameClockExtension = $TEMP_CLOCK_EXTENSION/" "$CONFIG_DIR/intent.toml"
+sed_inplace "s/faultGameMaxClockDuration = .*/faultGameMaxClockDuration = $TEMP_MAX_CLOCK_DURATION/" "$CONFIG_DIR/intent.toml"
+echo " ✅ Updated clock parameters in intent.toml: clockExtension=$TEMP_CLOCK_EXTENSION, maxClockDuration=$TEMP_MAX_CLOCK_DURATION"
 
 # Read opcmAddress from implementations.json and write it into intent.toml
 OPCM_ADDRESS=$(jq -r '.opcmAddress' ./config-op/implementations.json)
@@ -224,12 +229,12 @@ echo "🎉 OP Stack deployment preparation completed!"
 echo ""
 echo "🔧 Setting up Custom Gas Token (CGT)..."
 docker run --rm \
-  --network "${DOCKER_NETWORK}" \
-  -v "${PWD_DIR}/scripts:/scripts" \
-  -v "${PWD_DIR}/.env:/app/.env" \
-  -v "${PWD_DIR}/config-op:/config-op" \
+  --network "$DOCKER_NETWORK" \
+  -v "$PWD_DIR/scripts:/scripts" \
+  -v "$PWD_DIR/.env:/app/.env" \
+  -v "$PWD_DIR/config-op:/config-op" \
   "${OP_STACK_IMAGE_TAG}" \
-  bash -c "/scripts/setup-cgt-function.sh /app /config-op http://l1-geth:8545"
+  bash -c "/scripts/setup-cgt-function.sh /app /config-op ${L1_RPC_URL_IN_DOCKER}"
 
 echo ""
 echo "🎉 Complete setup with Custom Gas Token finished!"
