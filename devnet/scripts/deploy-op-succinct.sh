@@ -46,16 +46,17 @@ echo "🚀 Deploying AccessManager..."
 # Mount local deployment scripts into container
 ACCESS_MANAGER_OUTPUT=$(docker run --rm \
     --network "$DOCKER_NETWORK" \
+    --entrypoint sh \
     -v "$PWD_DIR/op-succinct/deployment:/app/contracts/script/fp" \
     -e DISPUTE_GAME_FACTORY_ADDRESS="$DISPUTE_GAME_FACTORY_ADDRESS" \
     -w /app/contracts \
     "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
-    forge script script/fp/DeployAccessManager.s.sol:DeployAccessManager \
-      --rpc-url "$L1_RPC_URL_IN_DOCKER" \
-      --private-key "$DEPLOYER_PRIVATE_KEY" \
+    -c "forge script script/fp/DeployAccessManager.s.sol:DeployAccessManager \
+      --rpc-url $L1_RPC_URL_IN_DOCKER \
+      --private-key $DEPLOYER_PRIVATE_KEY \
       --broadcast \
       --legacy \
-      --gas-price 10000000000 2>&1)
+      --gas-price 10000000000 2>&1")
 
 ACCESS_MANAGER_ADDRESS=$(echo "$ACCESS_MANAGER_OUTPUT" | grep -oE "AccessManager deployed at: (0x[a-fA-F0-9]{40})" | sed 's/AccessManager deployed at: //')
 
@@ -73,15 +74,16 @@ if [ "${OP_SUCCINCT_MOCK_MODE:-true}" = "true" ]; then
     # Mount local deployment scripts into container
     VERIFIER_OUTPUT=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
+        --entrypoint sh \
         -v "$PWD_DIR/op-succinct/deployment:/app/contracts/script/fp" \
         -w /app/contracts \
         "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
-        forge script script/fp/DeploySP1MockVerifier.s.sol:DeploySP1MockVerifier \
-          --rpc-url "$L1_RPC_URL_IN_DOCKER" \
-          --private-key "$DEPLOYER_PRIVATE_KEY" \
+        -c "forge script script/fp/DeploySP1MockVerifier.s.sol:DeploySP1MockVerifier \
+          --rpc-url $L1_RPC_URL_IN_DOCKER \
+          --private-key $DEPLOYER_PRIVATE_KEY \
           --broadcast \
           --legacy \
-          --gas-price 10000000000 2>&1)
+          --gas-price 10000000000 2>&1")
 
     VERIFIER_ADDRESS=$(echo "$VERIFIER_OUTPUT" | grep -oE "SP1MockVerifier deployed at: (0x[a-fA-F0-9]{40})" | sed 's/SP1MockVerifier deployed at: //')
 
@@ -99,13 +101,14 @@ else
     # Note: Contract class name is SP1Verifier, not SP1VerifierPlonk
     VERIFIER_OUTPUT=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
+        --entrypoint sh \
         -w /app/contracts \
         "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
-        forge create lib/sp1-contracts/contracts/src/v5.0.0/SP1VerifierPlonk.sol:SP1Verifier \
-          --rpc-url "$L1_RPC_URL_IN_DOCKER" \
-          --private-key "$DEPLOYER_PRIVATE_KEY" \
+        -c "forge create lib/sp1-contracts/contracts/src/v5.0.0/SP1VerifierPlonk.sol:SP1Verifier \
+          --rpc-url $L1_RPC_URL_IN_DOCKER \
+          --private-key $DEPLOYER_PRIVATE_KEY \
           --broadcast \
-          --legacy 2>&1)
+          --legacy 2>&1")
     
     VERIFIER_ADDRESS=$(echo "$VERIFIER_OUTPUT" | grep -oE "Deployed to: (0x[a-fA-F0-9]{40})" | sed 's/Deployed to: //')
     
@@ -126,11 +129,12 @@ else
     # Verify the VERIFIER_HASH matches v5.0.0
     VERIFIER_HASH=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
+        --entrypoint sh \
         "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
-        cast call \
-          --rpc-url "$L1_RPC_URL_IN_DOCKER" \
-          "$VERIFIER_ADDRESS" \
-          'VERIFIER_HASH()(bytes32)' 2>/dev/null || echo "")
+        -c "cast call \
+          --rpc-url $L1_RPC_URL_IN_DOCKER \
+          $VERIFIER_ADDRESS \
+          'VERIFIER_HASH()(bytes32)' 2>/dev/null" || echo "")
     
     EXPECTED_HASH="0xd4e8ecd2357dd882209800acd6abb443d231cf287d77ba62b732ce937c8b56e7"
     if [ "$VERIFIER_HASH" = "$EXPECTED_HASH" ]; then
