@@ -151,7 +151,7 @@ docker run --rm \
       --artifacts-locator file:///app/packages/contracts-bedrock/forge-artifacts \
       --l1-rpc-url $L1_RPC_URL_IN_DOCKER \
       --outfile /deployments/implementations.json \
-      --mips-version "7" \
+      --mips-version "8" \
       --private-key $DEPLOYER_PRIVATE_KEY \
       --protocol-versions-proxy $PROTOCOL_VERSIONS_PROXY \
       --superchain-config-proxy $SUPERCHAIN_CONFIG_PROXY \
@@ -175,6 +175,11 @@ echo " ✅ Updated chain id in intent.toml: $CHAIN_ID_UINT256"
 # Update intent.toml
 sed_inplace "s/l1ProxyAdminOwner = .*/l1ProxyAdminOwner = \"$L1_PROXY_ADMIN_OWNER\"/" "$CONFIG_DIR/intent.toml"
 echo " ✅ Updated intent.toml with $OWNER_TYPE owner: $L1_PROXY_ADMIN_OWNER"
+
+# Update dispute game clock parameters from .env
+sed_inplace "s/faultGameClockExtension = .*/faultGameClockExtension = $TEMP_CLOCK_EXTENSION/" "$CONFIG_DIR/intent.toml"
+sed_inplace "s/faultGameMaxClockDuration = .*/faultGameMaxClockDuration = $TEMP_MAX_CLOCK_DURATION/" "$CONFIG_DIR/intent.toml"
+echo " ✅ Updated clock parameters in intent.toml: clockExtension=$TEMP_CLOCK_EXTENSION, maxClockDuration=$TEMP_MAX_CLOCK_DURATION"
 
 # Read opcmAddress from implementations.json and write it into intent.toml
 OPCM_ADDRESS=$(jq -r '.opcmAddress' ./config-op/implementations.json)

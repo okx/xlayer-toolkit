@@ -65,6 +65,7 @@ if [ "$OP_GETH_LOCAL_DIRECTORY" = "" ]; then
   git submodule update --init --recursive
   OP_GETH_DIR="$OP_STACK_LOCAL_DIRECTORY/op-geth"
   echo "📍 Using op-geth submodule of op-stack"
+  cd -
 else
   OP_GETH_DIR="$OP_GETH_LOCAL_DIRECTORY"
   echo "📍 Using op-geth local directory: $OP_GETH_LOCAL_DIRECTORY"
@@ -77,7 +78,7 @@ if [ -n "$OP_GETH_BRANCH" ]; then
   git fetch origin
   git checkout "$OP_GETH_BRANCH"
   git pull origin "$OP_GETH_BRANCH"
-  cd "$PWD_DIR"
+  cd -
 else
   echo "📍 Using op-geth default branch"
 fi
@@ -95,15 +96,17 @@ if [ "$SKIP_OP_RETH_BUILD" != "true" ]; then
       git fetch origin
       git checkout "$OP_RETH_BRANCH"
       git pull origin "$OP_RETH_BRANCH"
-      cd "$PWD_DIR"
+      cd -
     else
       echo "📍 Using op-reth branch: $(cd "$OP_RETH_DIR" && git branch --show-current)"
+      cd $PWD_DIR
     fi
   fi
 fi
 
 cd "$OP_STACK_LOCAL_DIRECTORY"
 git submodule update --init --recursive
+cd -
 
 # Create log directory
 mkdir -p /tmp/docker-build-logs
@@ -144,6 +147,7 @@ function build_and_tag_image() {
     TAIL_PIDS+=($TAIL_PID)
     ALL_PIDS+=($TAIL_PID)
   fi
+  cd -
 }
 
 # Start all builds in parallel
