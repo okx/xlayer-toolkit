@@ -6,8 +6,10 @@ echo " 🧹 Cleaning up Optimism test environment..."
 echo " 📦 Stopping Docker containers..."
 [ -f .env ] && docker compose down
 
-echo " 🔄 Syncing .env from example.env..."
-[ -f example.env ] && cp example.env .env && echo "   ✅ .env synced from example.env"
+if [ ! -f .env ] && [ -f example.env ]; then
+    echo " 🔄 Creating .env from example.env..."
+    cp example.env .env && echo "   ✅ .env created from example.env"
+fi
 
 echo " 🗑️  Removing generated files..."
 rm -rf data
@@ -27,6 +29,7 @@ rm -rf l1-geth/consensus/genesis.ssz
 rm -rf l1-geth/consensus/validatordata/
 rm -rf l1-geth/execution/genesis.json
 rm -rf l1-geth/execution/geth/
+rm -rf l1-geth/execution/keystore/
 rm -rf init.log
 
 echo " ✅ Cleanup completed!"
