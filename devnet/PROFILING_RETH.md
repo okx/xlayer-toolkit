@@ -1,6 +1,6 @@
 # Op-Reth Profiling Guide
 
-This guide explains how to profile op-reth in the local development environment using `perf` for CPU profiling and flamegraph generation.
+This guide explains how to profile op-reth in the local development environment using `perf` for CPU profiling and various tools for memory profiling, with interactive flamegraph generation.
 
 ## Table of Contents
 
@@ -10,9 +10,15 @@ This guide explains how to profile op-reth in the local development environment 
   - [1. Enable Profiling in Configuration](#1-enable-profiling-in-configuration)
   - [2. Build and Start the Environment](#2-build-and-start-the-environment)
   - [3. Collect a CPU Profile](#3-collect-a-cpu-profile)
+  - [4. Collect a Memory Profile](#4-collect-a-memory-profile)
 - [Detailed Usage](#detailed-usage)
   - [Available Scripts](#available-scripts)
   - [Building Op-Reth with Profiling Support](#building-op-reth-with-profiling-support)
+- [CPU Profiling](#cpu-profiling)
+- [Memory Profiling](#memory-profiling)
+  - [Quick Memory Profiling](#quick-memory-profiling)
+  - [Memory Profiling Methods](#memory-profiling-methods)
+  - [When to Use Memory Profiling](#when-to-use-memory-profiling)
 - [Analyzing Profiles](#analyzing-profiles)
   - [Understanding Flamegraphs](#understanding-flamegraphs)
   - [Common Profiling Scenarios](#common-profiling-scenarios)
@@ -40,14 +46,21 @@ This guide explains how to profile op-reth in the local development environment 
 
 ## Overview
 
-The profiling setup uses [Linux perf](https://perf.wiki.kernel.org/) for CPU profiling with full debug symbol support. Profiles are visualized using interactive [flamegraphs](https://www.brendangregg.com/flamegraphs.html) that can be viewed in any web browser.
+The profiling setup provides comprehensive performance analysis tools:
 
-**Why perf?**
+**CPU Profiling** uses [Linux perf](https://perf.wiki.kernel.org/) with full debug symbol support to identify compute bottlenecks.
+
+**Memory Profiling** uses multiple tools ([heaptrack](https://github.com/KDE/heaptrack), jemalloc, valgrind) to identify memory leaks, excessive allocations, and memory bloat.
+
+All profiles are visualized using interactive [flamegraphs](https://www.brendangregg.com/flamegraphs.html) that can be viewed in any web browser.
+
+**Key Features:**
 - ✅ Full function name symbolication (no hex addresses)
 - ✅ Works offline without symbol servers
 - ✅ Generates self-contained SVG flamegraphs
 - ✅ Better integration with debug symbols
-- ✅ Standard Linux profiling tool
+- ✅ Multiple profiling methods for different use cases
+- ✅ Low overhead suitable for development and production
 
 ## Prerequisites
 
@@ -100,11 +113,30 @@ cd test
 ./scripts/profile-reth-perf.sh op-reth-seq 30
 ```
 
+### 4. Collect a Memory Profile
+
+```bash
+# Heaptrack - recommended for development (easiest, most comprehensive)
+./scripts/profile-reth-heaptrack.sh op-reth-seq 60
+
+# Jemalloc - recommended for production (low overhead)
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60
+
+# Massif - for memory timeline analysis
+./scripts/profile-reth-massif.sh op-reth-seq 60
+```
+
+All profiles generate interactive flamegraphs in `./profiling/op-reth-seq/`:
+- CPU profiles: `perf-*.svg`
+- Memory profiles: `heaptrack-*-allocations.svg` or `jemalloc-*-allocations.svg`
+
 ## Detailed Usage
 
 ### Available Scripts
 
-#### `profile-reth-perf.sh`
+#### CPU Profiling Scripts
+
+**`profile-reth-perf.sh`** - CPU profiling
 
 Captures a CPU profile using perf with full debug symbols.
 
@@ -115,13 +147,67 @@ Captures a CPU profile using perf with full debug symbols.
 **Output:**
 - `./profiling/[container_name]/perf-TIMESTAMP.data` - Raw perf data
 - `./profiling/[container_name]/perf-TIMESTAMP.script` - Symbolicated stack traces
+- `./profiling/[container_name]/perf-TIMESTAMP.svg` - CPU flamegraph
 
-#### `generate-flamegraph.sh`
+**`profile-reth-offcpu.sh`** - Off-CPU profiling
 
-Generates an interactive SVG flamegraph from perf data.
+Captures blocking/waiting time to identify I/O bottlenecks and lock contention.
+
+```bash
+./scripts/profile-reth-offcpu.sh [container_name] [duration_seconds]
+```
+
+See [OFFCPU_PROFILING.md](OFFCPU_PROFILING.md) for details.
+
+#### Memory Profiling Scripts
+
+**`profile-reth-heaptrack.sh`** - Memory profiling (recommended)
+
+Captures heap allocations with low overhead. Best for development.
+
+```bash
+./scripts/profile-reth-heaptrack.sh [container_name] [duration_seconds]
+```
+
+**Output:**
+- `./profiling/[container_name]/heaptrack-TIMESTAMP.data.gz` - Raw data
+- `./profiling/[container_name]/heaptrack-TIMESTAMP.txt` - Text report
+- `./profiling/[container_name]/heaptrack-TIMESTAMP-allocations.svg` - Memory flamegraph
+
+**`profile-reth-jemalloc.sh`** - Jemalloc heap profiling
+
+Uses jemalloc's built-in profiling. Very low overhead, suitable for production.
+
+```bash
+./scripts/profile-reth-jemalloc.sh [container_name] [duration_seconds]
+```
+
+**`profile-reth-massif.sh`** - Memory timeline profiling
+
+Tracks memory usage over time to identify memory growth patterns.
+
+```bash
+./scripts/profile-reth-massif.sh [container_name] [duration_seconds]
+```
+
+See [MEMORY_PROFILING.md](MEMORY_PROFILING.md) for complete memory profiling guide.
+
+#### Flamegraph Generation
+
+**`generate-flamegraph.sh`** - CPU flamegraphs
+
+Generates an interactive SVG flamegraph from CPU perf data.
 
 ```bash
 ./scripts/generate-flamegraph.sh [container_name] [perf_script_file]
+```
+
+**`generate-memory-flamegraph.sh`** - Memory flamegraphs
+
+Generates an interactive SVG flamegraph from memory profiling data.
+
+```bash
+./scripts/generate-memory-flamegraph.sh [container_name] [input_file] [profile_type]
 ```
 
 **Examples:**
@@ -144,32 +230,141 @@ The profiling-enabled image includes:
 - **Release optimizations** - Fast performance
 - **Debug symbols (debuginfo=2)** - Full function names and line numbers
 - **Frame pointers** - Accurate stack traces
-- **Perf pre-installed** - Ready for CPU profiling
+- **CPU profiling tools** - perf for multiple kernel versions
+- **Memory profiling tools** - heaptrack, valgrind, jemalloc profiling
+- **Visualization tools** - FlameGraph, graphviz
 
 **Build command:**
 ```bash
 # Set your reth source directory in .env or export it
 export OP_RETH_LOCAL_DIRECTORY=/path/to/your/reth
 
-# Build profiling-enabled image
+# Build profiling-enabled image (includes both CPU and memory profiling tools)
 ./scripts/build-reth-with-profiling.sh
 ```
+
+## CPU Profiling
+
+CPU profiling identifies where your code spends compute time. Use this to find:
+- Hot functions (functions consuming most CPU time)
+- Inefficient algorithms
+- Unexpected computation bottlenecks
+
+**Quick Start:**
+```bash
+# Profile for 60 seconds
+./scripts/profile-reth-perf.sh op-reth-seq 60
+
+# View the flamegraph
+open ./profiling/op-reth-seq/perf-*.svg
+```
+
+**What to look for in CPU flamegraphs:**
+- **Wide bars** = Functions using most CPU time (optimize these first)
+- **Tall stacks** = Deep call chains (may indicate recursion or complex logic)
+- **Unexpected functions** = Code paths you didn't expect to be hot
+
+For detailed CPU profiling information, see the sections below on [Analyzing Profiles](#analyzing-profiles) and [Common Profiling Scenarios](#common-profiling-scenarios).
+
+For off-CPU profiling (blocking, I/O, locks), see [OFFCPU_PROFILING.md](OFFCPU_PROFILING.md).
+
+## Memory Profiling
+
+Memory profiling identifies how your code allocates and uses memory. Use this to find:
+- Memory leaks (allocations never freed)
+- Excessive allocations (allocation hotspots)
+- Memory bloat (using more memory than necessary)
+- Peak memory usage
+
+### Quick Memory Profiling
+
+```bash
+# Development: Heaptrack (easiest, most detailed)
+./scripts/profile-reth-heaptrack.sh op-reth-seq 60
+
+# Production: Jemalloc (lowest overhead)
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60
+
+# View the memory flamegraph
+open ./profiling/op-reth-seq/*-allocations.svg
+```
+
+### Memory Profiling Methods
+
+| Method | Overhead | Best For | Command |
+|--------|----------|----------|---------|
+| **Heaptrack** | 5-10% | Development, debugging | `./scripts/profile-reth-heaptrack.sh` |
+| **Jemalloc** | <5% | Production, continuous monitoring | `./scripts/profile-reth-jemalloc.sh` |
+| **Massif** | Low | Memory timeline, growth analysis | `./scripts/profile-reth-massif.sh` |
+
+### When to Use Memory Profiling
+
+Use memory profiling when you observe:
+- ❌ **High memory usage** - RSS/memory consumption higher than expected
+- ❌ **Memory growth** - Memory usage continuously increasing over time
+- ❌ **OOM errors** - Out of memory crashes
+- ❌ **Slow allocations** - High CPU time in allocator functions
+- ❌ **Fragmentation** - Memory not released back to OS
+
+**What to look for in memory flamegraphs:**
+- **Wide bars** = Functions allocating most memory (bytes allocated)
+- **Unexpected allocators** = Memory allocated in surprising places
+- **Temporary allocations** = Short-lived objects that could be pooled
+
+For complete memory profiling documentation, see [MEMORY_PROFILING.md](MEMORY_PROFILING.md).
+
+### Combining CPU and Memory Profiling
+
+For comprehensive performance analysis, run both:
+
+```bash
+# Run both in parallel
+./scripts/profile-reth-perf.sh op-reth-seq 60 &
+./scripts/profile-reth-heaptrack.sh op-reth-seq 60 &
+wait
+
+# Compare results
+ls -lht ./profiling/op-reth-seq/*.svg
+```
+
+**Analysis matrix:**
+
+| CPU Usage | Memory Usage | Likely Issue |
+|-----------|--------------|--------------|
+| High | Low | CPU-bound (optimize algorithms) |
+| Low | High | Memory-bound (optimize allocations) |
+| High | High | Both (profile both!) |
+| Low | Low | I/O-bound (use off-CPU profiling) |
 
 ## Analyzing Profiles
 
 ### Understanding Flamegraphs
 
-Flamegraphs visualize where CPU time is spent:
+Flamegraphs visualize resource consumption in your code. The interpretation differs slightly for CPU vs memory:
+
+#### CPU Flamegraphs
 
 - **Width** = CPU time (wider = more time spent)
 - **Height** = Call stack depth (top = leaf functions, bottom = root)
 - **Color** = Visual distinction (not meaningful for perf)
 
-**Reading the graph:**
+**Reading CPU flamegraphs:**
 1. The bottom shows the entry point (usually `main` or thread start)
 2. Each box above represents a function call
-3. Wide boxes are CPU hotspots
+3. Wide boxes are CPU hotspots (optimize these!)
 4. Tall stacks show deep call chains
+
+#### Memory Flamegraphs
+
+- **Width** = Memory allocated (wider = more bytes allocated)
+- **Height** = Call stack depth showing allocation path
+- **Color** = Visual distinction
+
+**Reading memory flamegraphs:**
+1. The bottom shows the entry point
+2. Each box shows the allocation call path
+3. Wide boxes are allocation hotspots (most bytes)
+4. Focus on wide bars to reduce memory usage
 
 **Interactive features:**
 - **Click** any box to zoom in and focus on that subtree
@@ -264,36 +459,62 @@ docker stats op-reth-seq  # Should show significant CPU usage
 
 Profiles are stored in:
 ```
-test/profiling/
+profiling/
 ├── op-reth-seq/
-│   ├── perf-20241117-143022.data      # Raw perf data
-│   ├── perf-20241117-143022.script    # Symbolicated output
-│   ├── perf-20241117-143022.folded    # Folded stacks
-│   ├── perf-20241117-143022.svg       # Flamegraph (view in browser)
+│   ├── perf-20241117-143022.data             # Raw CPU perf data
+│   ├── perf-20241117-143022.script           # Symbolicated CPU output
+│   ├── perf-20241117-143022.folded           # Folded CPU stacks
+│   ├── perf-20241117-143022.svg              # CPU flamegraph
+│   ├── offcpu-20241117-143022.data           # Off-CPU data
+│   ├── offcpu-20241117-143022.svg            # Off-CPU flamegraph
+│   ├── heaptrack-20241117-143022.data.gz     # Heaptrack data
+│   ├── heaptrack-20241117-143022.txt         # Heaptrack text report
+│   ├── heaptrack-20241117-143022-allocations.svg  # Memory flamegraph
+│   ├── jemalloc-20241117-143022.heap         # Jemalloc heap dump
+│   ├── jemalloc-20241117-143022.txt          # Jemalloc text report
+│   ├── jemalloc-20241117-143022-allocations.svg   # Jemalloc flamegraph
+│   ├── massif-20241117-143022.csv            # Memory timeline data
+│   ├── massif-20241117-143022.txt            # Massif text report
 │   └── ...
 ├── op-reth-rpc/
 │   └── ...
-└── FlameGraph/                         # Flamegraph tools (cloned once)
+└── FlameGraph/                                # Flamegraph tools (cloned once)
 ```
 
 ### File Sizes
 
 Typical profile sizes:
+
+**CPU Profiles:**
 - **perf.data**: 0.1-5 MB (raw perf data)
 - **perf.script**: 1-50 MB (symbolicated stacks)
-- **flamegraph SVG**: 10-200 KB (compressed, interactive)
+- **perf SVG**: 10-200 KB (compressed, interactive flamegraph)
+
+**Memory Profiles:**
+- **heaptrack.data.gz**: 1-50 MB (compressed heap data)
+- **heaptrack.txt**: 0.1-10 MB (text report)
+- **jemalloc.heap**: 0.1-5 MB (heap dump)
+- **memory SVG**: 10-200 KB (compressed, interactive flamegraph)
 
 ### Cleanup
 
 ```bash
-# Remove old profiles
-rm -rf test/profiling/op-reth-seq/perf-*
+# Remove old CPU profiles
+rm -rf ./profiling/op-reth-seq/perf-*
+rm -rf ./profiling/op-reth-seq/offcpu-*
+
+# Remove old memory profiles
+rm -rf ./profiling/op-reth-seq/heaptrack-*
+rm -rf ./profiling/op-reth-seq/jemalloc-*
+rm -rf ./profiling/op-reth-seq/massif-*
 
 # Keep only recent profiles (last 7 days)
-find test/profiling -name "perf-*" -mtime +7 -delete
+find ./profiling -name "perf-*" -mtime +7 -delete
+find ./profiling -name "heaptrack-*" -mtime +7 -delete
+find ./profiling -name "jemalloc-*" -mtime +7 -delete
 
 # Clean up FlameGraph tools (will be re-downloaded if needed)
-rm -rf test/profiling/FlameGraph
+rm -rf ./profiling/FlameGraph
 ```
 
 ## Configuration Options
@@ -467,8 +688,26 @@ docker exec op-reth-seq perf report -i /tmp/perf.data --stdio
 
 ## Resources
 
+### Documentation
+
+- [MEMORY_PROFILING.md](MEMORY_PROFILING.md) - Complete memory profiling guide
+- [OFFCPU_PROFILING.md](OFFCPU_PROFILING.md) - Off-CPU profiling guide
+
+### CPU Profiling
+
 - [Linux Perf](https://perf.wiki.kernel.org/)
 - [Brendan Gregg's Flamegraphs](https://www.brendangregg.com/flamegraphs.html)
 - [FlameGraph GitHub](https://github.com/brendangregg/FlameGraph)
+- [Brendan Gregg's Perf Examples](https://www.brendangregg.com/perf.html)
+
+### Memory Profiling
+
+- [Heaptrack](https://github.com/KDE/heaptrack)
+- [Jemalloc Profiling](https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling)
+- [Valgrind Massif](https://valgrind.org/docs/manual/ms-manual.html)
+- [Brendan Gregg's Memory Leak Analysis](https://www.brendangregg.com/blog/2016-10-09/memory-leak-analysis.html)
+
+### General
+
 - [Rust Performance Book](https://nnethercote.github.io/perf-book/profiling.html)
 - [Reth Documentation](https://reth.rs)

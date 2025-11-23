@@ -4,6 +4,12 @@ set -e
 
 source /.env
 
+# Enable jemalloc profiling if requested
+if [ "${JEMALLOC_PROFILING:-false}" = "true" ]; then
+    export MALLOC_CONF="prof:true,prof_prefix:/profiling/jeprof,lg_prof_interval:30"
+    echo "Jemalloc profiling enabled: MALLOC_CONF=$MALLOC_CONF"
+fi
+
 exec op-reth node \
       --datadir=/datadir \
       --chain=/genesis.json \
