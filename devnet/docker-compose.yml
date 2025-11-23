@@ -90,9 +90,6 @@ services:
       - --authrpc.addr=0.0.0.0
       - --authrpc.jwtsecret=/execution/jwtsecret
       - --datadir=/execution
-      - --allow-insecure-unlock
-      - --unlock=0x123463a4b065722e99115d6c222f267d9cabb524
-      - --password=/execution/geth_password.txt
       - --nodiscover
       - --syncmode=full
       - --gcmode=archive
@@ -109,7 +106,6 @@ services:
     volumes:
       - ./l1-geth/execution:/execution
       - ./l1-geth/execution/jwtsecret:/execution/jwtsecret
-      - ./l1-geth/execution/geth_password.txt:/execution/geth_password.txt
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
       interval: 10s
@@ -211,12 +207,21 @@ services:
     entrypoint: /entrypoint/reth-seq.sh
     env_file:
       - .env
+    # Enable privileged mode for perf profiling
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
     volumes:
       - ./data/op-reth-seq:/datadir
       - ./config-op/jwt.txt:/jwt.txt
       - ./config-op/genesis-reth.json:/genesis.json
       - ./entrypoint:/entrypoint
       - ./.env:/.env
+      # Profiling data directory
+      - ./profiling/op-reth-seq:/profiling
     ports:
       - "8123:8545"
       - "7546:7546"
@@ -224,7 +229,7 @@ services:
       - "30303:30303"
       - "30303:30303/udp"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      test: ["CMD", "curl", "-f", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
       interval: 3s
       timeout: 3s
       retries: 10
@@ -256,6 +261,13 @@ services:
     entrypoint: /entrypoint/reth-rpc.sh
     env_file:
       - .env
+    # Enable privileged mode for perf profiling
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
     volumes:
       - ./data/op-reth-rpc:/datadir
       - ./config-op/jwt.txt:/jwt.txt
@@ -263,6 +275,8 @@ services:
       - ./config-op/test.reth.rpc.config.toml:/config.toml
       - ./entrypoint:/entrypoint
       - ./.env:/.env
+      # Profiling data directory
+      - ./profiling/op-reth-rpc:/profiling
     ports:
       - "8124:8545"
       - "30304:30303"
@@ -354,6 +368,7 @@ services:
       - --rollup.l1-chain-config=/l1-genesis.json
       - --safedb.path=/data/safedb
       - --l2.enginekind=${RPC_TYPE}
+      - --syncmode=execution-layer
     depends_on:
       - op-${RPC_TYPE}-rpc
 
@@ -467,7 +482,7 @@ services:
       - --log.level=debug
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
-      - --l2-eth-rpc=http://op-${RPC_TYPE}-seq:8545
+      - --l2-eth-rpc=http://op-${SEQ_TYPE}-seq:8545
       - --rollup-rpc=http://op-seq:9545
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
       - --cannon-bin=/app/cannon/bin/cannon
@@ -768,7 +783,8 @@ services:
     container_name: op-succinct-proposer
     volumes:
       - ./op-succinct/.env.proposer:/app/.env
-      - ./l1-geth/execution/genesis-raw.json:/app/configs/L1/1337.json
+      - ./l1-geth/execution/genesis.json:/app/configs/L1/1337.json
+      - ./config-op/rollup.json:/app/configs/L2/196.json
     ports:
       - "9000:9000"
     command:
