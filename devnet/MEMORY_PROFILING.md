@@ -1,24 +1,17 @@
 # Memory Profiling Guide for Reth
 
-This guide explains how to profile memory usage in op-reth using various tools including heaptrack, jemalloc profiling, and valgrind massif.
+This guide explains how to profile memory usage in op-reth using jemalloc profiling.
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
-- [Method 1: Heaptrack (Recommended)](#method-1-heaptrack-recommended)
-  - [Basic Usage](#basic-usage)
-  - [Analyzing Results](#analyzing-results)
-- [Method 2: Jemalloc Heap Profiling](#method-2-jemalloc-heap-profiling)
+- [Jemalloc Heap Profiling](#jemalloc-heap-profiling)
   - [Enable Profiling](#enable-profiling)
   - [Collecting Heap Dumps](#collecting-heap-dumps)
   - [Generating Flamegraphs](#generating-flamegraphs)
-- [Method 3: Valgrind Massif](#method-3-valgrind-massif)
-  - [Running Massif](#running-massif)
-  - [Visualizing Memory Over Time](#visualizing-memory-over-time)
-- [Method 4: Live Memory Analysis](#method-4-live-memory-analysis)
-- [Comparing Methods](#comparing-methods)
+- [Live Memory Analysis](#live-memory-analysis)
 - [Common Memory Issues](#common-memory-issues)
 - [Troubleshooting](#troubleshooting)
 - [Best Practices](#best-practices)
@@ -69,105 +62,14 @@ OP_RETH_LOCAL_DIRECTORY=/path/to/your/reth
 ### 3. Run Memory Profiling
 
 ```bash
-# Option 1: Heaptrack (easiest, most comprehensive)
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60
-
-# Option 2: Jemalloc (production-ready, low overhead)
+# Jemalloc profiling (production-ready, low overhead)
 ./scripts/profile-reth-jemalloc.sh op-reth-seq 60
 
-# Option 3: Valgrind Massif (memory over time)
-./scripts/profile-reth-massif.sh op-reth-seq 60
+# Generate flamegraph from heap dumps
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
 ```
 
-## Method 1: Heaptrack (Recommended)
-
-Heaptrack provides the most user-friendly memory profiling experience with excellent visualization.
-
-### What Heaptrack Shows
-
-- **Allocation hotspots**: Functions allocating the most memory
-- **Temporary allocations**: Short-lived objects
-- **Leak candidates**: Memory never freed
-- **Peak memory**: Maximum memory usage over time
-- **Allocation flamegraphs**: Visual call stacks
-
-### Basic Usage
-
-```bash
-# Profile for 60 seconds
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60
-
-# Profile for 2 minutes
-./scripts/profile-reth-heaptrack.sh op-reth-seq 120
-```
-
-**Output:**
-- `./profiling/op-reth-seq/heaptrack-TIMESTAMP.data.gz` - Raw heaptrack data
-- `./profiling/op-reth-seq/heaptrack-TIMESTAMP.txt` - Text summary
-- `./profiling/op-reth-seq/heaptrack-TIMESTAMP-allocations.svg` - Allocation flamegraph
-
-### Analyzing Results
-
-#### View Text Summary
-
-```bash
-cat ./profiling/op-reth-seq/heaptrack-*.txt
-```
-
-This shows:
-- Peak memory usage
-- Total allocations
-- Temporary allocations
-- Top allocation sites
-
-#### View Flamegraph
-
-```bash
-open ./profiling/op-reth-seq/heaptrack-*-allocations.svg
-```
-
-**Reading the flamegraph:**
-- **Width** = Total bytes allocated (wider = more memory)
-- **Color** = Different code paths
-- **Click** to zoom into specific call paths
-- **Search** to find specific functions
-
-#### GUI Analysis (Advanced)
-
-If you have heaptrack_gui installed locally:
-
-```bash
-# Copy data file to your local machine
-docker cp op-reth-seq:/profiling/heaptrack.data.gz ./heaptrack.data.gz
-
-# Open in GUI (if available)
-heaptrack_gui heaptrack.data.gz
-```
-
-### Manual Heaptrack Profiling
-
-For more control:
-
-```bash
-docker exec op-reth-seq sh -c '
-  RETH_PID=$(pgrep -f "op-reth node" | head -1)
-
-  # Attach heaptrack to running process
-  heaptrack -p $RETH_PID -o /profiling/heaptrack
-
-  # Let it run for desired duration
-  sleep 60
-
-  # Stop with Ctrl+C or kill heaptrack process
-'
-
-# Generate reports
-docker exec op-reth-seq sh -c '
-  heaptrack_print /profiling/heaptrack.*.gz > /profiling/heaptrack-report.txt
-'
-```
-
-## Method 2: Jemalloc Heap Profiling
+## Jemalloc Heap Profiling
 
 Since reth is built with jemalloc, you can use its native profiling capabilities with minimal overhead.
 
@@ -180,11 +82,18 @@ Since reth is built with jemalloc, you can use its native profiling capabilities
 
 ### Enable Profiling
 
-Jemalloc profiling is controlled via environment variables:
+Jemalloc profiling is controlled via environment variables. **Important:** Reth uses tikv-jemalloc which requires `_RJEM_MALLOC_CONF` (not `MALLOC_CONF`):
 
 ```bash
-# In docker-compose.yml or when starting reth
-MALLOC_CONF="prof:true,prof_prefix:/profiling/jeprof,lg_prof_interval:30"
+# Option 1: Use the JEMALLOC_PROFILING flag (recommended)
+# Add to docker-compose.yml under op-reth-seq service:
+environment:
+  - JEMALLOC_PROFILING=true
+
+# Option 2: Set _RJEM_MALLOC_CONF directly
+# Add to docker-compose.yml under op-reth-seq service:
+environment:
+  - _RJEM_MALLOC_CONF=prof:true,prof_prefix:/profiling/jeprof,lg_prof_interval:30
 ```
 
 **Options:**
@@ -192,6 +101,8 @@ MALLOC_CONF="prof:true,prof_prefix:/profiling/jeprof,lg_prof_interval:30"
 - `prof_prefix:<path>` - Output file prefix
 - `lg_prof_interval:N` - Dump heap every 2^N bytes allocated
 - `lg_prof_sample:N` - Sample rate (default: 19 = every 512KB)
+
+**Note:** The entrypoint scripts (`reth-seq.sh`, `reth-rpc.sh`) automatically set `_RJEM_MALLOC_CONF` when `JEMALLOC_PROFILING=true`.
 
 ### Collecting Heap Dumps
 
@@ -209,100 +120,74 @@ This will:
 ### Generating Flamegraphs
 
 ```bash
-# Generate flamegraph from heap dump
-./scripts/generate-memory-flamegraph.sh op-reth-seq jeprof.*.heap
+# Generate flamegraph from all heap files (merged)
+./scripts/generate-memory-flamegraph.sh op-reth-seq all
+
+# Generate flamegraph from latest heap file only
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
+
+# Generate flamegraph from last N heap files
+./scripts/generate-memory-flamegraph.sh op-reth-seq last:5
+
+# Generate flamegraph from specific files (comma-separated)
+./scripts/generate-memory-flamegraph.sh op-reth-seq jeprof.1.0.m0.heap,jeprof.1.1.i0.heap
+
+# Generate flamegraph from a single heap file
+./scripts/generate-memory-flamegraph.sh op-reth-seq jeprof.1.0.m0.heap
 ```
+
+**Output:** `./profiling/op-reth-seq/<basename>-allocations-demangled.svg`
+
+The script automatically:
+- Resolves symbols using `nm` for fast lookup
+- Demangles Rust symbols using `rustfilt` (preferred) or `c++filt`
+- Cleans up remaining mangled symbol artifacts
+- Generates an interactive SVG flamegraph with readable function names
 
 ### Manual Jemalloc Profiling
 
+**Note:** Jemalloc profiling must be enabled at process startup. You cannot enable it for a running process.
+
 ```bash
-# Enable profiling for running container
-docker exec op-reth-seq sh -c '
-  export MALLOC_CONF="prof:true,prof_prefix:/profiling/jeprof,lg_prof_interval:30"
+# Restart container with profiling enabled
+docker-compose stop op-reth-seq
+# Add JEMALLOC_PROFILING=true to environment, then:
+docker-compose up -d op-reth-seq
 
-  # Trigger manual heap dump (if jemalloc supports PROF signal)
+# Trigger manual heap dump using GDB (for tikv-jemalloc)
+docker exec op-reth-seq sh -c '
   RETH_PID=$(pgrep -f "op-reth node" | head -1)
-  kill -USR1 $RETH_PID
+  gdb -batch -p $RETH_PID -ex "call (int)_rjem_mallctl(\"prof.dump\", 0, 0, 0, 0)" -ex quit
 '
 
-# Convert heap dump to text
-docker exec op-reth-seq sh -c '
-  jeprof --text /usr/local/bin/op-reth /profiling/jeprof.*.heap > /profiling/jemalloc-report.txt
-'
+# List generated heap files
+docker exec op-reth-seq ls -la /profiling/*.heap
+```
 
-# Generate flamegraph
-docker exec op-reth-seq sh -c '
-  jeprof --collapsed /usr/local/bin/op-reth /profiling/jeprof.*.heap > /profiling/jemalloc.folded
-'
+**Generating reports from heap files:**
+```bash
+# Generate flamegraph (recommended)
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
+
+# Or generate text report manually
+docker exec op-reth-seq cat /profiling/jeprof.*.heap | head -50
 ```
 
 ### Analyzing Jemalloc Output
 
-```bash
-# View top allocation sites
-docker exec op-reth-seq jeprof --text /usr/local/bin/op-reth /profiling/jeprof.*.heap | head -50
-
-# Generate PDF report (if graphviz available)
-docker exec op-reth-seq jeprof --pdf /usr/local/bin/op-reth /profiling/jeprof.*.heap > jemalloc.pdf
-```
-
-## Method 3: Valgrind Massif
-
-Massif tracks memory usage over time, showing how memory consumption changes during execution.
-
-### What Massif Shows
-
-- **Memory timeline**: Usage over time
-- **Peak memory**: When and where maximum memory was used
-- **Heap growth**: How memory consumption increases
-- **Stack vs heap**: Breakdown of memory usage
-
-### Running Massif
+The recommended way to analyze jemalloc heap dumps is using the flamegraph script:
 
 ```bash
-# Profile for 60 seconds
-./scripts/profile-reth-massif.sh op-reth-seq 60
+# Generate demangled flamegraph (recommended)
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
+
+# View the flamegraph
+open ./profiling/op-reth-seq/*-allocations-demangled.svg
 ```
 
-**Output:**
-- `./profiling/op-reth-seq/massif-TIMESTAMP.out` - Raw massif data
-- `./profiling/op-reth-seq/massif-TIMESTAMP.txt` - Text report
-- `./profiling/op-reth-seq/massif-TIMESTAMP.png` - Memory timeline graph
+**Note:** Traditional `jeprof`/`pprof` tools may not work with tikv-jemalloc's `heap_v2` format. The `generate-memory-flamegraph.sh` script handles this format correctly.
 
-### Visualizing Memory Over Time
-
-```bash
-# View text report
-cat ./profiling/op-reth-seq/massif-*.txt
-
-# Generate graph with massif-visualizer (if available locally)
-massif-visualizer ./profiling/op-reth-seq/massif-*.out
-```
-
-### Manual Massif Profiling
-
-```bash
-# Run reth under massif (WARNING: Very slow!)
-docker exec op-reth-seq sh -c '
-  # Stop current reth
-  killall op-reth
-
-  # Start under massif
-  valgrind --tool=massif \
-    --massif-out-file=/profiling/massif.out \
-    --time-unit=ms \
-    --detailed-freq=10 \
-    /usr/local/bin/op-reth node \
-    [... your reth args ...]
-'
-
-# Analyze results
-docker exec op-reth-seq ms_print /profiling/massif.out > massif-report.txt
-```
-
-**Warning:** Massif has 10-20x overhead. Not suitable for production profiling.
-
-## Method 4: Live Memory Analysis
+## Live Memory Analysis
 
 For quick memory checks without heavy profiling:
 
@@ -350,15 +235,11 @@ docker exec op-reth-seq sh -c '
 
 | Method | Overhead | Detail | Use Case | Output |
 |--------|----------|--------|----------|--------|
-| **Heaptrack** | Low (5-10%) | High | Development, debugging | Flamegraphs, GUI |
-| **Jemalloc** | Very Low (<5%) | Medium | Production, continuous | Heap dumps, text |
-| **Massif** | Very High (10-20x) | Medium | Memory timeline | Graphs, reports |
+| **Jemalloc** | Very Low (<5%) | High | Development & Production | Heap dumps, flamegraphs |
 | **/proc/smaps** | None | Low | Quick checks | Text summary |
 
 **Recommendations:**
-- **Development**: Heaptrack (easiest, most comprehensive)
-- **Production**: Jemalloc (low overhead, always-on capability)
-- **Memory leaks**: Heaptrack or Massif
+- **Development & Production**: Jemalloc (low overhead, detailed flamegraphs)
 - **Quick checks**: /proc/smaps or pmap
 
 ## Common Memory Issues
@@ -372,12 +253,13 @@ docker exec op-reth-seq sh -c '
 
 **Detection:**
 ```bash
-# Run heaptrack for extended period
-./scripts/profile-reth-heaptrack.sh op-reth-seq 300
+# Collect multiple heap dumps over time
+./scripts/profile-reth-jemalloc.sh op-reth-seq 300
 
-# Look for:
+# Generate flamegraph and look for:
 # - Allocations with no corresponding frees
 # - Growing allocation counts over time
+./scripts/generate-memory-flamegraph.sh op-reth-seq all
 ```
 
 ### 2. Excessive Allocations
@@ -389,12 +271,12 @@ docker exec op-reth-seq sh -c '
 
 **Detection:**
 ```bash
-# Use heaptrack to find allocation hotspots
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60
+# Use jemalloc to find allocation hotspots
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
 
 # Look for:
-# - Wide bars in flamegraph
-# - High "temporary allocations" count
+# - Wide bars in flamegraph (functions allocating most memory)
 ```
 
 ### 3. Memory Bloat
@@ -430,11 +312,17 @@ docker exec op-reth-seq sh -c '
 
 ## Troubleshooting
 
-### "heaptrack: command not found"
+### "Jemalloc profiling is not enabled"
+
+Jemalloc profiling must be enabled at process startup:
 
 ```bash
-# Rebuild container with memory profiling tools
-./scripts/build-reth-with-profiling.sh
+# Add to docker-compose.yml environment:
+environment:
+  - JEMALLOC_PROFILING=true
+
+# Then restart the container
+docker-compose restart op-reth-seq
 ```
 
 ### "Cannot attach to process"
@@ -449,11 +337,12 @@ docker inspect op-reth-seq | grep -i ptrace
 ### High Overhead from Profiling
 
 ```bash
-# For heaptrack, reduce sampling
-docker exec op-reth-seq heaptrack -p $PID --sample-rate 100
+# Increase jemalloc sampling interval for lower overhead
+# In docker-compose.yml:
+environment:
+  - _RJEM_MALLOC_CONF=prof:true,prof_prefix:/profiling/jeprof,lg_prof_sample:21
 
-# For jemalloc, increase sampling interval
-MALLOC_CONF="prof:true,lg_prof_sample:21"  # Sample every 2MB instead of 512KB
+# lg_prof_sample:21 samples every 2MB instead of default 512KB
 ```
 
 ### No Symbols in Output
@@ -465,13 +354,13 @@ docker exec op-reth-seq file /usr/local/bin/op-reth
 # Should show: "with debug_info, not stripped"
 ```
 
-### Massif Too Slow
+### Mangled Rust Symbols in Flamegraph
 
 ```bash
-# Reduce detail frequency
-valgrind --tool=massif --detailed-freq=100  # Instead of default 10
+# Install rustfilt for better demangling
+cargo install rustfilt
 
-# Or use heaptrack/jemalloc instead
+# The generate-memory-flamegraph.sh script will automatically use it
 ```
 
 ## Best Practices
@@ -484,18 +373,22 @@ valgrind --tool=massif --detailed-freq=100  # Instead of default 10
 cast send --rpc-url http://localhost:8123 ...
 
 # Terminal 2: Profile
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
 ```
 
 ### 2. Multiple Profiling Sessions
 
 ```bash
 # Capture different phases
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60  # Startup
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60  # Startup
 # ... wait for steady state ...
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60  # Steady state
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60  # Steady state
 # ... trigger high load ...
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60  # Under load
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60  # Under load
+
+# Generate flamegraphs for comparison
+./scripts/generate-memory-flamegraph.sh op-reth-seq all
 ```
 
 ### 3. Combine CPU and Memory Profiling
@@ -503,25 +396,28 @@ cast send --rpc-url http://localhost:8123 ...
 ```bash
 # Run both simultaneously
 ./scripts/profile-reth-perf.sh op-reth-seq 60 &
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60 &
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60 &
 wait
 
 # Analyze both:
 # - CPU flamegraph shows compute hotspots
 # - Memory flamegraph shows allocation hotspots
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
 ```
 
 ### 4. Baseline Measurements
 
 ```bash
 # Establish baseline before changes
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
 
 # Make optimizations
 # ...
 
 # Compare after changes
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
 
 # Look for:
 # - Reduced peak memory
@@ -534,12 +430,15 @@ wait
 For production systems:
 
 ```bash
-# Enable jemalloc profiling with minimal overhead
-MALLOC_CONF="prof:true,prof_prefix:/profiling/jeprof,lg_prof_interval:33,lg_prof_sample:21"
+# Enable jemalloc profiling with minimal overhead (in docker-compose.yml)
+environment:
+  - _RJEM_MALLOC_CONF=prof:true,prof_prefix:/profiling/jeprof,lg_prof_interval:33,lg_prof_sample:21
 
 # This dumps heap every ~8GB allocated, sampling every 2MB
 # Very low overhead, suitable for production
 ```
+
+Or simply use `JEMALLOC_PROFILING=true` for default settings.
 
 ## Integration with Existing Profiling
 
@@ -549,13 +448,16 @@ MALLOC_CONF="prof:true,prof_prefix:/profiling/jeprof,lg_prof_interval:33,lg_prof
 # Run all profiling types
 ./scripts/profile-reth-perf.sh op-reth-seq 60 &       # On-CPU
 ./scripts/profile-reth-offcpu.sh op-reth-seq 60 &    # Off-CPU
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60 & # Memory
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60 &  # Memory
 wait
+
+# Generate memory flamegraph
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
 
 # Analyze together to understand:
 # - CPU hotspots (perf)
 # - I/O bottlenecks (offcpu)
-# - Memory bottlenecks (heaptrack)
+# - Memory bottlenecks (jemalloc)
 ```
 
 ### Decision Matrix
@@ -564,14 +466,12 @@ wait
 |---------|--------------|------|
 | High CPU usage | On-CPU | `profile-reth-perf.sh` |
 | Slow responses | Off-CPU | `profile-reth-offcpu.sh` |
-| High memory | Memory | `profile-reth-heaptrack.sh` |
-| Memory growing | Memory leak | `profile-reth-massif.sh` |
-| Slow allocations | CPU + Memory | Both perf and heaptrack |
+| High memory | Memory | `profile-reth-jemalloc.sh` |
+| Memory growing | Memory leak | `profile-reth-jemalloc.sh` (multiple dumps) |
+| Slow allocations | CPU + Memory | Both perf and jemalloc |
 
 ## Resources
 
-- [Heaptrack Documentation](https://github.com/KDE/heaptrack)
 - [Jemalloc Profiling](https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling)
-- [Valgrind Massif](https://valgrind.org/docs/manual/ms-manual.html)
 - [Linux Memory Management](https://www.kernel.org/doc/html/latest/admin-guide/mm/index.html)
 - [Rust Performance Book](https://nnethercote.github.io/perf-book/)

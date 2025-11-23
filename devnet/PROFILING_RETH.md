@@ -81,6 +81,9 @@ SEQ_TYPE=reth
 # Profiling configuration for op-reth
 RETH_PROFILING_ENABLED=true
 
+# Enable jemalloc heap profiling (for memory profiling)
+JEMALLOC_PROFILING=true
+
 # To build reth (init.sh)
 SKIP_OP_RETH_BUILD=false
 
@@ -91,6 +94,8 @@ RPC_TYPE=reth
 # Set your reth source directory (if building from source)
 OP_RETH_LOCAL_DIRECTORY=/path/to/your/reth
 ```
+
+**Note:** `JEMALLOC_PROFILING=true` enables jemalloc heap profiling. The entrypoint scripts automatically configure `_RJEM_MALLOC_CONF` for tikv-jemalloc.
 
 ### 2. Build and Start the Environment
 
@@ -116,19 +121,16 @@ cd test
 ### 4. Collect a Memory Profile
 
 ```bash
-# Heaptrack - recommended for development (easiest, most comprehensive)
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60
-
-# Jemalloc - recommended for production (low overhead)
+# Jemalloc profiling (low overhead, works in development & production)
 ./scripts/profile-reth-jemalloc.sh op-reth-seq 60
 
-# Massif - for memory timeline analysis
-./scripts/profile-reth-massif.sh op-reth-seq 60
+# Generate flamegraph from heap dumps
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
 ```
 
 All profiles generate interactive flamegraphs in `./profiling/op-reth-seq/`:
 - CPU profiles: `perf-*.svg`
-- Memory profiles: `heaptrack-*-allocations.svg` or `jemalloc-*-allocations.svg`
+- Memory profiles: `*-allocations-demangled.svg`
 
 ## Detailed Usage
 
@@ -161,34 +163,25 @@ See [OFFCPU_PROFILING.md](OFFCPU_PROFILING.md) for details.
 
 #### Memory Profiling Scripts
 
-**`profile-reth-heaptrack.sh`** - Memory profiling (recommended)
-
-Captures heap allocations with low overhead. Best for development.
-
-```bash
-./scripts/profile-reth-heaptrack.sh [container_name] [duration_seconds]
-```
-
-**Output:**
-- `./profiling/[container_name]/heaptrack-TIMESTAMP.data.gz` - Raw data
-- `./profiling/[container_name]/heaptrack-TIMESTAMP.txt` - Text report
-- `./profiling/[container_name]/heaptrack-TIMESTAMP-allocations.svg` - Memory flamegraph
-
 **`profile-reth-jemalloc.sh`** - Jemalloc heap profiling
 
-Uses jemalloc's built-in profiling. Very low overhead, suitable for production.
+Uses jemalloc's built-in profiling. Very low overhead, suitable for development and production.
+
+**Prerequisites:** Enable jemalloc profiling in docker-compose.yml:
+```yaml
+environment:
+  - JEMALLOC_PROFILING=true
+```
 
 ```bash
 ./scripts/profile-reth-jemalloc.sh [container_name] [duration_seconds]
 ```
 
-**`profile-reth-massif.sh`** - Memory timeline profiling
+**Output:**
+- `./profiling/[container_name]/jeprof.*.heap` - Heap dump files
+- `./profiling/[container_name]/jemalloc-TIMESTAMP.txt` - Text report
 
-Tracks memory usage over time to identify memory growth patterns.
-
-```bash
-./scripts/profile-reth-massif.sh [container_name] [duration_seconds]
-```
+**Note:** Reth uses tikv-jemalloc which requires `_RJEM_MALLOC_CONF` (not `MALLOC_CONF`). The entrypoint scripts handle this automatically when `JEMALLOC_PROFILING=true`.
 
 See [MEMORY_PROFILING.md](MEMORY_PROFILING.md) for complete memory profiling guide.
 
@@ -204,19 +197,37 @@ Generates an interactive SVG flamegraph from CPU perf data.
 
 **`generate-memory-flamegraph.sh`** - Memory flamegraphs
 
-Generates an interactive SVG flamegraph from memory profiling data.
+Generates an interactive SVG flamegraph from memory profiling data with automatic symbol demangling.
 
 ```bash
 ./scripts/generate-memory-flamegraph.sh [container_name] [input_file] [profile_type]
 ```
 
+**Input file options:**
+- `all` - Merge all .heap files (default)
+- `latest` - Use only the latest .heap file
+- `last:N` - Merge the last N .heap files (e.g., `last:5`)
+- `file1,file2` - Comma-separated list of specific files
+- `filename` - Single file (e.g., `jeprof.1.0.m0.heap`)
+
 **Examples:**
 ```bash
-# Generate flamegraph from perf script
-./scripts/generate-flamegraph.sh op-reth-seq perf-20241117-143022.script
+# Generate flamegraph from all heap files (merged)
+./scripts/generate-memory-flamegraph.sh op-reth-seq all
 
-# The output will be: ./profiling/op-reth-seq/perf-20241117-143022.svg
+# Generate flamegraph from latest heap file
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
+
+# Generate flamegraph from last 5 heap files
+./scripts/generate-memory-flamegraph.sh op-reth-seq last:5
+
+# The output will be: ./profiling/op-reth-seq/<basename>-allocations-demangled.svg
 ```
+
+**Features:**
+- Automatic symbol resolution using `nm`
+- Rust symbol demangling via `rustfilt` or `c++filt`
+- Readable function names in the flamegraph
 
 **Flamegraph Features:**
 - **Interactive**: Click to zoom, hover for details
@@ -279,23 +290,15 @@ Memory profiling identifies how your code allocates and uses memory. Use this to
 ### Quick Memory Profiling
 
 ```bash
-# Development: Heaptrack (easiest, most detailed)
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60
-
-# Production: Jemalloc (lowest overhead)
+# Jemalloc profiling (works for development & production)
 ./scripts/profile-reth-jemalloc.sh op-reth-seq 60
 
+# Generate flamegraph from heap dumps
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
+
 # View the memory flamegraph
-open ./profiling/op-reth-seq/*-allocations.svg
+open ./profiling/op-reth-seq/*-allocations-demangled.svg
 ```
-
-### Memory Profiling Methods
-
-| Method | Overhead | Best For | Command |
-|--------|----------|----------|---------|
-| **Heaptrack** | 5-10% | Development, debugging | `./scripts/profile-reth-heaptrack.sh` |
-| **Jemalloc** | <5% | Production, continuous monitoring | `./scripts/profile-reth-jemalloc.sh` |
-| **Massif** | Low | Memory timeline, growth analysis | `./scripts/profile-reth-massif.sh` |
 
 ### When to Use Memory Profiling
 
@@ -320,8 +323,11 @@ For comprehensive performance analysis, run both:
 ```bash
 # Run both in parallel
 ./scripts/profile-reth-perf.sh op-reth-seq 60 &
-./scripts/profile-reth-heaptrack.sh op-reth-seq 60 &
+./scripts/profile-reth-jemalloc.sh op-reth-seq 60 &
 wait
+
+# Generate memory flamegraph
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest
 
 # Compare results
 ls -lht ./profiling/op-reth-seq/*.svg
@@ -467,14 +473,11 @@ profiling/
 │   ├── perf-20241117-143022.svg              # CPU flamegraph
 │   ├── offcpu-20241117-143022.data           # Off-CPU data
 │   ├── offcpu-20241117-143022.svg            # Off-CPU flamegraph
-│   ├── heaptrack-20241117-143022.data.gz     # Heaptrack data
-│   ├── heaptrack-20241117-143022.txt         # Heaptrack text report
-│   ├── heaptrack-20241117-143022-allocations.svg  # Memory flamegraph
-│   ├── jemalloc-20241117-143022.heap         # Jemalloc heap dump
+│   ├── jeprof.1.0.m0.heap                    # Jemalloc heap dump
 │   ├── jemalloc-20241117-143022.txt          # Jemalloc text report
-│   ├── jemalloc-20241117-143022-allocations.svg   # Jemalloc flamegraph
-│   ├── massif-20241117-143022.csv            # Memory timeline data
-│   ├── massif-20241117-143022.txt            # Massif text report
+│   ├── merged-20241117-143022.folded         # Folded stacks (raw)
+│   ├── merged-20241117-143022.demangled.folded    # Folded stacks (demangled)
+│   ├── merged-20241117-143022-allocations-demangled.svg  # Jemalloc flamegraph
 │   └── ...
 ├── op-reth-rpc/
 │   └── ...
@@ -491,9 +494,8 @@ Typical profile sizes:
 - **perf SVG**: 10-200 KB (compressed, interactive flamegraph)
 
 **Memory Profiles:**
-- **heaptrack.data.gz**: 1-50 MB (compressed heap data)
-- **heaptrack.txt**: 0.1-10 MB (text report)
 - **jemalloc.heap**: 0.1-5 MB (heap dump)
+- **jemalloc.txt**: 0.1-1 MB (text report)
 - **memory SVG**: 10-200 KB (compressed, interactive flamegraph)
 
 ### Cleanup
@@ -504,14 +506,14 @@ rm -rf ./profiling/op-reth-seq/perf-*
 rm -rf ./profiling/op-reth-seq/offcpu-*
 
 # Remove old memory profiles
-rm -rf ./profiling/op-reth-seq/heaptrack-*
+rm -rf ./profiling/op-reth-seq/jeprof.*
 rm -rf ./profiling/op-reth-seq/jemalloc-*
-rm -rf ./profiling/op-reth-seq/massif-*
+rm -rf ./profiling/op-reth-seq/merged-*
 
 # Keep only recent profiles (last 7 days)
 find ./profiling -name "perf-*" -mtime +7 -delete
-find ./profiling -name "heaptrack-*" -mtime +7 -delete
-find ./profiling -name "jemalloc-*" -mtime +7 -delete
+find ./profiling -name "jeprof.*" -mtime +7 -delete
+find ./profiling -name "merged-*" -mtime +7 -delete
 
 # Clean up FlameGraph tools (will be re-downloaded if needed)
 rm -rf ./profiling/FlameGraph
@@ -702,10 +704,7 @@ docker exec op-reth-seq perf report -i /tmp/perf.data --stdio
 
 ### Memory Profiling
 
-- [Heaptrack](https://github.com/KDE/heaptrack)
 - [Jemalloc Profiling](https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling)
-- [Valgrind Massif](https://valgrind.org/docs/manual/ms-manual.html)
-- [Brendan Gregg's Memory Leak Analysis](https://www.brendangregg.com/blog/2016-10-09/memory-leak-analysis.html)
 
 ### General
 
