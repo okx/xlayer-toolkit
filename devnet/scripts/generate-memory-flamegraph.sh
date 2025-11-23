@@ -325,6 +325,14 @@ fi
 echo "[4/5] Demangling Rust symbols..."
 DEMANGLED_FILE="${FOLDED_FILE%.folded}.demangled.folded"
 
+# Check for rustfilt, install if cargo is available
+if ! command -v rustfilt &> /dev/null && ! command -v ~/.cargo/bin/rustfilt &> /dev/null; then
+    if command -v cargo &> /dev/null; then
+        echo "  Installing rustfilt for better Rust symbol demangling..."
+        cargo install rustfilt --quiet 2>/dev/null || true
+    fi
+fi
+
 if command -v rustfilt &> /dev/null; then
     # rustfilt is preferred for Rust symbols
     rustfilt < "$FOLDED_FILE" > "$DEMANGLED_FILE.tmp"
