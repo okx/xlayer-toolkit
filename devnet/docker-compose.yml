@@ -299,6 +299,7 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=debug
+      - --log.format=logfmtms
       - --l2=http://${SEQ_L2_EXECUTION_CLIENT}:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
@@ -347,6 +348,7 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=debug
+      - --log.format=logfmtms
       - --l2=http://op-${RPC_TYPE}-rpc:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled=false
@@ -385,6 +387,7 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=debug
+      - --log.format=logfmtms
       - --l2=http://op-${RPC_TYPE}-rpc2:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled=false
@@ -642,6 +645,7 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=info
+      - --log.format=logfmtms
       - --l2=http://${SEQ_L2_EXECUTION_CLIENT}2:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
@@ -761,6 +765,7 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=info
+      - --log.format=logfmtms
       - --l2=http://op-geth-seq3:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
