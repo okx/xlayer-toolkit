@@ -151,16 +151,6 @@ Captures a CPU profile using perf with full debug symbols.
 - `./profiling/[container_name]/perf-TIMESTAMP.script` - Symbolicated stack traces
 - `./profiling/[container_name]/perf-TIMESTAMP.svg` - CPU flamegraph
 
-**`profile-reth-offcpu.sh`** - Off-CPU profiling
-
-Captures blocking/waiting time to identify I/O bottlenecks and lock contention.
-
-```bash
-./scripts/profile-reth-offcpu.sh [container_name] [duration_seconds]
-```
-
-See [OFFCPU_PROFILING.md](OFFCPU_PROFILING.md) for details.
-
 #### Memory Profiling Scripts
 
 **`profile-reth-jemalloc.sh`** - Jemalloc heap profiling
@@ -277,8 +267,6 @@ open ./profiling/op-reth-seq/perf-*.svg
 
 For detailed CPU profiling information, see the sections below on [Analyzing Profiles](#analyzing-profiles) and [Common Profiling Scenarios](#common-profiling-scenarios).
 
-For off-CPU profiling (blocking, I/O, locks), see [OFFCPU_PROFILING.md](OFFCPU_PROFILING.md).
-
 ## Memory Profiling
 
 Memory profiling identifies how your code allocates and uses memory. Use this to find:
@@ -340,7 +328,7 @@ ls -lht ./profiling/op-reth-seq/*.svg
 | High | Low | CPU-bound (optimize algorithms) |
 | Low | High | Memory-bound (optimize allocations) |
 | High | High | Both (profile both!) |
-| Low | Low | I/O-bound (use off-CPU profiling) |
+| Low | Low | I/O-bound |
 
 ## Analyzing Profiles
 
@@ -471,8 +459,6 @@ profiling/
 │   ├── perf-20241117-143022.script           # Symbolicated CPU output
 │   ├── perf-20241117-143022.folded           # Folded CPU stacks
 │   ├── perf-20241117-143022.svg              # CPU flamegraph
-│   ├── offcpu-20241117-143022.data           # Off-CPU data
-│   ├── offcpu-20241117-143022.svg            # Off-CPU flamegraph
 │   ├── jeprof.1.0.m0.heap                    # Jemalloc heap dump
 │   ├── jemalloc-20241117-143022.txt          # Jemalloc text report
 │   ├── merged-20241117-143022.folded         # Folded stacks (raw)
@@ -503,7 +489,6 @@ Typical profile sizes:
 ```bash
 # Remove old CPU profiles
 rm -rf ./profiling/op-reth-seq/perf-*
-rm -rf ./profiling/op-reth-seq/offcpu-*
 
 # Remove old memory profiles
 rm -rf ./profiling/op-reth-seq/jeprof.*
@@ -693,7 +678,6 @@ docker exec op-reth-seq perf report -i /tmp/perf.data --stdio
 ### Documentation
 
 - [MEMORY_PROFILING.md](MEMORY_PROFILING.md) - Complete memory profiling guide
-- [OFFCPU_PROFILING.md](OFFCPU_PROFILING.md) - Off-CPU profiling guide
 
 ### CPU Profiling
 

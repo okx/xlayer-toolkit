@@ -446,8 +446,7 @@ Or simply use `JEMALLOC_PROFILING=true` for default settings.
 
 ```bash
 # Run all profiling types
-./scripts/profile-reth-perf.sh op-reth-seq 60 &       # On-CPU
-./scripts/profile-reth-offcpu.sh op-reth-seq 60 &    # Off-CPU
+./scripts/profile-reth-perf.sh op-reth-seq 60 &       # CPU
 ./scripts/profile-reth-jemalloc.sh op-reth-seq 60 &  # Memory
 wait
 
@@ -456,7 +455,6 @@ wait
 
 # Analyze together to understand:
 # - CPU hotspots (perf)
-# - I/O bottlenecks (offcpu)
 # - Memory bottlenecks (jemalloc)
 ```
 
@@ -464,8 +462,7 @@ wait
 
 | Symptom | Profile Type | Tool |
 |---------|--------------|------|
-| High CPU usage | On-CPU | `profile-reth-perf.sh` |
-| Slow responses | Off-CPU | `profile-reth-offcpu.sh` |
+| High CPU usage | CPU | `profile-reth-perf.sh` |
 | High memory | Memory | `profile-reth-jemalloc.sh` |
 | Memory growing | Memory leak | `profile-reth-jemalloc.sh` (multiple dumps) |
 | Slow allocations | CPU + Memory | Both perf and jemalloc |
