@@ -37,8 +37,8 @@ if [ -z "$L1_RPC_URL_IN_DOCKER" ]; then
     exit 1
 fi
 
-if [ -z "$OP_SUCCINCT_CONTRACTS_IAMGE_TAG" ]; then
-    echo "❌ Error: OP_SUCCINCT_CONTRACTS_IAMGE_TAG is not set"
+if [ -z "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" ]; then
+    echo "❌ Error: OP_SUCCINCT_CONTRACTS_IMAGE_TAG is not set"
     exit 1
 fi
 
@@ -50,7 +50,7 @@ ACCESS_MANAGER_OUTPUT=$(docker run --rm \
     -v "$PWD_DIR/op-succinct/deployment:/app/contracts/script/fp" \
     -e DISPUTE_GAME_FACTORY_ADDRESS="$DISPUTE_GAME_FACTORY_ADDRESS" \
     -w /app/contracts \
-    "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+    "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
     -c "forge script script/fp/DeployAccessManager.s.sol:DeployAccessManager \
       --rpc-url $L1_RPC_URL_IN_DOCKER \
       --private-key $DEPLOYER_PRIVATE_KEY \
@@ -77,7 +77,7 @@ if [ "${OP_SUCCINCT_MOCK_MODE:-true}" = "true" ]; then
         --entrypoint sh \
         -v "$PWD_DIR/op-succinct/deployment:/app/contracts/script/fp" \
         -w /app/contracts \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         -c "forge script script/fp/DeploySP1MockVerifier.s.sol:DeploySP1MockVerifier \
           --rpc-url $L1_RPC_URL_IN_DOCKER \
           --private-key $DEPLOYER_PRIVATE_KEY \
@@ -104,7 +104,7 @@ else
         --entrypoint sh \
         -v "$PWD_DIR/op-succinct/verifier-contracts/v5.0.0:/app/v5.0.0:ro" \
         -w /app \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         -c "forge create v5.0.0/SP1VerifierPlonk.sol:SP1Verifier \
           --rpc-url $L1_RPC_URL_IN_DOCKER \
           --private-key $DEPLOYER_PRIVATE_KEY \
@@ -132,7 +132,7 @@ else
     VERIFIER_HASH=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
         --entrypoint sh \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         -c "cast call \
           --rpc-url $L1_RPC_URL_IN_DOCKER \
           $VERIFIER_ADDRESS \
@@ -169,7 +169,7 @@ if [ -n "$OPTIMISM_PORTAL_PROXY_ADDRESS" ]; then
     echo "🔍 Querying AnchorStateRegistry from Portal..."
     ANCHOR_QUERY_OUTPUT=$(timeout 15 docker run --rm --network "$DOCKER_NETWORK" \
         --entrypoint cast \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         call --rpc-url "$L1_RPC_URL_IN_DOCKER" \
         "$OPTIMISM_PORTAL_PROXY_ADDRESS" 'anchorStateRegistry()(address)' 2>&1 || echo "QUERY_TIMEOUT")
     
@@ -310,7 +310,7 @@ upgrade_op_succinct_fdg() {
         echo "🔍 Querying AnchorStateRegistry from Portal..."
         if [ -n "$OPTIMISM_PORTAL_PROXY_ADDRESS" ]; then
             ANCHOR_STATE_REGISTRY=$(docker run --rm --network "$DOCKER_NETWORK" \
-                "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+                "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
                 cast call --rpc-url "$L1_RPC_URL_IN_DOCKER" \
                 "$OPTIMISM_PORTAL_PROXY_ADDRESS" 'anchorStateRegistry()(address)')
             echo "   ✅ AnchorStateRegistry found: $ANCHOR_STATE_REGISTRY"
@@ -358,7 +358,7 @@ upgrade_op_succinct_fdg() {
         --network "$DOCKER_NETWORK" \
         --entrypoint forge \
         -w /app/contracts \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         create src/fp/OPSuccinctFaultDisputeGame.sol:OPSuccinctFaultDisputeGame \
           --rpc-url "$L1_RPC_URL_IN_DOCKER" \
           --private-key "$DEPLOYER_PRIVATE_KEY" \
@@ -392,12 +392,12 @@ upgrade_op_succinct_fdg() {
     SET_IMPL_CALLDATA=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
         --entrypoint cast \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         calldata 'setImplementation(uint32,address)' "$GAME_TYPE" "$NEW_GAME_ADDRESS")
     TRANSACTOR_OUTPUT=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
         --entrypoint cast \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         send \
           --rpc-url "$L1_RPC_URL_IN_DOCKER" \
           --private-key "$DEPLOYER_PRIVATE_KEY" \
@@ -420,7 +420,7 @@ upgrade_op_succinct_fdg() {
     REGISTERED_IMPL=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
         --entrypoint cast \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         call \
           --rpc-url "$L1_RPC_URL_IN_DOCKER" \
           "$DISPUTE_GAME_FACTORY_ADDRESS" \
@@ -447,7 +447,7 @@ upgrade_op_succinct_fdg() {
     ASR_OUTPUT=$(docker run --rm \
         --network "$DOCKER_NETWORK" \
         --entrypoint cast \
-        "${OP_SUCCINCT_CONTRACTS_IAMGE_TAG}" \
+        "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}" \
         send \
           --rpc-url "$L1_RPC_URL_IN_DOCKER" \
           --private-key "$DEPLOYER_PRIVATE_KEY" \
