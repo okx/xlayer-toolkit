@@ -1,24 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.15;
 
-import "forge-std/Script.sol";
+import {Script} from "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
+import {SP1Verifier} from "@sp1-contracts/src/v5.0.0/SP1VerifierPlonk.sol";
 
 /// @title Deploy Real SP1 Verifier (Plonk v5.0.0)
-/// @notice Deployment script for v5.0.0 Plonk verifier using forge create
+/// @notice Deployment script for v5.0.0 Plonk verifier using constructor
 contract DeployRealVerifierPlonk is Script {
-    function run() external returns (address) {
+    function run() public {
         vm.startBroadcast();
-
-        // Deploy using deployCode which reads from compilation artifacts
-        address verifier = deployCode("SP1VerifierPlonk.sol:SP1VerifierPlonk");
+        
+        // Deploy SP1VerifierPlonk using constructor
+        SP1Verifier verifier = new SP1Verifier();
         
         console.log("===========================================");
         console.log("SP1VerifierPlonk v5.0.0 deployed");
         console.log("===========================================");
-        console.log("SP1VerifierPlonk deployed at:", verifier);
+        console.log("SP1VerifierPlonk deployed at:", address(verifier));
         console.log("===========================================");
-
+        
         vm.stopBroadcast();
-        return verifier;
     }
 }

@@ -15,10 +15,11 @@ function build_and_tag_image() {
   local image_tag=$2
   local build_dir=$3
   local dockerfile=$4
+  local args=$5
 
   cd "$build_dir"
   GITTAG=$(git rev-parse --short HEAD)
-  docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
+  docker build $args -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
   docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
   echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
   cd -
@@ -119,5 +120,24 @@ else
     fi
 
     cd "$OP_STACK_LOCAL_DIRECTORY"
+  fi
+fi
+
+# Build OP_SUCCINCT image if not skipping
+if [ "$SKIP_OP_SUCCINCT_BUILD" = "true" ]; then
+  echo "⏭️  Skipping op-succinct build"
+else
+  if [ "$OP_SUCCINCT_LOCAL_DIRECTORY" = "" ]; then
+    echo "❌ Please set OP_SUCCINCT_LOCAL_DIRECTORY in .env"
+    exit 1
+  else
+    echo "🔨 Building op-succinct images"
+    
+    # Build op-succinct-builder image, we need it to build `config` cli tool
+    cd "$OP_SUCCINCT_LOCAL_DIRECTORY"
+    build_and_tag_image "op-succinct-builder" "$OP_SUCCINCT_BUILDER_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "fault-proof/Dockerfile.proposer" "--target builder"
+    build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "$PWD_DIR/op-succinct/Dockerfile.contract"
+    build_and_tag_image "op-succinct-proposer" "$OP_SUCCINCT_PROPOSER_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "fault-proof/Dockerfile.proposer"
+    build_and_tag_image "op-succinct-challenger" "$OP_SUCCINCT_CHALLENGER_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "fault-proof/Dockerfile.challenger"
   fi
 fi
