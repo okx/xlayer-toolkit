@@ -16,6 +16,7 @@ scripts/dev-utils/*.processing
 devnet/.env
 devnet/op-succinct/.env.proposer
 devnet/op-succinct/.env.challenger
+devnet/op-succinct/configs/
 devnet/l1-geth/consensus/beacondata
 devnet/l1-geth/consensus/validatordata
 devnet/config-op/genesis.json
