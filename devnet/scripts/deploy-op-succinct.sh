@@ -186,49 +186,21 @@ setup_op_succinct_configs() {
 configure_real_mode() {
     echo ""
     echo "🔍 Configuring Real mode..."
-    echo "   ✅ Configuring Real mode... $PROPOSER_ENV"
     
-    # Check if AGGREGATION_VKEY is set
-    if ! grep -q "^AGGREGATION_VKEY=0x[a-fA-F0-9]" "$PROPOSER_ENV" 2>/dev/null; then
-        echo "⚠️  AGGREGATION_VKEY not found in .env.proposer"
-        echo "   Attempting to generate VKeys..."
-        
-        # Try to generate VKeys automatically
-        if [ -n "$OP_SUCCINCT_LOCAL_DIRECTORY" ]; then
-            VKEY_SCRIPT="$SCRIPTS_DIR/generate-vkeys.sh"
-            if [ -f "$VKEY_SCRIPT" ]; then
-                bash "$VKEY_SCRIPT" || {
-                    echo "❌ Failed to generate VKeys"
-                    exit 1
-                }
-            else
-                echo "❌ generate-vkeys.sh not found"
-                exit 1
-            fi
-        else
-            echo "❌ OP_SUCCINCT_LOCAL_DIRECTORY not set or invalid"
-            exit 1
-        fi
-    else
-        AGGREGATION_VKEY=$(grep "^AGGREGATION_VKEY=" "$PROPOSER_ENV" | cut -d'=' -f2 | tr -d '[:space:]')
-        RANGE_VKEY_COMMITMENT=$(grep "^RANGE_VKEY_COMMITMENT=" "$PROPOSER_ENV" | cut -d'=' -f2 | tr -d '[:space:]')
-        ROLLUP_CONFIG_HASH=$(grep "^ROLLUP_CONFIG_HASH=" "$PROPOSER_ENV" | cut -d'=' -f2 | tr -d '[:space:]')
-        
-        echo "   ✅ VKeys found in configuration"
-        echo "      AGGREGATION_VKEY: $AGGREGATION_VKEY"
-        
-        # Verify it's not a placeholder
-        if echo "$AGGREGATION_VKEY" | grep -qE "^0x(abcdef|000000|111111|00{62,})"; then
-            echo "   ⚠️  Looks like a placeholder! Regenerating..."
-            VKEY_SCRIPT="$SCRIPTS_DIR/generate-vkeys.sh"
-            if [ -f "$VKEY_SCRIPT" ]; then
-                bash "$VKEY_SCRIPT" || {
-                    echo "❌ Failed to generate VKeys"
-                    exit 1
-                }
-            fi
-        fi
+    # Always generate VKeys
+    echo "🔄 Generating VKeys..."
+    
+    if [ -z "$OP_SUCCINCT_LOCAL_DIRECTORY" ]; then
+        echo "❌ OP_SUCCINCT_LOCAL_DIRECTORY not set or invalid"
+        exit 1
     fi
+
+    echo "Script directory: $SCRIPTS_DIR"
+    
+    "$SCRIPTS_DIR/generate-vkeys.sh" || {
+        echo "❌ Failed to generate VKeys"
+        exit 1
+    }
     
     # Reload environment after potential VKey generation
     source "$PROPOSER_ENV"
@@ -264,7 +236,7 @@ configure_real_mode() {
     fi
     
     echo ""
-    echo "✅ Real mode configuration verified"
+    echo "✅ Real mode configuration completed"
 }
 
 
