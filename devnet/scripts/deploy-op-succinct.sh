@@ -190,13 +190,6 @@ configure_real_mode() {
     # Always generate VKeys
     echo "🔄 Generating VKeys..."
     
-    if [ -z "$OP_SUCCINCT_LOCAL_DIRECTORY" ]; then
-        echo "❌ OP_SUCCINCT_LOCAL_DIRECTORY not set or invalid"
-        exit 1
-    fi
-
-    echo "Script directory: $SCRIPTS_DIR"
-    
     "$SCRIPTS_DIR/generate-vkeys.sh" || {
         echo "❌ Failed to generate VKeys"
         exit 1

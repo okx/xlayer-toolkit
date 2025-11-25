@@ -21,12 +21,6 @@ sed_inplace() {
 # SP1 proof verification from the OP-Succinct ELF files.
 # ============================================================================
 
-# Check if OP_SUCCINCT_LOCAL_DIRECTORY is set
-if [ -z "$OP_SUCCINCT_LOCAL_DIRECTORY" ]; then
-    echo "❌ Error: OP_SUCCINCT_LOCAL_DIRECTORY is not set"
-    exit 1
-fi
-
 # Check if Docker image is available
 if [ -z "$OP_SUCCINCT_PROPOSER_IMAGE_TAG" ]; then
     echo "❌ Error: OP_SUCCINCT_PROPOSER_IMAGE_TAG is not set"
