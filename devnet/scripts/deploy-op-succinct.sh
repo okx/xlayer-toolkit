@@ -277,6 +277,9 @@ deploy_op_succinct_contracts() {
         return 1
     fi
 
+    # Setup OP-Succinct config directories
+    setup_op_succinct_configs
+
     # Deploy contracts
     deploy_access_manager || return 1
     deploy_sp1_verifier || return 1
