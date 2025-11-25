@@ -7,7 +7,6 @@ source /.env
 INDEX=${1:-""}
 
 exec rollup-boost \
-      --external-state-root \
       --l2-url=http://op-"${SEQ_TYPE}"-seq"${INDEX}":8552 \
       --l2-jwt-path=/jwt.txt \
       --l2-timeout=1000 \

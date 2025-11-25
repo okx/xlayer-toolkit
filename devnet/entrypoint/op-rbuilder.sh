@@ -27,7 +27,6 @@ exec op-rbuilder node \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
       --flashblocks.enabled \
-      --flashblocks.disable-state-root \
       --flashblocks.addr=0.0.0.0 \
       --flashblocks.port=1111 \
       --flashblocks.block-time=200
