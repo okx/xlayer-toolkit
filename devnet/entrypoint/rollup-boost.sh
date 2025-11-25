@@ -9,10 +9,10 @@ INDEX=${1:-""}
 exec rollup-boost \
       --l2-url=http://op-"${SEQ_TYPE}"-seq"${INDEX}":8552 \
       --l2-jwt-path=/jwt.txt \
-      --l2-timeout=1000 \
+      --l2-timeout=5000 \
       --builder-url=http://op-rbuilder"${INDEX}":8552 \
       --builder-jwt-path=/jwt.txt \
-      --builder-timeout=1000 \
+      --builder-timeout=5000 \
       --flashblocks \
       --flashblocks-builder-url=ws://op-rbuilder"${INDEX}":1111 \
       --flashblocks-host=0.0.0.0 \
