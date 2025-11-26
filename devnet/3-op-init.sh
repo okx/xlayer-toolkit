@@ -12,6 +12,125 @@ sed_inplace() {
   fi
 }
 
+# ========================================
+# Genesis Mode Detection
+# ========================================
+detect_genesis_mode() {
+    if [ "$USE_MAINNET_GENESIS" = "true" ]; then
+        echo "🌐 Mainnet genesis mode enabled"
+        
+        # Enforce MIN_RUN requirement
+        if [ "$MIN_RUN" != "true" ]; then
+            echo ""
+            echo "❌ ERROR: Mainnet genesis requires MIN_RUN=true"
+            echo ""
+            echo "Reason:"
+            echo "  • Mainnet genesis is too large (6.6GB+)"
+            echo "  • Building op-program prestate would fail or timeout"
+            echo "  • Dispute game features are not compatible with mainnet data"
+            echo ""
+            echo "Solution:"
+            echo "  Set MIN_RUN=true in your .env file"
+            echo ""
+            exit 1
+        fi
+        
+        echo "✅ MIN_RUN=true verified"
+        return 0
+    else
+        echo "🔧 Using generated genesis mode"
+        return 1
+    fi
+}
+
+# ========================================
+# Prepare Mainnet Genesis
+# ========================================
+prepare_mainnet_genesis() {
+    echo ""
+    echo "📦 Preparing mainnet genesis..."
+    
+    PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    # Check if genesis file exists
+    if [ ! -f "$MAINNET_GENESIS_PATH" ]; then
+        echo "🔍 Genesis not found at: $MAINNET_GENESIS_PATH"
+        
+        # Try to extract from tar.gz
+        TAR_PATH="../rpc-setup/genesis-mainnet.tar.gz"
+        if [ -f "$TAR_PATH" ]; then
+            echo "📂 Extracting from $TAR_PATH..."
+            echo "⏳ This may take 2-5 minutes (1.6GB → 6.6GB)..."
+            
+            tar -xzf "$TAR_PATH" -C "$PWD_DIR"
+            
+            if [ -f "$PWD_DIR/merged.genesis.json" ]; then
+                mv "$PWD_DIR/merged.genesis.json" "$MAINNET_GENESIS_PATH"
+                echo "✅ Extracted successfully"
+            else
+                echo "❌ ERROR: Extraction failed (merged.genesis.json not found)"
+                exit 1
+            fi
+        else
+            echo "❌ ERROR: Neither genesis file nor tar.gz found"
+            echo "   Looking for:"
+            echo "   - $MAINNET_GENESIS_PATH"
+            echo "   - $TAR_PATH"
+            exit 1
+        fi
+    fi
+    
+    # Verify file
+    GENESIS_SIZE_MB=$(du -m "$MAINNET_GENESIS_PATH" | cut -f1)
+    GENESIS_SIZE_GB=$(echo "scale=2; $GENESIS_SIZE_MB / 1024" | bc)
+    echo "✅ Found mainnet genesis ($GENESIS_SIZE_GB GB)"
+    
+    # Validate configuration
+    if [ -z "$FORK_BLOCK" ] || [ -z "$PARENT_HASH" ]; then
+        echo "❌ ERROR: FORK_BLOCK and PARENT_HASH must be set"
+        exit 1
+    fi
+    
+    NEXT_BLOCK=$((FORK_BLOCK + 1))
+    echo "🎯 Fork configuration:"
+    echo "   • FORK_BLOCK: $FORK_BLOCK"
+    echo "   • PARENT_HASH: $PARENT_HASH"
+    echo "   • Next block: $NEXT_BLOCK"
+    
+    # Process genesis using Python (fast)
+    echo ""
+    echo "🔧 Processing genesis (this may take 1-2 minutes)..."
+    
+    mkdir -p "$CONFIG_DIR"
+    
+    # Prepare arguments
+    PROCESS_ARGS=(
+        "$MAINNET_GENESIS_PATH"
+        "$CONFIG_DIR/genesis.json"
+        "$NEXT_BLOCK"
+        "$PARENT_HASH"
+    )
+    
+    # Add test account injection if enabled
+    if [ "$INJECT_L2_TEST_ACCOUNT" = "true" ]; then
+        echo "💰 Test account injection enabled"
+        PROCESS_ARGS+=("$TEST_ACCOUNT_ADDRESS" "$TEST_ACCOUNT_BALANCE")
+    fi
+    
+    # Run Python script
+    if ! python3 scripts/process-mainnet-genesis.py "${PROCESS_ARGS[@]}"; then
+        echo "❌ ERROR: Failed to process mainnet genesis"
+        exit 1
+    fi
+    
+    echo ""
+    echo "✅ Mainnet genesis prepared"
+    echo "   • Output: $CONFIG_DIR/genesis.json"
+    echo "   • Reth version: $CONFIG_DIR/genesis-reth.json"
+    echo "   • Accounts: $(python3 -c "import json; print(len(json.load(open('$CONFIG_DIR/genesis.json'))['alloc']))")"
+    echo ""
+}
+
 # Check if FORK_BLOCK is set
 if [ -z "$FORK_BLOCK" ]; then
     echo " ❌ FORK_BLOCK environment variable is not set"
@@ -19,15 +138,29 @@ if [ -z "$FORK_BLOCK" ]; then
     exit 1
 fi
 
-FORK_BLOCK_HEX=$(printf "0x%x" "$FORK_BLOCK")
-sed_inplace '/"config": {/,/}/ s/"optimism": {/"legacyXLayerBlock": '"$((FORK_BLOCK + 1))"',\n    "optimism": {/' ./config-op/genesis.json
-sed_inplace 's/"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"/"parentHash": "'"$PARENT_HASH"'"/' ./config-op/genesis.json
-sed_inplace '/"70997970c51812dc3a010c7d01b50e0d17dc79c8": {/,/}/ s/"balance": "[^"]*"/"balance": "0x446c3b15f9926687d2c40534fdb564000000000000"/' ./config-op/genesis.json
-NEXT_BLOCK_NUMBER=$((FORK_BLOCK + 1))
-NEXT_BLOCK_NUMBER_HEX=$(printf "0x%x" "$NEXT_BLOCK_NUMBER")
-sed_inplace 's/"number": 0/"number": '"$NEXT_BLOCK_NUMBER"'/' ./config-op/rollup.json
-cp ./config-op/genesis.json ./config-op/genesis-reth.json
-sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
+# ========================================
+# Genesis Processing - Mode Selection
+# ========================================
+if detect_genesis_mode; then
+    # Mainnet genesis mode
+    prepare_mainnet_genesis
+    
+    # Update rollup.json
+    NEXT_BLOCK_NUMBER=$((FORK_BLOCK + 1))
+    sed_inplace 's/"number": 0/"number": '"$NEXT_BLOCK_NUMBER"'/' ./config-op/rollup.json
+    
+else
+    # Generated genesis mode (original logic)
+    FORK_BLOCK_HEX=$(printf "0x%x" "$FORK_BLOCK")
+    sed_inplace '/"config": {/,/}/ s/"optimism": {/"legacyXLayerBlock": '"$((FORK_BLOCK + 1))"',\n    "optimism": {/' ./config-op/genesis.json
+    sed_inplace 's/"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"/"parentHash": "'"$PARENT_HASH"'"/' ./config-op/genesis.json
+    sed_inplace '/"70997970c51812dc3a010c7d01b50e0d17dc79c8": {/,/}/ s/"balance": "[^"]*"/"balance": "0x446c3b15f9926687d2c40534fdb564000000000000"/' ./config-op/genesis.json
+    NEXT_BLOCK_NUMBER=$((FORK_BLOCK + 1))
+    NEXT_BLOCK_NUMBER_HEX=$(printf "0x%x" "$NEXT_BLOCK_NUMBER")
+    sed_inplace 's/"number": 0/"number": '"$NEXT_BLOCK_NUMBER"'/' ./config-op/rollup.json
+    cp ./config-op/genesis.json ./config-op/genesis-reth.json
+    sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
+fi
 
 # Extract contract addresses from state.json and update .env file
 echo "🔧 Extracting contract addresses from state.json..."
@@ -202,8 +335,33 @@ gzip -c config-op/genesis.json > config-op/genesis.json.gz
 
 # Check if MIN_RUN mode is enabled
 if [ "$MIN_RUN" = "true" ]; then
+    echo ""
     echo "⚡ MIN_RUN mode enabled: Skipping op-program prestate build"
-    echo "✅ Initialization completed for minimal run (no dispute game support)"
+    
+    # Show mainnet-specific summary
+    if [ "$USE_MAINNET_GENESIS" = "true" ]; then
+        echo ""
+        echo "🌐 Mainnet Genesis Deployment Summary:"
+        echo "   • Source: $MAINNET_GENESIS_PATH"
+        echo "   • Starting block: $((FORK_BLOCK + 1))"
+        echo "   • Genesis size: $(du -h $CONFIG_DIR/genesis.json | cut -f1)"
+        
+        if [ "$INJECT_L2_TEST_ACCOUNT" = "true" ]; then
+            echo "   • Test account: $TEST_ACCOUNT_ADDRESS (injected)"
+            BALANCE_ETH=$(python3 -c "print(int('$TEST_ACCOUNT_BALANCE', 16) / 10**18)")
+            echo "   • Test balance: $BALANCE_ETH ETH on L2"
+        fi
+        
+        echo "   • Database: $(du -sh data/op-$SEQ_TYPE-seq 2>/dev/null | cut -f1 || echo 'initializing...')"
+        echo ""
+        echo "ℹ️  Notes:"
+        echo "   • All mainnet accounts preserved in L2 genesis"
+        echo "   • L1 accounts funded by 1-start-l1.sh (100 ETH each)"
+        echo "   • Dispute game features skipped (not compatible with mainnet data)"
+    fi
+    
+    echo ""
+    echo "✅ Initialization completed for minimal run"
     exit 0
 fi
 
