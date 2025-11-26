@@ -45,20 +45,14 @@ if [ "$RPC_TYPE" != "geth" ]; then
 fi
 
 # Validate Docker images
-if [ -z "$OP_SUCCINCT_PROPOSER_IMAGE_TAG" ] || [ -z "$OP_SUCCINCT_CHALLENGER_IMAGE_TAG" ]; then
-    echo "❌ Error: Missing OP-Succinct Docker image tags"
+if [ -z "$OP_SUCCINCT_IMAGE_TAG" ]; then
+    echo "❌ Error: Missing OP-Succinct Docker image tag"
     exit 1
 fi
 
-# Check if Docker images exist
-if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${OP_SUCCINCT_PROPOSER_IMAGE_TAG}$"; then
-    echo "❌ Error: Docker image $OP_SUCCINCT_PROPOSER_IMAGE_TAG not found"
-    echo "   Please run: ./init.sh"
-    exit 1
-fi
-
-if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${OP_SUCCINCT_CHALLENGER_IMAGE_TAG}$"; then
-    echo "❌ Error: Docker image $OP_SUCCINCT_CHALLENGER_IMAGE_TAG not found"
+# Check if Docker image exists
+if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${OP_SUCCINCT_IMAGE_TAG}$"; then
+    echo "❌ Error: Docker image $OP_SUCCINCT_IMAGE_TAG not found"
     echo "   Please run: ./init.sh"
     exit 1
 fi

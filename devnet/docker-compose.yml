@@ -779,7 +779,7 @@ services:
       - --reth-mempool-endpoint=http://op-reth-seq:8545
 
   op-succinct-proposer:
-    image: "${OP_SUCCINCT_PROPOSER_IMAGE_TAG}"
+    image: "${OP_SUCCINCT_IMAGE_TAG}"
     container_name: op-succinct-proposer
     volumes:
       - ./op-succinct/.env.proposer:/app/.env
@@ -791,7 +791,7 @@ services:
       - --env-file=/app/.env
 
   op-succinct-challenger:
-    image: "${OP_SUCCINCT_CHALLENGER_IMAGE_TAG}"
+    image: "${OP_SUCCINCT_IMAGE_TAG}"
     container_name: op-succinct-challenger
     volumes:
       - ./op-succinct/.env.challenger:/app/.env

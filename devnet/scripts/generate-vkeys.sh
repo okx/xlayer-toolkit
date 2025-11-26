@@ -22,8 +22,8 @@ sed_inplace() {
 # ============================================================================
 
 # Check if Docker image is available
-if [ -z "$OP_SUCCINCT_PROPOSER_IMAGE_TAG" ]; then
-    echo "❌ Error: OP_SUCCINCT_PROPOSER_IMAGE_TAG is not set"
+if [ -z "$OP_SUCCINCT_IMAGE_TAG" ]; then
+    echo "❌ Error: OP_SUCCINCT_IMAGE_TAG is not set"
     exit 1
 fi
 
@@ -36,10 +36,10 @@ CONFIGS_DIR="$PROJECT_DIR/op-succinct/configs"
 VKEY_OUTPUT=$(docker run --rm \
     --network "$DOCKER_NETWORK" \
     -v "$PROPOSER_ENV:/.env.proposer" \
-    -v "$CONFIGS_DIR:/usr/src/app/configs" \
-    -v op-succinct-target:/usr/src/app/target \
-    "$OP_SUCCINCT_BUILDER_IMAGE_TAG" \
-    cargo run --bin config --release -- --env-file /.env.proposer)
+    -v "$CONFIGS_DIR:/app/configs" \
+    -v op-succinct-target:/app/target \
+    "$OP_SUCCINCT_IMAGE_TAG" \
+    config --env-file /.env.proposer)
 
 echo "VKEY_OUTPUT: $VKEY_OUTPUT"
 
