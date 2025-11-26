@@ -29,6 +29,7 @@ exec op-rbuilder node \
       --txpool.pending-max-size=2000 \
       --txpool.basefee-max-size=2000 \
       --flashblocks.enabled \
+      --flashblocks.disable-state-root \
       --flashblocks.addr=0.0.0.0 \
       --flashblocks.port=1111 \
       --flashblocks.block-time=200
