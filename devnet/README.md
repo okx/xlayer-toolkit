@@ -10,7 +10,7 @@ Configure `example.env` (do not modify `.env` directly) and run `./clean.sh` to 
 | **Reth as Sequencer** | `SEQ_TYPE=reth`<br>`SKIP_OP_RETH_BUILD=false`<br>`OP_RETH_LOCAL_DIRECTORY=/absolute/path/to/reth/repository`<br>`OP_RETH_BRANCH=dev` |
 | **Geth as RPC** | `RPC_TYPE=geth`<br>`LAUNCH_RPC_NODE=true`<br>`SKIP_OP_RETH_BUILD=true`<br>`DB_ENGINE=pebble` |
 | **Reth as RPC** | `RPC_TYPE=reth`<br>`LAUNCH_RPC_NODE=true`<br>`SKIP_OP_RETH_BUILD=false`<br>`OP_RETH_LOCAL_DIRECTORY=/absolute/path/to/reth/repository`<br>`OP_RETH_BRANCH=dev` |
-| **OP-Succinct Enabled** | `OP_SUCCINCT_ENABLE=true`<br>`SEQ_TYPE=reth` <br>`RPC_TYPE=geth` <br>`MIN_RUN=false` <br>`OP_SUCCINCT_MOCK_MODE=true` (for testing)<br>`OP_SUCCINCT_FAST_FINALITY_MODE=true` (skip challenger) |
+| **OP-Succinct Enabled** | `OP_SUCCINCT_ENABLE=true`<br>`RPC_TYPE=geth` <br>`MIN_RUN=false` <br>`OP_SUCCINCT_MOCK_MODE=true` (for testing)<br>`OP_SUCCINCT_FAST_FINALITY_MODE=true` (skip challenger) |
 
 **Notes:**
 - Always modify `example.env`, then run `./clean.sh` to sync to `.env`

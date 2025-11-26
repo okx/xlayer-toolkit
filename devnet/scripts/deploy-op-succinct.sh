@@ -187,9 +187,6 @@ configure_real_mode() {
     echo ""
     echo "🔍 Configuring Real mode..."
     
-    # Always generate VKeys
-    echo "🔄 Generating VKeys..."
-    
     "$SCRIPTS_DIR/generate-vkeys.sh" || {
         echo "❌ Failed to generate VKeys"
         exit 1
