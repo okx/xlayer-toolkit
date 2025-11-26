@@ -38,9 +38,9 @@ if [ "$MIN_RUN" == "true" ]; then
     exit 0
 fi
 
-# Validate sequencer and RPC configuration
-if [ "$SEQ_TYPE" != "reth" ] || [ "$RPC_TYPE" != "geth" ]; then
-    echo "❌ Error: OP-Succinct requires reth sequencer and geth RPC"
+# Validate RPC configuration
+if [ "$RPC_TYPE" != "geth" ]; then
+    echo "❌ Error: OP-Succinct requires geth RPC for witness reason"
     exit 1
 fi
 
