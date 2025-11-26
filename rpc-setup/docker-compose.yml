@@ -22,7 +22,7 @@ services:
       - -c
       - |
         exec /app/op-node/bin/op-node \
-          --log.level=trace \
+          --log.level=info \
           --l2=${L2_ENGINE_URL} \
           --l2.jwt-secret=/jwt.txt \
           --sequencer.enabled=false \
