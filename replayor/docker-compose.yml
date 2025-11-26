@@ -1,0 +1,28 @@
+services:
+#  node: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
+#    build: ./geth
+#    ports:
+#      - 8545:8545
+#      - 8551:8551
+#    command: [ "/app/geth" ]
+#    volumes:
+#      - ./geth-data:/data
+#      - ./secret:/secret
+#    env_file: "test-configs/base-mainnet-replay.env"
+  node: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
+    build: ./reth
+    ports:
+      - 8545:8545
+      - 8551:8551
+    volumes:
+      - ./reth-data:/data
+      - ./secret:/secret
+    env_file: "test-configs/base-mainnet-replay-reth.env"
+  replayor:
+    build: .
+    command: [ "/app/bin/replayor" ]
+    network_mode: "host"
+    env_file: "test-configs/base-mainnet-replay-reth.env"
+    volumes:
+      - ./secret:/secret
+      - ./results:/results

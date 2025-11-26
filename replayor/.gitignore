@@ -1,0 +1,16 @@
+.idea/
+.vscode/
+.DS_Store
+geth-data-archive/
+geth-data/
+secret/
+results/
+result/
+reth-data/
+*.crt
+tps.log
+
+# Environment configuration files (keep .example files)
+*.env
+!*.env.example
+
