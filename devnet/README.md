@@ -382,3 +382,11 @@ The `scripts/mempool-rebroadcaster-scheduler.sh` script facilitates running the 
 | **Other Services** | | |
 | op-batcher | 8548 | Batcher RPC |
 | op-proposer | 8560 | Proposer RPC |
+
+## Profiling Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Profiling Reth](../docs/PROFILING_RETH.md) | Main profiling guide for op-reth with CPU and memory profiling |
+| [Memory Profiling](../docs/MEMORY_PROFILING.md) | Jemalloc heap profiling for memory leaks and allocation patterns |
+| [Perf TUI Reference](../docs/PERF_TUI_REFERENCE.md) | Quick reference for perf report interactive commands |
