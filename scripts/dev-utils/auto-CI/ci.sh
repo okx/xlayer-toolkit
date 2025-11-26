@@ -55,7 +55,6 @@ set -euo pipefail
 #                  • Go linting (golangci-lint + go mod tidy)
 #                  • Unit tests
 #                  Skips: semgrep, shellcheck, contracts, other test suites, and Lark notifications
-#   -h, --help     Show help message
 #
 # Configuration:
 #   All configuration is read from the .env file in the same directory.
