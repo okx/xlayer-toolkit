@@ -26,6 +26,8 @@ exec op-rbuilder node \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
+      --txpool.pending-max-size=2000 \
+      --txpool.basefee-max-size=2000 \
       --flashblocks.enabled \
       --flashblocks.addr=0.0.0.0 \
       --flashblocks.port=1111 \
