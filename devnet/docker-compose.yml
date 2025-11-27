@@ -48,8 +48,6 @@ services:
         echo "Fixing genesis.json fork times..."
         sed -i 's/"shanghaiTime": [0-9]*/"shanghaiTime": 0/g' /execution/genesis.json
         sed -i 's/"cancunTime": [0-9]*/"cancunTime": 0/g' /execution/genesis.json
-        #echo "Adding blobSchedule for Cancun and Osaka (Fusaka)..."
-        #jq '.config.blobSchedule = {"cancun": {"target": 3, "max": 6, "baseFeeUpdateFraction": 3338477}, "osaka": {"target": 6, "max": 9, "baseFeeUpdateFraction": 5007716}}' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
         echo "Adding pragueTime for Pectra support..."
         jq '.config.pragueTime = 0' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
         echo "Adding osakaTime for Fusaka support..."
