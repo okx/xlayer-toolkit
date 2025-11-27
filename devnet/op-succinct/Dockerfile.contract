@@ -1,17 +1,31 @@
-# Dependencies are prepared by init.sh before building this image:
-# - git submodule update --init --recursive
-# - sp1-contracts checked out to v5.0.0
-# - Solidity version compatibility fixed (^0.8.20 -> >=0.8.15)
+FROM alpine:3.20 AS deps
+RUN apk add --no-cache git && \
+    git config --global --add safe.directory "*"
+
+WORKDIR /src
+COPY . .
+
+RUN git submodule update --init --recursive
+
+# Update sp1-contracts to v5.0.0 and fix solidity version compatibility
+RUN cd contracts/lib/sp1-contracts && \
+    git fetch --tags && \
+    git checkout v5.0.0 && \
+    cd - && \
+    sed -i 's/pragma solidity \^0.8.20;/pragma solidity >=0.8.15;/' \
+    contracts/lib/sp1-contracts/contracts/src/ISP1Verifier.sol && \
+    sed -i 's/pragma solidity \^0.8.20;/pragma solidity >=0.8.15;/' \
+    contracts/lib/sp1-contracts/contracts/src/SP1MockVerifier.sol
 
 FROM ghcr.io/foundry-rs/foundry:latest
 WORKDIR /app/contracts
 
-# Copy contract files (dependencies already prepared by init.sh)
-COPY contracts/lib ./lib
-COPY contracts/foundry.toml .
-COPY contracts/src ./src
-COPY contracts/script ./script
-COPY contracts/test ./test
+# Copy dependencies and source files from deps stage
+COPY --from=deps /src/contracts/lib ./lib
+COPY --from=deps /src/contracts/foundry.toml .
+COPY --from=deps /src/contracts/src ./src
+COPY --from=deps /src/contracts/script ./script
+COPY --from=deps /src/contracts/test ./test
 
 # Build with cache mounts
 RUN --mount=type=cache,target=/root/.foundry \
