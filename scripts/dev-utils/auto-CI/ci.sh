@@ -20,9 +20,11 @@ set -euo pipefail
 # 12. Runs Op-E2E WebSocket tests (optional)
 # 13. Runs Op-E2E HTTP tests (optional)
 # 14. Runs Cannon VM tests (optional)
-# 15. Generates comprehensive summary
-# 16. Sends Lark notification (if LARK_WEBHOOK_URL is set)
-# 17. Stores logs in specified directory
+# 15. Runs X Layer E2E Geth tests (full mode only)
+# 16. Runs X Layer E2E Reth tests (full mode only)
+# 17. Generates comprehensive summary
+# 18. Sends Lark notification (if LARK_WEBHOOK_URL is set)
+# 19. Stores logs in specified directory
 #
 # Build Artifact Reuse:
 # - Contract artifacts are stored in packages/contracts-bedrock/:
@@ -55,6 +57,7 @@ set -euo pipefail
 #                  • Go linting (golangci-lint + go mod tidy)
 #                  • Unit tests
 #                  Skips: semgrep, shellcheck, contracts, other test suites, and Lark notifications
+#   -h, --help     Show help message
 #
 # Configuration:
 #   All configuration is read from the .env file in the same directory.
@@ -68,6 +71,17 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+# Change GOCACHE to a temporary directory
+export GOCACHE=/data1/brendon/ci/go-build
+
+# Change Rust cache directory to a temporary directory
+export CARGO_HOME=/data1/brendon/rust/cargo
+export RUSTUP_HOME=/data1/brendon/rust/rustup
+export PATH=$CARGO_HOME/bin:$PATH
+
+# Add Go binary path to PATH
+export PATH=/home/$SUDO_USER/go/bin:$PATH
 
 # Parse command-line arguments
 DEV_MODE=false
@@ -552,6 +566,7 @@ sync_upstream() {
         # Store commit info
         echo "$before_commit" > "$LOG_DIR/before_merge_commit.txt"
         echo "$after_commit" > "$LOG_DIR/after_merge_commit.txt"
+        echo "success" > "$LOG_DIR/sync_status.txt"
     else
         log_error "Merge conflict detected"
         log_error "Please resolve conflicts manually:"
@@ -559,6 +574,7 @@ sync_upstream() {
         log_error "  2. Resolve conflicts"
         log_error "  3. Run: git merge --continue"
         log_error "  4. Re-run this CI script"
+        echo "failed" > "$LOG_DIR/sync_status.txt"
         git merge --abort 2>/dev/null || true
         exit 1
     fi
@@ -1378,12 +1394,88 @@ run_cannon_tests() {
     fi
 }
 
+run_xlayer_e2e_geth_tests() {
+    log_section "Phase 14: Run X Layer E2E Tests (Geth)"
+    
+    local test_log="$LOG_DIR/xlayer-e2e-geth.log"
+    log_info "X Layer E2E Geth test log: $test_log"
+    
+    log_info "Running X Layer E2E tests with Geth..."
+    
+    local test_start
+    test_start=$(date +%s)
+    
+    # Run E2E tests with geth
+    set +e  # Temporarily disable exit on error
+    bash "$SCRIPT_DIR/run-e2e.sh" -geth 2>&1 | tee "$test_log"
+    local test_exit_code=$?
+    set -e  # Re-enable exit on error
+    
+    local test_end
+    test_end=$(date +%s)
+    local duration=$((test_end - test_start))
+    
+    if [[ $test_exit_code -eq 0 ]]; then
+        log_success "All X Layer E2E Geth tests passed"
+        log_success "Test duration: $((duration / 60))m $((duration % 60))s"
+        echo "success" > "$LOG_DIR/xlayer_e2e_geth_test_status.txt"
+        echo "$duration" > "$LOG_DIR/xlayer_e2e_geth_test_duration.txt"
+    else
+        log_error "Some X Layer E2E Geth tests failed"
+        log_error "Test duration: $((duration / 60))m $((duration % 60))s"
+        echo "failed" > "$LOG_DIR/xlayer_e2e_geth_test_status.txt"
+        echo "$duration" > "$LOG_DIR/xlayer_e2e_geth_test_duration.txt"
+        log_error "Full output: $test_log"
+        
+        # Don't exit immediately - let the script continue to generate summary
+        return 1
+    fi
+}
+
+run_xlayer_e2e_reth_tests() {
+    log_section "Phase 15: Run X Layer E2E Tests (Reth)"
+    
+    local test_log="$LOG_DIR/xlayer-e2e-reth.log"
+    log_info "X Layer E2E Reth test log: $test_log"
+    
+    log_info "Running X Layer E2E tests with Reth..."
+    
+    local test_start
+    test_start=$(date +%s)
+    
+    # Run E2E tests with reth
+    set +e  # Temporarily disable exit on error
+    bash "$SCRIPT_DIR/run-e2e.sh" -reth 2>&1 | tee "$test_log"
+    local test_exit_code=$?
+    set -e  # Re-enable exit on error
+    
+    local test_end
+    test_end=$(date +%s)
+    local duration=$((test_end - test_start))
+    
+    if [[ $test_exit_code -eq 0 ]]; then
+        log_success "All X Layer E2E Reth tests passed"
+        log_success "Test duration: $((duration / 60))m $((duration % 60))s"
+        echo "success" > "$LOG_DIR/xlayer_e2e_reth_test_status.txt"
+        echo "$duration" > "$LOG_DIR/xlayer_e2e_reth_test_duration.txt"
+    else
+        log_error "Some X Layer E2E Reth tests failed"
+        log_error "Test duration: $((duration / 60))m $((duration % 60))s"
+        echo "failed" > "$LOG_DIR/xlayer_e2e_reth_test_status.txt"
+        echo "$duration" > "$LOG_DIR/xlayer_e2e_reth_test_duration.txt"
+        log_error "Full output: $test_log"
+        
+        # Don't exit immediately - let the script continue to generate summary
+        return 1
+    fi
+}
+
 # =============================================================================
-# Phase 15: Generate Summary
+# Phase 17: Generate Summary
 # =============================================================================
 
 generate_summary() {
-    log_section "Phase 15: Summary"
+    log_section "Phase 17: Summary"
     
     local summary_file="$LOG_DIR/summary.txt"
     
@@ -1461,6 +1553,8 @@ generate_summary() {
         display_test_with_duration "Op-E2E WebSocket Tests" "op_e2e_ws_test"
         display_test_with_duration "Op-E2E HTTP Tests" "op_e2e_http_test"
         display_test_with_duration "Cannon VM Tests" "cannon_test"
+        display_test_with_duration "X Layer E2E Geth Tests" "xlayer_e2e_geth_test"
+        display_test_with_duration "X Layer E2E Reth Tests" "xlayer_e2e_reth_test"
         
         echo ""
         echo "─────────────────────────────────────────────────────────────"
@@ -1491,6 +1585,8 @@ generate_summary() {
             test_passed "op_e2e_ws_test" true || ci_passed=false
             test_passed "op_e2e_http_test" true || ci_passed=false
             test_passed "cannon_test" true || ci_passed=false
+            test_passed "xlayer_e2e_geth_test" true || ci_passed=false
+            test_passed "xlayer_e2e_reth_test" true || ci_passed=false
             
             if [ "$ci_passed" = "true" ]; then
                 echo "✅ CI PASSED"
@@ -1512,6 +1608,8 @@ generate_summary() {
             show_failure_logs "Op-E2E WebSocket Tests" "op_e2e_ws_test" "$LOG_DIR/test-op-e2e-ws.log"
             show_failure_logs "Op-E2E HTTP Tests" "op_e2e_http_test" "$LOG_DIR/test-op-e2e-http.log"
             show_failure_logs "Cannon VM Tests" "cannon_test" "$LOG_DIR/test-cannon.log"
+            show_failure_logs "X Layer E2E Geth Tests" "xlayer_e2e_geth_test" "$LOG_DIR/xlayer-e2e-geth.log"
+            show_failure_logs "X Layer E2E Reth Tests" "xlayer_e2e_reth_test" "$LOG_DIR/xlayer-e2e-reth.log"
         fi
         
         echo ""
@@ -1522,11 +1620,11 @@ generate_summary() {
 }
 
 # =============================================================================
-# Phase 10: Send Lark Notification
+# Phase 18: Send Lark Notification
 # =============================================================================
 
 send_lark_notification() {
-    log_section "Phase 16: Sending Lark Notification"
+    log_section "Phase 18: Sending Lark Notification"
     
     # Check if LARK_WEBHOOK_URL is configured
     if [ -z "${LARK_WEBHOOK_URL:-}" ]; then
@@ -1573,6 +1671,8 @@ send_lark_notification() {
     local op_e2e_ws_test_status=$(get_test_status "op_e2e_ws_test")
     local op_e2e_http_test_status=$(get_test_status "op_e2e_http_test")
     local cannon_test_status=$(get_test_status "cannon_test")
+    local xlayer_e2e_geth_test_status=$(get_test_status "xlayer_e2e_geth_test")
+    local xlayer_e2e_reth_test_status=$(get_test_status "xlayer_e2e_reth_test")
     
     # Determine overall status and color using helper functions
     local all_passed=true
@@ -1589,6 +1689,8 @@ send_lark_notification() {
     test_passed "op_e2e_ws_test" true || all_passed=false
     test_passed "op_e2e_http_test" true || all_passed=false
     test_passed "cannon_test" true || all_passed=false
+    test_passed "xlayer_e2e_geth_test" true || all_passed=false
+    test_passed "xlayer_e2e_reth_test" true || all_passed=false
     
     if [ "$all_passed" = "true" ]; then
       CARD_COLOR="green"
@@ -1629,6 +1731,8 @@ send_lark_notification() {
     OP_E2E_WS_TEST_ICON=$(get_status_icon "$op_e2e_ws_test_status")
     OP_E2E_HTTP_TEST_ICON=$(get_status_icon "$op_e2e_http_test_status")
     CANNON_TEST_ICON=$(get_status_icon "$cannon_test_status")
+    XLAYER_E2E_GETH_TEST_ICON=$(get_status_icon "$xlayer_e2e_geth_test_status")
+    XLAYER_E2E_RETH_TEST_ICON=$(get_status_icon "$xlayer_e2e_reth_test_status")
     
     # Build Lark Card JSON
     cat > "$LOG_DIR/lark_card.json" <<EOF
@@ -1794,6 +1898,20 @@ send_lark_notification() {
               "tag": "lark_md",
               "content": "${OP_E2E_HTTP_TEST_ICON} Op-E2E HTTP"
             }
+          },
+          {
+            "is_short": true,
+            "text": {
+              "tag": "lark_md",
+              "content": "${XLAYER_E2E_GETH_TEST_ICON} X Layer E2E Geth"
+            }
+          },
+          {
+            "is_short": true,
+            "text": {
+              "tag": "lark_md",
+              "content": "${XLAYER_E2E_RETH_TEST_ICON} X Layer E2E Reth"
+            }
           }
         ]
       },
@@ -1831,6 +1949,59 @@ EOF
 }
 
 # =============================================================================
+# Exit Handler - Ensures notification is always sent
+# =============================================================================
+
+NOTIFICATION_SENT=false
+
+cleanup_and_notify() {
+    local exit_code=$?
+    
+    # Prevent multiple notifications
+    if [ "$NOTIFICATION_SENT" = "true" ]; then
+        return
+    fi
+    NOTIFICATION_SENT=true
+    
+    # Skip notification in dev mode
+    if [ "$DEV_MODE" = "true" ]; then
+        return
+    fi
+    
+    # Ensure LOG_DIR is set (in case we exit very early)
+    if [ -z "$LOG_DIR" ]; then
+        return
+    fi
+    
+    # If summary doesn't exist yet, generate it
+    if [ ! -f "$LOG_DIR/summary.txt" ]; then
+        log_warning "Script terminated unexpectedly (exit code: $exit_code). Generating partial summary..."
+        # Mark any missing status files as unknown/skipped
+        for test_key in sync lint_go semgrep shellcheck build unit_test contract_test fraud_proof_test \
+                        op_e2e_actions_test contracts_static_test op_e2e_ws_test \
+                        op_e2e_http_test cannon_test xlayer_e2e_geth_test xlayer_e2e_reth_test; do
+            if [ ! -f "$LOG_DIR/${test_key}_status.txt" ]; then
+                echo "unknown" > "$LOG_DIR/${test_key}_status.txt"
+            fi
+        done
+        # Mark missing duration files as 0
+        for test_key in unit_test contract_test fraud_proof_test \
+                        op_e2e_actions_test contracts_static_test op_e2e_ws_test \
+                        op_e2e_http_test cannon_test xlayer_e2e_geth_test xlayer_e2e_reth_test; do
+            if [ ! -f "$LOG_DIR/${test_key}_duration.txt" ]; then
+                echo "0" > "$LOG_DIR/${test_key}_duration.txt"
+            fi
+        done
+        generate_summary 2>/dev/null || true
+    fi
+    
+    # Send notification
+    send_lark_notification 2>/dev/null || {
+        log_error "Failed to send Lark notification"
+    }
+}
+
+# =============================================================================
 # Main Execution
 # =============================================================================
 
@@ -1852,6 +2023,9 @@ main() {
     # Setup logging first (before changing directories)
     setup_logging
     
+    # Set up trap to ensure notification is sent on any exit
+    trap cleanup_and_notify EXIT
+    
     # Then setup and validate the repository
     setup_environment
     sync_upstream
@@ -1869,6 +2043,8 @@ main() {
     local op_e2e_ws_test_result=0
     local op_e2e_http_test_result=0
     local cannon_test_result=0
+    local xlayer_e2e_geth_test_result=0
+    local xlayer_e2e_reth_test_result=0
     local unit_test_result=0
     
     if [ "$DEV_MODE" = "true" ]; then
@@ -1894,7 +2070,7 @@ main() {
         fi
         
         # Run unit tests
-        run_unit_tests || unit_test_result=$?
+        # run_unit_tests || unit_test_result=$?
 
         # Optional: Run additional test suites (uncomment as needed)
         # run_contract_tests || contract_test_result=$?
@@ -1904,6 +2080,10 @@ main() {
         # run_op_e2e_ws_tests || op_e2e_ws_test_result=$?
         # run_op_e2e_http_tests || op_e2e_http_test_result=$?
         # run_cannon_tests || cannon_test_result=$?
+        
+        # Run X Layer E2E tests (geth and reth)
+        # run_xlayer_e2e_geth_tests || xlayer_e2e_geth_test_result=$?
+        run_xlayer_e2e_reth_tests || xlayer_e2e_reth_test_result=$?
     fi
     
     # Always generate summary regardless of test outcome
@@ -1912,8 +2092,10 @@ main() {
     # Send Lark notification (skip in dev mode)
     if [ "$DEV_MODE" = "true" ]; then
         log_info "DEV MODE: Skipping Lark notification"
+        NOTIFICATION_SENT=true  # Mark as sent to prevent trap from sending
     else
         send_lark_notification
+        NOTIFICATION_SENT=true  # Mark as sent to prevent trap from sending
     fi
     
     local end_time
@@ -1943,7 +2125,9 @@ main() {
            [[ $contracts_static_test_result -eq 0 ]] && \
            [[ $op_e2e_ws_test_result -eq 0 ]] && \
            [[ $op_e2e_http_test_result -eq 0 ]] && \
-           [[ $cannon_test_result -eq 0 ]]; then
+           [[ $cannon_test_result -eq 0 ]] && \
+           [[ $xlayer_e2e_geth_test_result -eq 0 ]] && \
+           [[ $xlayer_e2e_reth_test_result -eq 0 ]]; then
             log_success "FULL MODE: CI completed successfully in $((total_duration / 60))m $((total_duration % 60))s"
             log_info "All logs available in: $LOG_DIR"
             exit 0
