@@ -135,6 +135,24 @@ else
     # Build op-succinct-builder image, we need it to build `config` cli tool
     cd "$OP_SUCCINCT_LOCAL_DIRECTORY"
     build_and_tag_image "op-succinct" "$OP_SUCCINCT_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "$PWD_DIR/op-succinct/Dockerfile"
+
+    # Prepare op-succinct-contracts: update submodules and fix compatibility
+    echo "📦 Preparing op-succinct-contracts dependencies..."
+    git submodule update --init --recursive
+    
+    # Update sp1-contracts to v5.0.0
+    cd contracts/lib/sp1-contracts
+    git fetch --tags
+    git checkout v5.0.0
+    cd -
+    
+    # Fix solidity version compatibility (^0.8.20 -> >=0.8.15)
+    sed -i 's/pragma solidity \^0.8.20;/pragma solidity >=0.8.15;/' \
+        contracts/lib/sp1-contracts/contracts/src/ISP1Verifier.sol
+    sed -i 's/pragma solidity \^0.8.20;/pragma solidity >=0.8.15;/' \
+        contracts/lib/sp1-contracts/contracts/src/SP1MockVerifier.sol
+    echo "✅ Dependencies prepared"
+
     build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "$PWD_DIR/op-succinct/Dockerfile.contract"
   fi
 fi
