@@ -1,13 +1,9 @@
 #!/bin/bash
 set -e
 
-sed_inplace() {
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "$@"
-  else
-    sed -i "$@"
-  fi
-}
+# Source common utilities (sed_inplace, etc.)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 ROOT_DIR=$(git rev-parse --show-toplevel)
 

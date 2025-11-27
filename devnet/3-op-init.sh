@@ -4,13 +4,8 @@ set -e
 
 source .env
 
-sed_inplace() {
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "$@"
-  else
-    sed -i "$@"
-  fi
-}
+# Source common utilities (sed_inplace, etc.)
+source "$(dirname "${BASH_SOURCE[0]}")/scripts/common.sh"
 
 # Check if FORK_BLOCK is set
 if [ -z "$FORK_BLOCK" ]; then

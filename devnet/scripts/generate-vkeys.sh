@@ -6,13 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$PROJECT_DIR/.env"
 
-sed_inplace() {
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "$@"
-    else
-    sed -i "$@"
-    fi
-}
+# Source common utilities (sed_inplace, etc.)
+source "$SCRIPT_DIR/common.sh"
 
 # ============================================================================
 # Generate VKeys for OP-Succinct Real Mode

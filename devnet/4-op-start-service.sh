@@ -5,15 +5,10 @@ set -x
 # Load environment variables early
 source .env
 
-sed_inplace() {
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "$@"
-  else
-    sed -i "$@"
-  fi
-}
-
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source common utilities (sed_inplace, etc.)
+source "$PWD_DIR/scripts/common.sh"
 SCRIPTS_DIR=$PWD_DIR/scripts
 
 if [ "$SEQ_TYPE" = "geth" ]; then

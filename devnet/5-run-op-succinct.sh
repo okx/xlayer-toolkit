@@ -8,19 +8,12 @@ set -e
 # Load environment variables
 source .env
 
-sed_inplace() {
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "$@"
-  else
-    sed -i "$@"
-  fi
-}
-
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR=$PWD_DIR/scripts
 PROJECT_DIR=$PWD_DIR
 
-# Source deployment functions
+# Source common utilities and deployment functions
+source "$SCRIPTS_DIR/common.sh"
 source "$SCRIPTS_DIR/deploy-op-succinct.sh"
 
 # ============================================================================

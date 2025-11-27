@@ -24,13 +24,9 @@ replace_enode_ip() {
     echo "$enode" | sed "s/@127.0.0.1:/@$container_name:/"
 }
 
-sed_inplace() {
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "$@"
-  else
-    sed -i "$@"
-  fi
-}
+# Source common utilities (sed_inplace, etc.)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
 
 # Get enodes for all op-geth containers
 echo "📡 Getting enode addresses..."

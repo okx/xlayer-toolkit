@@ -3,13 +3,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-sed_inplace() {
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "$@"
-  else
-    sed -i "$@"
-  fi
-}
+# Source common utilities (sed_inplace, etc.)
+source "$SCRIPT_DIR/common.sh"
 
 # Function to update .env.proposer and .env.challenger with values
 update_env_files() {

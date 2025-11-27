@@ -2,13 +2,8 @@
 
 set -e
 
-sed_inplace() {
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    sed -i '' "$@"
-  else
-    sed -i "$@"
-  fi
-}
+# Source common utilities (sed_inplace, etc.)
+source "$(dirname "${BASH_SOURCE[0]}")/scripts/common.sh"
 
 # Deploy Safe function
 deploy_safe() {
