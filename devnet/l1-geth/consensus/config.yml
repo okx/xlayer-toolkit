@@ -24,12 +24,14 @@ DENEB_FORK_VERSION: 0x20000093
 #Electra
 ELECTRA_FORK_EPOCH: 0
 ELECTRA_FORK_VERSION: 0x15000000
+
 #Fulu
-FULU_FORK_EPOCH: 0
+FULU_FORK_EPOCH: 50
 FULU_FORK_VERSION: 0x15000001
 
 # Time parameters
 SECONDS_PER_SLOT: 2
+SLOT_DURATION_MS: 2000 # use this to auto calculate el fork time, should be consistent with SECONDS_PER_SLOT
 SLOTS_PER_EPOCH: 4 # change this because of this check https://github.com/OffchainLabs/prysm/blob/92bd211e4dfb583d7d3602e21a48e38f753155d9/beacon-chain/state/state-native/setters_proposer_lookahead.go#L18-L20
 MIN_SEED_LOOKAHEAD: 15
 MAX_SEED_LOOKAHEAD: 18
