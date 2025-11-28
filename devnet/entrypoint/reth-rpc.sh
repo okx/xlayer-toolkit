@@ -13,9 +13,9 @@ fi
 
 # Build the optional innertx flag
 INNERTX_FLAG=""
-if [ "${ENABLE_INNERTX:-false}" = "true" ]; then
+if [ "${ENABLE_INNERTX_RPC:-false}" = "true" ]; then
     INNERTX_FLAG="--xlayer.enable-innertx"
-    echo "Inner transaction tracking enabled"
+    echo "Inner transaction tracking enabled for RPC"
 fi
 
 exec op-reth node \
