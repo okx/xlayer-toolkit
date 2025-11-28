@@ -165,11 +165,15 @@ sed_inplace "s/NEW_BLOCK_HASH=.*/NEW_BLOCK_HASH=$NEW_BLOCK_HASH/" .env
 
 
 # Copy initialized database from op-geth-seq to other nodes
-OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
-
 echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
+OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
 rm -rf "$OP_GETH_RPC_DATADIR"
 cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
+
+echo " 🔄 Copying database from op-reth-seq to op-reth-rpc..."
+OP_RETH_RPC_DATADIR="$(pwd)/data/op-reth-rpc"
+rm -rf "$OP_RETH_RPC_DATADIR"
+cp -r "$OP_RETH_DATADIR" "$OP_RETH_RPC_DATADIR"
 
 if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     if [ "$SEQ_TYPE" = "geth" ]; then
