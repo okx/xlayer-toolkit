@@ -133,7 +133,6 @@ else
     echo "🔨 Building op-succinct images"
     
     # Build op-succinct-builder image, we need it to build `config` cli tool
-    cd "$OP_SUCCINCT_LOCAL_DIRECTORY"
     build_and_tag_image "op-succinct" "$OP_SUCCINCT_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "$PWD_DIR/op-succinct/Dockerfile"
     build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "$PWD_DIR/op-succinct/Dockerfile.contract"
   fi
