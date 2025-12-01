@@ -70,7 +70,6 @@ cleanup() {
     rm -f *-old-clean.json *-new-clean.json *.bak
     rm -f merged.genesis.json merged.genesis.json.bak
     rm -f op-program/chainconfig/configs/*-old-clean.json op-program/chainconfig/configs/*-new-clean.json op-program/chainconfig/configs/*.bak
-    rm -f op-program/Makefile.prestate.bak
 }
 
 # ============================================================
@@ -81,8 +80,7 @@ ensure_makefile_crossplatform() {
     grep -q "platform=\$(TARGETOS)/\$(TARGETARCH)" "$mf" && { echo "✓ Makefile cross-platform ready"; return 0; }
     cp "$mf" "${mf}.prestate.bak"
     sed '/^reproducible-prestate:/,/^[a-z]/ s|@docker build --build-arg|@docker build --platform=$(TARGETOS)/$(TARGETARCH) --build-arg|g; s|^\t\./bin/op-program configs check-custom-chains|	@docker run --rm --platform $(TARGETOS)/$(TARGETARCH) -v $(PWD)/op-program/bin:/app/bin -v $(PWD)/op-program/configs:/app/configs -w /app ubuntu:20.04 /app/bin/op-program configs check-custom-chains|' "$mf" > "${mf}.new"
-    grep -q "platform=" "${mf}.new" && mv "${mf}.new" "$mf" || { mv "${mf}.prestate.bak" "$mf"; echo "❌ Patch failed"; exit 1; }
-    echo "✓ Patched (backup: ${mf}.prestate.bak)"
+    grep -q "platform=" "${mf}.new" && { mv "${mf}.new" "$mf"; rm -f "${mf}.prestate.bak"; echo "✓ Patched"; } || { rm -f "${mf}.new"; mv "${mf}.prestate.bak" "$mf"; echo "❌ Patch failed"; exit 1; }
 }
 
 trap cleanup EXIT
@@ -274,13 +272,6 @@ echo "Rollup jovian_time: $(jq -r '.jovian_time' "$ROLLUP_FILE")"
 echo ""
 echo "=== Building Reproducible Prestate ==="
 
-# Ensure configs directory is clean before build
-echo "Cleaning up any remaining temporary files..."
-rm -f op-program/chainconfig/configs/*.bak
-rm -f op-program/chainconfig/configs/*-old-clean.json
-rm -f op-program/chainconfig/configs/*-new-clean.json
-echo "✓ Configs directory cleaned"
-
 make reproducible-prestate -e TARGETOS=linux -e TARGETARCH=amd64
 
 # ============================================================
@@ -330,4 +321,3 @@ echo "  Size: $(du -h "$PACKAGE_NAME" | cut -f1)"
 echo "  SHA256: $(shasum -a 256 "$PACKAGE_NAME" | cut -d' ' -f1)"
 echo ""
 echo "✓ All done!"
-
