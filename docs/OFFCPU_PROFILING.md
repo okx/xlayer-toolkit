@@ -74,7 +74,7 @@ The off-CPU profiling script captures:
 ./scripts/profile-reth-offcpu.sh op-reth-seq 120
 
 # Profile with custom event configuration
-./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./scripts/my-events.conf
+./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/my-events.conf
 ```
 
 ### What You Get
@@ -149,7 +149,7 @@ tokio-runtime-w    18 [001]  1735.043726:      syscalls:sys_enter_futex:
 
 ### Default Configuration
 
-The default config (`scripts/offcpu-events.conf`) captures:
+The default config (`profiling-configs/offcpu-events.conf`) captures:
 - Lock contention (futex events)
 - Disk sync operations (fsync/fdatasync)
 - Block I/O (block layer events)
@@ -178,10 +178,10 @@ To profile which reth functions cause the most context switches, use the dedicat
 
 ```bash
 # Profile context switches for 60 seconds
-./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./scripts/offcpu-events-contextswitches.conf
+./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/offcpu-events-contextswitches.conf
 ```
 
-**Note**: Context switch profiling generates high sample counts (~100k-150k events/min). This is expected and provides detailed information about which reth functions are going off-CPU most frequently. The processing time in step [5/5] will be longer (30-60 seconds).
+**Note**: Context switch profiling generates high sample counts (~100k-150k events/min). **Fast mode is auto-enabled** - the script skips slow symbolication and generates a quick summary instead (~10x faster). If you need full symbolication, use `SKIP_SCRIPT=false`.
 
 ### I/O Bandwidth Profiling
 
@@ -189,9 +189,10 @@ To measure how much data each reth function reads/writes:
 
 ```bash
 # Profile I/O bandwidth for 60 seconds
-./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./scripts/offcpu-events-iobandwidth.conf
+./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/offcpu-events-iobandwidth.conf
 
-# Analyze the results
+# Analyze the results (requires full script, so use SKIP_SCRIPT=false)
+SKIP_SCRIPT=false ./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/offcpu-events-iobandwidth.conf
 ./scripts/analyze-io-bandwidth.sh ./profiling/op-reth-seq/perf-offcpu-{timestamp}.script
 ```
 
@@ -213,7 +214,7 @@ Top functions doing reads (by call count):
     2145 calls: reth_nippy_jar::compression::decompress_to
 ```
 
-**Note**: I/O bandwidth profiling captures high-frequency read/write syscalls, generating 50k-500k+ events per minute depending on workload. Use shorter durations (30-60 seconds) and expect step [5/5] to take 1-2 minutes.
+**Note**: I/O bandwidth profiling captures high-frequency read/write syscalls, generating 50k-500k+ events per minute depending on workload. **Fast mode is auto-enabled** to avoid slow symbolication. Use shorter durations (30-60 seconds). For detailed bandwidth stats with `analyze-io-bandwidth.sh`, generate full script with `SKIP_SCRIPT=false`.
 
 ### Page Fault Profiling (Memory-Mapped I/O)
 
@@ -221,7 +222,7 @@ To profile page faults and understand memory-mapped I/O (mmap) performance:
 
 ```bash
 # Profile page faults for 60 seconds
-./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./scripts/offcpu-events-pagefaults.conf
+./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/offcpu-events-pagefaults.conf
 ```
 
 **What you'll see**:
@@ -440,7 +441,7 @@ Low block_rq_complete rate
 
 ## Best Practices
 
-1. **Start with default config**: Use `offcpu-events.conf` for general profiling
+1. **Start with default config**: Use `profiling-configs/offcpu-events.conf` for general profiling
 2. **Profile under load**: Run profiling when reth is actively syncing/processing
 3. **Multiple samples**: Take profiles at different times to find consistent patterns
 4. **Compare with CPU profile**: Off-CPU + CPU profiling gives complete picture
