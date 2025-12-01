@@ -5,10 +5,12 @@ set -e
 # Configuration
 CONTAINER=${1:-op-reth-seq}
 DURATION=${2:-60}
+PROCESS_NAME=${3:-"op-reth node"}  # Default to op-reth, but allow override
 OUTPUT_DIR="./profiling/${CONTAINER}"
 
 echo "=== Reth CPU Profiling with perf ==="
 echo "Container: $CONTAINER"
+echo "Process: $PROCESS_NAME"
 echo "Duration: ${DURATION}s"
 echo "Output Directory: $OUTPUT_DIR"
 echo ""
@@ -37,12 +39,12 @@ docker exec "$CONTAINER" sh -c '
     fi
 '
 
-# Find the op-reth process PID
-echo "[2/5] Finding op-reth process..."
-RETH_PID=$(docker exec "$CONTAINER" sh -c 'pgrep -f "op-reth node" | head -1')
+# Find the process PID
+echo "[2/5] Finding process..."
+RETH_PID=$(docker exec "$CONTAINER" sh -c "pgrep -f \"${PROCESS_NAME}\" | head -1")
 
 if [ -z "$RETH_PID" ]; then
-    echo "Error: Could not find op-reth process in container"
+    echo "Error: Could not find process '${PROCESS_NAME}' in container"
     exit 1
 fi
 
