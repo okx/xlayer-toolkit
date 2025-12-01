@@ -4,15 +4,22 @@ set -e
 
 CONTAINER=${1:-op-reth-seq}
 PERF_SCRIPT_FILE=${2}
+PROFILE_TYPE=${3:-cpu}  # cpu, offcpu, memory
 
 if [ -z "$PERF_SCRIPT_FILE" ]; then
-    echo "Usage: $0 <container_name> <perf_script_file>"
+    echo "Usage: $0 <container_name> <perf_script_file> [profile_type]"
+    echo ""
+    echo "Arguments:"
+    echo "  container_name  - Docker container name (default: op-reth-seq)"
+    echo "  perf_script_file - Perf script filename (e.g., perf-20251117-144128.script)"
+    echo "  profile_type    - Type of profile: cpu, offcpu, memory (default: cpu)"
     echo ""
     echo "Available perf scripts for $CONTAINER:"
     echo ""
     ls -lht "./profiling/${CONTAINER}/"perf-*.script 2>/dev/null | head -10 || echo "No perf scripts found"
     echo ""
-    echo "Example: $0 op-reth-seq perf-20251117-144128.script"
+    echo "Example: $0 op-reth-seq perf-20251117-144128.script cpu"
+    echo "Example: $0 op-reth-seq perf-offcpu-20251117-144128.script offcpu"
     exit 1
 fi
 
@@ -50,12 +57,28 @@ FOLDED_FILE="./profiling/${CONTAINER}/${BASENAME}.folded"
 echo "[3/3] Generating interactive flamegraph..."
 SVG_FILE="./profiling/${CONTAINER}/${BASENAME}.svg"
 
+# Set flamegraph options based on profile type
+if [ "$PROFILE_TYPE" = "offcpu" ]; then
+    TITLE="Reth Off-CPU Time - $BASENAME"
+    COLOR_SCHEME="io"
+    COUNTNAME="off-cpu time"
+elif [ "$PROFILE_TYPE" = "memory" ]; then
+    TITLE="Reth Memory Profile - $BASENAME"
+    COLOR_SCHEME="mem"
+    COUNTNAME="bytes"
+else
+    TITLE="Reth CPU Profile - $BASENAME"
+    COLOR_SCHEME="hot"
+    COUNTNAME="samples"
+fi
+
 "$FLAMEGRAPH_DIR/flamegraph.pl" \
-    --title "Reth CPU Profile - $BASENAME" \
+    --title "$TITLE" \
     --width 1800 \
     --fontsize 14 \
     --fonttype "Verdana" \
-    --colors java \
+    --colors "$COLOR_SCHEME" \
+    --countname "$COUNTNAME" \
     --inverted \
     "$FOLDED_FILE" > "$SVG_FILE"
 
