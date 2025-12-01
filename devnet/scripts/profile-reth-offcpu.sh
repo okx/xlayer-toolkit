@@ -5,7 +5,7 @@ set -e
 # Configuration
 CONTAINER=${1:-op-reth-seq}
 DURATION=${2:-60}
-EVENT_CONFIG=${3:-"./scripts/offcpu-events.conf"}
+EVENT_CONFIG=${3:-"./profiling-configs/offcpu-events.conf"}
 SKIP_SCRIPT=${SKIP_SCRIPT:-false}  # Set SKIP_SCRIPT=true to skip symbolication
 OUTPUT_DIR="./profiling/${CONTAINER}"
 
@@ -247,10 +247,15 @@ if [ -f "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.data" ]; then
 
     if [ "$HAS_IO" = "true" ]; then
     echo "I/O Operations:"
-    READ_COUNT=$(grep -c "syscalls:sys_enter_read" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || echo "0")
-    WRITE_COUNT=$(grep -c "syscalls:sys_enter_write" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || echo "0")
-    FSYNC_COUNT=$(grep -c "syscalls:sys_enter_fsync" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || echo "0")
-    FDATASYNC_COUNT=$(grep -c "syscalls:sys_enter_fdatasync" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || echo "0")
+    READ_COUNT=$(grep -c "syscalls:sys_enter_read" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || true)
+    WRITE_COUNT=$(grep -c "syscalls:sys_enter_write" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || true)
+    FSYNC_COUNT=$(grep -c "syscalls:sys_enter_fsync" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || true)
+    FDATASYNC_COUNT=$(grep -c "syscalls:sys_enter_fdatasync" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || true)
+    # Ensure numeric values (strip whitespace and default to 0 if empty)
+    READ_COUNT=$(echo "$READ_COUNT" | tr -d '\n\r ' | grep -E '^[0-9]+$' || echo "0")
+    WRITE_COUNT=$(echo "$WRITE_COUNT" | tr -d '\n\r ' | grep -E '^[0-9]+$' || echo "0")
+    FSYNC_COUNT=$(echo "$FSYNC_COUNT" | tr -d '\n\r ' | grep -E '^[0-9]+$' || echo "0")
+    FDATASYNC_COUNT=$(echo "$FDATASYNC_COUNT" | tr -d '\n\r ' | grep -E '^[0-9]+$' || echo "0")
     echo "  read syscalls:     $READ_COUNT"
     echo "  write syscalls:    $WRITE_COUNT"
     echo "  fsync calls:       $FSYNC_COUNT"
@@ -260,15 +265,20 @@ if [ -f "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.data" ]; then
 
     if [ "$HAS_SCHED" = "true" ]; then
     echo "Scheduler context switches:"
-    SCHED_SWITCH=$(grep -c "sched:sched_switch" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || echo "0")
+    SCHED_SWITCH=$(grep -c "sched:sched_switch" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || true)
+    # Ensure numeric value (strip whitespace and default to 0 if empty)
+    SCHED_SWITCH=$(echo "$SCHED_SWITCH" | tr -d '\n\r ' | grep -E '^[0-9]+$' || echo "0")
     echo "  $SCHED_SWITCH"
     echo ""
     fi
 
     if [ "$HAS_BLOCK" = "true" ]; then
     echo "Block I/O operations:"
-    BLOCK_ISSUE=$(grep -c "block:block_rq_issue" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || echo "0")
-    BLOCK_COMPLETE=$(grep -c "block:block_rq_complete" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || echo "0")
+    BLOCK_ISSUE=$(grep -c "block:block_rq_issue" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || true)
+    BLOCK_COMPLETE=$(grep -c "block:block_rq_complete" "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" 2>/dev/null || true)
+    # Ensure numeric values (strip whitespace and default to 0 if empty)
+    BLOCK_ISSUE=$(echo "$BLOCK_ISSUE" | tr -d '\n\r ' | grep -E '^[0-9]+$' || echo "0")
+    BLOCK_COMPLETE=$(echo "$BLOCK_COMPLETE" | tr -d '\n\r ' | grep -E '^[0-9]+$' || echo "0")
     echo "  requests issued:    $BLOCK_ISSUE"
     echo "  requests completed: $BLOCK_COMPLETE"
     echo ""
