@@ -21,7 +21,8 @@ import (
 )
 
 const (
-	concurrency = 25
+	concurrency        = 8000
+	fetchGoroutinePool = 8000
 )
 
 type Benchmark struct {
@@ -146,29 +147,123 @@ func (r *Benchmark) loadBlocksContinuous(ctx context.Context) {
 
 			latestBlockNum := latestBlock.NumberU64()
 
-			// Load blocks from current to latest
-			for currentBlockNum <= latestBlockNum {
-				block, err := r.getBlockFromSourceNode(ctx, currentBlockNum)
-				if err != nil {
-					r.log.Error("failed to getBlockFromSourceNode", "blockNum", currentBlockNum, "err", err)
-					// Wait a bit before retrying
-					time.Sleep(2 * time.Second)
-					continue
+			// Load blocks from current to latest using goroutine pool
+			if currentBlockNum <= latestBlockNum {
+				// Create channels for distributing work and collecting results
+				blockNumChan := make(chan uint64, fetchGoroutinePool)
+				blockResultChan := make(chan *types.Block, fetchGoroutinePool*2)
+
+				var fetchWg sync.WaitGroup
+
+				// Start fetcher goroutines (N=256)
+				for i := 0; i < fetchGoroutinePool; i++ {
+					fetchWg.Add(1)
+					go func() {
+						defer fetchWg.Done()
+						for blockNum := range blockNumChan {
+							for {
+								block, err := r.getBlockFromSourceNode(ctx, blockNum)
+								if err != nil {
+									r.log.Error("failed to getBlockFromSourceNode", "blockNum", blockNum, "err", err)
+									time.Sleep(2 * time.Second)
+									continue
+								}
+								if block == nil {
+									r.log.Warn("received nil block", "blockNum", blockNum)
+									time.Sleep(2 * time.Second)
+									continue
+								}
+								blockResultChan <- block
+								break
+							}
+						}
+					}()
 				}
 
-				if block == nil {
-					r.log.Warn("received nil block", "blockNum", currentBlockNum)
-					time.Sleep(2 * time.Second)
-					continue
-				}
+				// Goroutine to dispatch block numbers
+				go func() {
+					for blockNum := currentBlockNum; blockNum <= latestBlockNum; blockNum++ {
+						select {
+						case blockNumChan <- blockNum:
+						case <-ctx.Done():
+							close(blockNumChan)
+							return
+						}
+					}
+					close(blockNumChan)
+				}()
 
-				select {
-				case r.incomingBlocks <- block:
-					currentBlockNum++
-				case <-ctx.Done():
-					r.log.Info("stopping continuous block loading")
-					close(r.incomingBlocks)
-					return
+				// Goroutine to close result channel after all fetchers are done
+				go func() {
+					fetchWg.Wait()
+					close(blockResultChan)
+				}()
+
+				// Collect blocks into map and write them in order
+				blockMap := make(map[uint64]*types.Block)
+				var mu sync.Mutex
+				collectorDone := make(chan struct{})
+
+				// Collect all results into map
+				go func() {
+					for block := range blockResultChan {
+						mu.Lock()
+						blockMap[block.NumberU64()] = block
+						mu.Unlock()
+					}
+					close(collectorDone)
+				}()
+
+				// Write blocks in strict order by block number
+				for currentBlockNum <= latestBlockNum {
+					// Wait for the specific block we need
+					var block *types.Block
+					for {
+						mu.Lock()
+						b, exists := blockMap[currentBlockNum]
+						if exists {
+							block = b
+							delete(blockMap, currentBlockNum)
+						}
+						mu.Unlock()
+
+						if exists {
+							break
+						}
+
+						// Check if collector is done and block still doesn't exist
+						select {
+						case <-collectorDone:
+							r.log.Error("block not found after all fetching completed", "blockNum", currentBlockNum)
+							// This shouldn't happen, but if it does, try to fetch it directly
+							var err error
+							block, err = r.getBlockFromSourceNode(ctx, currentBlockNum)
+							if err != nil || block == nil {
+								r.log.Error("failed to fetch missing block", "blockNum", currentBlockNum, "err", err)
+								time.Sleep(2 * time.Second)
+								continue
+							}
+							goto writeBlock
+						case <-ctx.Done():
+							r.log.Info("stopping continuous block loading")
+							close(r.incomingBlocks)
+							return
+						default:
+							// Block not ready yet, wait a bit
+							time.Sleep(10 * time.Millisecond)
+						}
+					}
+
+				writeBlock:
+					// Write block to channel in order
+					select {
+					case r.incomingBlocks <- block:
+						currentBlockNum++
+					case <-ctx.Done():
+						r.log.Info("stopping continuous block loading")
+						close(r.incomingBlocks)
+						return
+					}
 				}
 			}
 
@@ -467,8 +562,8 @@ func NewBenchmark(
 		clients:                   c,
 		rollupCfg:                 rollupCfg,
 		log:                       logger,
-		incomingBlocks:            make(chan *types.Block, 256),
-		processBlocks:             make(chan strategies.BlockCreationParams, 25),
+		incomingBlocks:            make(chan *types.Block, 20000),
+		processBlocks:             make(chan strategies.BlockCreationParams, 20000),
 		strategy:                  strategy,
 		s:                         s,
 		currentBlock:              currentBlock,
@@ -484,3 +579,4 @@ func NewBenchmark(
 
 	return r
 }
+

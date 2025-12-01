@@ -16,9 +16,11 @@ type TPSTracker struct {
 	log log.Logger
 
 	// Current window stats
-	currentTPS float64
-	maxTPS     float64
-	minTPS     float64
+	currentTPS        float64
+	currentTPSWinSize int
+	maxTPS            float64
+	maxTPSWinSize     int
+	minTPS            float64
 
 	// Overall stats
 	totalTxs   uint64
@@ -103,22 +105,25 @@ func (t *TPSTracker) calculateTPS() {
 	txCount := 0
 	oldestTime := now
 
+	winCount := 0
 	for _, e := range t.window {
 		if e.timestamp.After(cutoff) {
 			txCount += e.txCount
 			if e.timestamp.Before(oldestTime) {
 				oldestTime = e.timestamp
 			}
+			winCount++
 		}
 	}
 
 	duration := now.Sub(oldestTime).Seconds()
 	if duration > 0 {
 		t.currentTPS = float64(txCount) / duration
-
+		t.currentTPSWinSize = winCount
 		// Update max TPS
-		if t.currentTPS > t.maxTPS {
+		if t.currentTPS > t.maxTPS && winCount >= 3 {
 			t.maxTPS = t.currentTPS
+			t.maxTPSWinSize = t.maxTPSWinSize
 		}
 
 		// Update min TPS (only if we have meaningful data)
@@ -224,3 +229,4 @@ func (t *TPSTracker) GetStats() (currentTPS, maxTPS, minTPS float64, totalTxs ui
 
 	return t.currentTPS, t.maxTPS, minTPS, t.totalTxs, t.lastUpdate
 }
+
