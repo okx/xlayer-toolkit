@@ -314,7 +314,7 @@ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 PACKAGE_NAME="xlayer-${NETWORK}-prestate-${CHAIN_ID}-${TIMESTAMP}.tar.gz"
 
 tar -czf "$PACKAGE_NAME" \
-    -C op-program bin configs BUILD_INFO.txt
+    -C op-program bin chainconfig/configs BUILD_INFO.txt
 
 echo "✓ Package created: $PACKAGE_NAME"
 echo "  Size: $(du -h "$PACKAGE_NAME" | cut -f1)"
