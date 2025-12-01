@@ -70,7 +70,21 @@ cleanup() {
     rm -f *-old-clean.json *-new-clean.json *.bak
     rm -f merged.genesis.json merged.genesis.json.bak
     rm -f op-program/chainconfig/configs/*-old-clean.json op-program/chainconfig/configs/*-new-clean.json op-program/chainconfig/configs/*.bak
+    rm -f op-program/Makefile.prestate.bak
 }
+
+# ============================================================
+# Ensure Makefile Supports Cross-Platform Builds
+# ============================================================
+ensure_makefile_crossplatform() {
+    local mf="op-program/Makefile"
+    grep -q "platform=\$(TARGETOS)/\$(TARGETARCH)" "$mf" && { echo "✓ Makefile cross-platform ready"; return 0; }
+    cp "$mf" "${mf}.prestate.bak"
+    sed '/^reproducible-prestate:/,/^[a-z]/ s|@docker build --build-arg|@docker build --platform=$(TARGETOS)/$(TARGETARCH) --build-arg|g; s|^\t\./bin/op-program configs check-custom-chains|	@docker run --rm --platform $(TARGETOS)/$(TARGETARCH) -v $(PWD)/op-program/bin:/app/bin -v $(PWD)/op-program/configs:/app/configs -w /app ubuntu:20.04 /app/bin/op-program configs check-custom-chains|' "$mf" > "${mf}.new"
+    grep -q "platform=" "${mf}.new" && mv "${mf}.new" "$mf" || { mv "${mf}.prestate.bak" "$mf"; echo "❌ Patch failed"; exit 1; }
+    echo "✓ Patched (backup: ${mf}.prestate.bak)"
+}
+
 trap cleanup EXIT
 
 # ============================================================
@@ -93,6 +107,12 @@ rm -f op-program/BUILD_INFO.txt
 
 echo "✓ Cleanup complete"
 echo ""
+
+# ============================================================
+# Ensure Cross-Platform Build Support
+# ============================================================
+
+ensure_makefile_crossplatform
 
 # ============================================================
 # Download & Extract Genesis
