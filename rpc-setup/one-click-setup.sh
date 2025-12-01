@@ -410,17 +410,23 @@ validate_snapshot_support() {
     local rpc_type=$1
     local network=$2
     
-    if [ "$rpc_type" != "geth" ] || [ "$network" != "testnet" ]; then
-        print_error "Snapshot mode is currently only supported for geth + testnet"
+    if [ "$rpc_type" != "geth" ]; then
+        print_error "Snapshot mode is currently only supported for geth"
         print_info "Supported combinations:"
         print_info "  - geth + testnet: ✅ snapshot supported"
-        print_info "  - geth + mainnet: ❌ snapshot not supported"
+        print_info "  - geth + mainnet: ✅ snapshot supported"
         print_info "  - reth + testnet: ❌ snapshot not supported"
         print_info "  - reth + mainnet: ❌ snapshot not supported"
         print_info ""
         print_info "Please use 'genesis' sync mode for your selected configuration"
         return 1
     fi
+    
+    if [ "$network" != "testnet" ] && [ "$network" != "mainnet" ]; then
+        print_error "Snapshot mode is currently only supported for testnet and mainnet"
+        return 1
+    fi
+    
     return 0
 }
 
@@ -596,14 +602,15 @@ generate_config_files() {
         EXEC_CLIENT="op-geth"
     fi
     
-    # Use different directory structure for snapshot mode
-    if [ "$SYNC_MODE" = "snapshot" ]; then
-        # Snapshot mode: use TARGET_DIR directory directly (all files already in snapshot)
-        # No need to create any directories or copy config files - everything is in snapshot
-        CONFIG_DIR="${TARGET_DIR}/config"  # Not used in snapshot mode, but kept for compatibility
-        LOGS_DIR="${TARGET_DIR}/logs"  # Not used in snapshot mode, logs are in snapshot data
+    # Use different directory structure based on sync mode and network
+    # Mainnet snapshot uses the same structure as genesis mode (nested: data/, config/, logs/)
+    # Testnet snapshot uses flat structure (op-geth/, op-node/) - TODO: will be unified with mainnet
+    if [ "$SYNC_MODE" = "snapshot" ] && [ "$NETWORK_TYPE" = "testnet" ]; then
+        # Testnet snapshot: flat structure (op-geth, op-node at root) - temporary special handling
+        CONFIG_DIR="${TARGET_DIR}/config"  # Not used in testnet snapshot mode
+        LOGS_DIR="${TARGET_DIR}/logs"  # Not used in testnet snapshot mode
         GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-        DATA_DIR="${TARGET_DIR}/data"  # Not used in snapshot mode, but set for compatibility
+        DATA_DIR="${TARGET_DIR}/data"  # Not used in testnet snapshot mode
         
         # Ensure snapshot directory exists (should be created by extract_snapshot)
         if [ ! -d "$TARGET_DIR" ]; then
@@ -611,26 +618,35 @@ generate_config_files() {
             exit 1
         fi
         
-        print_info "Using snapshot data directory: $TARGET_DIR (all configs, data and logs included)"
+        print_info "Using snapshot data directory: $TARGET_DIR (flat structure: op-geth, op-node)"
     else
-        # Genesis mode: nested structure
+        # Genesis mode OR mainnet snapshot: nested structure (data/, config/, logs/)
         DATA_DIR="${TARGET_DIR}/data"
         CONFIG_DIR="${TARGET_DIR}/config"
         LOGS_DIR="${TARGET_DIR}/logs"
         GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
         
-        # Create directory structure
-        mkdir -p "$CONFIG_DIR" "$LOGS_DIR" "$DATA_DIR/op-node/p2p"
-        
-        # Create execution client specific data directory
-        if [ "$RPC_TYPE" = "reth" ]; then
-            mkdir -p "$DATA_DIR/op-reth"
+        if [ "$SYNC_MODE" = "snapshot" ]; then
+            # Mainnet snapshot: directory already exists from extraction, just verify
+            if [ ! -d "$TARGET_DIR" ]; then
+                print_error "Snapshot directory not found: $TARGET_DIR. Please run extract_snapshot first."
+                exit 1
+            fi
+            print_info "Using snapshot data directory: $TARGET_DIR (nested structure: data/, config/, logs/)"
         else
-            mkdir -p "$DATA_DIR/op-geth"
+            # Genesis mode: create directory structure
+            mkdir -p "$CONFIG_DIR" "$LOGS_DIR" "$DATA_DIR/op-node/p2p"
+            
+            # Create execution client specific data directory
+            if [ "$RPC_TYPE" = "reth" ]; then
+                mkdir -p "$DATA_DIR/op-reth"
+            else
+                mkdir -p "$DATA_DIR/op-geth"
+            fi
+            
+            # Generate and verify JWT
+            generate_or_verify_jwt "$CONFIG_DIR/jwt.txt"
         fi
-        
-        # Generate and verify JWT
-        generate_or_verify_jwt "$CONFIG_DIR/jwt.txt"
     fi
     
     # Note: Configuration files are already downloaded to CONFIG_DIR by download_config_files()
@@ -786,14 +802,37 @@ extract_genesis() {
 
 # Download snapshot for geth testnet
 download_snapshot() {
-    local snapshot_url="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/xlayerdata_new.tar.gz"
-    local snapshot_file="geth-testnet.tar.gz"
-    local target_dir=$1  # Target directory (e.g., testnet-geth)
+    local target_dir=$1  # Target directory (e.g., testnet-geth or mainnet-geth)
+    local network=$2     # Network type (testnet or mainnet)
+    
+    # Determine snapshot URL and file name based on network
+    local snapshot_url
+    local snapshot_file
+    
+    if [ "$network" = "testnet" ]; then
+        snapshot_url="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/xlayerdata_new.tar.gz"
+        snapshot_file="geth-testnet.tar.gz"
+    elif [ "$network" = "mainnet" ]; then
+        snapshot_url="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/mainnet-geth.tar.gz"
+        snapshot_file="mainnet-geth.tar.gz"
+    else
+        print_error "Unsupported network for snapshot: $network"
+        exit 1
+    fi
     
     # Check if target directory already exists (data already extracted)
-    if [ -n "$target_dir" ] && [ -d "$target_dir" ] && [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
-        print_success "Target directory already exists: $target_dir, skipping download"
-        return 0
+    # For testnet: check for op-geth and op-node directories (flat structure)
+    # For mainnet: check for data, config, logs directories (nested structure)
+    if [ "$network" = "testnet" ]; then
+        if [ -n "$target_dir" ] && [ -d "$target_dir" ] && [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
+            print_success "Target directory already exists: $target_dir, skipping download"
+            return 0
+        fi
+    elif [ "$network" = "mainnet" ]; then
+        if [ -n "$target_dir" ] && [ -d "$target_dir" ] && [ -d "$target_dir/data" ] && [ -d "$target_dir/config" ]; then
+            print_success "Target directory already exists: $target_dir, skipping download"
+            return 0
+        fi
     fi
     
     # Check if snapshot file already exists
@@ -803,10 +842,12 @@ download_snapshot() {
         return 0
     fi
     
-    # Check if xlayerdata exists (from previous extraction, not yet renamed)
-    if [ -d "xlayerdata" ] && [ -d "xlayerdata/op-geth" ] && [ -d "xlayerdata/op-node" ]; then
-        print_success "Found existing xlayerdata directory, skipping download"
-        return 0
+    # Check if xlayerdata exists (from previous extraction, not yet renamed) - only for testnet
+    if [ "$network" = "testnet" ]; then
+        if [ -d "xlayerdata" ] && [ -d "xlayerdata/op-geth" ] && [ -d "xlayerdata/op-node" ]; then
+            print_success "Found existing xlayerdata directory, skipping download"
+            return 0
+        fi
     fi
     
     print_info "Downloading snapshot (this may take a while)..."
@@ -823,30 +864,51 @@ download_snapshot() {
 # Extract snapshot
 extract_snapshot() {
     local target_dir=$1
-    local snapshot_file="geth-testnet.tar.gz"
+    local network=$2
+    
+    # Determine snapshot file name based on network
+    local snapshot_file
+    if [ "$network" = "testnet" ]; then
+        snapshot_file="geth-testnet.tar.gz"
+    elif [ "$network" = "mainnet" ]; then
+        snapshot_file="mainnet-geth.tar.gz"
+    else
+        print_error "Unsupported network for snapshot: $network"
+        exit 1
+    fi
     
     # Priority 1: Check if target directory already exists with valid data
     # If it exists, skip everything (no download, no extract, no rename)
-    if [ -d "$target_dir" ] && [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
-        print_success "Found existing snapshot directory: $target_dir, skipping extraction"
-        return 0
-    fi
-    
-    # Priority 2: Check if xlayerdata exists (from previous extraction, not yet renamed)
-    # If it exists, just rename it to target directory
-    if [ -d "xlayerdata" ] && [ -d "xlayerdata/op-geth" ] && [ -d "xlayerdata/op-node" ]; then
-        print_info "Found xlayerdata directory, renaming to $target_dir..."
-        if [ -d "$target_dir" ]; then
-            print_error "Target directory $target_dir already exists but doesn't contain valid snapshot data"
-            print_info "Please remove $target_dir and try again"
-            exit 1
+    if [ "$network" = "testnet" ]; then
+        # Testnet: flat structure with op-geth and op-node
+        if [ -d "$target_dir" ] && [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
+            print_success "Found existing snapshot directory: $target_dir, skipping extraction"
+            return 0
         fi
-        mv xlayerdata "$target_dir"
-        print_success "Renamed xlayerdata to $target_dir"
-        return 0
+    elif [ "$network" = "mainnet" ]; then
+        # Mainnet: nested structure with data, config, logs
+        if [ -d "$target_dir" ] && [ -d "$target_dir/data" ] && [ -d "$target_dir/config" ]; then
+            print_success "Found existing snapshot directory: $target_dir, skipping extraction"
+            return 0
+        fi
     fi
     
-    # Priority 3: Extract from snapshot file (only if target directory and xlayerdata don't exist)
+    # Priority 2: Check if xlayerdata exists (from previous extraction, not yet renamed) - only for testnet
+    if [ "$network" = "testnet" ]; then
+        if [ -d "xlayerdata" ] && [ -d "xlayerdata/op-geth" ] && [ -d "xlayerdata/op-node" ]; then
+            print_info "Found xlayerdata directory, renaming to $target_dir..."
+            if [ -d "$target_dir" ]; then
+                print_error "Target directory $target_dir already exists but doesn't contain valid snapshot data"
+                print_info "Please remove $target_dir and try again"
+                exit 1
+            fi
+            mv xlayerdata "$target_dir"
+            print_success "Renamed xlayerdata to $target_dir"
+            return 0
+        fi
+    fi
+    
+    # Priority 3: Extract from snapshot file (only if target directory doesn't exist)
     # Check if snapshot file exists before extracting
     if [ ! -f "$snapshot_file" ]; then
         print_error "Snapshot file not found: $snapshot_file"
@@ -861,28 +923,44 @@ extract_snapshot() {
         exit 1
     fi
     
-    if [ ! -d "xlayerdata" ]; then
-        print_error "Snapshot extraction failed: xlayerdata directory not found"
-        exit 1
-    fi
-    
-    # Rename xlayerdata to target directory name (e.g., testnet-geth)
-    # At this point, target_dir should not exist (we checked at Priority 1)
-    # But double-check to be safe
-    if [ -d "$target_dir" ]; then
-        print_warning "Target directory $target_dir already exists (this shouldn't happen)"
-        if [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
-            print_info "Target directory already contains snapshot data, using existing directory"
-            rm -rf xlayerdata
-        else
-            print_error "Target directory exists but doesn't contain valid snapshot data"
-            print_info "Please remove $target_dir and try again"
+    if [ "$network" = "testnet" ]; then
+        # Testnet: extracts to xlayerdata, need to rename
+        if [ ! -d "xlayerdata" ]; then
+            print_error "Snapshot extraction failed: xlayerdata directory not found"
             exit 1
         fi
-    else
-        print_info "Renaming xlayerdata to $target_dir..."
-        mv xlayerdata "$target_dir"
-        print_success "Snapshot extracted and renamed to $target_dir"
+        
+        # Rename xlayerdata to target directory name (e.g., testnet-geth)
+        if [ -d "$target_dir" ]; then
+            print_warning "Target directory $target_dir already exists (this shouldn't happen)"
+            if [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
+                print_info "Target directory already contains snapshot data, using existing directory"
+                rm -rf xlayerdata
+            else
+                print_error "Target directory exists but doesn't contain valid snapshot data"
+                print_info "Please remove $target_dir and try again"
+                exit 1
+            fi
+        else
+            print_info "Renaming xlayerdata to $target_dir..."
+            mv xlayerdata "$target_dir"
+            print_success "Snapshot extracted and renamed to $target_dir"
+        fi
+    elif [ "$network" = "mainnet" ]; then
+        # Mainnet: extracts directly to mainnet-geth (already correct name)
+        if [ ! -d "$target_dir" ]; then
+            print_error "Snapshot extraction failed: $target_dir directory not found"
+            exit 1
+        fi
+        
+        # Verify structure
+        if [ ! -d "$target_dir/data" ] || [ ! -d "$target_dir/config" ]; then
+            print_error "Snapshot extraction failed: invalid structure in $target_dir"
+            print_info "Expected: $target_dir/data and $target_dir/config"
+            exit 1
+        fi
+        
+        print_success "Snapshot extracted to $target_dir"
     fi
 }
 
@@ -960,29 +1038,39 @@ initialize_node() {
     cd "$WORK_DIR" || exit 1
     
     if [ "$SYNC_MODE" = "snapshot" ]; then
-        # Snapshot mode: download and extract snapshot (just rename xlayerdata to TARGET_DIR)
-        download_snapshot "$TARGET_DIR"
-        extract_snapshot "$TARGET_DIR"
+        # Snapshot mode: download and extract snapshot
+        download_snapshot "$TARGET_DIR" "$NETWORK_TYPE"
+        extract_snapshot "$TARGET_DIR" "$NETWORK_TYPE"
         
-        # Remove EnableInnerTx = true from config.toml
-        # todo：remove this logic
-        local config_file="$TARGET_DIR/op-geth/config.toml"
-        if [ -f "$config_file" ]; then
-            print_info "Removing EnableInnerTx = true from config.toml..."
-            sed -i '/^EnableInnerTx = true$/d' "$config_file"
-            print_success "Updated config.toml"
+        if [ "$NETWORK_TYPE" = "testnet" ]; then
+            # Testnet snapshot: temporary special handling (flat structure)
+            # TODO: Remove this when testnet snapshot structure is unified with mainnet
+            # Remove EnableInnerTx = true from config.toml
+            local config_file="$TARGET_DIR/op-geth/config.toml"
+            if [ -f "$config_file" ]; then
+                print_info "Removing EnableInnerTx = true from config.toml..."
+                sed -i '/^EnableInnerTx = true$/d' "$config_file"
+                print_success "Updated config.toml"
+            fi
+            
+            # Ensure op-node logs directory exists (needed for log output)
+            if [ ! -d "$TARGET_DIR/op-node/logs" ]; then
+                mkdir -p "$TARGET_DIR/op-node/logs"
+                print_info "Created logs directory for op-node"
+            fi
+            
+            print_success "Node initialization completed (snapshot mode - testnet)"
+            print_info "Using snapshot data directory: $TARGET_DIR"
+            print_info "  - $TARGET_DIR/op-geth/: Geth blockchain data (from snapshot)"
+            print_info "  - $TARGET_DIR/op-node/: Op-node data (from snapshot)"
+        else
+            # Mainnet snapshot: uses same structure as genesis mode, no special handling needed
+            print_success "Node initialization completed (snapshot mode - mainnet)"
+            print_info "Using snapshot data directory: $TARGET_DIR"
+            print_info "  - $TARGET_DIR/data/: Blockchain data (from snapshot)"
+            print_info "  - $TARGET_DIR/config/: Configuration files (from snapshot)"
+            print_info "  - $TARGET_DIR/logs/: Service logs (from snapshot)"
         fi
-        
-        # Ensure op-node logs directory exists (needed for log output)
-        if [ ! -d "$TARGET_DIR/op-node/logs" ]; then
-            mkdir -p "$TARGET_DIR/op-node/logs"
-            print_info "Created logs directory for op-node"
-        fi
-        
-        print_success "Node initialization completed (snapshot mode)"
-        print_info "Using snapshot data directory: $TARGET_DIR"
-        print_info "  - $TARGET_DIR/op-geth/: Geth blockchain data (from snapshot)"
-        print_info "  - $TARGET_DIR/op-node/: Op-node data (from snapshot)"
     else
         # Genesis mode: download and extract genesis, then initialize
         download_genesis "$GENESIS_URL" "$NETWORK_TYPE"
@@ -1040,8 +1128,10 @@ generate_docker_compose() {
     
     cd "$WORK_DIR" || exit 1
 
-    if [ "$SYNC_MODE" = "snapshot" ]; then
-        # Generate snapshot mode docker-compose.yml
+    # Mainnet snapshot uses the same docker-compose.yml as genesis mode (same structure)
+    # Only testnet snapshot needs special docker-compose.yml (flat structure) - TODO: will be unified
+    if [ "$SYNC_MODE" = "snapshot" ] && [ "$NETWORK_TYPE" = "testnet" ]; then
+        # Generate snapshot mode docker-compose.yml for testnet (flat structure) - temporary special handling
         cat > docker-compose.yml << 'EOF'
 networks:
   xlayer-network:
@@ -1181,12 +1271,17 @@ services:
       retries: 30
       start_period: 30s
 EOF
-        print_success "docker-compose.yml generated (snapshot mode)"
+        print_success "docker-compose.yml generated (snapshot mode - testnet)"
     else
-        # Use existing docker-compose.yml from repository or download
+        # Genesis mode OR mainnet snapshot: use standard docker-compose.yml (same structure)
         if ! get_file_from_source "docker-compose.yml"; then
             print_error "Failed to get docker-compose.yml"
             exit 1
+        fi
+        if [ "$SYNC_MODE" = "snapshot" ]; then
+            print_success "docker-compose.yml generated (snapshot mode - mainnet, using standard structure)"
+        else
+            print_success "docker-compose.yml generated (genesis mode)"
         fi
     fi
 }
@@ -1255,9 +1350,15 @@ main() {
     if [ "$SKIP_INIT" -eq 0 ]; then
         # Full initialization process
         print_info "Performing full initialization..."
-        if [ "$SYNC_MODE" = "snapshot" ]; then
-            # Snapshot mode: only extract snapshot, then generate .env file
+        if [ "$SYNC_MODE" = "snapshot" ] && [ "$NETWORK_TYPE" = "testnet" ]; then
+            # Testnet snapshot: extract snapshot, then generate .env file
             initialize_node
+            load_network_config "$NETWORK_TYPE"  # Load network config for .env generation
+            generate_env_file
+        elif [ "$SYNC_MODE" = "snapshot" ]; then
+            # Mainnet snapshot: uses same structure as genesis, need to set directory variables
+            initialize_node
+            generate_config_files  # Set CONFIG_DIR, DATA_DIR, LOGS_DIR variables (no dir creation)
             load_network_config "$NETWORK_TYPE"  # Load network config for .env generation
             generate_env_file
         else
