@@ -51,7 +51,49 @@ echo "[2/3] Processing perf script data..."
 BASENAME=$(basename "$PERF_SCRIPT_FILE" .script)
 FOLDED_FILE="./profiling/${CONTAINER}/${BASENAME}.folded"
 
-"$FLAMEGRAPH_DIR/stackcollapse-perf.pl" "$SCRIPT_PATH" > "$FOLDED_FILE"
+# Add kernel/user delimiter for off-CPU profiles
+if [ "$PROFILE_TYPE" = "offcpu" ]; then
+    echo "    Adding kernel/user stack delimiters..."
+    # stackcollapse-perf.pl with kernel/user annotation
+    # Insert "--" delimiter between kernel and user stacks
+    "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" "$SCRIPT_PATH" | \
+        awk -F';' '{
+            # Last field is the count
+            count_idx = NF;
+            count = $count_idx;
+
+            # Process stack frames (all but the last field which is count)
+            new_stack = "";
+            prev_was_kernel = 0;
+
+            for (i = 1; i < count_idx; i++) {
+                frame = $i;
+
+                # Detect kernel frames by common kernel function patterns
+                # Kernel functions typically include: __schedule, do_*, el0_*, futex_*, page_*, etc.
+                is_kernel = (frame ~ /__schedule|^schedule$|^do_|^el0_|^el0t_|futex_wait|futex_wake|page_fault|^handle_|invoke_syscall|^__arm64_|filemap_|read_pages|io_schedule|ksys_|vfs_|^__handle_|^__do_|^__futex|^__fuse|request_wait_answer|folio_wait|page_cache|page_touch|^__el0_|^__kernel_|^__close|^__GI_|fuse_|fakeowner_|lookup_|^filp_/);
+
+                # Skip empty frames
+                if (frame == "") continue;
+
+                # Insert delimiter when transitioning from kernel to user
+                if (prev_was_kernel && !is_kernel && new_stack != "") {
+                    if (new_stack != "") new_stack = new_stack ";";
+                    new_stack = new_stack "---";
+                }
+
+                if (new_stack != "") {
+                    new_stack = new_stack ";";
+                }
+                new_stack = new_stack frame;
+                prev_was_kernel = is_kernel;
+            }
+
+            print new_stack " " count;
+        }' > "$FOLDED_FILE"
+else
+    "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" "$SCRIPT_PATH" > "$FOLDED_FILE"
+fi
 
 # Generate flamegraph SVG
 echo "[3/3] Generating interactive flamegraph..."

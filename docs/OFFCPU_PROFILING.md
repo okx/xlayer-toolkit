@@ -165,13 +165,108 @@ Create a custom config file:
 syscalls:sys_enter_futex
 syscalls:sys_exit_futex
 syscalls:sys_enter_fsync
-sched:sched_switch
 ```
 
 Use it:
 ```bash
 ./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./my-custom-events.conf
 ```
+
+### Context Switch Profiling
+
+To profile which reth functions cause the most context switches, use the dedicated config:
+
+```bash
+# Profile context switches for 60 seconds
+./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./scripts/offcpu-events-contextswitches.conf
+```
+
+**Note**: Context switch profiling generates high sample counts (~100k-150k events/min). This is expected and provides detailed information about which reth functions are going off-CPU most frequently. The processing time in step [5/5] will be longer (30-60 seconds).
+
+### I/O Bandwidth Profiling
+
+To measure how much data each reth function reads/writes:
+
+```bash
+# Profile I/O bandwidth for 60 seconds
+./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./scripts/offcpu-events-iobandwidth.conf
+
+# Analyze the results
+./scripts/analyze-io-bandwidth.sh ./profiling/op-reth-seq/perf-offcpu-{timestamp}.script
+```
+
+**What you'll get**:
+- Total bytes read/written
+- Average I/O operation size
+- Top reth functions by I/O call count
+- Read/write bandwidth ratio
+
+**Example output**:
+```
+Total read calls: 15234
+Total bytes read: 524288000 bytes (500.00 MB)
+Average read size: 34421 bytes
+
+Top functions doing reads (by call count):
+    8456 calls: reth_db::static_file::cursor::StaticFileCursor::get
+    3201 calls: reth_provider::providers::database::Database::get
+    2145 calls: reth_nippy_jar::compression::decompress_to
+```
+
+**Note**: I/O bandwidth profiling captures high-frequency read/write syscalls, generating 50k-500k+ events per minute depending on workload. Use shorter durations (30-60 seconds) and expect step [5/5] to take 1-2 minutes.
+
+### Page Fault Profiling (Memory-Mapped I/O)
+
+To profile page faults and understand memory-mapped I/O (mmap) performance:
+
+```bash
+# Profile page faults for 60 seconds
+./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./scripts/offcpu-events-pagefaults.conf
+```
+
+**What you'll see**:
+- **Major faults**: Page faults requiring disk reads (mmap'd pages loaded from disk)
+- **Minor faults**: Page faults resolved from RAM (mmap'd pages already cached)
+- **Memory pressure**: Direct reclaim and kswapd events (system running low on memory)
+
+**Why this matters**:
+- Reth uses MDBX database with memory-mapped files
+- `sys_enter_read` syscalls only show ~5 KB of reads (metadata)
+- **Major faults reveal the actual bulk data reads** from mmap'd database files
+- High major fault count = poor mmap cache hit rate = slow disk reads
+
+**Example output**:
+```
+Page faults (memory-mapped I/O):
+  major faults:      12450 (disk reads)
+  minor faults:      89234 (RAM hits)
+  → Major faults indicate mmap'd pages being read from disk
+    Check stack traces to see which reth functions access mmap'd data
+
+Memory pressure:
+  direct reclaims:   0
+  kswapd wakes:      2
+```
+
+**Analysis**:
+- **Major faults = hidden disk reads**: Each major fault loads a 4KB page from disk
+- **Cache hit rate**: minor_faults / (major_faults + minor_faults) × 100%
+  - Above example: 89234 / (12450 + 89234) = 87.7% cache hit rate
+- **Memory pressure**: If direct reclaims > 0, reth is using too much memory
+
+**Stack trace example**:
+```bash
+# Find which reth functions cause major faults
+grep -A 10 'major-faults:' ./profiling/op-reth-seq/perf-offcpu-{timestamp}.script
+
+# Example output:
+reth-node-1    18 [001]   1735.043726:      major-faults:
+         ffffc6b51abc __filemap_get_folio+0x12c (kernel reading from disk)
+           1a2b3c4 reth_db_api::table::Table::get+0x74
+           2b3c4d5 reth_provider::providers::database::DatabaseProvider::get
+```
+
+This shows `DatabaseProvider::get` accessing mmap'd data that wasn't in RAM, causing a disk read.
 
 ### Available Events
 
@@ -189,6 +284,16 @@ Use it:
 
 **Scheduler**:
 - `sched:sched_switch` - Context switch (thread goes off-CPU)
+
+**Page Faults (Memory-Mapped I/O)**:
+- `major-faults` - Page fault requiring disk read (mmap'd page not in RAM)
+- `minor-faults` - Page fault resolved from RAM (mmap'd page cached)
+- `page-faults` - All page faults (major + minor)
+
+**Memory Pressure**:
+- `vmscan:mm_vmscan_direct_reclaim_begin` - Process blocked waiting for memory
+- `vmscan:mm_vmscan_direct_reclaim_end` - Memory reclaim completed
+- `vmscan:mm_vmscan_kswapd_wake` - Background memory reclaimer activated
 
 **⚠️ Warning**: Avoid high-frequency events like `sys_enter_read` or `sys_enter_write` as they generate millions of samples per second!
 
