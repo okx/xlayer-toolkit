@@ -60,6 +60,17 @@ docker exec "$CONTAINER" sh -c '
         echo 0 > /proc/sys/kernel/kptr_restrict
         echo "Set kptr_restrict to 0"
     fi
+
+    # Increase perf buffer size limit from default (~516KB) to 256MB
+    # This allows perf to use larger buffers, reducing wakeup frequency
+    if [ -w /proc/sys/kernel/perf_event_mlock_kb ]; then
+        OLD_LIMIT=$(cat /proc/sys/kernel/perf_event_mlock_kb)
+        echo 262144 > /proc/sys/kernel/perf_event_mlock_kb
+        NEW_LIMIT=$(cat /proc/sys/kernel/perf_event_mlock_kb)
+        echo "Set perf_event_mlock_kb: ${OLD_LIMIT} KB → ${NEW_LIMIT} KB (~$((NEW_LIMIT / 1024)) MB)"
+    else
+        echo "Warning: Cannot increase perf_event_mlock_kb (buffer size will be limited)"
+    fi
 '
 
 # Find the op-reth process PID
@@ -160,6 +171,8 @@ docker exec "$CONTAINER" sh -c "
                     -o perf-offcpu.data \
                     -- sleep ${DURATION}
 "
+
+echo ""
 
 # Generate perf script output with symbols (optional)
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
