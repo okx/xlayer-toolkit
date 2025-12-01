@@ -5,12 +5,14 @@ set -e
 CONTAINER=${1}
 INPUT_FILE=${2:-"all"}
 PROFILE_TYPE=${3:-"jemalloc"}
+PROCESS_NAME=${4:-"op-reth node"}
+BINARY_NAME=${5:-"op-reth"}
 
 if [ -z "$CONTAINER" ]; then
-    echo "Usage: $0 <container_name> [input_file|all|latest|last:N|file1,file2,...] [profile_type]"
+    echo "Usage: $0 <container_name> [input_file|all|latest|last:N|file1,file2,...] [profile_type] [process_name] [binary_name]"
     echo ""
     echo "Arguments:"
-    echo "  container_name  - Docker container name (e.g., op-reth-seq)"
+    echo "  container_name  - Docker container name (e.g., op-reth-seq, op-rbuilder)"
     echo "  input_file      - One of:"
     echo "                    - all         : Merge all .heap files"
     echo "                    - latest      : Use only the latest .heap file"
@@ -18,14 +20,20 @@ if [ -z "$CONTAINER" ]; then
     echo "                    - file1,file2 : Comma-separated list of specific files"
     echo "                    - filename    : Single file (e.g., jeprof.1.0.m0.heap)"
     echo "  profile_type    - Type: jemalloc (default) or heaptrack"
+    echo "  process_name    - Process to find (default: 'op-reth node')"
+    echo "  binary_name     - Binary name for symbols (default: 'op-reth')"
     echo ""
     echo "Examples:"
+    echo "  # op-reth (default)"
     echo "  $0 op-reth-seq                                              # Merge all .heap files"
     echo "  $0 op-reth-seq all                                          # Merge all .heap files"
     echo "  $0 op-reth-seq latest                                       # Use latest .heap file"
     echo "  $0 op-reth-seq last:5                                       # Merge last 5 .heap files"
     echo "  $0 op-reth-seq jeprof.1.0.m0.heap                           # Single file"
     echo "  $0 op-reth-seq jeprof.1.0.m0.heap,jeprof.1.1.i0.heap        # Specific files"
+    echo ""
+    echo "  # op-rbuilder"
+    echo "  $0 op-rbuilder latest jemalloc \"op-rbuilder node\" op-rbuilder"
     exit 1
 fi
 
@@ -107,6 +115,8 @@ fi
 
 echo "=== Generating Memory Flamegraph ==="
 echo "Container: $CONTAINER"
+echo "Process: $PROCESS_NAME"
+echo "Binary: $BINARY_NAME"
 echo "Input: $INPUT_PATH"
 echo "Type: $PROFILE_TYPE"
 echo ""
@@ -133,7 +143,7 @@ SVG_FILE="${OUTPUT_DIR}/${BASENAME}-allocations-demangled.svg"
 case "$PROFILE_TYPE" in
     jemalloc)
         # Get the process PID
-        RETH_PID=$(docker exec "$CONTAINER" sh -c 'pgrep -f "op-reth node" | head -1' 2>/dev/null || echo "1")
+        RETH_PID=$(docker exec "$CONTAINER" sh -c "pgrep -f \"${PROCESS_NAME}\" | head -1" 2>/dev/null || echo "1")
 
         if [ "$MERGE_MODE" = true ]; then
             echo "[2/4] Merging and parsing all heap files..."
@@ -182,12 +192,13 @@ case "$PROFILE_TYPE" in
 HEAP_FILE="'"$HEAP_FILE_IN_CONTAINER"'"
 PID="'"$RETH_PID"'"
 USE_MERGED="'"$USE_MERGED"'"
+BINARY_NAME="'"$BINARY_NAME"'"
 
-# Get base address
-BASE_HEX=$(cat /proc/$PID/maps 2>/dev/null | grep "op-reth" | head -1 | cut -d"-" -f1 || echo "0")
+# Get base address - try to match the binary name in process maps
+BASE_HEX=$(cat /proc/$PID/maps 2>/dev/null | grep "$BINARY_NAME" | head -1 | cut -d"-" -f1 || echo "0")
 if [ "$BASE_HEX" = "0" ] || [ -z "$BASE_HEX" ]; then
-    # Fallback: try to get it from any running op-reth
-    BASE_HEX=$(cat /proc/1/maps 2>/dev/null | grep "op-reth" | head -1 | cut -d"-" -f1 || echo "0")
+    # Fallback: try to get it from PID 1
+    BASE_HEX=$(cat /proc/1/maps 2>/dev/null | grep "$BINARY_NAME" | head -1 | cut -d"-" -f1 || echo "0")
 fi
 BASE_DEC=$((0x$BASE_HEX))
 
@@ -197,11 +208,11 @@ echo "  Base address: 0x$BASE_HEX"
 echo "  Extracting symbols from binary (this may take a moment)..."
 # Use perl for fast hex-to-decimal conversion if available, otherwise use bash
 if command -v perl &> /dev/null; then
-    nm -n /usr/local/bin/op-reth 2>/dev/null | grep -E "^[0-9a-f]+ [TtWw]" | \
+    nm -n /usr/local/bin/$BINARY_NAME 2>/dev/null | grep -E "^[0-9a-f]+ [TtWw]" | \
         perl -ne "if (/^([0-9a-f]+)\s+\S+\s+(\S+)/) { print hex(\$1), \" \$2\\n\"; }" > /tmp/symbols_dec.txt
 else
     # Fallback to bash (slower but works)
-    nm -n /usr/local/bin/op-reth 2>/dev/null | grep -E "^[0-9a-f]+ [TtWw]" | \
+    nm -n /usr/local/bin/$BINARY_NAME 2>/dev/null | grep -E "^[0-9a-f]+ [TtWw]" | \
         while read addr type name; do echo "$((0x$addr)) $name"; done > /tmp/symbols_dec.txt
 fi
 SYMBOL_COUNT=$(wc -l < /tmp/symbols_dec.txt)
