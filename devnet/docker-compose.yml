@@ -861,7 +861,7 @@ services:
       - op-${SEQ_TYPE}-seq
 
   op-rbuilder:
-    image: xlayerdev/op-rbuilder:v0.1.3
+    image: "${OP_RBUILDER_IMAGE_TAG:-xlayerdev/op-rbuilder:v0.1.3}"
     container_name: op-rbuilder
     entrypoint: /entrypoint/op-rbuilder.sh
     env_file:
@@ -879,6 +879,7 @@ services:
       - ./config-op/genesis-reth.json:/genesis.json
       - ./entrypoint:/entrypoint
       - ./.env:/.env
+      - ./profiling/op-rbuilder:/profiling
     ports:
       - "8125:8545"
       - "18552:8552"
@@ -909,7 +910,7 @@ services:
       - op-${SEQ_TYPE}-seq2
 
   op-rbuilder2:
-    image: xlayerdev/op-rbuilder:v0.1.3
+    image: "${OP_RBUILDER_IMAGE_TAG:-xlayerdev/op-rbuilder:v0.1.3}"
     container_name: op-rbuilder2
     entrypoint: /entrypoint/op-rbuilder.sh
     env_file:
@@ -927,6 +928,7 @@ services:
       - ./config-op/genesis-reth.json:/genesis.json
       - ./entrypoint:/entrypoint
       - ./.env:/.env
+      - ./profiling/op-rbuilder2:/profiling
     ports:
       - "8126:8545"
       - "19552:8552"
