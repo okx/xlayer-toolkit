@@ -3,38 +3,50 @@
 set -e
 
 CONTAINER=${1:-op-reth-seq}
-PERF_SCRIPT_FILE=${2}
+PERF_FILE=${2}
 PROFILE_TYPE=${3:-cpu}  # cpu, offcpu, memory
 
-if [ -z "$PERF_SCRIPT_FILE" ]; then
-    echo "Usage: $0 <container_name> <perf_script_file> [profile_type]"
+if [ -z "$PERF_FILE" ]; then
+    echo "Usage: $0 <container_name> <perf_file> [profile_type]"
     echo ""
     echo "Arguments:"
     echo "  container_name  - Docker container name (default: op-reth-seq)"
-    echo "  perf_script_file - Perf script filename (e.g., perf-20251117-144128.script)"
+    echo "  perf_file       - Perf data filename (e.g., perf-20251117-144128.data)"
     echo "  profile_type    - Type of profile: cpu, offcpu, memory (default: cpu)"
     echo ""
-    echo "Available perf scripts for $CONTAINER:"
+    echo "Available perf data files for $CONTAINER:"
     echo ""
-    ls -lht "./profiling/${CONTAINER}/"perf-*.script 2>/dev/null | head -10 || echo "No perf scripts found"
+    ls -lht "./profiling/${CONTAINER}/"perf-*.data 2>/dev/null | head -10 || echo "No perf data files found"
     echo ""
-    echo "Example: $0 op-reth-seq perf-20251117-144128.script cpu"
-    echo "Example: $0 op-reth-seq perf-offcpu-20251117-144128.script offcpu"
+    echo "Example: $0 op-reth-seq perf-20251117-144128.data cpu"
+    echo "Example: $0 op-reth-seq perf-offcpu-20251117-144128.data offcpu"
     exit 1
 fi
 
-SCRIPT_PATH="./profiling/${CONTAINER}/${PERF_SCRIPT_FILE}"
+FILE_PATH="./profiling/${CONTAINER}/${PERF_FILE}"
 
-if [ ! -f "$SCRIPT_PATH" ]; then
-    echo "Error: Perf script file not found: $SCRIPT_PATH"
+if [ ! -f "$FILE_PATH" ]; then
+    echo "Error: Perf data file not found: $FILE_PATH"
     echo ""
-    echo "Available perf scripts:"
-    ls -lht "./profiling/${CONTAINER}/"perf-*.script 2>/dev/null | head -10 || echo "No perf scripts found"
+    echo "Available perf data files:"
+    ls -lht "./profiling/${CONTAINER}/"perf-*.data 2>/dev/null | head -10 || echo "No perf data files found"
+    exit 1
+fi
+
+# Detect file type
+FILE_EXT="${PERF_FILE##*.}"
+
+if [ "$FILE_EXT" != "data" ]; then
+    echo "Error: This script only works with .data files"
+    echo "Got: $PERF_FILE (.$FILE_EXT)"
+    echo ""
+    echo "If you have a .script file, use stackcollapse-perf.pl directly:"
+    echo "  ./profiling/FlameGraph/stackcollapse-perf.pl $FILE_PATH | ./profiling/FlameGraph/flamegraph.pl > output.svg"
     exit 1
 fi
 
 echo "=== Generating Flamegraph from Perf Data ==="
-echo "Input: $SCRIPT_PATH"
+echo "Input: $FILE_PATH"
 echo ""
 
 # Clone FlameGraph tools if not present
@@ -46,17 +58,33 @@ else
     echo "[1/3] FlameGraph tools already present"
 fi
 
-# Generate folded stacks from perf script
-echo "[2/3] Processing perf script data..."
-BASENAME=$(basename "$PERF_SCRIPT_FILE" .script)
+# Find perf binary in container
+echo "[2/3] Converting .data to folded stacks (streaming, no intermediate .script file)..."
+PERF_BIN=$(docker exec "$CONTAINER" sh -c 'command -v perf 2>/dev/null || find /usr/local/bin /usr/bin -name "perf*" -type f -o -type l 2>/dev/null | grep -E "perf" | head -1 || echo ""')
+
+if [ -z "$PERF_BIN" ]; then
+    echo "Error: No perf binary found in container $CONTAINER"
+    exit 1
+fi
+
+echo "   Using perf binary: $PERF_BIN"
+
+# Copy .data file to container
+docker cp "$FILE_PATH" "$CONTAINER:/profiling/temp-perf.data" 2>/dev/null
+
+# Stream perf script output directly through stackcollapse
+BASENAME=$(basename "$PERF_FILE" .data)
 FOLDED_FILE="./profiling/${CONTAINER}/${BASENAME}.folded"
 
 # Add kernel/user delimiter for off-CPU profiles
 if [ "$PROFILE_TYPE" = "offcpu" ]; then
-    echo "    Adding kernel/user stack delimiters..."
-    # stackcollapse-perf.pl with kernel/user annotation
-    # Insert "--" delimiter between kernel and user stacks
-    "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" "$SCRIPT_PATH" | \
+    echo "   Processing with kernel/user stack delimiters..."
+    
+    # Stream: perf script -> stackcollapse -> add delimiters -> folded file
+    docker exec "$CONTAINER" sh -c "
+        cd /profiling && \
+        $PERF_BIN script -f -i temp-perf.data
+    " | "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" | \
         awk -F';' '{
             # Last field is the count
             count_idx = NF;
@@ -70,7 +98,6 @@ if [ "$PROFILE_TYPE" = "offcpu" ]; then
                 frame = $i;
 
                 # Detect kernel frames by common kernel function patterns
-                # Kernel functions typically include: __schedule, do_*, el0_*, futex_*, page_*, etc.
                 is_kernel = (frame ~ /__schedule|^schedule$|^do_|^el0_|^el0t_|futex_wait|futex_wake|page_fault|^handle_|invoke_syscall|^__arm64_|filemap_|read_pages|io_schedule|ksys_|vfs_|^__handle_|^__do_|^__futex|^__fuse|request_wait_answer|folio_wait|page_cache|page_touch|^__el0_|^__kernel_|^__close|^__GI_|fuse_|fakeowner_|lookup_|^filp_/);
 
                 # Skip empty frames
@@ -92,8 +119,39 @@ if [ "$PROFILE_TYPE" = "offcpu" ]; then
             print new_stack " " count;
         }' > "$FOLDED_FILE"
 else
-    "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" "$SCRIPT_PATH" > "$FOLDED_FILE"
+    echo "   Processing stacks..."
+    
+    # Stream: perf script -> stackcollapse -> folded file
+    docker exec "$CONTAINER" sh -c "
+        cd /profiling && \
+        $PERF_BIN script -f -i temp-perf.data
+    " | "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" > "$FOLDED_FILE"
 fi
+
+# Check if we got any data
+if [ ! -s "$FOLDED_FILE" ]; then
+    echo ""
+    echo "ERROR: No stack data generated"
+    echo ""
+    echo "Possible reasons:"
+    echo "  1. The .data file has no samples (system was idle during profiling)"
+    echo "  2. The events captured had no stack traces"
+    echo "  3. Perf version mismatch"
+    echo ""
+    echo "Try profiling for longer or during higher load:"
+    echo "  ./scripts/profile-reth-offcpu.sh $CONTAINER 60"
+    
+    # Clean up
+    docker exec "$CONTAINER" sh -c 'rm -f /profiling/temp-perf.data' 2>/dev/null || true
+    rm -f "$FOLDED_FILE"
+    exit 1
+fi
+
+# Clean up temp files in container
+docker exec "$CONTAINER" sh -c 'rm -f /profiling/temp-perf.data' 2>/dev/null || true
+
+FOLDED_SIZE=$(du -h "$FOLDED_FILE" | cut -f1)
+echo "   Generated folded stacks: $FOLDED_SIZE"
 
 # Generate flamegraph SVG
 echo "[3/3] Generating interactive flamegraph..."

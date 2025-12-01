@@ -6,7 +6,12 @@ set -e
 CONTAINER=${1:-op-reth-seq}
 DURATION=${2:-60}
 EVENT_CONFIG=${3:-"./profiling-configs/offcpu-events.conf"}
-SKIP_SCRIPT=${SKIP_SCRIPT:-false}  # Set SKIP_SCRIPT=true to skip symbolication
+# SKIP_SCRIPT can be set via environment variable OR as 4th argument
+if [ -n "$4" ]; then
+    SKIP_SCRIPT=$4
+else
+    SKIP_SCRIPT=${SKIP_SCRIPT:-true}  # Set SKIP_SCRIPT=false to generate .script file
+fi
 OUTPUT_DIR="./profiling/${CONTAINER}"
 
 echo "=== Reth Off-CPU Profiling with perf ==="
@@ -14,7 +19,10 @@ echo "Container: $CONTAINER"
 echo "Duration: ${DURATION}s"
 echo "Event Config: $EVENT_CONFIG"
 if [ "$SKIP_SCRIPT" = "true" ]; then
-    echo "Script generation: SKIPPED (use perf report directly)"
+    echo "Script generation: SKIPPED (faster, saves disk space)"
+    echo "  → To generate script: SKIP_SCRIPT=false ./scripts/profile-reth-offcpu.sh"
+else
+    echo "Script generation: ENABLED (slower, generates 2-3GB .script file)"
 fi
 echo "Output Directory: $OUTPUT_DIR"
 echo ""
@@ -223,17 +231,18 @@ fi
 
 if [ -f "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.data" ]; then
 
-    # Generate summary statistics
-    echo "=== Off-CPU Event Summary ==="
-    echo ""
+    # Generate summary statistics (only if script file exists)
+    if [ -f "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script" ]; then
+        echo "=== Off-CPU Event Summary ==="
+        echo ""
 
-    # Detect which event categories were configured
-    HAS_FUTEX=$(echo "$EVENTS" | grep -q "futex" && echo "true" || echo "false")
-    HAS_IO=$(echo "$EVENTS" | grep -qE "(sys_enter_read|sys_enter_write)" && echo "true" || echo "false")
-    HAS_SCHED=$(echo "$EVENTS" | grep -q "sched_switch" && echo "true" || echo "false")
-    HAS_BLOCK=$(echo "$EVENTS" | grep -q "block:" && echo "true" || echo "false")
-    HAS_PAGEFAULT=$(echo "$EVENTS" | grep -qE "(major-faults|minor-faults|page-faults)" && echo "true" || echo "false")
-    HAS_VMSCAN=$(echo "$EVENTS" | grep -q "vmscan:" && echo "true" || echo "false")
+        # Detect which event categories were configured
+        HAS_FUTEX=$(echo "$EVENTS" | grep -q "futex" && echo "true" || echo "false")
+        HAS_IO=$(echo "$EVENTS" | grep -qE "(sys_enter_read|sys_enter_write)" && echo "true" || echo "false")
+        HAS_SCHED=$(echo "$EVENTS" | grep -q "sched_switch" && echo "true" || echo "false")
+        HAS_BLOCK=$(echo "$EVENTS" | grep -q "block:" && echo "true" || echo "false")
+        HAS_PAGEFAULT=$(echo "$EVENTS" | grep -qE "(major-faults|minor-faults|page-faults)" && echo "true" || echo "false")
+        HAS_VMSCAN=$(echo "$EVENTS" | grep -q "vmscan:" && echo "true" || echo "false")
 
     # Only show sections for configured events
     if [ "$HAS_FUTEX" = "true" ]; then
@@ -347,13 +356,16 @@ if [ -f "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.data" ]; then
     fi
     fi
 
+    # Close the summary if block
+    fi
+
     # Generate flamegraph automatically
     echo "[7/7] Generating off-CPU flamegraph..."
     if [ -x "./scripts/generate-flamegraph.sh" ]; then
-        ./scripts/generate-flamegraph.sh "$CONTAINER" "perf-offcpu-${TIMESTAMP}.script" "offcpu"
+        ./scripts/generate-flamegraph.sh "$CONTAINER" "perf-offcpu-${TIMESTAMP}.data" "offcpu"
     else
         echo "Warning: generate-flamegraph.sh not found or not executable"
-        echo "You can manually generate it with: ./scripts/generate-flamegraph.sh $CONTAINER perf-offcpu-${TIMESTAMP}.script offcpu"
+        echo "You can manually generate it with: ./scripts/generate-flamegraph.sh $CONTAINER perf-offcpu-${TIMESTAMP}.data offcpu"
     fi
 
     echo ""
