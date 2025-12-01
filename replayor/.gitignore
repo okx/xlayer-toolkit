@@ -9,6 +9,7 @@ result/
 reth-data/
 *.crt
 tps.log
+test_tps.log
 
 # Environment configuration files (keep .example files)
 *.env

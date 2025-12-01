@@ -22,10 +22,16 @@ type TPSTracker struct {
 	maxTPSWinSize     int
 	minTPS            float64
 
+	// Block stats
+	currentBPS float64
+	maxBPS     float64
+	minBPS     float64
+
 	// Overall stats
-	totalTxs   uint64
-	startTime  time.Time
-	lastUpdate time.Time
+	totalTxs    uint64
+	totalBlocks uint64
+	startTime   time.Time
+	lastUpdate  time.Time
 
 	// Circular buffer for TPS calculation
 	window     []txEvent
@@ -54,6 +60,7 @@ func NewTPSTracker(l log.Logger, logFilePath string) *TPSTracker {
 		window:      make([]txEvent, 0, 1000),
 		windowSize:  5 * time.Second,
 		minTPS:      -1, // -1 indicates not initialized
+		minBPS:      -1, // -1 indicates not initialized
 		stopCh:      make(chan struct{}),
 		doneCh:      make(chan struct{}),
 		logFilePath: logFilePath,
@@ -73,6 +80,7 @@ func (t *TPSTracker) RecordFCU(txCount int) {
 
 	t.window = append(t.window, event)
 	t.totalTxs += uint64(txCount)
+	t.totalBlocks++ // Each FCU call represents a block
 	t.lastUpdate = now
 
 	// Clean up old events outside the window
@@ -88,8 +96,9 @@ func (t *TPSTracker) RecordFCU(txCount int) {
 		t.window = t.window[validIdx:]
 	}
 
-	// Calculate current TPS
+	// Calculate current TPS and BPS
 	t.calculateTPS()
+	t.calculateBPS()
 }
 
 // calculateTPS calculates TPS for the current window (must be called with lock held)
@@ -129,6 +138,43 @@ func (t *TPSTracker) calculateTPS() {
 		// Update min TPS (only if we have meaningful data)
 		if t.minTPS < 0 || (t.currentTPS > 0 && t.currentTPS < t.minTPS) {
 			t.minTPS = t.currentTPS
+		}
+	}
+}
+
+// calculateBPS calculates blocks per second for the current window (must be called with lock held)
+func (t *TPSTracker) calculateBPS() {
+	if len(t.window) == 0 {
+		t.currentBPS = 0
+		return
+	}
+
+	now := time.Now()
+	cutoff := now.Add(-t.windowSize)
+
+	blockCount := 0
+	oldestTime := now
+
+	for _, e := range t.window {
+		if e.timestamp.After(cutoff) {
+			blockCount++ // Each event represents a block
+			if e.timestamp.Before(oldestTime) {
+				oldestTime = e.timestamp
+			}
+		}
+	}
+
+	duration := now.Sub(oldestTime).Seconds()
+	if duration > 0 {
+		t.currentBPS = float64(blockCount) / duration
+		// Update max BPS
+		if t.currentBPS > t.maxBPS && blockCount >= 3 {
+			t.maxBPS = t.currentBPS
+		}
+
+		// Update min BPS (only if we have meaningful data)
+		if t.minBPS < 0 || (t.currentBPS > 0 && t.currentBPS < t.minBPS) {
+			t.minBPS = t.currentBPS
 		}
 	}
 }
@@ -173,10 +219,20 @@ func (t *TPSTracker) printStats(final bool) {
 		minTPS = 0
 	}
 
+	minBPS := t.minBPS
+	if minBPS < 0 {
+		minBPS = 0
+	}
+
 	uptime := time.Since(t.startTime)
 	avgTPS := 0.0
 	if uptime.Seconds() > 0 {
 		avgTPS = float64(t.totalTxs) / uptime.Seconds()
+	}
+
+	avgBPS := 0.0
+	if uptime.Seconds() > 0 {
+		avgBPS = float64(t.totalBlocks) / uptime.Seconds()
 	}
 
 	// Print to both logger and stdout
@@ -186,6 +242,11 @@ func (t *TPSTracker) printStats(final bool) {
 	output += fmt.Sprintf("Max TPS:      %.2f tx/s\n", t.maxTPS)
 	output += fmt.Sprintf("Min TPS:      %.2f tx/s\n", minTPS)
 	output += fmt.Sprintf("Total Txs:    %d\n", t.totalTxs)
+	output += fmt.Sprintf("Current BPS:  %.2f block/s\n", t.currentBPS)
+	output += fmt.Sprintf("Average BPS:  %.2f block/s\n", avgBPS)
+	output += fmt.Sprintf("Max BPS:      %.2f block/s\n", t.maxBPS)
+	output += fmt.Sprintf("Min BPS:      %.2f block/s\n", minBPS)
+	output += fmt.Sprintf("Total Blocks: %d\n", t.totalBlocks)
 	output += fmt.Sprintf("Last Update:  %s\n", t.lastUpdate.Format("2006-01-02 15:04:05"))
 	output += fmt.Sprintf("Uptime:       %s\n", uptime.Round(time.Second))
 	output += "=====================================\n\n"
@@ -207,6 +268,11 @@ func (t *TPSTracker) printStats(final bool) {
 		"maxTPS", fmt.Sprintf("%.2f", t.maxTPS),
 		"minTPS", fmt.Sprintf("%.2f", minTPS),
 		"totalTxs", t.totalTxs,
+		"currentBPS", fmt.Sprintf("%.2f", t.currentBPS),
+		"avgBPS", fmt.Sprintf("%.2f", avgBPS),
+		"maxBPS", fmt.Sprintf("%.2f", t.maxBPS),
+		"minBPS", fmt.Sprintf("%.2f", minBPS),
+		"totalBlocks", t.totalBlocks,
 		"uptime", uptime.Round(time.Second).String(),
 	)
 }
@@ -218,7 +284,7 @@ func (t *TPSTracker) Stop() {
 }
 
 // GetStats returns the current statistics (thread-safe)
-func (t *TPSTracker) GetStats() (currentTPS, maxTPS, minTPS float64, totalTxs uint64, lastUpdate time.Time) {
+func (t *TPSTracker) GetStats() (currentTPS, maxTPS, minTPS, currentBPS, maxBPS, minBPS float64, totalTxs, totalBlocks uint64, lastUpdate time.Time) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -227,6 +293,10 @@ func (t *TPSTracker) GetStats() (currentTPS, maxTPS, minTPS float64, totalTxs ui
 		minTPS = 0
 	}
 
-	return t.currentTPS, t.maxTPS, minTPS, t.totalTxs, t.lastUpdate
-}
+	minBPS = t.minBPS
+	if minBPS < 0 {
+		minBPS = 0
+	}
 
+	return t.currentTPS, t.maxTPS, minTPS, t.currentBPS, t.maxBPS, minBPS, t.totalTxs, t.totalBlocks, t.lastUpdate
+}

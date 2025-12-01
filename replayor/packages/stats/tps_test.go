@@ -45,11 +45,17 @@ func TestTPSTracker(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	// Get stats
-	currentTPS, maxTPS, minTPS, totalTxs, lastUpdate := tracker.GetStats()
+	currentTPS, maxTPS, minTPS, currentBPS, maxBPS, minBPS, totalTxs, totalBlocks, lastUpdate := tracker.GetStats()
 
 	// Verify total transactions
 	if totalTxs != totalExpected {
 		t.Errorf("Expected total txs %d, got %d", totalExpected, totalTxs)
+	}
+
+	// Verify total blocks (should equal number of FCU calls)
+	expectedBlocks := uint64(len(testCases))
+	if totalBlocks != expectedBlocks {
+		t.Errorf("Expected total blocks %d, got %d", expectedBlocks, totalBlocks)
 	}
 
 	// Verify stats are reasonable
@@ -71,6 +77,8 @@ func TestTPSTracker(t *testing.T) {
 
 	t.Logf("TPS Stats: Current=%.2f, Max=%.2f, Min=%.2f, Total=%d",
 		currentTPS, maxTPS, minTPS, totalTxs)
+	t.Logf("BPS Stats: Current=%.2f, Max=%.2f, Min=%.2f, Total=%d",
+		currentBPS, maxBPS, minBPS, totalBlocks)
 
 	// Wait for at least one report cycle (5 seconds) to see the output
 	time.Sleep(6 * time.Second)
@@ -93,10 +101,15 @@ func TestTPSTrackerZeroTransactions(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	currentTPS, maxTPS, minTPS, totalTxs, _ := tracker.GetStats()
+	currentTPS, maxTPS, minTPS, currentBPS, maxBPS, minBPS, totalTxs, totalBlocks, _ := tracker.GetStats()
 
 	if totalTxs != 0 {
 		t.Errorf("Expected total txs 0, got %d", totalTxs)
+	}
+
+	// Should have 2 blocks (2 FCU calls)
+	if totalBlocks != 2 {
+		t.Errorf("Expected total blocks 2, got %d", totalBlocks)
 	}
 
 	if currentTPS != 0 {
@@ -109,6 +122,21 @@ func TestTPSTrackerZeroTransactions(t *testing.T) {
 
 	if minTPS != 0 {
 		t.Errorf("Expected min TPS 0, got %.2f", minTPS)
+	}
+
+	// BPS should be positive even with zero transactions, since we have blocks
+	if currentBPS <= 0 {
+		t.Errorf("Expected current BPS > 0, got %.2f", currentBPS)
+	}
+
+	// maxBPS may be 0 if we don't have enough blocks (requires >= 3 blocks)
+	// With only 2 blocks, maxBPS won't be updated, which is acceptable
+	if maxBPS > 0 && maxBPS < currentBPS {
+		t.Errorf("Expected max BPS >= current BPS (if set), got max=%.2f, current=%.2f", maxBPS, currentBPS)
+	}
+
+	if minBPS > currentBPS {
+		t.Errorf("Expected min BPS <= current BPS, got min=%.2f, current=%.2f", minBPS, currentBPS)
 	}
 }
 
@@ -139,11 +167,16 @@ func TestTPSTrackerConcurrency(t *testing.T) {
 		<-done
 	}
 
-	_, _, _, totalTxs, _ := tracker.GetStats()
+	_, _, _, _, _, _, totalTxs, totalBlocks, _ := tracker.GetStats()
 
 	expectedTotal := uint64(5 * 10 * 10) // 5 goroutines * 10 iterations * 10 txs
 	if totalTxs != expectedTotal {
 		t.Errorf("Expected total txs %d, got %d", expectedTotal, totalTxs)
+	}
+
+	expectedBlocks := uint64(5 * 10) // 5 goroutines * 10 iterations
+	if totalBlocks != expectedBlocks {
+		t.Errorf("Expected total blocks %d, got %d", expectedBlocks, totalBlocks)
 	}
 }
 
