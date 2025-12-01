@@ -4,6 +4,20 @@ set -e
 
 source /.env
 
+# Enable jemalloc profiling if requested
+# Note: tikv-jemalloc (used by Rust) uses _RJEM_MALLOC_CONF, not MALLOC_CONF
+if [ "${JEMALLOC_PROFILING:-false}" = "true" ]; then
+    export _RJEM_MALLOC_CONF="prof:true,prof_prefix:/profiling/jeprof,lg_prof_interval:30"
+    echo "Jemalloc profiling enabled: _RJEM_MALLOC_CONF=$_RJEM_MALLOC_CONF"
+fi
+
+# Build the optional innertx flag
+INNERTX_FLAG=""
+if [ "${ENABLE_INNERTX_SEQ:-false}" = "true" ]; then
+    INNERTX_FLAG="--xlayer.enable-innertx"
+    echo "Inner transaction tracking enabled for sequencer"
+fi
+
 exec op-reth node \
       --datadir=/datadir \
       --chain=/genesis.json \
@@ -30,4 +44,5 @@ exec op-reth node \
       --txpool.queued-max-count=100000 \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
-      --txpool.max-new-txns=100000
+      --txpool.max-new-txns=100000 \
+      $INNERTX_FLAG

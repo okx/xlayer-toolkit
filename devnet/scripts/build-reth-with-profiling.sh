@@ -47,7 +47,8 @@ COPY . .
 
 # Build op-reth with profiling support using the Makefile target
 # RUN make profiling-op
-RUN RUSTFLAGS="-C force-frame-pointers=yes -C target-cpu=native" cargo build --profile profiling --features jemalloc,asm-keccak --bin op-reth --manifest-path crates/optimism/bin/Cargo.toml
+# Note: jemalloc-prof feature enables jemalloc profiling support (--enable-prof)
+RUN RUSTFLAGS="-C force-frame-pointers=yes -C target-cpu=native" cargo build --profile profiling --features jemalloc,jemalloc-prof,asm-keccak --bin op-reth --manifest-path crates/optimism/bin/Cargo.toml
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -67,6 +68,21 @@ RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
     linux-perf \
     && rm -rf /var/lib/apt/lists/*
+
+# Install memory profiling tools
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    heaptrack \
+    valgrind \
+    libjemalloc2 \
+    libjemalloc-dev \
+    google-perftools \
+    libgoogle-perftools-dev \
+    graphviz \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create symlinks for jemalloc profiling tools
+RUN ln -sf /usr/bin/google-pprof /usr/local/bin/jeprof || true
 
 # The linux-perf package installs versioned binaries in /usr/lib/linux-tools/
 # Find and symlink them to /usr/bin for easy access
@@ -122,8 +138,17 @@ echo "Image: $IMAGE_TAG"
 echo ""
 echo "The image includes:"
 echo "  - op-reth built with profiling support (debug symbols + frame pointers)"
-echo "  - perf tools for multiple kernel versions (5.10, 6.1, 6.10+)"
+echo "  - CPU profiling: perf tools for multiple kernel versions (5.10, 6.1, 6.10+)"
+echo "  - Memory profiling: heaptrack, valgrind (massif), jemalloc profiling"
 echo "  - binutils (for addr2line symbol resolution)"
+echo "  - graphviz (for visualization)"
 echo ""
-echo "Note: The profiling script will auto-detect and use the matching perf version"
+echo "Available profiling scripts:"
+echo "  - ./scripts/profile-reth-perf.sh (CPU profiling)"
+echo "  - ./scripts/profile-reth-offcpu.sh (Off-CPU profiling)"
+echo "  - ./scripts/profile-reth-heaptrack.sh (Memory profiling - recommended)"
+echo "  - ./scripts/profile-reth-jemalloc.sh (Jemalloc heap profiling)"
+echo "  - ./scripts/profile-reth-massif.sh (Memory timeline profiling)"
+echo ""
+echo "Note: The profiling scripts will auto-detect and use the matching tools"
 echo "      for your container's kernel version."
