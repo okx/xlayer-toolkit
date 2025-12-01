@@ -5,10 +5,14 @@ set -e
 # Configuration
 CONTAINER=${1:-op-reth-seq}
 DURATION=${2:-60}
+PROCESS_NAME=${3:-"op-reth node"}  # Process name to profile
+BINARY_NAME=${4:-"op-reth"}        # Binary name for symbol lookup
 OUTPUT_DIR="./profiling/${CONTAINER}"
 
 echo "=== Reth Memory Profiling with Jemalloc ==="
 echo "Container: $CONTAINER"
+echo "Process: $PROCESS_NAME"
+echo "Binary: $BINARY_NAME"
 echo "Duration: ${DURATION}s"
 echo "Output Directory: $OUTPUT_DIR"
 echo ""
@@ -22,35 +26,36 @@ if ! docker ps | grep -q "$CONTAINER"; then
     exit 1
 fi
 
-# Find the op-reth process PID
-echo "[1/6] Finding op-reth process..."
-RETH_PID=$(docker exec "$CONTAINER" sh -c 'pgrep -f "op-reth node" | head -1')
+# Find the process PID
+echo "[1/6] Finding process..."
+RETH_PID=$(docker exec "$CONTAINER" sh -c "pgrep -f \"${PROCESS_NAME}\" | head -1")
 
 if [ -z "$RETH_PID" ]; then
-    echo "Error: Could not find op-reth process in container"
+    echo "Error: Could not find process '${PROCESS_NAME}' in container"
     exit 1
 fi
 
-echo "Found op-reth process with PID: $RETH_PID"
+echo "Found process with PID: $RETH_PID"
 
 # Check if jemalloc profiling is available
 echo "[2/6] Checking jemalloc profiling support..."
 
 # Check for jemalloc symbols (tikv-jemalloc uses _rjem_ prefix)
-JEMALLOC_SYMBOLS=$(docker exec "$CONTAINER" sh -c 'nm /usr/local/bin/op-reth 2>/dev/null | grep -c "_rjem_mallctl" || echo 0')
+JEMALLOC_SYMBOLS=$(docker exec "$CONTAINER" sh -c "nm /usr/local/bin/${BINARY_NAME} 2>/dev/null | grep -c '_rjem_mallctl' || echo 0")
 if [ "$JEMALLOC_SYMBOLS" -gt 0 ]; then
-    echo "✓ op-reth has tikv-jemalloc statically linked (_rjem_ prefix)"
+    echo "✓ ${BINARY_NAME} has tikv-jemalloc statically linked (_rjem_ prefix)"
     MALLCTL_FUNC="_rjem_mallctl"
 else
-    # Check for standard jemalloc
-    JEMALLOC_SYMBOLS=$(docker exec "$CONTAINER" sh -c 'nm /usr/local/bin/op-reth 2>/dev/null | grep -c "je_mallctl" || echo 0')
+    # Line 46
+    JEMALLOC_SYMBOLS=$(docker exec "$CONTAINER" sh -c "nm /usr/local/bin/${BINARY_NAME} 2>/dev/null | grep -c 'je_mallctl' || echo 0")
     if [ "$JEMALLOC_SYMBOLS" -gt 0 ]; then
-        echo "✓ op-reth has jemalloc statically linked (je_ prefix)"
+        # Line 48
+        echo "✓ ${BINARY_NAME} has jemalloc statically linked (je_ prefix)"
         MALLCTL_FUNC="je_mallctl"
     else
-        # Check dynamic linking
-        if docker exec "$CONTAINER" ldd /usr/local/bin/op-reth 2>/dev/null | grep -q jemalloc; then
-            echo "✓ op-reth is dynamically linked with jemalloc"
+        # Line 52
+        if docker exec "$CONTAINER" ldd /usr/local/bin/${BINARY_NAME} 2>/dev/null | grep -q jemalloc; then
+            echo "✓ ${BINARY_NAME} is dynamically linked with jemalloc"
             MALLCTL_FUNC="mallctl"
         else
             echo "⚠ Warning: Could not find jemalloc symbols"
@@ -186,7 +191,7 @@ done
 echo "Generating text report..."
 
 docker exec "$CONTAINER" bash -c '
-BASE_HEX=$(cat /proc/'"$RETH_PID"'/maps | grep "op-reth" | head -1 | cut -d"-" -f1)
+BASE_HEX=$(cat /proc/'"$RETH_PID"'/maps | grep "'"$BINARY_NAME"'" | head -1 | cut -d"-" -f1)
 BASE_DEC=$((0x$BASE_HEX))
 HEAP_FILE="'"$LATEST_HEAP"'"
 
