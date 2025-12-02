@@ -1,4 +1,5 @@
 /.vscode/openscaidentity
+.idea
 
 # Chain data directory - contains all network and client data
 rpc-setup/*-geth/
@@ -14,8 +15,7 @@ scripts/dev-utils/*.genesis.json
 scripts/dev-utils/*.processing
 # Ignore test files
 devnet/.env
-devnet/op-succinct/.env.proposer
-devnet/op-succinct/.env.challenger
+devnet/*/.env*
 devnet/op-succinct/configs/
 devnet/l1-geth/consensus/beacondata
 devnet/l1-geth/consensus/validatordata
@@ -38,6 +38,3 @@ devnet/saved-cannon-data
 devnet/init.log
 devnet/l1-geth/
 profiling/
-devnet/op-succinct/.env.*
-
-.idea

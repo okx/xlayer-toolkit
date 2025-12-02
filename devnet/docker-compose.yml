@@ -879,7 +879,7 @@ services:
       - ./op-succinct/.env.proposer:/app/.env
       - ./op-succinct/configs:/app/configs
     environment:
-      - RUST_LOG=info,op_succinct_client_utils=debug,op_succinct_host_utils=debug,fault_proof=info
+      - RUST_LOG=info
     ports:
       - "9000:9000"
     command:

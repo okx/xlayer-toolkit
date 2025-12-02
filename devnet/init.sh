@@ -133,7 +133,7 @@ else
     echo "🔨 Building op-succinct images"
 
     cd "$OP_SUCCINCT_LOCAL_DIRECTORY"
-    build_and_tag_image "op-succinct" "$OP_SUCCINCTIMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile"
+    build_and_tag_image "op-succinct" "$OP_SUCCINCT_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile"
     build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.contract"
   fi
 fi
