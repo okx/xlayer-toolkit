@@ -39,3 +39,5 @@ devnet/init.log
 devnet/l1-geth/
 profiling/
 devnet/op-succinct/.env.*
+
+.idea

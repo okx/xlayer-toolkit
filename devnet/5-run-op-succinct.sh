@@ -31,7 +31,7 @@ fi
 # update .env.deploy
 sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.deploy
 sed_inplace "s|^L2_RPC=.*|L2_RPC=$L2_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.deploy
-sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_RPC_CL_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.deploy
+sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_NODE_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.deploy
 
 sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.deploy
 sed_inplace "s|^OPTIMISM_PORTAL2_ADDRESS=.*|OPTIMISM_PORTAL2_ADDRESS=$OPTIMISM_PORTAL_PROXY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.deploy
@@ -49,7 +49,7 @@ sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env
 sed_inplace "s|^L1_BEACON_RPC=.*|L1_BEACON_RPC=$L1_BEACON_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
 sed_inplace "s|^L2_RPC=.*|L2_RPC=$L2_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
 sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.proposer
-sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_RPC_CL_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
+sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_NODE_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
 
 sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$OP_SUCCINCT_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.proposer
 
@@ -84,7 +84,7 @@ docker compose up -d op-succinct-proposer
 echo "   ✓ Proposer started"
 
 # Start challenger if fast finality mode is disabled
-if [ "${OP_SUCCINCT_FAST_FINALITY_MODE:-true}" != "true" ]; then
+if [ "${OP_SUCCINCT_FAST_FINALITY_MODE}" != "true" ]; then
     docker compose up -d op-succinct-challenger
     echo "   ✓ Challenger started"
 else

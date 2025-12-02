@@ -18,12 +18,12 @@ services:
       - ./l1-geth/consensus:/consensus
 
   l1-create-beacon-chain-genesis:
-    image: "gcr.io/prysmaticlabs/prysm/cmd/prysmctl:v5.1.2"
+    image: "gcr.io/prysmaticlabs/prysm/cmd/prysmctl:v7.0.0"
     container_name: l1-create-beacon-chain-genesis
     command:
       - testnet
       - generate-genesis
-      - --fork=deneb
+      - --fork=fulu
       - --num-validators=4
       - --genesis-time-delay=0
       - --output-ssz=/consensus/genesis.ssz
@@ -48,12 +48,14 @@ services:
         echo "Fixing genesis.json fork times..."
         sed -i 's/"shanghaiTime": [0-9]*/"shanghaiTime": 0/g' /execution/genesis.json
         sed -i 's/"cancunTime": [0-9]*/"cancunTime": 0/g' /execution/genesis.json
-        echo "Adding blobSchedule for Cancun..."
-        jq '.config.blobSchedule = {"cancun": {"target": 3, "max": 6, "baseFeeUpdateFraction": 3338477}}' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
+        echo "Adding pragueTime for Pectra support..."
+        jq '.config.pragueTime = 0' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
+        echo "Adding osakaTime for Fusaka support..."
+        jq '.config.osakaTime = 0' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
         echo "Removing terminalTotalDifficultyPassed for op-node compatibility..."
         jq 'del(.config.terminalTotalDifficultyPassed)' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
-        echo "Genesis.json: shanghai=0, cancun=0 (MCOPY enabled), blobSchedule added, terminalTotalDifficultyPassed removed"
-        cat /execution/genesis.json | jq '.config | {shanghaiTime, cancunTime, terminalTotalDifficulty, blobSchedule}'
+        echo "Genesis.json: shanghai=0, cancun=0, osaka=0 (Fusaka enabled), blobSchedule added, terminalTotalDifficultyPassed removed"
+        cat /execution/genesis.json | jq '.config | {shanghaiTime, cancunTime, osakaTime, terminalTotalDifficulty, blobSchedule}'
     volumes:
       - ./l1-geth/execution:/execution
     depends_on:
@@ -61,7 +63,7 @@ services:
         condition: service_completed_successfully
 
   l1-geth-genesis:
-    image: "ethereum/client-go:v1.15.11"
+    image: "ethereum/client-go:v1.16.7"
     container_name: l1-geth-genesis
     command: --datadir=/execution --gcmode=archive init --state.scheme=hash /execution/genesis.json
     volumes:
@@ -74,7 +76,7 @@ services:
         condition: service_completed_successfully
 
   l1-geth:
-    image: "ethereum/client-go:v1.15.11"
+    image: "ethereum/client-go:v1.16.7"
     container_name: l1-geth
     command:
       - --http
@@ -113,7 +115,7 @@ services:
       retries: 5
 
   l1-beacon-chain:
-    image: "gcr.io/prysmaticlabs/prysm/beacon-chain:v5.1.2"
+    image: "gcr.io/prysmaticlabs/prysm/beacon-chain:v7.0.0"
     container_name: l1-beacon-chain
     command:
       - --datadir=/consensus/beacondata
@@ -131,7 +133,6 @@ services:
       - --jwt-secret=/execution/jwtsecret
       - --suggested-fee-recipient=0x123463a4b065722e99115d6c222f267d9cabb524
       - --minimum-peers-per-subnet=0
-      - --enable-debug-rpc-endpoints
       - --verbosity=info
     depends_on:
       l1-create-beacon-chain-genesis:
@@ -150,7 +151,7 @@ services:
       - ./l1-geth/execution/jwtsecret:/execution/jwtsecret
 
   l1-validator:
-    image: "gcr.io/prysmaticlabs/prysm/validator:v5.1.2"
+    image: "gcr.io/prysmaticlabs/prysm/validator:v7.0.0"
     container_name: l1-validator
     command:
       - --beacon-rpc-provider=l1-beacon-chain:4000
@@ -299,7 +300,8 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=debug
-      - --l2=http://op-${SEQ_TYPE}-seq:8552
+      - --log.format=logfmtms
+      - --l2=http://${SEQ_L2_EXECUTION_CLIENT}:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
       - --sequencer.l1-confs=5
@@ -327,7 +329,7 @@ services:
       - --pprof.port=9091
       - --l2.enginekind=${SEQ_TYPE}
     depends_on:
-      - op-${SEQ_TYPE}-seq
+      - ${SEQ_L2_EXECUTION_CLIENT}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9545"]
       interval: 3s
@@ -348,6 +350,7 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=debug
+      - --log.format=logfmtms
       - --l2=http://op-${RPC_TYPE}-rpc:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled=false
@@ -374,6 +377,64 @@ services:
     depends_on:
       - op-${RPC_TYPE}-rpc
 
+  op-rpc2:
+    image: "${OP_STACK_IMAGE_TAG}"
+    container_name: op-rpc2
+    volumes:
+      - ./data/op-rpc2:/data
+      - ./config-op/rollup.json:/rollup.json
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./l1-geth/execution/genesis.json:/l1-genesis.json
+    ports:
+      - "9565:9545"
+    command:
+      - /app/op-node/bin/op-node
+      - --log.level=debug
+      - --log.format=logfmtms
+      - --l2=http://op-${RPC_TYPE}-rpc2:8552
+      - --l2.jwt-secret=/jwt.txt
+      - --sequencer.enabled=false
+      - --verifier.l1-confs=1
+      - --rollup.config=/rollup.json
+      - --rpc.addr=0.0.0.0
+      - --rpc.port=9545
+      - --p2p.listen.tcp=9223
+      - --p2p.listen.udp=9223
+      - --p2p.priv.raw=096648ce9102985f9a57a12fa8138c4892a881f7b99dc7e84ede99b7ba24ffe7
+      - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
+      - --p2p.discovery.path=/data/p2p/opnode_discovery_db
+      - --p2p.static=/dns4/op-seq/tcp/9223/p2p/16Uiu2HAkzHdkbmS2VrCsccLibsu7MvGHpmFUMJnMTkKifrtS5m65
+      - --p2p.no-discovery
+      - --rpc.enable-admin=true
+      - --l1=${L1_RPC_URL_IN_DOCKER}
+      - --l1.beacon=${L1_BEACON_URL_IN_DOCKER}
+      - --l1.rpckind=standard
+      - --rollup.l1-chain-config=/l1-genesis.json
+      - --safedb.path=/data/safedb
+      - --l2.enginekind=reth
+    depends_on:
+      - op-reth-rpc2
+
+  op-reth-rpc2:
+    image: "${OP_RETH_IMAGE_TAG}"
+    container_name: op-reth-rpc2
+    environment:
+      - DISABLE_FLASHBLOCKS=true
+    entrypoint: "/entrypoint/reth-rpc.sh"
+    env_file:
+      - .env
+    volumes:
+      - ./data/op-reth-rpc2:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/genesis-reth.json:/genesis.json
+      - ./config-op/test.reth.rpc.config.toml:/config.toml
+      - ./entrypoint:/entrypoint
+      - ./.env:/.env
+    ports:
+      - "8128:8545"
+      - "30309:30303"
+      - "30309:30303/udp"
+
   op-conductor:
     image: "${OP_STACK_IMAGE_TAG}"
     container_name: op-conductor
@@ -388,7 +449,7 @@ services:
       - --log.level=debug
       # already existed service
       - --node.rpc=http://op-seq:9545
-      - --execution.rpc=http://op-${SEQ_TYPE}-seq:8545
+      - --execution.rpc=http://${SEQ_L2_EXECUTION_CLIENT}:${SEQ_L2_EXECUTION_PORT}
       # Raft Config
       - --raft.server.id=conductor-1
       - --raft.storage.dir=/data/raft
@@ -405,6 +466,7 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
+      - --rollup-boost.enabled=${FLASHBLOCK_ENABLED:-false}
     depends_on:
       op-seq:
         condition: service_healthy
@@ -586,7 +648,8 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=info
-      - --l2=http://op-${SEQ_TYPE}-seq2:8552
+      - --log.format=logfmtms
+      - --l2=http://${SEQ_L2_EXECUTION_CLIENT}2:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
       - --sequencer.stopped
@@ -613,7 +676,7 @@ services:
       - --conductor.rpc=http://op-conductor2:8547
       - --l2.enginekind=${SEQ_TYPE}
     depends_on:
-      - op-${SEQ_TYPE}-seq2
+      - ${SEQ_L2_EXECUTION_CLIENT}2
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9545"]
       interval: 3s
@@ -635,7 +698,7 @@ services:
       - --log.level=debug
       # already existed service
       - --node.rpc=http://op-seq2:9545
-      - --execution.rpc=http://op-${SEQ_TYPE}-seq2:8545
+      - --execution.rpc=http://${SEQ_L2_EXECUTION_CLIENT}2:${SEQ_L2_EXECUTION_PORT}
       # Raft Config
       - --raft.server.id=conductor-2
       - --raft.storage.dir=/data/raft
@@ -652,6 +715,7 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
+      - --rollup-boost.enabled=${FLASHBLOCK_ENABLED:-false}
     depends_on:
       op-seq2:
         condition: service_healthy
@@ -705,6 +769,7 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=info
+      - --log.format=logfmtms
       - --l2=http://op-geth-seq3:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
@@ -831,3 +896,99 @@ services:
     command:
       - challenger 
       - --env-file=/app/.env
+
+  rollup-boost:
+    image: xlayerdev/rollup-boost:v0.1.3
+    container_name: rollup-boost
+    entrypoint: /entrypoint/rollup-boost.sh
+    env_file:
+      - .env
+    volumes:
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./entrypoint:/entrypoint
+      - ./.env:/.env
+    ports:
+      - "10111:1111" # outbound flashblocks ws port
+      - "5555:5555" # debug server port
+    depends_on:
+      - op-rbuilder
+      - op-${SEQ_TYPE}-seq
+
+  op-rbuilder:
+    image: xlayerdev/op-rbuilder:v0.1.3
+    container_name: op-rbuilder
+    entrypoint: /entrypoint/op-rbuilder.sh
+    env_file:
+      - .env
+    # Enable privileged mode for perf profiling
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - ./data/op-rbuilder:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/genesis-reth.json:/genesis.json
+      - ./entrypoint:/entrypoint
+      - ./.env:/.env
+    ports:
+      - "8125:8545"
+      - "18552:8552"
+      - "30307:30303"
+      - "30307:30303/udp"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+  rollup-boost2:
+    image: xlayerdev/rollup-boost:v0.1.3
+    container_name: rollup-boost2
+    entrypoint: /entrypoint/rollup-boost.sh 2
+    env_file:
+      - .env
+    volumes:
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./entrypoint:/entrypoint
+      - ./.env:/.env
+    ports:
+      - "10112:1111" # outbound flashblocks ws port
+      - "5556:5555" # debug server port
+    depends_on:
+      - op-rbuilder2
+      - op-${SEQ_TYPE}-seq2
+
+  op-rbuilder2:
+    image: xlayerdev/op-rbuilder:v0.1.3
+    container_name: op-rbuilder2
+    entrypoint: /entrypoint/op-rbuilder.sh
+    env_file:
+      - .env
+    # Enable privileged mode for perf profiling
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - ./data/op-rbuilder2:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/genesis-reth.json:/genesis.json
+      - ./entrypoint:/entrypoint
+      - ./.env:/.env
+    ports:
+      - "8126:8545"
+      - "19552:8552"
+      - "30308:30303"
+      - "30308:30303/udp"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
