@@ -20,6 +20,18 @@ PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR=$PWD_DIR/scripts
 OP_SUCCINCT_DIR=$PWD_DIR/op-succinct
 
+if [ ! -f "$OP_SUCCINCT_DIR"/.env.deploy ]; then
+    cp "$OP_SUCCINCT_DIR"/example.env.deploy "$OP_SUCCINCT_DIR"/.env.deploy
+fi
+
+if [ ! -f "$OP_SUCCINCT_DIR"/.env.proposer ]; then
+    cp "$OP_SUCCINCT_DIR"/example.env.proposer "$OP_SUCCINCT_DIR"/.env.proposer
+fi
+
+if [ ! -f "$OP_SUCCINCT_DIR"/.env.challenger ]; then
+    cp "$OP_SUCCINCT_DIR"/example.env.challenger "$OP_SUCCINCT_DIR"/.env.challenger
+fi
+
 ANCHOR_STATE_REGISTRY=$(cast call "$OPTIMISM_PORTAL_PROXY_ADDRESS" 'anchorStateRegistry()(address)' -r "$L1_RPC_URL")
 if [ "$MIN_RUN" = "true" ]; then
     "$SCRIPTS_DIR"/update-anchor-root.sh
