@@ -41,19 +41,17 @@ echo "Found process with PID: $RETH_PID"
 echo "[2/6] Checking jemalloc profiling support..."
 
 # Check for jemalloc symbols (tikv-jemalloc uses _rjem_ prefix)
-JEMALLOC_SYMBOLS=$(docker exec "$CONTAINER" sh -c "nm /usr/local/bin/${BINARY_NAME} 2>/dev/null | grep -c '_rjem_mallctl' || echo 0")
+JEMALLOC_SYMBOLS=$(docker exec "$CONTAINER" sh -c 'nm /usr/local/bin/${BINARY_NAME} 2>/dev/null | grep -c "_rjem_mallctl" || echo 0')
 if [ "$JEMALLOC_SYMBOLS" -gt 0 ]; then
     echo "✓ ${BINARY_NAME} has tikv-jemalloc statically linked (_rjem_ prefix)"
     MALLCTL_FUNC="_rjem_mallctl"
 else
-    # Line 46
-    JEMALLOC_SYMBOLS=$(docker exec "$CONTAINER" sh -c "nm /usr/local/bin/${BINARY_NAME} 2>/dev/null | grep -c 'je_mallctl' || echo 0")
+    # Check for standard jemalloc
+    JEMALLOC_SYMBOLS=$(docker exec "$CONTAINER" sh -c 'nm /usr/local/bin/${BINARY_NAME} 2>/dev/null | grep -c "je_mallctl" || echo 0')
     if [ "$JEMALLOC_SYMBOLS" -gt 0 ]; then
-        # Line 48
         echo "✓ ${BINARY_NAME} has jemalloc statically linked (je_ prefix)"
         MALLCTL_FUNC="je_mallctl"
     else
-        # Line 52
         if docker exec "$CONTAINER" ldd /usr/local/bin/${BINARY_NAME} 2>/dev/null | grep -q jemalloc; then
             echo "✓ ${BINARY_NAME} is dynamically linked with jemalloc"
             MALLCTL_FUNC="mallctl"
