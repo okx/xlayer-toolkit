@@ -94,7 +94,7 @@ if [ "$OP_RBUILDER_PROFILING_ENABLED" = "true" ]; then
   cd $PWD_DIR
   ./scripts/build-oprbuilder-with-profiling.sh
 else
-  echo "Building standard op-rbuilder image from dockerhub..."
+  echo "Using op-rbuilder image from dockerhub..."
 fi
 
 # Build OP_RETH image
