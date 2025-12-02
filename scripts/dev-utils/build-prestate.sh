@@ -318,6 +318,6 @@ tar -czf "$PACKAGE_NAME" \
 
 echo "✓ Package created: $PACKAGE_NAME"
 echo "  Size: $(du -h "$PACKAGE_NAME" | cut -f1)"
-echo "  SHA256: $(shasum -a 256 "$PACKAGE_NAME" | cut -d' ' -f1)"
+echo "  MD5: $(md5sum "$PACKAGE_NAME" | cut -d' ' -f1)"
 echo ""
 echo "✓ All done!"
