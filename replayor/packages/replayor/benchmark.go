@@ -314,11 +314,14 @@ func (r *Benchmark) addBlock(ctx context.Context, currentBlock strategies.BlockC
 
 	if r.rollupCfg.IsHolocene(uint64(currentBlock.Time)) {
 		l.Info("holocene block", "holoceneTime", r.rollupCfg.HoloceneTime)
-		d, e := eip1559.DecodeHoloceneExtraData(currentBlock.Extra)
+		d, e, m := eip1559.DecodeOptimismExtraData(r.rollupCfg, uint64(currentBlock.Time), currentBlock.Extra)
 		eip1559Params := eip1559.EncodeHolocene1559Params(d, e)
 		var params eth.Bytes8
 		copy(params[:], eip1559Params)
 		attrs.EIP1559Params = &params
+		if m != nil {
+			attrs.MinBaseFee = m
+		}
 	}
 
 	var totalTime time.Duration
@@ -579,4 +582,3 @@ func NewBenchmark(
 
 	return r
 }
-
