@@ -92,7 +92,6 @@ docker compose up -d op-batcher
 
 # Check if MIN_RUN mode is enabled
 if [ "$MIN_RUN" = "true" ]; then
-    set +x
     echo ""
     echo "🎉 MIN_RUN deployment completed successfully!"
     echo ""
@@ -152,6 +151,7 @@ docker compose stop op-proposer
 
 echo "⏰ Sleeping for ($TEMP_MAX_CLOCK_DURATION seconds)..."
 sleep $TEMP_MAX_CLOCK_DURATION
+sleep 10
 
 echo "🔧 Executing dispute resolution sequence using op-challenger..."
 

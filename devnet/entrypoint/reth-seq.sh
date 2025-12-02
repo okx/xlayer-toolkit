@@ -38,4 +38,4 @@ exec op-reth node \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
-      --rpc.eth-proof-window=1000
+      --rpc.eth-proof-window=10000

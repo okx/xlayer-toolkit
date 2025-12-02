@@ -18,109 +18,68 @@ sed_inplace() {
 
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR=$PWD_DIR/scripts
-PROJECT_DIR=$PWD_DIR
+OP_SUCCINCT_DIR=$PWD_DIR/op-succinct
 
-# Source deployment functions
-source "$SCRIPTS_DIR/deploy-op-succinct.sh"
+ANCHOR_STATE_REGISTRY=$(cast call "$OPTIMISM_PORTAL_PROXY_ADDRESS" 'anchorStateRegistry()(address)' -r "$L1_RPC_URL")
+if [ "$MIN_RUN" = "true" ]; then
+    "$SCRIPTS_DIR"/update-anchor-root.sh
 
-# ============================================================================
-# Pre-flight Checks
-# ============================================================================
-
-# Check if OP_SUCCINCT_ENABLE is set
-if [ "$OP_SUCCINCT_ENABLE" != "true" ]; then
-    echo "⏭️  OP-Succinct is disabled, skipping..."
-    exit 0
+    sed_inplace "s|^PROPOSAL_INTERVAL_IN_BLOCKS=.*|PROPOSAL_INTERVAL_IN_BLOCKS=10|" "$OP_SUCCINCT_DIR"/.env.proposer
+    sed_inplace "s|^MAX_CONCURRENT_DEFENSE_TASKS=.*|MAX_CONCURRENT_DEFENSE_TASKS=8|" "$OP_SUCCINCT_DIR"/.env.proposer
 fi
 
-if [ "$MIN_RUN" == "true" ]; then
-    echo "❌ Error: Min Run is enabled, skipping..."
-    exit 0
-fi
+# update .env.deploy
+sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.deploy
+sed_inplace "s|^L2_RPC=.*|L2_RPC=$L2_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.deploy
+sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_RPC_CL_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.deploy
 
-# Validate sequencer and RPC configuration
-if [ "$SEQ_TYPE" != "reth" ] || [ "$RPC_TYPE" != "geth" ]; then
-    echo "❌ Error: OP-Succinct requires reth sequencer and geth RPC"
-    exit 1
-fi
+sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.deploy
+sed_inplace "s|^OPTIMISM_PORTAL2_ADDRESS=.*|OPTIMISM_PORTAL2_ADDRESS=$OPTIMISM_PORTAL_PROXY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.deploy
+sed_inplace "s|^ANCHOR_STATE_REGISTRY=.*|ANCHOR_STATE_REGISTRY=$ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.deploy
+sed_inplace "s|^TRANSACTOR_ADDRESS=.*|TRANSACTOR_ADDRESS=$TRANSACTOR|" "$OP_SUCCINCT_DIR"/.env.deploy
+sed_inplace "s|^STARTING_L2_BLOCK_NUMBER=.*|STARTING_L2_BLOCK_NUMBER=$((FORK_BLOCK + 1))|" "$OP_SUCCINCT_DIR"/.env.deploy
 
-# Validate Docker images
-if [ -z "$OP_SUCCINCT_PROPOSER_IMAGE_TAG" ] || [ -z "$OP_SUCCINCT_CHALLENGER_IMAGE_TAG" ]; then
-    echo "❌ Error: Missing OP-Succinct Docker image tags"
-    exit 1
-fi
+sed_inplace "s|^OP_SUCCINCT_MOCK=.*|OP_SUCCINCT_MOCK=$OP_SUCCINCT_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.deploy
 
-# Check if Docker images exist
-if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${OP_SUCCINCT_PROPOSER_IMAGE_TAG}$"; then
-    echo "❌ Error: Docker image $OP_SUCCINCT_PROPOSER_IMAGE_TAG not found"
-    echo "   Please run: ./init.sh"
-    exit 1
-fi
+STARTING_L2_BLOCK_NUMBER=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json | jq -r '.[1]')
+sed_inplace "s|^STARTING_L2_BLOCK_NUMBER=.*|STARTING_L2_BLOCK_NUMBER=$STARTING_L2_BLOCK_NUMBER|" "$OP_SUCCINCT_DIR"/.env.deploy
 
-if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${OP_SUCCINCT_CHALLENGER_IMAGE_TAG}$"; then
-    echo "❌ Error: Docker image $OP_SUCCINCT_CHALLENGER_IMAGE_TAG not found"
-    echo "   Please run: ./init.sh"
-    exit 1
-fi
+# update .env.proposer
+sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
+sed_inplace "s|^L1_BEACON_RPC=.*|L1_BEACON_RPC=$L1_BEACON_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
+sed_inplace "s|^L2_RPC=.*|L2_RPC=$L2_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
+sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.proposer
+sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_RPC_CL_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
 
-echo "✅ Docker images verified"
+sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$OP_SUCCINCT_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.proposer
 
-echo ""
-echo "🚀 OP-Succinct Setup"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📋 Configuration:"
-echo "   • Mock Mode: ${OP_SUCCINCT_MOCK_MODE:-true}"
-echo "   • Fast Finality: ${OP_SUCCINCT_FAST_FINALITY_MODE:-true}"
-echo ""
+# update .env.challenger
+sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
+sed_inplace "s|^L2_RPC=.*|L2_RPC=$L2_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
+sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.challenger
 
-# ============================================================================
-# Step 1: Prepare Environment
-# ============================================================================
+docker compose up op-succinct-fetch-config
+OP_DEPLOYER_ADDR=$(cast wallet a "$DEPLOYER_PRIVATE_KEY")
+cast send --private-key "$RICH_L1_PRIVATE_KEY" --value 1ether "$OP_DEPLOYER_ADDR" --legacy --rpc-url "$L1_RPC_URL"
+docker compose up op-succinct-contracts
 
-echo "📁 Preparing environment files..."
-cp ./op-succinct/example.env.proposer ./op-succinct/.env.proposer
-cp ./op-succinct/example.env.challenger ./op-succinct/.env.challenger
+cast send "$ANCHOR_STATE_REGISTRY" "setRespectedGameType(uint32)" 42 --private-key="$DEPLOYER_PRIVATE_KEY"
 
-# Set NETWORK_PRIVATE_KEY from main .env if available
-if [ -n "$OP_SUCCINCT_NETWORK_PRIVATE_KEY" ]; then
-    # Ensure 0x prefix is present
-    NETWORK_KEY="$OP_SUCCINCT_NETWORK_PRIVATE_KEY"
-    if [[ ! "$NETWORK_KEY" =~ ^0x ]]; then
-        NETWORK_KEY="0x$NETWORK_KEY"
+TARGET_HEIGHT=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json | jq -r '.[1]')
+
+while true; do
+    CURRENT_HEIGHT=$(cast bn -r "$L2_RPC_URL" finalized)
+    if [ "$CURRENT_HEIGHT" -ge "$TARGET_HEIGHT" ]; then
+        echo "✓ Finalized height reached: ${CURRENT_HEIGHT}"
+        break
     fi
-    sed -i "s|^NETWORK_PRIVATE_KEY=.*|NETWORK_PRIVATE_KEY=$NETWORK_KEY|" ./op-succinct/.env.proposer
-fi
 
-echo "   ✓ Environment files prepared"
-echo ""
+    REMAINING=$((TARGET_HEIGHT - CURRENT_HEIGHT))
+    echo "[$(date +'%H:%M:%S')] Finalized: ${CURRENT_HEIGHT}, Anchor: ${TARGET_HEIGHT}, Remaining: ${REMAINING}"
+    sleep 5
+done
 
-# ============================================================================
-# Step 2: Deploy Contracts
-# ============================================================================
 
-# Deploy OP-Succinct contracts
-deploy_op_succinct_contracts
-
-# Setup FDG (deploy and register)
-setup_op_succinct_fdg
-
-# Show deployed addresses
-echo ""
-echo "✅ Contract Deployment Complete"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📍 Deployed Addresses:"
-echo "   • Verifier:      $VERIFIER_ADDRESS"
-echo "   • AccessManager: $ACCESS_MANAGER_ADDRESS"
-echo "   • Game:          $NEW_GAME_ADDRESS"
-echo ""
-
-# ============================================================================
-# Step 3: Start Services
-# ============================================================================
-
-echo "🚀 Starting services..."
-
-# Start proposer
 docker compose up -d op-succinct-proposer
 echo "   ✓ Proposer started"
 
@@ -131,9 +90,3 @@ if [ "${OP_SUCCINCT_FAST_FINALITY_MODE:-true}" != "true" ]; then
 else
     echo "   ⏭  Challenger skipped (fast finality mode)"
 fi
-
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "✅ OP-Succinct Setup Complete!"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-

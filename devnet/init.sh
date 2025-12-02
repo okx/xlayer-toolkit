@@ -132,12 +132,9 @@ else
     exit 1
   else
     echo "🔨 Building op-succinct images"
-    
-    # Build op-succinct-builder image, we need it to build `config` cli tool
+
     cd "$OP_SUCCINCT_LOCAL_DIRECTORY"
-    build_and_tag_image "op-succinct-builder" "$OP_SUCCINCT_BUILDER_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "fault-proof/Dockerfile.proposer" "--target builder"
-    build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "$PWD_DIR/op-succinct/Dockerfile.contract"
-    build_and_tag_image "op-succinct-proposer" "$OP_SUCCINCT_PROPOSER_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "fault-proof/Dockerfile.proposer"
-    build_and_tag_image "op-succinct-challenger" "$OP_SUCCINCT_CHALLENGER_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "fault-proof/Dockerfile.challenger"
+    build_and_tag_image "op-succinct" "$OP_SUCCINCTIMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile"
+    build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.contract"
   fi
 fi

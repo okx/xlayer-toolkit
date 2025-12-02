@@ -22,7 +22,6 @@ devnet/l1-geth/consensus/validatordata
 devnet/config-op/genesis.json
 devnet/config-op/genesis-reth.json
 devnet/config-op/genesis.json.gz
-devnet/config-op/genesis-reth.json
 devnet/config-op/gen.test.geth.rpc.config.toml
 devnet/config-op/gen.test.reth.rpc.config.toml
 devnet/config-op/implementations.json
@@ -39,3 +38,4 @@ devnet/saved-cannon-data
 devnet/init.log
 devnet/l1-geth/
 profiling/
+devnet/op-succinct/.env.*
