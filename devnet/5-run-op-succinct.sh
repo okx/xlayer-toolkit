@@ -52,6 +52,10 @@ sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS
 sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_NODE_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
 
 sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$OP_SUCCINCT_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.proposer
+if [ "$OP_SUCCINCT_MOCK_MODE" = "true" ]; then
+    sed_inplace "s|^PROPOSAL_INTERVAL_IN_BLOCKS=.*|PROPOSAL_INTERVAL_IN_BLOCKS=10|" "$OP_SUCCINCT_DIR"/.env.proposer
+    sed_inplace "s|^MAX_CONCURRENT_DEFENSE_TASKS=.*|MAX_CONCURRENT_DEFENSE_TASKS=8|" "$OP_SUCCINCT_DIR"/.env.proposer
+fi
 
 # update .env.challenger
 sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
@@ -68,7 +72,7 @@ cast send "$ANCHOR_STATE_REGISTRY" "setRespectedGameType(uint32)" 42 --private-k
 TARGET_HEIGHT=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json | jq -r '.[1]')
 
 while true; do
-    CURRENT_HEIGHT=$(cast bn -r "$L2_RPC_URL" finalized)
+    CURRENT_HEIGHT=$(cast bn -r "$L2_RPC_URL" finalized 2>/dev/null || echo "0")
     if [ "$CURRENT_HEIGHT" -ge "$TARGET_HEIGHT" ]; then
         echo "✓ Finalized height reached: ${CURRENT_HEIGHT}"
         break

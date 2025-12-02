@@ -15,11 +15,10 @@ function build_and_tag_image() {
   local image_tag=$2
   local build_dir=$3
   local dockerfile=$4
-  local args=$5
 
   cd "$build_dir"
   GITTAG=$(git rev-parse --short HEAD)
-  docker build $args -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
+  docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
   docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
   echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
   cd -
