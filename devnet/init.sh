@@ -88,15 +88,6 @@ else
   fi
 fi
 
-# Check if profiling is enabled and build accordingly
-if [ "$OP_RBUILDER_PROFILING_ENABLED" = "true" ]; then
-  echo "Building with profiling support..."
-  cd $PWD_DIR
-  ./scripts/build-oprbuilder-with-profiling.sh
-else
-  echo "Using op-rbuilder image from dockerhub..."
-fi
-
 # Build OP_RETH image
 if [ "$SKIP_OP_RETH_BUILD" = "true" ]; then
   echo "⏭️  Skipping op-reth build"

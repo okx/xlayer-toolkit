@@ -12,7 +12,7 @@ if [ -z "$CONTAINER" ]; then
     echo "Usage: $0 <container_name> [input_file|all|latest|last:N|file1,file2,...] [profile_type] [process_name] [binary_name]"
     echo ""
     echo "Arguments:"
-    echo "  container_name  - Docker container name (e.g., op-reth-seq, op-rbuilder)"
+    echo "  container_name  - Docker container name (e.g., op-reth-seq)"
     echo "  input_file      - One of:"
     echo "                    - all         : Merge all .heap files"
     echo "                    - latest      : Use only the latest .heap file"
@@ -32,8 +32,6 @@ if [ -z "$CONTAINER" ]; then
     echo "  $0 op-reth-seq jeprof.1.0.m0.heap                           # Single file"
     echo "  $0 op-reth-seq jeprof.1.0.m0.heap,jeprof.1.1.i0.heap        # Specific files"
     echo ""
-    echo "  # op-rbuilder"
-    echo "  $0 op-rbuilder latest jemalloc \"op-rbuilder node\" op-rbuilder"
     exit 1
 fi
 
