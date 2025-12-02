@@ -120,6 +120,17 @@ L2_CHAIN_ID=$(cast call --rpc-url $L1_RPC_URL $PERMISSIONED_GAME "l2ChainId()")
 
 echo "✅ Game type 1 (permissioned) already deployed by op-deployer at: $PERMISSIONED_GAME"
 
+echo "🔧 Adding new game type 1 with correct prestate..."
+# Add new game type 1 using the correct prestate from file
+"$SCRIPTS_DIR/add-game-type.sh" 1 true $CLOCK_EXTENSION $MAX_CLOCK_DURATION $ABSOLUTE_PRESTATE
+NEW_GAME_TYPE_1=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDRESS "gameImpls(uint32)(address)" 1)
+if [ "$NEW_GAME_TYPE_1" != "$PERMISSIONED_GAME" ] && [ "$NEW_GAME_TYPE_1" != "0x0000000000000000000000000000000000000000" ]; then
+    echo " ✅ Game type 1 updated with correct prestate: $NEW_GAME_TYPE_1"
+    PERMISSIONED_GAME=$NEW_GAME_TYPE_1
+else
+    echo " ⚠️  Game type 1 may not have been updated, using original: $PERMISSIONED_GAME"
+fi
+
 export GAME_TYPE=1
 docker compose up -d op-proposer
 
@@ -212,7 +223,6 @@ echo " ✅ Dispute resolution sequence completed using op-challenger commands!"
 # Retrieve existing values from chain for reference
 # Get permissioned game implementation
 PERMISSIONED_GAME=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDRESS "gameImpls(uint32)(address)" 1)
-ABSOLUTE_PRESTATE=$(cast call --rpc-url $L1_RPC_URL $PERMISSIONED_GAME "absolutePrestate()")
 ANCHOR_STATE_REGISTRY=$(cast call --rpc-url $L1_RPC_URL $PERMISSIONED_GAME "anchorStateRegistry()")
 
 # Call the function to add game type 0 (permissionless)

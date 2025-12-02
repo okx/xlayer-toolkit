@@ -33,6 +33,7 @@
   "granite_time": 0,
   "holocene_time": 0,
   "isthmus_time": 0,
+  "jovian_time": 1764327600,
   "batch_inbox_address": "0x006737cc6980a7786a477ce46b491845509b19dc",
   "deposit_contract_address": "0x1529a34331d7d85c8868fc88ec730ae56d3ec9c0",
   "l1_system_config_address": "0x06be4b4a9a28ff8eed6da09447bc5daa676efac3",
