@@ -606,7 +606,7 @@ services:
   op-reth-seq2:
     image: "${OP_RETH_IMAGE_TAG}"
     container_name: op-reth-seq2
-    entrypoint: /entrypoint/reth-seq.sh
+    entrypoint: /entrypoint/reth-seq.sh 2
     env_file:
       - ./.env
     volumes:

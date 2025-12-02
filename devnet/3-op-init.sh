@@ -191,6 +191,10 @@ if [ "$SEQ_TYPE" = "reth" ]; then
   echo -n "1aba031aeb5aa8aedadaf04159d20e7d58eeefb3280176c7d59040476c2ab21b" > $OP_RETH_DATADIR/discovery-secret
   if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     echo -n "934ee1c6d37504aa6397b13348d2b5788a0bae5d3a77c71645f8b28be54590d9" > $OP_RETH_DATADIR2/discovery-secret
+    if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
+        echo -n "60a4284707ef52c2b8486410be2bc7bf3bf803fcd85f0059b87b8b772eba62b421ef496e2a44135cfd9e74133e2e2b3e30a4a6c428d3f41e3537eea14eaf9ea3" > $OP_RETH_DATADIR/fb-p2p-key
+        echo -n "6c899cb8b6dadfc34ddde60a57a61b3bdc655247a72feae16b851204fd41596f67a5e73ff50c90ec1755bcf640de7333322cce8612f722732f1244af23be007a" > $OP_RETH_DATADIR2/fb-p2p-key
+    fi
   fi
     echo "✅ Set p2p nodekey for reth sequencer"
 fi

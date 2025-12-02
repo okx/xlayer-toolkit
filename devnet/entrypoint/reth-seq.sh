@@ -37,7 +37,7 @@ CMD="op-reth node \
       --authrpc.addr=0.0.0.0 \
       --authrpc.port=8552 \
       --authrpc.jwtsecret=/jwt.txt \
-      --trusted-peers="${TRUSTED_PEERS}" \
+      --trusted-peers=$TRUSTED_PEERS \
       --tx-propagation-policy=all \
       --txpool.max-account-slots=100000 \
       --txpool.pending-max-count=100000 \
@@ -57,6 +57,21 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
         --flashblocks.addr=0.0.0.0 \
         --flashblocks.port=1111 \
         --flashblocks.block-time=200"
+
+    if [ "$CONDUCTOR_ENABLED" = "true" ]; then
+        CMD="$CMD --flashblocks.p2p_enabled \
+            --flashblocks.p2p_port=9009 \
+            --flashblocks.p2p_private_key_file=/datadir/fb-p2p-key"
+
+        INDEX="${1:-}"
+        if [ -z "$INDEX" ]; then
+            # op-reth-seq connects to op-reth-seq2
+            CMD="$CMD --flashblocks.p2p_known_peers=/dns4/op-reth-seq2/tcp/9009/p2p/12D3KooWGnxtRXJWhNtwKmRjpqj5QFQPskjWJkC7AkGWhCXBM6ed"
+        else
+            # op-reth-seq2 connects to op-reth-seq
+            CMD="$CMD --flashblocks.p2p_known_peers=/dns4/op-reth-seq/tcp/9009/p2p/12D3KooWC6qFQzcS6V6Tp53nRqw2pmU1snjSYq7H4Q6ckTWAskTt"
+        fi
+    fi
 fi
 
 exec $CMD
