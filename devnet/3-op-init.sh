@@ -187,36 +187,6 @@ if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     cp -r $OP_GETH_DATADIR $OP_GETH_DATADIR3
 fi
 
-SEQ_L2_EXECUTION_CLIENT="op-${SEQ_TYPE}-seq"
-SEQ_L2_EXECUTION_PORT=8545
-
-# For flashblocks architecture
-if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
-    # Copy initialized database from op-geth-seq to op-rbuilder
-    OP_RBUILDER_DATADIR="$(pwd)/data/op-rbuilder"
-    rm -rf "$OP_RBUILDER_DATADIR"
-    cp -r $OP_RETH_DATADIR $OP_RBUILDER_DATADIR
-    if [ "$CONDUCTOR_ENABLED" = "true" ]; then
-        OP_RBUILDER_DATADIR2="$(pwd)/data/op-rbuilder2"
-        rm -rf "$OP_RBUILDER_DATADIR2"
-        cp -r $OP_RETH_DATADIR $OP_RBUILDER_DATADIR2
-    fi
-
-    # Set sequencer L2 execution client into env
-    SEQ_L2_EXECUTION_CLIENT="rollup-boost"
-    SEQ_L2_EXECUTION_PORT=8552
-
-    # Set p2p nodekey
-    echo -n "b04fab1a632f3371f90ba4a24853e1b42b5625418f07e042151185e818d0c5f6" > $OP_RBUILDER_DATADIR/discovery-secret
-    if [ "$CONDUCTOR_ENABLED" = "true" ]; then
-        echo -n "35d2f79381dc94a7818e27c4b130d4ae934550a18787d2ba102b20a26577a172" > $OP_RBUILDER_DATADIR2/discovery-secret
-        echo "✅ Set p2p nodekey for op-rbuilder"
-    fi
-fi
-
-sed_inplace "s/^SEQ_L2_EXECUTION_CLIENT=.*/SEQ_L2_EXECUTION_CLIENT=$SEQ_L2_EXECUTION_CLIENT/" .env
-sed_inplace "s/^SEQ_L2_EXECUTION_PORT=.*/SEQ_L2_EXECUTION_PORT=$SEQ_L2_EXECUTION_PORT/" .env
-
 if [ "$SEQ_TYPE" = "reth" ]; then
   echo -n "1aba031aeb5aa8aedadaf04159d20e7d58eeefb3280176c7d59040476c2ab21b" > $OP_RETH_DATADIR/discovery-secret
   if [ "$CONDUCTOR_ENABLED" = "true" ]; then

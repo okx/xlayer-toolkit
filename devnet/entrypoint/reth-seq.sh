@@ -18,7 +18,7 @@ if [ "${ENABLE_INNERTX_SEQ:-false}" = "true" ]; then
     echo "Inner transaction tracking enabled for sequencer"
 fi
 
-exec op-reth node \
+CMD="op-reth node \
       --datadir=/datadir \
       --chain=/genesis.json \
       --http \
@@ -45,4 +45,18 @@ exec op-reth node \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
-      $INNERTX_FLAG
+      --txpool.pending-max-size=2000 \
+      --txpool.basefee-max-size=2000 \
+      $INNERTX_FLAG"
+
+# For flashblocks architecture
+if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
+    CMD="$CMD \
+        --flashblocks.enabled \
+        --flashblocks.disable-state-root \
+        --flashblocks.addr=0.0.0.0 \
+        --flashblocks.port=1111 \
+        --flashblocks.block-time=200"
+fi
+
+exec $CMD
