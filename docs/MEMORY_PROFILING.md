@@ -38,6 +38,7 @@ Memory profiling helps identify:
 
 Edit your `.env` file:
 
+For op-reth-seq
 ```bash
 # Enable reth with memory profiling
 SEQ_TYPE=reth
@@ -46,6 +47,21 @@ SKIP_OP_RETH_BUILD=false
 
 # Set your reth source directory
 OP_RETH_LOCAL_DIRECTORY=/path/to/your/reth
+```
+For op-rbuilder
+```bash
+# Enable reth with memory profiling
+SEQ_TYPE=reth
+RETH_PROFILING_ENABLED=true
+SKIP_OP_RETH_BUILD=false
+
+# Set your reth source directory
+OP_RETH_LOCAL_DIRECTORY=/path/to/your/reth
+
+# Enable op-rbuilder profiling
+OP_RBUILDER_PROFILING_ENABLED=true
+# Leave it empty for default op-rbuilder:profiling
+OP_RBUILDER_IMAGE_TAG=
 ```
 
 ### 2. Build with Memory Profiling Support
@@ -67,6 +83,12 @@ OP_RETH_LOCAL_DIRECTORY=/path/to/your/reth
 
 # Generate flamegraph from heap dumps
 ./scripts/generate-memory-flamegraph.sh op-reth-seq latest
+
+# Jemalloc profiling for op-rbuilder
+./scripts/profile-reth-jemalloc.sh op-rbuilder 60 "op-rbuilder node" "op-rbuilder"
+
+# Generate flamegraph for op-rbuilder
+./scripts/generate-memory-flamegraph.sh op-rbuilder latest jemalloc "op-rbuilder node" op-rbuilder
 ```
 
 ## Jemalloc Heap Profiling
@@ -394,15 +416,24 @@ cast send --rpc-url http://localhost:8123 ...
 ### 3. Combine CPU and Memory Profiling
 
 ```bash
-# Run both simultaneously
+# Run both simultaneously for op-reth-seq
 ./scripts/profile-reth-perf.sh op-reth-seq 60 &
 ./scripts/profile-reth-jemalloc.sh op-reth-seq 60 &
+wait
+
+
+# Run both simulaneously for op-rbuilder
+./scripts/profile-reth-perf.sh op-rbuilder 60 "op-rbuilder node" &
+./scripts/generate-memory-flamegraph.sh op-rbuilder latest jemalloc "op-rbuilder node" op-rbuilder
 wait
 
 # Analyze both:
 # - CPU flamegraph shows compute hotspots
 # - Memory flamegraph shows allocation hotspots
-./scripts/generate-memory-flamegraph.sh op-reth-seq latest
+./scripts/generate-memory-flamegraph.sh op-reth-seq latest #op-reth-seq
+
+./scripts/generate-memory-flamegraph.sh op-rbuilder latest jemalloc "op-rbuilder node" op-rbuilder #op-rbuilder
+
 ```
 
 ### 4. Baseline Measurements
