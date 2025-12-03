@@ -92,8 +92,6 @@ devnet/
 │   ├── active-sequencer.sh      # Check active sequencer
 │   ├── add-game-type.sh         # Add dispute game type
 │   ├── add-peers.sh             # Add peer connections
-│   ├── deploy-op-succinct.sh    # OP-Succinct contracts deployment script
-│   ├── generate-vkeys.sh        # Generate verification keys for OP-Succinct real mode
 │   ├── docker-install-start.sh # Docker installation helper
 │   ├── gray-upgrade-simulation.sh # Gray upgrade simulation
 │   ├── kill-rpc.sh              # Kill RPC node
@@ -104,7 +102,8 @@ devnet/
 │   ├── start-rpc.sh             # Start RPC node
 │   ├── stop-rpc.sh              # Stop RPC node
 │   ├── test-cgt.sh              # Test CGT functionality
-│   └── trusted-peers.sh         # Configure trusted peers
+│   ├── trusted-peers.sh         # Configure trusted peers
+│   └── update-anchor-root.sh    # Update anchor root by creating and resolving a dispute game
 ├── config-op/          # Configuration directory
 ├── entrypoint/         # Container entrypoint scripts
 ├── l1-geth/            # L1 Geth configuration and data
