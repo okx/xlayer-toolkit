@@ -249,59 +249,9 @@ PYTHON_EOF
 }
 
 # ==============================================================================
-# Generated Genesis Mode (Original Logic)
+# Standalone Execution
 # ==============================================================================
-_prepare_generated_genesis() {
-    echo ""
-    echo "🔧 Generated genesis mode"
-    
-    NEXT_BLOCK=$((FORK_BLOCK + 1))
-    NEXT_BLOCK_HEX=$(printf "0x%x" "$NEXT_BLOCK")
-    
-    echo "   • FORK_BLOCK: $FORK_BLOCK"
-    echo "   • Next block: $NEXT_BLOCK"
-    
-    # Update genesis.json
-    _sed_inplace '/"config": {/,/}/ s/"optimism": {/"legacyXLayerBlock": '"$NEXT_BLOCK"',\n    "optimism": {/' ./config-op/genesis.json
-    _sed_inplace 's/"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"/"parentHash": "'"$PARENT_HASH"'"/' ./config-op/genesis.json
-    _sed_inplace '/"70997970c51812dc3a010c7d01b50e0d17dc79c8": {/,/}/ s/"balance": "[^"]*"/"balance": "0x446c3b15f9926687d2c40534fdb564000000000000"/' ./config-op/genesis.json
-    
-    # Update rollup.json
-    _sed_inplace 's/"number": 0/"number": '"$NEXT_BLOCK"'/' ./config-op/rollup.json
-    
-    # Create reth version
-    cp ./config-op/genesis.json ./config-op/genesis-reth.json
-    _sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_HEX"'"/' ./config-op/genesis-reth.json
-    
-    echo "✅ Generated genesis prepared"
-}
-
-# ==============================================================================
-# Main Entry Point
-# ==============================================================================
-prepare_genesis() {
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "📦 Preparing Genesis"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    
-    # Validate FORK_BLOCK
-    if [ -z "$FORK_BLOCK" ]; then
-        echo "❌ ERROR: FORK_BLOCK environment variable is not set"
-        echo "Please set FORK_BLOCK in your .env file"
-        exit 1
-    fi
-    
-    # Select mode and prepare
-    if [ "$USE_FAKE_MAINNET" = "true" ]; then
-        _prepare_mainnet_genesis
-    else
-        _prepare_generated_genesis
-    fi
-    
-    echo ""
-}
-
 # Run if executed directly (not sourced)
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    prepare_genesis
+    _prepare_mainnet_genesis
 fi
