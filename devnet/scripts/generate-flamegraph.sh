@@ -5,6 +5,7 @@ set -e
 CONTAINER=${1:-op-reth-seq}
 PERF_FILE=${2}
 PROFILE_TYPE=${3:-cpu}  # cpu, offcpu, memory
+VERBOSE=${VERBOSE:-false}  # Set VERBOSE=true for detailed output
 
 if [ -z "$PERF_FILE" ]; then
     echo "Usage: $0 <container_name> <perf_file> [profile_type]"
@@ -45,21 +46,28 @@ if [ "$FILE_EXT" != "data" ]; then
     exit 1
 fi
 
-echo "=== Generating Flamegraph from Perf Data ==="
-echo "Input: $FILE_PATH"
-echo ""
+# Helper function for verbose output
+log_verbose() {
+    if [ "$VERBOSE" = "true" ]; then
+        echo "$@"
+    fi
+}
+
+log_verbose "=== Generating Flamegraph from Perf Data ==="
+log_verbose "Input: $FILE_PATH"
+log_verbose ""
 
 # Clone FlameGraph tools if not present
 FLAMEGRAPH_DIR="./profiling/FlameGraph"
 if [ ! -d "$FLAMEGRAPH_DIR" ]; then
-    echo "[1/3] Downloading FlameGraph tools..."
-    git clone https://github.com/brendangregg/FlameGraph.git "$FLAMEGRAPH_DIR"
+    log_verbose "[1/3] Downloading FlameGraph tools..."
+    git clone https://github.com/brendangregg/FlameGraph.git "$FLAMEGRAPH_DIR" >/dev/null 2>&1
 else
-    echo "[1/3] FlameGraph tools already present"
+    log_verbose "[1/3] FlameGraph tools already present"
 fi
 
 # Find perf binary in container
-echo "[2/3] Converting .data to folded stacks (streaming, no intermediate .script file)..."
+log_verbose "[2/3] Converting .data to folded stacks (streaming, no intermediate .script file)..."
 PERF_BIN=$(docker exec "$CONTAINER" sh -c 'command -v perf 2>/dev/null || find /usr/local/bin /usr/bin -name "perf*" -type f -o -type l 2>/dev/null | grep -E "perf" | head -1 || echo ""')
 
 if [ -z "$PERF_BIN" ]; then
@@ -67,7 +75,7 @@ if [ -z "$PERF_BIN" ]; then
     exit 1
 fi
 
-echo "   Using perf binary: $PERF_BIN"
+log_verbose "   Using perf binary: $PERF_BIN"
 
 # Copy .data file to container
 docker cp "$FILE_PATH" "$CONTAINER:/profiling/temp-perf.data" 2>/dev/null
@@ -78,13 +86,13 @@ FOLDED_FILE="./profiling/${CONTAINER}/${BASENAME}.folded"
 
 # Add kernel/user delimiter for off-CPU profiles
 if [ "$PROFILE_TYPE" = "offcpu" ]; then
-    echo "   Processing with kernel/user stack delimiters..."
-    
+    log_verbose "   Processing with kernel/user stack delimiters..."
+
     # Stream: perf script -> stackcollapse -> add delimiters -> folded file
     docker exec "$CONTAINER" sh -c "
         cd /profiling && \
         $PERF_BIN script -f -i temp-perf.data
-    " | "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" | \
+    " 2>/dev/null | "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" | \
         awk -F';' '{
             # Last field is the count
             count_idx = NF;
@@ -119,13 +127,13 @@ if [ "$PROFILE_TYPE" = "offcpu" ]; then
             print new_stack " " count;
         }' > "$FOLDED_FILE"
 else
-    echo "   Processing stacks..."
-    
+    log_verbose "   Processing stacks..."
+
     # Stream: perf script -> stackcollapse -> folded file
     docker exec "$CONTAINER" sh -c "
         cd /profiling && \
         $PERF_BIN script -f -i temp-perf.data
-    " | "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" > "$FOLDED_FILE"
+    " 2>/dev/null | "$FLAMEGRAPH_DIR/stackcollapse-perf.pl" > "$FOLDED_FILE"
 fi
 
 # Check if we got any data
@@ -151,10 +159,10 @@ fi
 docker exec "$CONTAINER" sh -c 'rm -f /profiling/temp-perf.data' 2>/dev/null || true
 
 FOLDED_SIZE=$(du -h "$FOLDED_FILE" | cut -f1)
-echo "   Generated folded stacks: $FOLDED_SIZE"
+log_verbose "   Generated folded stacks: $FOLDED_SIZE"
 
 # Generate flamegraph SVG
-echo "[3/3] Generating interactive flamegraph..."
+log_verbose "[3/3] Generating interactive flamegraph..."
 SVG_FILE="./profiling/${CONTAINER}/${BASENAME}.svg"
 
 # Set flamegraph options based on profile type
@@ -184,16 +192,14 @@ fi
 
 SVG_SIZE=$(du -h "$SVG_FILE" | cut -f1)
 
-echo ""
-echo "Done!"
-echo ""
-echo "Flamegraph generated: $SVG_FILE ($SVG_SIZE)"
-echo ""
-echo "To view the flamegraph:"
-echo "  1. Open in browser: open $SVG_FILE"
-echo "  2. Or double-click the file to open in your default browser"
-echo ""
-echo "The flamegraph is interactive:"
-echo "  - Click on any box to zoom in"
-echo "  - Click 'Reset Zoom' to zoom back out"
-echo "  - Hover over boxes to see function names and percentages"
+# Always show the final result
+echo "Flamegraph: $SVG_FILE ($SVG_SIZE)"
+
+# Verbose mode shows additional help
+if [ "$VERBOSE" = "true" ]; then
+    echo ""
+    echo "To view the flamegraph:"
+    echo "  1. Open in browser: open -a Google\ Chrome $SVG_FILE"
+    echo "  2. Or double-click the file to open in your default browser"
+    echo ""
+fi
