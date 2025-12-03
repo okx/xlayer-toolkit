@@ -164,17 +164,20 @@ def main():
     print(f"   ✓ chainId: {old_chain_id} → {chain_id}")
     
     genesis['config']['legacyXLayerBlock'] = next_block
+    genesis['config']['jovianTime'] = 0  # Enable Jovian upgrade
     genesis['parentHash'] = parent_hash
     genesis['number'] = 0  # Required for geth init
     
-    # Update timestamp to current time (avoid conductor "unsafe head falling behind" error)
-    current_timestamp = int(time.time())
+    # Update timestamp to 15 minutes in the future (avoid conductor "unsafe head falling behind" error)
+    # This gives buffer time between init and service startup
+    current_timestamp = int(time.time()) + 15 * 60  # +15 minutes
     genesis['timestamp'] = hex(current_timestamp)
     
     print(f"   ✓ legacyXLayerBlock: {next_block}")
+    print(f"   ✓ jovianTime: 0 (Jovian upgrade enabled)")
     print(f"   ✓ parentHash: {parent_hash[:20]}...")
     print(f"   ✓ number: 0 (required for geth init)")
-    print(f"   ✓ timestamp: {hex(current_timestamp)}")
+    print(f"   ✓ timestamp: {hex(current_timestamp)} (+15min from now)")
     
     # Inject test account (enabled by default in mainnet mode)
     if test_account and test_balance:
