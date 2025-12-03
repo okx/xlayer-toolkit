@@ -16,29 +16,10 @@
 
 set -e
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEVNET_DIR="$(dirname "$SCRIPT_DIR")"
-
-# Change to devnet directory if running standalone
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    cd "$DEVNET_DIR"
-    source .env
-fi
-
-# ==============================================================================
-# Default Configuration (can be overridden by .env)
-# ==============================================================================
-# Remote URL for mainnet genesis download
-MAINNET_GENESIS_URL="${MAINNET_GENESIS_URL:-https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.mainnet.tar.gz}"
-
-# Local path for mainnet genesis file
-MAINNET_GENESIS_PATH="${MAINNET_GENESIS_PATH:-mainnet.genesis.json}"
-
-# Test account injection (enabled by default in mainnet mode)
-# Anvil default account #1
-TEST_ACCOUNT_ADDRESS="${TEST_ACCOUNT_ADDRESS:-0x70997970C51812dc3A010C7d01b50e0d17dc79C8}"
-TEST_ACCOUNT_BALANCE="${TEST_ACCOUNT_BALANCE:-0x52B7D2DCC80CD2E4000000}"  # 100,000 ETH
+MAINNET_GENESIS_URL="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/merged.genesis.json.mainnet.tar.gz"
+MAINNET_GENESIS_PATH="mainnet.genesis.json"
+TEST_ACCOUNT_ADDRESS="0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+TEST_ACCOUNT_BALANCE="0x52B7D2DCC80CD2E4000000" # 100,000 ETH
 
 # ==============================================================================
 # Helper Functions
@@ -247,11 +228,3 @@ PYTHON_EOF
     echo "   • Output: $CONFIG_DIR/genesis.json"
     echo "   • Reth version: $CONFIG_DIR/genesis-reth.json"
 }
-
-# ==============================================================================
-# Standalone Execution
-# ==============================================================================
-# Run if executed directly (not sourced)
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    _prepare_mainnet_genesis
-fi
