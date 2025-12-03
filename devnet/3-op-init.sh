@@ -221,14 +221,8 @@ gzip -c config-op/genesis.json > config-op/genesis.json.gz
 
 # Check if MIN_RUN mode is enabled
 if [ "$MIN_RUN" = "true" ]; then
-    echo ""
     echo "⚡ MIN_RUN mode enabled: Skipping op-program prestate build"
-    
-    # Show mainnet-specific summary (function from prepare-genesis.sh)
-    print_mainnet_summary
-    
-    echo ""
-    echo "✅ Initialization completed for minimal run"
+    echo "✅ Initialization completed for minimal run (no dispute game support)"
     exit 0
 fi
 

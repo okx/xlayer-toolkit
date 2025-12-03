@@ -277,33 +277,6 @@ _prepare_generated_genesis() {
 }
 
 # ==============================================================================
-# Print Mainnet Summary (for MIN_RUN mode)
-# ==============================================================================
-print_mainnet_summary() {
-    if [ "$USE_FAKE_MAINNET" != "true" ]; then
-        return
-    fi
-    
-    echo ""
-    echo "🌐 Mainnet Genesis Deployment Summary:"
-    echo "   • Source: $MAINNET_GENESIS_PATH"
-    echo "   • Chain ID: $CHAIN_ID"
-    echo "   • Starting block: $((FORK_BLOCK + 1))"
-    echo "   • Genesis size: $(du -h $CONFIG_DIR/genesis.json | cut -f1)"
-    echo "   • Test account: $TEST_ACCOUNT_ADDRESS (injected)"
-    
-    BALANCE_ETH=$(python3 -c "print(int('$TEST_ACCOUNT_BALANCE', 16) / 10**18)")
-    echo "   • Test balance: $BALANCE_ETH ETH on L2"
-    
-    echo "   • Database: $(du -sh data/op-$SEQ_TYPE-seq 2>/dev/null | cut -f1 || echo 'initializing...')"
-    echo ""
-    echo "ℹ️  Notes:"
-    echo "   • All mainnet accounts preserved in L2 genesis"
-    echo "   • L1 accounts funded by 1-start-l1.sh (100 ETH each)"
-    echo "   • Dispute game features skipped (not compatible with mainnet data)"
-}
-
-# ==============================================================================
 # Main Entry Point
 # ==============================================================================
 prepare_genesis() {
