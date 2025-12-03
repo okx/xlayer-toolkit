@@ -11,7 +11,18 @@ if [ "${JEMALLOC_PROFILING:-false}" = "true" ]; then
     echo "Jemalloc profiling enabled: _RJEM_MALLOC_CONF=$_RJEM_MALLOC_CONF"
 fi
 
-exec op-reth node \
+# Build the optional innertx flag
+INNERTX_FLAG=""
+if [ "${ENABLE_INNERTX_RPC:-false}" = "true" ]; then
+    INNERTX_FLAG="--xlayer.enable-innertx"
+    echo "Inner transaction tracking enabled for RPC"
+fi
+
+# Read the first argument (1 or 0), default to 0 if not provided
+DISABLE_FLASHBLOCKS=${DISABLE_FLASHBLOCKS:-"false"}
+
+# Build the command with common arguments
+CMD="op-reth node \
       --datadir=/datadir \
       --chain=/genesis.json \
       --config=/config.toml \
@@ -31,11 +42,20 @@ exec op-reth node \
       --authrpc.addr=0.0.0.0 \
       --authrpc.port=8552 \
       --authrpc.jwtsecret=/jwt.txt \
-      --trusted-peers="${TRUSTED_PEERS}" \
+      --trusted-peers=$TRUSTED_PEERS \
       --tx-propagation-policy=all \
       --txpool.max-account-slots=100000 \
       --txpool.pending-max-count=100000 \
       --txpool.queued-max-count=100000 \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
-      --txpool.max-new-txns=100000
+      --txpool.max-new-txns=100000 \
+      $INNERTX_FLAG"
+
+# For flashblocks architecture. Enable flashblocks RPC
+if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$DISABLE_FLASHBLOCKS" = "false" ]; then
+    CMD="$CMD --flashblocks-url=ws://rollup-boost:1111"
+    echo "Flashblocks RPC enabled"
+fi
+
+exec $CMD
