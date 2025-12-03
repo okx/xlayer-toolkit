@@ -10,6 +10,7 @@ reth-data/
 *.crt
 tps.log
 test_tps.log
+genesis.json
 
 # Environment configuration files (keep .example files)
 *.env

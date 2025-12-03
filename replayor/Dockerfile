@@ -10,13 +10,20 @@ RUN go build -o bin/replayor ./cmd/replayor/main.go
 
 WORKDIR /app
 
-FROM golang:1.23-alpine
+FROM ubuntu:25.04
+
+# Install ping and other utilities
+RUN apt-get update && apt-get install -y \
+    iputils-ping \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install certs
 # RUN apk add --no-cache ca-certificates
 # COPY ./oplabs.crt /usr/local/share/ca-certificates/oplabs.crt
 # RUN chmod 644 /usr/local/share/ca-certificates/oplabs.crt && update-ca-certificates
 
-COPY --from=builder /app/bin/replayor /app/bin/replayor
+WORKDIR /app
 
-CMD ["/app/bin/replayor"]
+COPY --from=builder /app/bin/replayor /bin/replayor
+
+CMD ["/app/replayor.sh"]

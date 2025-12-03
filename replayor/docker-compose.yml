@@ -1,3 +1,7 @@
+networks:
+  default:
+    name: ${DOCKER_NETWORK:-dev-replayor}
+
 services:
 #  node: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
 #    build: ./geth
@@ -9,20 +13,45 @@ services:
 #      - ./geth-data:/data
 #      - ./secret:/secret
 #    env_file: "test-configs/base-mainnet-replay.env"
-  node: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
-    build: ./reth
+  node-unwind: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
+    image: "op-reth:latest"
     ports:
-      - 8545:8545
-      - 8551:8551
+      - 9123:9123
+      - 8553:8553
+    environment:
+      - ENV_FILE=reth.docker.env
+    working_dir: /app
+    entrypoint: [ "bash", "/app/unwind.sh" ]
     volumes:
-      - ./reth-data:/data
-      - ./secret:/secret
-    env_file: "test-configs/base-mainnet-replay-reth.env"
+      - ./:/app
+  node-init: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
+    image: "op-reth:latest"
+    ports:
+      - 9123:9123
+      - 8553:8553
+    environment:
+      - ENV_FILE=reth.docker.env
+    working_dir: /app
+    entrypoint: [ "bash", "/app/op-reth-init.sh" ]
+    volumes:
+      - ./:/app
+  node: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
+    image: "op-reth:latest"
+    ports:
+      - 9123:9123
+      - 8553:8553
+    environment:
+      - ENV_FILE=reth.docker.env
+    working_dir: /app
+    entrypoint: [ "bash", "/app/reth.sh" ]
+    volumes:
+     - ./:/app
   replayor:
     build: .
-    command: [ "/app/bin/replayor" ]
-    network_mode: "host"
-    env_file: "test-configs/base-mainnet-replay-reth.env"
+    command: [ "bash", "/app/replayor.sh" ]
+    working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file: "replayor.docker.env"
     volumes:
-      - ./secret:/secret
-      - ./results:/results
+      - ./:/app

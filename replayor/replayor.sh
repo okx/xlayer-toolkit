@@ -28,9 +28,9 @@ DISK_PATH="${DISK_PATH:-./result}"
 STORAGE_TYPE="${STORAGE_TYPE:-disk}"
 BLOCK_COUNT="${BLOCK_COUNT:-1}"
 
-echo "Starting Replayor"
+echo "Starting Replayor in $(pwd)"
 echo "$CONTINUOUS_MODE"
-if [ "$CONTINUOUS_MODE" == "true" ]; then
+if [ "$CONTINUOUS_MODE" = "true" ]; then
   exec "$REPLAYOR_BINARY" \
     --engine-api-secret="$ENGINE_API_SECRET" \
     --engine-api-url="$ENGINE_API_URL" \

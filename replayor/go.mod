@@ -2,9 +2,9 @@ module github.com/danyalprout/replayor
 
 go 1.23.0
 
-replace github.com/ethereum/go-ethereum v1.16.3 => ../../optimism/op-geth
+replace github.com/ethereum/go-ethereum v1.16.3 => github.com/okx/op-geth v1.101408.1-0.20251201025605-086f4e1ace5b
 
-replace github.com/ethereum-optimism/optimism v1.10.1-0.20250201050502-d64038bd93a4 => ../../optimism
+replace github.com/ethereum-optimism/optimism v1.10.1-0.20250201050502-d64038bd93a4 => github.com/okx/optimism v1.9.2-0.20251201105222-0838d46d73a5
 
 require (
 	github.com/ethereum-optimism/optimism v1.10.1-0.20250201050502-d64038bd93a4
@@ -52,7 +52,7 @@ require (
 	github.com/elastic/gosigar v0.14.3 // indirect
 	github.com/emicklei/dot v1.6.2 // indirect
 	github.com/ethereum-optimism/go-ethereum-hdwallet v0.1.4-0.20251001155152-4eb15ccedf7e // indirect
-	github.com/ethereum/c-kzg-4844/v2 v2.1.0 // indirect
+	github.com/ethereum/c-kzg-4844/v2 v2.1.5 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/ferranbt/fastssz v0.1.4 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
@@ -77,7 +77,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/golang-lru/arc/v2 v2.0.7 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
-	github.com/holiman/billy v0.0.0-20240216141850-2abb0c79d3c4 // indirect
+	github.com/holiman/billy v0.0.0-20250707135307-f2f9b9aae7db // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
 	github.com/holiman/uint256 v1.3.2 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
@@ -178,7 +178,7 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
-	github.com/supranational/blst v0.3.14 // indirect
+	github.com/supranational/blst v0.3.15 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20220614013038-64ee5596c38a // indirect
 	github.com/tklauser/go-sysconf v0.3.14 // indirect
 	github.com/tklauser/numcpus v0.8.0 // indirect
