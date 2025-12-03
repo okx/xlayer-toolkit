@@ -44,24 +44,27 @@ The off-CPU profiling script captures:
 
 **Important**: Each event includes a **full stack trace** showing which reth function caused the blocking operation.
 
-## Quick Start
+## Quick Start (using xlayer-toolkit)
 
 ### Prerequisites
 
 1. Build reth with profiling support:
    ```bash
+   # set these .env before running script
+   OP_RETH_LOCAL_DIRECTORY=...
+   RETH_PROFILING_ENABLED=false
+
    ./scripts/build-reth-with-profiling.sh
    ```
 
-2. Update `docker-compose.yml` to use the profiling image:
-   ```yaml
-   op-reth-seq:
-     image: ${OP_RETH_IMAGE_TAG:-op-reth:profiling}
-   ```
-
-3. Restart the container:
+2. run minimal services:
    ```bash
-   docker-compose restart op-reth-seq
+   MIN_RUN=true
+   CONDUCTOR_ENABLED=false
+   SEQ_TYPE=reth
+   RPC_TYPE=reth
+
+   ./0-all.sh
    ```
 
 ### Basic Usage
@@ -75,6 +78,9 @@ The off-CPU profiling script captures:
 
 # Profile with custom event configuration
 ./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/my-events.conf
+
+# Profile with custom event configuration (without script generation ~ faster)
+./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/my-events.conf true
 ```
 
 ### What You Get
@@ -88,7 +94,7 @@ After profiling completes, you'll find in `./profiling/op-reth-seq/`:
 
 ### Summary Statistics
 
-The script outputs a summary of captured events:
+The script outputs a summary of captured events (example):
 
 ```
 === Off-CPU Event Summary ===
@@ -192,8 +198,10 @@ To measure how much data each reth function reads/writes:
 ./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/offcpu-events-iobandwidth.conf
 
 # Analyze the results (requires full script, so use SKIP_SCRIPT=false)
-SKIP_SCRIPT=false ./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/offcpu-events-iobandwidth.conf
-./scripts/analyze-io-bandwidth.sh ./profiling/op-reth-seq/perf-offcpu-{timestamp}.script
+./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/offcpu-events-iobandwidth.conf
+
+# The script below is auto-run.
+# ./scripts/analyze-io-bandwidth.sh ./profiling/op-reth-seq/perf-offcpu-{timestamp}.script
 ```
 
 **What you'll get**:
@@ -447,31 +455,6 @@ Low block_rq_complete rate
 4. **Compare with CPU profile**: Off-CPU + CPU profiling gives complete picture
 5. **Focus on wide bars**: In flamegraphs, wide bars = high impact
 6. **Check timestamps**: Each profile is a snapshot - compare different periods
-
-## Example Workflow
-
-```bash
-# 1. Build profiling image
-./scripts/build-reth-with-profiling.sh
-
-# 2. Start reth with profiling support
-docker-compose restart op-reth-seq
-
-# 3. Wait for reth to start syncing
-sleep 60
-
-# 4. Profile for 2 minutes during sync
-./scripts/profile-reth-offcpu.sh op-reth-seq 120
-
-# 5. Open flamegraph
-open ./profiling/op-reth-seq/perf-offcpu-*.svg
-
-# 6. Search for lock contention
-grep -A 15 'syscalls:sys_enter_futex' ./profiling/op-reth-seq/perf-offcpu-*.script | less
-
-# 7. Identify hotspots and optimize
-# (e.g., reduce lock hold time, batch operations, etc.)
-```
 
 ## Related Documentation
 
