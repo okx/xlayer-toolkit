@@ -12,22 +12,31 @@ sed_inplace() {
   fi
 }
 
-# Check if FORK_BLOCK is set
-if [ -z "$FORK_BLOCK" ]; then
-    echo " ❌ FORK_BLOCK environment variable is not set"
-    echo "Please set FORK_BLOCK in your .env file"
-    exit 1
-fi
+# ========================================
+# Genesis Preparation
+# ========================================
+if [ "$USE_FAKE_MAINNET" = "true" ]; then
+    # Fake mainnet mode: use unified script with mainnet genesis
+    source scripts/prepare-genesis.sh
+    _prepare_mainnet_genesis
+else
+    # Original generated genesis logic
+    if [ -z "$FORK_BLOCK" ]; then
+        echo " ❌ FORK_BLOCK environment variable is not set"
+        echo "Please set FORK_BLOCK in your .env file"
+        exit 1
+    fi
 
-FORK_BLOCK_HEX=$(printf "0x%x" "$FORK_BLOCK")
-sed_inplace '/"config": {/,/}/ s/"optimism": {/"legacyXLayerBlock": '"$((FORK_BLOCK + 1))"',\n    "optimism": {/' ./config-op/genesis.json
-sed_inplace 's/"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"/"parentHash": "'"$PARENT_HASH"'"/' ./config-op/genesis.json
-sed_inplace '/"70997970c51812dc3a010c7d01b50e0d17dc79c8": {/,/}/ s/"balance": "[^"]*"/"balance": "0x446c3b15f9926687d2c40534fdb564000000000000"/' ./config-op/genesis.json
-NEXT_BLOCK_NUMBER=$((FORK_BLOCK + 1))
-NEXT_BLOCK_NUMBER_HEX=$(printf "0x%x" "$NEXT_BLOCK_NUMBER")
-sed_inplace 's/"number": 0/"number": '"$NEXT_BLOCK_NUMBER"'/' ./config-op/rollup.json
-cp ./config-op/genesis.json ./config-op/genesis-reth.json
-sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
+    FORK_BLOCK_HEX=$(printf "0x%x" "$FORK_BLOCK")
+    sed_inplace '/"config": {/,/}/ s/"optimism": {/"legacyXLayerBlock": '"$((FORK_BLOCK + 1))"',\n    "optimism": {/' ./config-op/genesis.json
+    sed_inplace 's/"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"/"parentHash": "'"$PARENT_HASH"'"/' ./config-op/genesis.json
+    sed_inplace '/"70997970c51812dc3a010c7d01b50e0d17dc79c8": {/,/}/ s/"balance": "[^"]*"/"balance": "0x446c3b15f9926687d2c40534fdb564000000000000"/' ./config-op/genesis.json
+    NEXT_BLOCK_NUMBER=$((FORK_BLOCK + 1))
+    NEXT_BLOCK_NUMBER_HEX=$(printf "0x%x" "$NEXT_BLOCK_NUMBER")
+    sed_inplace 's/"number": 0/"number": '"$NEXT_BLOCK_NUMBER"'/' ./config-op/rollup.json
+    cp ./config-op/genesis.json ./config-op/genesis-reth.json
+    sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
+fi
 
 # Extract contract addresses from state.json and update .env file
 echo "🔧 Extracting contract addresses from state.json..."
