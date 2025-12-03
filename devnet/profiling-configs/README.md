@@ -24,7 +24,8 @@ This directory contains event configuration files for off-CPU profiling with per
 **Context switch profiling** - identifies which reth functions cause the most context switches.
 
 ```bash
-./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/offcpu-events-contextswitches.conf
+# Recommended: 10-30 seconds
+./scripts/profile-reth-offcpu.sh op-reth-seq 30 ./profiling-configs/offcpu-events-contextswitches.conf
 ```
 
 **Events captured:**
@@ -32,7 +33,10 @@ This directory contains event configuration files for off-CPU profiling with per
 
 **Use when:** You want to identify which functions are going off-CPU most frequently.
 
-**Note:** Generates high sample counts (~100k-150k events/min). **Fast mode auto-enabled** - skips symbolication and generates quick summary instead (~10x faster).
+**⚠️ WARNING:** Very high-frequency events (50k-150k samples/min)
+- **Recommended duration: 10-30 seconds** (avoid 60+ seconds)
+- **Fast mode auto-enabled** - skips .script generation (SKIP_SCRIPT=true by default)
+- With SKIP_SCRIPT=false, expect 2-5GB .script files for 30 seconds
 
 ---
 
@@ -40,10 +44,11 @@ This directory contains event configuration files for off-CPU profiling with per
 **I/O bandwidth analysis** - measures how much data each reth function reads/writes.
 
 ```bash
-# Profile
-./scripts/profile-reth-offcpu.sh op-reth-seq 60 ./profiling-configs/offcpu-events-iobandwidth.conf
+# Profile (recommended: 10-30 seconds)
+./scripts/profile-reth-offcpu.sh op-reth-seq 30 ./profiling-configs/offcpu-events-iobandwidth.conf
 
-# Analyze
+# Analyze (only if SKIP_SCRIPT=false was used)
+# Note: IO bandwidth analysis runs automatically when .script file is generated
 ./scripts/analyze-io-bandwidth.sh ./profiling/op-reth-seq/perf-offcpu-{timestamp}.script
 ```
 
@@ -54,7 +59,11 @@ This directory contains event configuration files for off-CPU profiling with per
 
 **Use when:** You need to measure actual I/O bandwidth per function.
 
-**Note:** Generates very high sample counts (50k-500k+ events/min). **Fast mode auto-enabled**. Use shorter durations (30-60s). For detailed bandwidth analysis, generate full script with `SKIP_SCRIPT=false`.
+**⚠️ WARNING:** Very high-frequency events (50k-500k+ events/min)
+- **Recommended duration: 10-30 seconds** (avoid 60+ seconds)
+- **Fast mode auto-enabled** - skips .script generation (SKIP_SCRIPT=true by default)
+- With SKIP_SCRIPT=false, expect 2-3GB .script files for 30 seconds
+- **IO bandwidth analysis runs automatically** when using this config with SKIP_SCRIPT=false
 
 ---
 
