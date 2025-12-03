@@ -24,6 +24,10 @@ services:
     entrypoint: [ "bash", "/app/unwind.sh" ]
     volumes:
       - ./:/app
+      - ${GENESIS_JSON_PATH:-./genesis.json}:/app/genesis.json:ro
+      - ${ROLLUP_JSON_PATH:-./rollup.json}:/app/rollup.json:ro
+      - ${JWT_TXT_PATH:-./jwt.txt}:/app/jwt.txt:ro
+      - ${RETH_DATA_PATH:-./reth-data}:/app/reth-data
   node-init: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
     image: "op-reth:latest"
     ports:
@@ -35,6 +39,10 @@ services:
     entrypoint: [ "bash", "/app/op-reth-init.sh" ]
     volumes:
       - ./:/app
+      - ${GENESIS_JSON_PATH:-./genesis.json}:/app/genesis.json:ro
+      - ${ROLLUP_JSON_PATH:-./rollup.json}:/app/rollup.json:ro
+      - ${JWT_TXT_PATH:-./jwt.txt}:/app/jwt.txt:ro
+      - ${RETH_DATA_PATH:-./reth-data}:/app/reth-data
   node: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
     image: "op-reth:latest"
     ports:
@@ -45,13 +53,19 @@ services:
     working_dir: /app
     entrypoint: [ "bash", "/app/reth.sh" ]
     volumes:
-     - ./:/app
+      - ./:/app
+      - ${GENESIS_JSON_PATH:-./genesis.json}:/app/genesis.json:ro
+      - ${ROLLUP_JSON_PATH:-./rollup.json}:/app/rollup.json:ro
+      - ${JWT_TXT_PATH:-./jwt.txt}:/app/jwt.txt:ro
+      - ${RETH_DATA_PATH:-./reth-data}:/app/reth-data
   replayor:
     build: .
     command: [ "bash", "/app/replayor.sh" ]
     working_dir: /app
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    env_file: "replayor.docker.env"
+    environment:
+      - ENV_FILE=replayor.docker.env
     volumes:
       - ./:/app
+      - ${ROLLUP_JSON_PATH:-./rollup.json}:/app/rollup.json:ro
