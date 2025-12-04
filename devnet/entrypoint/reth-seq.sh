@@ -59,7 +59,7 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
         --flashblocks.port=1111 \
         --flashblocks.block-time=200"
 
-    if [ "$CONDUCTOR_ENABLED" = "true" ] && [ "$FLASHBLOCK_P2P_ENABLED" = "true" ]; then
+    if [ "$FLASHBLOCK_P2P_ENABLED" = "true" ] && [ "$CONDUCTOR_ENABLED" = "true" ]; then
         CMD="$CMD \
             --flashblocks.p2p_enabled \
             --flashblocks.p2p_port=9009 \
