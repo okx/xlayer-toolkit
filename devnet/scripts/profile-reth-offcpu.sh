@@ -56,7 +56,7 @@ if ! docker ps | grep -q "$CONTAINER"; then
 fi
 
 # Set perf_event_paranoid to allow profiling
-echo "[1/5] Configuring kernel settings for profiling..."
+echo "[1/7] Configuring kernel settings for profiling..."
 docker exec "$CONTAINER" sh -c '
     if [ -w /proc/sys/kernel/perf_event_paranoid ]; then
         echo -1 > /proc/sys/kernel/perf_event_paranoid
@@ -82,7 +82,7 @@ docker exec "$CONTAINER" sh -c '
 '
 
 # Find the op-reth process PID
-echo "[2/5] Finding op-reth process..."
+echo "[2/7] Finding op-reth process..."
 RETH_PID=$(docker exec "$CONTAINER" sh -c 'pgrep -f "op-reth node" | head -1')
 
 if [ -z "$RETH_PID" ]; then
@@ -148,8 +148,55 @@ echo "Selected perf binary: $PERF_BIN"
 PERF_VERSION_OUTPUT=$(docker exec "$CONTAINER" sh -c "$PERF_BIN --version 2>&1" || echo "Unable to get version")
 echo "Perf version: $PERF_VERSION_OUTPUT"
 
+# Check if tracefs/debugfs is mounted
+echo "[3/7] Verifying tracing filesystem..."
+TRACEFS_CHECK=$(docker exec "$CONTAINER" sh -c '
+	if [ -d /sys/kernel/tracing/events ]; then
+		echo "TRACEFS_OK:/sys/kernel/tracing"
+	elif [ -d /sys/kernel/debug/tracing/events ]; then
+		echo "DEBUGFS_OK:/sys/kernel/debug/tracing"
+	else
+		echo "MISSING"
+	fi
+')
+
+TRACEFS_STATUS=$(echo "$TRACEFS_CHECK" | cut -d: -f1)
+TRACEFS_PATH=$(echo "$TRACEFS_CHECK" | cut -d: -f2)
+
+if [ "$TRACEFS_STATUS" = "MISSING" ]; then
+	echo "ERROR: Tracing filesystem not found!"
+	echo ""
+	echo "Diagnostics:"
+	docker exec "$CONTAINER" sh -c '
+		echo "Checking for tracing directories:"
+		ls -ld /sys/kernel/tracing 2>&1 || echo "  /sys/kernel/tracing: NOT FOUND"
+		ls -ld /sys/kernel/debug 2>&1 || echo "  /sys/kernel/debug: NOT FOUND"
+		echo ""
+		echo "Checking mounted filesystems:"
+		mount | grep -E "tracefs|debugfs" || echo "  No tracefs or debugfs mounted"
+		echo ""
+		echo "Container capabilities:"
+		cat /proc/self/status | grep Cap || echo "  Cannot read capabilities"
+	'
+	echo ""
+	echo "Solutions:"
+	echo "  1. Mount tracefs in the container (add to docker-compose.yml):"
+	echo "     volumes:"
+	echo "       - /sys/kernel/tracing:/sys/kernel/tracing:ro"
+	echo ""
+	echo "  2. Or mount debugfs:"
+	echo "     volumes:"
+	echo "       - /sys/kernel/debug:/sys/kernel/debug:ro"
+	echo ""
+	echo "  3. Or run container with --privileged flag (not recommended for production)"
+	echo ""
+	exit 1
+else
+	echo "✓ Tracing filesystem found at: $TRACEFS_PATH"
+fi
+
 # Check available events
-echo "[3/5] Checking available off-CPU events..."
+echo "[4/7] Checking available off-CPU events..."
 AVAILABLE_EVENTS=$(docker exec "$CONTAINER" sh -c "$PERF_BIN list 2>&1 | grep -E 'sched:|block:|writeback:|syscalls:'" || echo "")
 
 if [ -z "$AVAILABLE_EVENTS" ]; then
@@ -160,7 +207,7 @@ else
 fi
 
 # Record off-CPU profile with perf
-echo "[4/5] Recording off-CPU profile for ${DURATION}s with perf..."
+echo "[5/7] Recording off-CPU profile for ${DURATION}s with perf..."
 echo "Events to capture:"
 echo "$EVENTS" | tr ' ' '\n' | sed 's/^/  - /'
 echo ""
@@ -190,7 +237,7 @@ PERF_EXIT_CODE=${PIPESTATUS[0]}
 echo ""
 
 # Verify perf.data file is valid before proceeding
-echo "[5/6] Verifying perf.data integrity..."
+echo "[6/7] Verifying perf.data integrity..."
 DATA_CHECK=$(docker exec "$CONTAINER" sh -c "
     if [ ! -f /profiling/perf-offcpu.data ]; then
         echo 'FILE_NOT_FOUND'
@@ -281,7 +328,7 @@ echo ""
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 
 if [ "$SKIP_SCRIPT" = "true" ]; then
-	echo "[6/6] Skipping script generation (SKIP_SCRIPT=true)"
+	echo "[7/7] Skipping script generation (SKIP_SCRIPT=true)"
 	echo ""
 
 	# Copy only the data file
@@ -302,7 +349,7 @@ if [ "$SKIP_SCRIPT" = "true" ]; then
 	echo "  3. Or generate script later: docker exec $CONTAINER $PERF_BIN script -i /profiling/perf-offcpu.data > $OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.script"
 	echo ""
 else
-	echo "[6/6] Generating symbolicated output..."
+	echo "[7/7] Generating symbolicated output..."
 	docker exec "$CONTAINER" sh -c "
         cd /profiling && \
         $PERF_BIN script -i perf-offcpu.data > perf-offcpu.script
@@ -471,7 +518,7 @@ if [ -f "$OUTPUT_DIR/perf-offcpu-${TIMESTAMP}.data" ]; then
 	fi
 
 	# Generate flamegraph automatically
-	echo "[7/7] Generating off-CPU flamegraph..."
+	echo "[8/8] Generating off-CPU flamegraph..."
 	if [ -x "./scripts/generate-flamegraph.sh" ]; then
 		./scripts/generate-flamegraph.sh "$CONTAINER" "perf-offcpu-${TIMESTAMP}.data" "offcpu"
 	else
