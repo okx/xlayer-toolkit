@@ -52,7 +52,7 @@ The off-CPU profiling script captures:
    ```bash
    # set these .env before running script
    OP_RETH_LOCAL_DIRECTORY=...
-   RETH_PROFILING_ENABLED=false
+   RETH_PROFILING_ENABLED=true
 
    ./scripts/build-reth-with-profiling.sh
    ```
