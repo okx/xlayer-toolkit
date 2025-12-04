@@ -2,6 +2,21 @@
 
 This directory contains event configuration files for off-CPU profiling with perf.
 
+## ⚠️ Requirements
+
+**Off-CPU profiling requires rootful Docker (standard Docker daemon).**
+
+Rootless Docker does not support:
+- Access to `/sys/kernel/tracing` or `/sys/kernel/debug`
+- Privileged containers with kernel tracepoint access
+- `CAP_SYS_ADMIN` and `CAP_SYS_PTRACE` capabilities needed for perf
+
+**If using rootless Docker on Linux:**
+- Switch to rootful Docker (standard installation)
+- Or use CPU profiling instead: `./scripts/profile-reth-perf.sh` (limited functionality)
+
+**Note:** Docker Desktop on Mac/Windows works fine as it runs containers in a privileged Linux VM.
+
 ## Available Configurations
 
 ### `offcpu-events.conf` (Default)
