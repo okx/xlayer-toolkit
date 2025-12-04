@@ -50,11 +50,20 @@ The off-CPU profiling script captures:
 
 1. Build reth with profiling support:
    ```bash
-   # set these .env before running script
+   # set these `.env` before running script
    OP_RETH_LOCAL_DIRECTORY=...
    RETH_PROFILING_ENABLED=true
 
+   # This will tag the docker image with profiling
    ./scripts/build-reth-with-profiling.sh
+   # OR
+   SKIP_OP_STACK_BUILD=true
+   SKIP_OP_CONTRACTS_BUILD=true
+   SKIP_OP_GETH_BUILD=true
+   SKIP_OP_RETH_BUILD=false # <-- to build reth only
+   SKIP_BUILD_PRESTATE=true
+   OP_RETH_IMAGE_TAG=op-reth:profiling
+   ./init.sh
    ```
 
 2. run minimal services:
