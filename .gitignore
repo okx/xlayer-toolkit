@@ -12,6 +12,7 @@ scripts/dev-utils/genesis/
 scripts/dev-utils/*.tar.gz
 scripts/dev-utils/*.genesis.json
 scripts/dev-utils/*.processing
+scripts/dev-utils/auto-CI/.env
 # Ignore test files
 devnet/.env
 devnet/l1-geth/consensus/beacondata
