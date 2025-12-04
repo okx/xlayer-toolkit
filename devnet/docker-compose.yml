@@ -229,6 +229,7 @@ services:
       - "8552:8552"
       - "30303:30303"
       - "30303:30303/udp"
+      - "11111:1111" # outbound flashblocks ws port
     healthcheck:
       test: ["CMD", "curl", "-f", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
       interval: 3s
@@ -301,7 +302,7 @@ services:
       - /app/op-node/bin/op-node
       - --log.level=debug
       - --log.format=logfmtms
-      - --l2=http://${SEQ_L2_EXECUTION_CLIENT}:8552
+      - --l2=http://op-${SEQ_TYPE}-seq:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
       - --sequencer.l1-confs=5
@@ -328,7 +329,7 @@ services:
       - --pprof.port=9091
       - --l2.enginekind=${SEQ_TYPE}
     depends_on:
-      - ${SEQ_L2_EXECUTION_CLIENT}
+      - op-${SEQ_TYPE}-seq
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9545"]
       interval: 3s
@@ -417,7 +418,7 @@ services:
     image: "${OP_RETH_IMAGE_TAG}"
     container_name: op-reth-rpc2
     environment:
-      - DISABLE_FLASHBLOCKS=true
+      - FLASHBLOCKS_RPC=false
     entrypoint: "/entrypoint/reth-rpc.sh"
     env_file:
       - .env
@@ -447,7 +448,7 @@ services:
       - --log.level=debug
       # already existed service
       - --node.rpc=http://op-seq:9545
-      - --execution.rpc=http://${SEQ_L2_EXECUTION_CLIENT}:${SEQ_L2_EXECUTION_PORT}
+      - --execution.rpc=http://op-${SEQ_TYPE}-seq:8545
       # Raft Config
       - --raft.server.id=conductor-1
       - --raft.storage.dir=/data/raft
@@ -464,7 +465,6 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
-      - --rollup-boost.enabled=${FLASHBLOCK_ENABLED:-false}
     depends_on:
       op-seq:
         condition: service_healthy
@@ -606,7 +606,7 @@ services:
   op-reth-seq2:
     image: "${OP_RETH_IMAGE_TAG}"
     container_name: op-reth-seq2
-    entrypoint: /entrypoint/reth-seq.sh
+    entrypoint: /entrypoint/reth-seq.sh 2
     env_file:
       - ./.env
     volumes:
@@ -619,6 +619,7 @@ services:
       - "8223:8545"
       - "30305:30303"
       - "30305:30303/udp"
+      - "11112:1111" # outbound flashblocks ws port
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
       interval: 3s
@@ -647,7 +648,7 @@ services:
       - /app/op-node/bin/op-node
       - --log.level=info
       - --log.format=logfmtms
-      - --l2=http://${SEQ_L2_EXECUTION_CLIENT}2:8552
+      - --l2=http://op-${SEQ_TYPE}-seq2:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
       - --sequencer.stopped
@@ -673,7 +674,7 @@ services:
       - --conductor.rpc=http://op-conductor2:8547
       - --l2.enginekind=${SEQ_TYPE}
     depends_on:
-      - ${SEQ_L2_EXECUTION_CLIENT}2
+      - op-${SEQ_TYPE}-seq2
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9545"]
       interval: 3s
@@ -695,7 +696,7 @@ services:
       - --log.level=debug
       # already existed service
       - --node.rpc=http://op-seq2:9545
-      - --execution.rpc=http://${SEQ_L2_EXECUTION_CLIENT}2:${SEQ_L2_EXECUTION_PORT}
+      - --execution.rpc=http://op-${SEQ_TYPE}-seq2:8545
       # Raft Config
       - --raft.server.id=conductor-2
       - --raft.storage.dir=/data/raft
@@ -712,7 +713,6 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
-      - --rollup-boost.enabled=${FLASHBLOCK_ENABLED:-false}
     depends_on:
       op-seq2:
         condition: service_healthy
@@ -842,99 +842,3 @@ services:
     command:
       - --geth-mempool-endpoint=http://op-geth-seq3:8545
       - --reth-mempool-endpoint=http://op-reth-seq:8545
-
-  rollup-boost:
-    image: xlayerdev/rollup-boost:v0.1.3
-    container_name: rollup-boost
-    entrypoint: /entrypoint/rollup-boost.sh
-    env_file:
-      - .env
-    volumes:
-      - ./config-op/jwt.txt:/jwt.txt
-      - ./entrypoint:/entrypoint
-      - ./.env:/.env
-    ports:
-      - "10111:1111" # outbound flashblocks ws port
-      - "5555:5555" # debug server port
-    depends_on:
-      - op-rbuilder
-      - op-${SEQ_TYPE}-seq
-
-  op-rbuilder:
-    image: xlayerdev/op-rbuilder:v0.1.3
-    container_name: op-rbuilder
-    entrypoint: /entrypoint/op-rbuilder.sh
-    env_file:
-      - .env
-    # Enable privileged mode for perf profiling
-    privileged: true
-    cap_add:
-      - SYS_ADMIN
-      - SYS_PTRACE
-    security_opt:
-      - seccomp=unconfined
-    volumes:
-      - ./data/op-rbuilder:/datadir
-      - ./config-op/jwt.txt:/jwt.txt
-      - ./config-op/genesis-reth.json:/genesis.json
-      - ./entrypoint:/entrypoint
-      - ./.env:/.env
-    ports:
-      - "8125:8545"
-      - "18552:8552"
-      - "30307:30303"
-      - "30307:30303/udp"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
-      interval: 3s
-      timeout: 3s
-      retries: 10
-      start_period: 3s
-
-  rollup-boost2:
-    image: xlayerdev/rollup-boost:v0.1.3
-    container_name: rollup-boost2
-    entrypoint: /entrypoint/rollup-boost.sh 2
-    env_file:
-      - .env
-    volumes:
-      - ./config-op/jwt.txt:/jwt.txt
-      - ./entrypoint:/entrypoint
-      - ./.env:/.env
-    ports:
-      - "10112:1111" # outbound flashblocks ws port
-      - "5556:5555" # debug server port
-    depends_on:
-      - op-rbuilder2
-      - op-${SEQ_TYPE}-seq2
-
-  op-rbuilder2:
-    image: xlayerdev/op-rbuilder:v0.1.3
-    container_name: op-rbuilder2
-    entrypoint: /entrypoint/op-rbuilder.sh
-    env_file:
-      - .env
-    # Enable privileged mode for perf profiling
-    privileged: true
-    cap_add:
-      - SYS_ADMIN
-      - SYS_PTRACE
-    security_opt:
-      - seccomp=unconfined
-    volumes:
-      - ./data/op-rbuilder2:/datadir
-      - ./config-op/jwt.txt:/jwt.txt
-      - ./config-op/genesis-reth.json:/genesis.json
-      - ./entrypoint:/entrypoint
-      - ./.env:/.env
-    ports:
-      - "8126:8545"
-      - "19552:8552"
-      - "30308:30303"
-      - "30308:30303/udp"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
-      interval: 3s
-      timeout: 3s
-      retries: 10
-      start_period: 3s

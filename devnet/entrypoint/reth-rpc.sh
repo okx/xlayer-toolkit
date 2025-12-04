@@ -19,7 +19,7 @@ if [ "${ENABLE_INNERTX_RPC:-false}" = "true" ]; then
 fi
 
 # Read the first argument (1 or 0), default to 0 if not provided
-DISABLE_FLASHBLOCKS=${DISABLE_FLASHBLOCKS:-"false"}
+FLASHBLOCKS_RPC=${FLASHBLOCKS_RPC:-"true"}
 
 # Build the command with common arguments
 CMD="op-reth node \
@@ -53,9 +53,8 @@ CMD="op-reth node \
       $INNERTX_FLAG"
 
 # For flashblocks architecture. Enable flashblocks RPC
-if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$DISABLE_FLASHBLOCKS" = "false" ]; then
-    CMD="$CMD --flashblocks-url=ws://rollup-boost:1111"
-    echo "Flashblocks RPC enabled"
+if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
+    CMD="$CMD --flashblocks-url=ws://op-reth-seq:1111"
 fi
 
 exec $CMD
