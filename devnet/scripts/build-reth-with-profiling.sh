@@ -4,13 +4,31 @@ set -e
 
 source .env
 
+# Verify it's xlayer-reth
+cd $OP_RETH_LOCAL_DIRECTORY
+set +e
+cargo tree -p xlayer-reth-node &>/dev/null
+result=$?
+set -e
+cd - 
+
+DOCKERFILE=${DOCKERFILE:=Dockerfile.profiling}
+BINARY=${BINARY:=op-reth}
+if [ "$result" -eq 0 ]; then
+	  DOCKERFILE="Dockerfile-xlayer-reth.profiling"
+    BINARY="xlayer-reth-node"
+fi
+
 # Configuration
 RETH_SOURCE_DIR=${OP_RETH_LOCAL_DIRECTORY:-"../../reth"}
 IMAGE_TAG=${OP_RETH_IMAGE_TAG:-"op-reth:profiling"}
 
 echo "=== Building op-reth with Profiling Support ==="
+echo "Reth directory: $OP_RETH_LOCAL_DIRECTORY"
 echo "Source: $RETH_SOURCE_DIR"
 echo "Image: $IMAGE_TAG"
+echo "Dockerfile: $DOCKERFILE"
+echo "Binary: $BINARY"
 echo ""
 
 # Check if source directory exists
@@ -31,13 +49,13 @@ echo "[1/2] Copying Dockerfile to reth directory..."
 cd "$RETH_SOURCE_DIR"
 
 # Copy the Dockerfile from the devnet directory
-if [ ! -f "$DEVNET_DIR/dockerfile/Dockerfile.profiling" ]; then
-    echo "Error: Dockerfile.profiling not found at $DEVNET_DIR/dockerfile/Dockerfile.profiling"
+if [ ! -f "$DEVNET_DIR/dockerfile/$DOCKERFILE" ]; then
+    echo "Error: Dockerfile.profiling not found at $DEVNET_DIR/dockerfile/$DOCKERFILE"
     exit 1
 fi
 
 # Copies to reth folder.
-cp "$DEVNET_DIR/dockerfile/Dockerfile.profiling" Dockerfile.profiling.tmp
+cp "$DEVNET_DIR/dockerfile/$DOCKERFILE" Dockerfile.profiling.tmp
 
 echo "[2/2] Building Docker image (this may take a while)..."
 docker build --progress=plain -f Dockerfile.profiling.tmp -t "$IMAGE_TAG" .
@@ -47,7 +65,7 @@ rm Dockerfile.profiling.tmp
 
 echo ""
 echo "=== Verifying image ==="
-docker run --rm "$IMAGE_TAG" op-reth --version
+docker run --rm "$IMAGE_TAG" $BINARY --version
 
 echo ""
 echo "=== Build Complete ==="
