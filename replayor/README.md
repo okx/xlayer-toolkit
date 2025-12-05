@@ -27,7 +27,7 @@ docker compose up -d node
 # start replayor
 ```
 cp replayor.docker.env.example replayor.docker.env
-docker compose up -d replayer
+docker compose up -d replayor
 ```
 
 # unwind(optional)
