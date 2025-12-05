@@ -223,6 +223,8 @@ services:
       - ./.env:/.env
       # Profiling data directory
       - ./profiling/op-reth-seq:/profiling
+      # Kernel tracing filesystem for perf profiling
+      - /sys/kernel/tracing:/sys/kernel/tracing:ro
     ports:
       - "8123:8545"
       - "7546:7546"
@@ -279,6 +281,8 @@ services:
       - ./.env:/.env
       # Profiling data directory
       - ./profiling/op-reth-rpc:/profiling
+      # Kernel tracing filesystem for perf profiling
+      - /sys/kernel/tracing:/sys/kernel/tracing:ro
     ports:
       - "8124:8545"
       - "30304:30303"

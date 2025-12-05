@@ -164,33 +164,54 @@ TRACEFS_STATUS=$(echo "$TRACEFS_CHECK" | cut -d: -f1)
 TRACEFS_PATH=$(echo "$TRACEFS_CHECK" | cut -d: -f2)
 
 if [ "$TRACEFS_STATUS" = "MISSING" ]; then
-	echo "ERROR: Tracing filesystem not found!"
-	echo ""
-	echo "Diagnostics:"
-	docker exec "$CONTAINER" sh -c '
-		echo "Checking for tracing directories:"
-		ls -ld /sys/kernel/tracing 2>&1 || echo "  /sys/kernel/tracing: NOT FOUND"
-		ls -ld /sys/kernel/debug 2>&1 || echo "  /sys/kernel/debug: NOT FOUND"
+	echo "Tracing filesystem not mounted. Attempting to mount..."
+
+	# Try to mount tracefs (requires privileged container)
+	MOUNT_RESULT=$(docker exec "$CONTAINER" sh -c '
+		if mount -t tracefs nodev /sys/kernel/tracing 2>/dev/null; then
+			echo "TRACEFS_MOUNTED"
+		elif mount -t debugfs nodev /sys/kernel/debug 2>/dev/null; then
+			echo "DEBUGFS_MOUNTED"
+		else
+			echo "MOUNT_FAILED"
+		fi
+	')
+
+	if [ "$MOUNT_RESULT" = "TRACEFS_MOUNTED" ]; then
+		echo "✓ Successfully mounted tracefs at /sys/kernel/tracing"
+		TRACEFS_PATH="/sys/kernel/tracing"
+	elif [ "$MOUNT_RESULT" = "DEBUGFS_MOUNTED" ]; then
+		echo "✓ Successfully mounted debugfs at /sys/kernel/debug/tracing"
+		TRACEFS_PATH="/sys/kernel/debug/tracing"
+	else
+		echo "ERROR: Failed to mount tracing filesystem!"
 		echo ""
-		echo "Checking mounted filesystems:"
-		mount | grep -E "tracefs|debugfs" || echo "  No tracefs or debugfs mounted"
+		echo "Diagnostics:"
+		docker exec "$CONTAINER" sh -c '
+			echo "Checking for tracing directories:"
+			ls -ld /sys/kernel/tracing 2>&1 || echo "  /sys/kernel/tracing: NOT FOUND"
+			ls -ld /sys/kernel/debug 2>&1 || echo "  /sys/kernel/debug: NOT FOUND"
+			echo ""
+			echo "Checking mounted filesystems:"
+			mount | grep -E "tracefs|debugfs" || echo "  No tracefs or debugfs mounted"
+			echo ""
+			echo "Container capabilities:"
+			cat /proc/self/status | grep Cap || echo "  Cannot read capabilities"
+		'
 		echo ""
-		echo "Container capabilities:"
-		cat /proc/self/status | grep Cap || echo "  Cannot read capabilities"
-	'
-	echo ""
-	echo "Solutions:"
-	echo "  1. Mount tracefs in the container (add to docker-compose.yml):"
-	echo "     volumes:"
-	echo "       - /sys/kernel/tracing:/sys/kernel/tracing:ro"
-	echo ""
-	echo "  2. Or mount debugfs:"
-	echo "     volumes:"
-	echo "       - /sys/kernel/debug:/sys/kernel/debug:ro"
-	echo ""
-	echo "  3. Or run container with --privileged flag (not recommended for production)"
-	echo ""
-	exit 1
+		echo "Solutions:"
+		echo "  1. Mount tracefs in the container (add to docker-compose.yml):"
+		echo "     volumes:"
+		echo "       - /sys/kernel/tracing:/sys/kernel/tracing:ro"
+		echo ""
+		echo "  2. Or mount debugfs:"
+		echo "     volumes:"
+		echo "       - /sys/kernel/debug:/sys/kernel/debug:ro"
+		echo ""
+		echo "  3. Or run container with --privileged flag (not recommended for production)"
+		echo ""
+		exit 1
+	fi
 else
 	echo "✓ Tracing filesystem found at: $TRACEFS_PATH"
 fi

@@ -4,13 +4,28 @@ set -e
 
 source .env
 
+# Verify it's xlayer-reth
+cd $OP_RETH_LOCAL_DIRECTORY
+set +e
+cargo tree -p xlayer-reth-node &>/dev/null
+result=$?
+set -e
+cd - 
+
+DOCKERFILE=${DOCKERFILE:=Dockerfile.profiling}
+if [ "$result" -eq 0 ]; then
+	  DOCKERFILE="Dockerfile-xlayer-reth.profiling"
+fi
+
 # Configuration
 RETH_SOURCE_DIR=${OP_RETH_LOCAL_DIRECTORY:-"../../reth"}
 IMAGE_TAG=${OP_RETH_IMAGE_TAG:-"op-reth:profiling"}
 
 echo "=== Building op-reth with Profiling Support ==="
+echo "Reth directory: $OP_RETH_LOCAL_DIRECTORY"
 echo "Source: $RETH_SOURCE_DIR"
 echo "Image: $IMAGE_TAG"
+echo "Dockerfile: $DOCKERFILE"
 echo ""
 
 # Check if source directory exists
@@ -23,104 +38,21 @@ fi
 # Get absolute path
 RETH_SOURCE_DIR=$(cd "$RETH_SOURCE_DIR" && pwd)
 
-echo "[1/2] Creating Dockerfile with multi-stage build..."
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+DEVNET_DIR="$( cd "$SCRIPT_DIR/.." && pwd )"
+
+echo "[1/2] Copying Dockerfile to reth directory..."
 cd "$RETH_SOURCE_DIR"
 
-# Create a temporary Dockerfile that builds everything in Docker
-cat > Dockerfile.profiling.tmp <<'EOF'
-# Multi-stage build: Build stage
-FROM rust:1.88-bookworm AS builder
+# Copy the Dockerfile from the devnet directory
+if [ ! -f "$DEVNET_DIR/dockerfile/$DOCKERFILE" ]; then
+    echo "Error: Dockerfile.profiling not found at $DEVNET_DIR/dockerfile/$DOCKERFILE"
+    exit 1
+fi
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    libclang-dev \
-    pkg-config \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
-WORKDIR /build
-
-# Copy source code
-COPY . .
-
-# Build op-reth with profiling support using the Makefile target
-# RUN make profiling-op
-# Note: jemalloc-prof feature enables jemalloc profiling support (--enable-prof)
-RUN RUSTFLAGS="-C force-frame-pointers=yes -C target-cpu=native" cargo build --profile profiling --features jemalloc,jemalloc-prof,asm-keccak --bin op-reth --manifest-path crates/optimism/bin/Cargo.toml
-
-# Runtime stage
-FROM debian:bookworm-slim
-
-# Install runtime dependencies and profiling tools
-RUN apt-get update && apt-get install -y \
-    ca-certificates \
-    curl \
-    libssl3 \
-    procps \
-    binutils \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install perf from bookworm repos (supports newer kernels)
-# Debian Bookworm has better kernel support (5.10, 6.1, 6.3+)
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    linux-perf \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install memory profiling tools
-RUN apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    heaptrack \
-    valgrind \
-    libjemalloc2 \
-    libjemalloc-dev \
-    google-perftools \
-    libgoogle-perftools-dev \
-    graphviz \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create symlinks for jemalloc profiling tools
-RUN ln -sf /usr/bin/google-pprof /usr/local/bin/jeprof || true
-
-# The linux-perf package installs versioned binaries in /usr/lib/linux-tools/
-# Find and symlink them to /usr/bin for easy access
-RUN echo "Setting up perf binaries..." && \
-    mkdir -p /usr/local/bin && \
-    # Find all installed perf binaries
-    find /usr/lib -name "perf" -type f 2>/dev/null | while read perf_path; do \
-        version=$(echo "$perf_path" | grep -oP '\d+\.\d+' | head -1); \
-        if [ -n "$version" ]; then \
-            echo "Found perf version $version at $perf_path"; \
-            ln -sf "$perf_path" "/usr/local/bin/perf_$version"; \
-        fi; \
-    done && \
-    # Create a generic perf symlink to the newest version
-    newest_perf=$(find /usr/lib -name "perf" -type f 2>/dev/null | head -1); \
-    if [ -n "$newest_perf" ]; then \
-        ln -sf "$newest_perf" /usr/local/bin/perf; \
-        echo "Created generic perf symlink to: $newest_perf"; \
-    fi && \
-    echo "" && \
-    echo "Installed perf binaries:" && \
-    ls -lh /usr/local/bin/perf* 2>/dev/null || echo "Warning: No perf binaries found"
-
-# Copy op-reth binary from builder stage
-COPY --from=builder /build/target/profiling/op-reth /usr/local/bin/op-reth
-
-# Create directories for data and profiling output
-RUN mkdir -p /datadir /profiling
-
-# Expose ports
-EXPOSE 8545 8546 8547 30303 30303/udp
-
-# Set working directory
-WORKDIR /
-
-# Default command (will be overridden by entrypoint script)
-CMD ["/usr/local/bin/op-reth", "--help"]
-EOF
+# Copies to reth folder.
+cp "$DEVNET_DIR/dockerfile/$DOCKERFILE" Dockerfile.profiling.tmp
 
 echo "[2/2] Building Docker image (this may take a while)..."
 docker build --progress=plain -f Dockerfile.profiling.tmp -t "$IMAGE_TAG" .
