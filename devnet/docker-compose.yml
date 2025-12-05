@@ -497,7 +497,10 @@ services:
       - --rpc.enable-admin
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --private-key=${OP_BATCHER_PRIVATE_KEY}
-      - --throttle.block-size-upper-limit=1300000
+      - --throttle.tx-size-upper-limit=0
+      - --throttle.tx-size-lower-limit=0
+      - --throttle.block-size-upper-limit=0
+      - --throttle.block-size-lower-limit=0
       - --active-sequencer-check-duration=5s
 
   op-proposer:
