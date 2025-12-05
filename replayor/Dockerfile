@@ -12,11 +12,6 @@ WORKDIR /app
 
 FROM ubuntu:25.04
 
-# Install ping and other utilities
-RUN apt-get update && apt-get install -y \
-    iputils-ping \
-    && rm -rf /var/lib/apt/lists/*
-
 # Install certs
 # RUN apk add --no-cache ca-certificates
 # COPY ./oplabs.crt /usr/local/share/ca-certificates/oplabs.crt
