@@ -121,3 +121,19 @@ else
     cd "$OP_STACK_LOCAL_DIRECTORY"
   fi
 fi
+
+# Build OP_SUCCINCT image if not skipping
+if [ "$SKIP_OP_SUCCINCT_BUILD" = "true" ]; then
+  echo "⏭️  Skipping op-succinct build"
+else
+  if [ "$OP_SUCCINCT_LOCAL_DIRECTORY" = "" ]; then
+    echo "❌ Please set OP_SUCCINCT_LOCAL_DIRECTORY in .env"
+    exit 1
+  else
+    echo "🔨 Building op-succinct images"
+
+    cd "$OP_SUCCINCT_LOCAL_DIRECTORY"
+    build_and_tag_image "op-succinct" "$OP_SUCCINCT_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile"
+    build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.contract"
+  fi
+fi

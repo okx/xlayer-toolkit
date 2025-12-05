@@ -307,6 +307,7 @@ services:
       - --sequencer.enabled
       - --sequencer.l1-confs=5
       - --verifier.l1-confs=1
+      - --l1.epoch-poll-interval=10s
       - --rollup.config=/rollup.json
       - --rpc.addr=0.0.0.0
       - --p2p.listen.tcp=9223
@@ -355,6 +356,7 @@ services:
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled=false
       - --verifier.l1-confs=1
+      - --l1.epoch-poll-interval=10s
       - --rollup.config=/rollup.json
       - --rpc.addr=0.0.0.0
       - --rpc.port=9545
@@ -511,7 +513,7 @@ services:
     command:
       - /app/op-proposer/bin/op-proposer
       - --log.level=debug
-      - --poll-interval=20s
+      - --poll-interval=5s
       - --wait-node-sync=true
       - --allow-non-finalized=false
       - --num-confirmations=1
@@ -520,7 +522,7 @@ services:
       - --rpc.port=8560
       - --rollup-rpc=http://op-seq:9545
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
-      - --proposal-interval=1m
+      - --proposal-interval=10s
       - --private-key=${OP_PROPOSER_PRIVATE_KEY}
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --game-type=${GAME_TYPE:-0}
@@ -657,6 +659,7 @@ services:
       - --sequencer.stopped
       - --sequencer.l1-confs=5
       - --verifier.l1-confs=1
+      - --l1.epoch-poll-interval=10s
       - --rollup.config=/rollup.json
       - --rpc.addr=0.0.0.0
       - --p2p.listen.tcp=9223
@@ -776,6 +779,7 @@ services:
       - --sequencer.stopped
       - --sequencer.l1-confs=5
       - --verifier.l1-confs=1
+      - --l1.epoch-poll-interval=10s
       - --rollup.config=/rollup.json
       - --rpc.addr=0.0.0.0
       - --p2p.listen.tcp=9223
@@ -845,3 +849,53 @@ services:
     command:
       - --geth-mempool-endpoint=http://op-geth-seq3:8545
       - --reth-mempool-endpoint=http://op-reth-seq:8545
+
+  op-succinct-fetch-config:
+    image: "${OP_SUCCINCT_IMAGE_TAG}"
+    container_name: fetch-config
+    volumes:
+      - ./op-succinct/.env.deploy:/app/.env
+      - ./op-succinct/configs:/app/configs
+    command:
+      - fetch-fault-dispute-game-config
+
+  op-succinct-contracts:
+    image: "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}"
+    container_name: op-succinct-contracts
+    volumes:
+      - ./op-succinct/configs/opsuccinctfdgconfig.json:/app/contracts/opsuccinctfdgconfig.json
+    env_file:
+      - ./op-succinct/.env.deploy
+    command:
+      - forge
+      - script
+      - script/fp/DeployOPSuccinctLite.s.sol:DeployOPSuccinctLite
+      - -vvv
+      - --private-key=${DEPLOYER_PRIVATE_KEY}
+      - --rpc-url=${L1_RPC_URL_IN_DOCKER}
+      - --broadcast
+
+  op-succinct-proposer:
+    image: "${OP_SUCCINCT_IMAGE_TAG}"
+    container_name: op-succinct-proposer
+    volumes:
+      - ./op-succinct/.env.proposer:/app/.env
+      - ./op-succinct/configs:/app/configs
+    environment:
+      - RUST_LOG=info
+    ports:
+      - "9000:9000"
+    command:
+      - proposer
+      - --env-file=/app/.env
+
+  op-succinct-challenger:
+    image: "${OP_SUCCINCT_IMAGE_TAG}"
+    container_name: op-succinct-challenger
+    volumes:
+      - ./op-succinct/.env.challenger:/app/.env
+    ports:
+      - "9001:9001"
+    command:
+      - challenger 
+      - --env-file=/app/.env
