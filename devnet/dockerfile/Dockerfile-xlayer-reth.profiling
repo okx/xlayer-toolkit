@@ -76,7 +76,7 @@ RUN echo "Setting up perf binaries..." && \
     ls -lh /usr/local/bin/perf* 2>/dev/null || echo "Warning: No perf binaries found"
 
 # Copy xlayer-reth-node binary from builder stage
-COPY --from=builder /build/target/profiling/xlayer-reth-node /usr/local/bin/xlayer-reth-node
+COPY --from=builder /build/target/profiling/xlayer-reth-node /usr/local/bin/op-reth
 
 # Create directories for data and profiling output
 RUN mkdir -p /datadir /profiling
@@ -88,4 +88,4 @@ EXPOSE 8545 8546 8547 30303 30303/udp
 WORKDIR /
 
 # Default command (will be overridden by entrypoint script)
-CMD ["/usr/local/bin/xlayer-reth-node", "--help"]
+CMD ["/usr/local/bin/op-reth", "--help"]

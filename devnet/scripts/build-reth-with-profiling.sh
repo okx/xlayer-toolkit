@@ -13,10 +13,8 @@ set -e
 cd - 
 
 DOCKERFILE=${DOCKERFILE:=Dockerfile.profiling}
-BINARY=${BINARY:=op-reth}
 if [ "$result" -eq 0 ]; then
 	  DOCKERFILE="Dockerfile-xlayer-reth.profiling"
-    BINARY="xlayer-reth-node"
 fi
 
 # Configuration
@@ -28,7 +26,6 @@ echo "Reth directory: $OP_RETH_LOCAL_DIRECTORY"
 echo "Source: $RETH_SOURCE_DIR"
 echo "Image: $IMAGE_TAG"
 echo "Dockerfile: $DOCKERFILE"
-echo "Binary: $BINARY"
 echo ""
 
 # Check if source directory exists
@@ -65,7 +62,7 @@ rm Dockerfile.profiling.tmp
 
 echo ""
 echo "=== Verifying image ==="
-docker run --rm "$IMAGE_TAG" $BINARY --version
+docker run --rm "$IMAGE_TAG" op-reth --version
 
 echo ""
 echo "=== Build Complete ==="
