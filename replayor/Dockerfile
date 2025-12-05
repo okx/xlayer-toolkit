@@ -1,4 +1,8 @@
-FROM golang:1.23-alpine AS builder
+FROM okexchain/go-builder:v1  AS builder
+
+RUN apt-get install -y wget \
+    && wget -qO- https://get.docker.com | sh \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -10,7 +14,7 @@ RUN go build -o bin/replayor ./cmd/replayor/main.go
 
 WORKDIR /app
 
-FROM ubuntu:25.04
+FROM okexchain/go-builder:v1
 
 # Install certs
 # RUN apk add --no-cache ca-certificates
