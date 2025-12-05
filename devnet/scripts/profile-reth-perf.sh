@@ -5,11 +5,13 @@ set -e
 # Configuration
 CONTAINER=${1:-op-reth-seq}
 DURATION=${2:-60}
+SKIP_SCRIPT=${3:-true}  # Set to "true" to skip generating perf.script
 OUTPUT_DIR="./profiling/${CONTAINER}"
 
 echo "=== Reth CPU Profiling with perf ==="
 echo "Container: $CONTAINER"
 echo "Duration: ${DURATION}s"
+echo "Skip perf.script: $SKIP_SCRIPT"
 echo "Output Directory: $OUTPUT_DIR"
 echo ""
 
@@ -108,42 +110,58 @@ echo "Perf version: $PERF_VERSION_OUTPUT"
 echo "[3/5] Recording CPU profile for ${DURATION}s with perf..."
 echo "Collecting call graph data with symbols..."
 
+# Use cpu-clock software event for consistent sampling regardless of CPU activity
+# -F 999: Sample at 999 Hz (999 samples per second) - reduced to avoid overhead
+# -g: Enable call-graph (stack trace) recording
+# -p $RETH_PID: Profile specific process
 docker exec "$CONTAINER" sh -c "
     cd /profiling && \
     $PERF_BIN record -F 999 -e cycles:u -p $RETH_PID -g --call-graph fp -o perf.data -- sleep ${DURATION}
 "
 
-# Generate perf script output with symbols
-echo "[4/5] Generating symbolicated output..."
-docker exec "$CONTAINER" sh -c "
-    cd /profiling && \
-    $PERF_BIN script -i perf.data > perf.script
-"
+# Generate perf script output with symbols (optional)
+if [ "$SKIP_SCRIPT" != "true" ]; then
+    echo "[4/5] Generating symbolicated output..."
+    docker exec "$CONTAINER" sh -c "
+        cd /profiling && \
+        $PERF_BIN script -i perf.data > perf.script
+    "
+else
+    echo "[4/5] Skipping perf.script generation (use perf report directly on .data file)"
+fi
 
 # Copy profile data from container
 echo "[5/5] Copying profile data from container..."
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 docker cp "$CONTAINER:/profiling/perf.data" "$OUTPUT_DIR/perf-${TIMESTAMP}.data" 2>/dev/null || echo "Warning: Could not copy perf.data"
-docker cp "$CONTAINER:/profiling/perf.script" "$OUTPUT_DIR/perf-${TIMESTAMP}.script" 2>/dev/null || echo "Warning: Could not copy perf.script"
+
+if [ "$SKIP_SCRIPT" != "true" ]; then
+    docker cp "$CONTAINER:/profiling/perf.script" "$OUTPUT_DIR/perf-${TIMESTAMP}.script" 2>/dev/null || echo "Warning: Could not copy perf.script"
+fi
 
 # Clean up in container
 docker exec "$CONTAINER" sh -c 'rm -f /profiling/perf.data /profiling/perf.script' 2>/dev/null || true
 
-if [ -f "$OUTPUT_DIR/perf-${TIMESTAMP}.script" ]; then
+DATA_SIZE=$(du -h "$OUTPUT_DIR/perf-${TIMESTAMP}.data" | cut -f1)
+echo ""
+echo "Profile data collected successfully!"
+echo "  - perf.data: $OUTPUT_DIR/perf-${TIMESTAMP}.data ($DATA_SIZE)"
+
+if [ "$SKIP_SCRIPT" != "true" ] && [ -f "$OUTPUT_DIR/perf-${TIMESTAMP}.script" ]; then
     SCRIPT_SIZE=$(du -h "$OUTPUT_DIR/perf-${TIMESTAMP}.script" | cut -f1)
-    echo ""
-    echo "Profile data collected successfully!"
-    echo "  - perf.data: $OUTPUT_DIR/perf-${TIMESTAMP}.data"
     echo "  - perf.script: $OUTPUT_DIR/perf-${TIMESTAMP}.script ($SCRIPT_SIZE)"
-    echo ""
+fi
+echo ""
+
+if [ -f "$OUTPUT_DIR/perf-${TIMESTAMP}.data" ]; then
 
     # Generate flamegraph automatically
     echo "[6/6] Generating flamegraph..."
     if [ -x "./scripts/generate-flamegraph.sh" ]; then
-        ./scripts/generate-flamegraph.sh "$CONTAINER" "perf-${TIMESTAMP}.script"
+        ./scripts/generate-flamegraph.sh "$CONTAINER" "perf-${TIMESTAMP}.data" "cpu"
     else
         echo "Warning: generate-flamegraph.sh not found or not executable"
-        echo "You can manually generate it with: ./scripts/generate-flamegraph.sh $CONTAINER perf-${TIMESTAMP}.script"
+        echo "You can manually generate it with: ./scripts/generate-flamegraph.sh $CONTAINER perf-${TIMESTAMP}.data cpu"
     fi
 else
     echo "Error: Profile was not generated successfully"

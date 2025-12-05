@@ -16,6 +16,11 @@ sed_inplace() {
   fi
 }
 
+if [ "$OP_SUCCINCT_ENABLE" = "false" ]; then
+  echo "skip launching op succinct"
+  exit 0
+fi
+
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR=$PWD_DIR/scripts
 OP_SUCCINCT_DIR=$PWD_DIR/op-succinct
