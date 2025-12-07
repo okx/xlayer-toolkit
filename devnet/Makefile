@@ -48,26 +48,28 @@ test-geth-e2e: stop
 	@echo "Running with SEQ_TYPE=geth RPC_TYPE=geth"
 	@if [ -n "$(OP_GETH_BRANCH)" ]; then \
 		echo "Running E2E tests with branch: $(OP_GETH_BRANCH)"; \
-		SEQ_TYPE=geth RPC_TYPE=geth SKIP_OP_GETH_BUILD=false SKIP_OP_RETH_BUILD=true $(MAKE) run && sleep 10 && $(MAKE) run-geth-test; \
 	else \
 		echo "Running E2E tests with default branch"; \
-		SEQ_TYPE=geth RPC_TYPE=geth SKIP_OP_GETH_BUILD=false SKIP_OP_RETH_BUILD=true $(MAKE) run && sleep 10 && $(MAKE) run-geth-test; \
-	fi && echo "✅ Geth E2E tests passed ✅"
+	fi 
+	SEQ_TYPE=geth RPC_TYPE=geth SKIP_OP_GETH_BUILD=false SKIP_OP_RETH_BUILD=true $(MAKE) run && sleep 10 && $(MAKE) run-geth-test && echo "✅ Geth E2E tests passed ✅"
 
 .PHONY: run-reth-test
 run-reth-test:
-	@echo "OP_RETH_LOCAL_DIRECTORY: $$OP_RETH_LOCAL_DIRECTORY"
-	@echo "OP_RETH_BRANCH: $(OP_RETH_BRANCH)"
-	@if [ -n "$$OP_RETH_LOCAL_DIRECTORY" ]; then \
-		echo "Using custom local directory: $$OP_RETH_LOCAL_DIRECTORY"; \
-		cd "$$OP_RETH_LOCAL_DIRECTORY"; \
+	@echo "Starting op-rpc2 for tests..."
+	@./scripts/run-rpc2.sh
+	@sleep 5
+	@echo "XLAYER_RETH_LOCAL_DIRECTORY: $$XLAYER_RETH_LOCAL_DIRECTORY"
+	@echo "XLAYER_RETH_BRANCH: $(XLAYER_RETH_BRANCH)"
+	@if [ -n "$$XLAYER_RETH_LOCAL_DIRECTORY" ]; then \
+		echo "Using custom local directory: $$XLAYER_RETH_LOCAL_DIRECTORY"; \
+		cd "$$XLAYER_RETH_LOCAL_DIRECTORY"; \
 	else \
-		echo "Please set OP_RETH_LOCAL_DIRECTORY in .env"; \
+		echo "Please set XLAYER_RETH_LOCAL_DIRECTORY in .env"; \
 		exit 1; \
 	fi && \
-	if [ -n "$(OP_RETH_BRANCH)" ]; then \
-		echo "Switching to branch: $(OP_RETH_BRANCH)"; \
-		git fetch origin && git checkout "$(OP_RETH_BRANCH)" && git pull origin "$(OP_RETH_BRANCH)"; \
+	if [ -n "$(XLAYER_RETH_BRANCH)" ]; then \
+		echo "Switching to branch: $(XLAYER_RETH_BRANCH)"; \
+		git fetch origin && git checkout "$(XLAYER_RETH_BRANCH)" && git pull origin "$(XLAYER_RETH_BRANCH)"; \
 	else \
 		echo "Using current branch"; \
 	fi && \
@@ -77,12 +79,11 @@ run-reth-test:
 .PHONY: test-reth-e2e
 test-reth-e2e: stop
 	@trap 'make stop' EXIT ERR INT TERM;
-	@echo "OP_RETH_BRANCH: $(OP_RETH_BRANCH)"
+	@echo "XLAYER_RETH_BRANCH: $(XLAYER_RETH_BRANCH)"
 	@echo "Running with SEQ_TYPE=reth RPC_TYPE=reth"
-	@if [ -n "$(OP_RETH_BRANCH)" ]; then \
-		echo "Running E2E tests with branch: $(OP_RETH_BRANCH)"; \
-		SEQ_TYPE=reth RPC_TYPE=reth SKIP_OP_RETH_BUILD=false SKIP_OP_GETH_BUILD=true $(MAKE) run && sleep 3 && $(MAKE) run-reth-test; \
+	@if [ -n "$(XLAYER_RETH_BRANCH)" ]; then \
+		echo "Running E2E tests with branch: $(XLAYER_RETH_BRANCH)"; \
 	else \
 		echo "Running E2E tests with default branch"; \
-		SEQ_TYPE=reth RPC_TYPE=reth SKIP_OP_RETH_BUILD=false SKIP_OP_GETH_BUILD=true $(MAKE) run && sleep 3 && $(MAKE) run-reth-test; \
-	fi && echo "✅ Reth E2E tests passed ✅"
+	fi
+	@SEQ_TYPE=reth RPC_TYPE=reth SKIP_OP_RETH_BUILD=false SKIP_OP_GETH_BUILD=true FLASHBLOCK_ENABLED=true ENABLE_INNERTX_SEQ=true ENABLE_INNERTX_RPC=true $(MAKE) run && sleep 3 && $(MAKE) run-reth-test && echo "✅ Reth E2E tests passed ✅"
