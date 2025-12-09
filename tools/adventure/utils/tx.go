@@ -393,7 +393,9 @@ func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accou
 	txHashes, err := ethClient.SendMultipleEthereumTx(signedTxs)
 	if err != nil {
 		log.Printf("[g%d] batch send failed: %v\n", gIndex, err)
-		if strings.Contains(err.Error(), "Transaction already exists") {
+		if strings.Contains(err.Error(), "Transaction already exists") ||
+			strings.Contains(err.Error(), "already known") {
+			// Transaction with same hash already in mempool - increment nonce to move forward
 			noncePlus1(accounts)
 		} else if strings.Contains(err.Error(), "nonce too low") {
 			queryNonce(ethClient, accounts)
