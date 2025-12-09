@@ -368,8 +368,14 @@ challenge_game() {
     echo ""
     echo -e "${CYAN}Challenging game #$idx ($addr)...${NC}"
     
-    # Send challenge transaction with bond
-    local result=$(cast send $addr "challenge()" --value $bond --private-key $CHALLENGER_KEY --rpc-url $L1_RPC --json 2>&1)
+    # Send challenge transaction with bond (with increased timeout for devnet)
+    local result=$(cast send $addr "challenge()" \
+        --value $bond \
+        --private-key $CHALLENGER_KEY \
+        --rpc-url $L1_RPC \
+        --timeout 60 \
+        --confirmations 1 \
+        --json 2>&1)
     local exit_code=$?
     
     # Extract TX hash
