@@ -18,7 +18,6 @@ L1_RPC=${L1_RPC_URL:-"http://localhost:8545"}
 L2_RPC=${L2_RPC_URL:-"http://localhost:9545"}
 CHALLENGER_KEY=${CHALLENGER_PRIVATE_KEY:-""}
 GAME_TYPE=42  # OP-Succinct game type
-PROPOSAL_INTERVAL=${PROPOSAL_INTERVAL_IN_BLOCKS:-10}  # Blocks per proposal
 
 # Colors
 RED='\033[0;31m'
@@ -112,37 +111,70 @@ list_games() {
     echo -e "${YELLOW}Loading game details...${NC}"
     echo ""
     
+    # First pass: collect all OP-Succinct games and their start blocks
+    declare -a game_indices
+    declare -a game_addrs
+    declare -a game_starts
+    
+    for ((i=0; i<total; i++)); do
+        local game_data=$(cast call $FACTORY_ADDRESS "gameAtIndex(uint256)((uint32,uint64,address))" $i --rpc-url $L1_RPC 2>/dev/null)
+        [ -z "$game_data" ] && continue
+        
+        local type=$(echo "$game_data" | grep -oE '\([0-9]+' | head -1 | tr -d '(')
+        [ "$type" != "$GAME_TYPE" ] && continue
+        
+        local addr=$(echo "$game_data" | grep -oE '0x[a-fA-F0-9]{40}')
+        local start=$(cast call $addr "l2BlockNumber()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
+        [ -z "$start" ] && start=0
+        
+        game_indices+=("$i")
+        game_addrs+=("$addr")
+        game_starts+=("$start")
+    done
+    
+    local count=${#game_indices[@]}
+    
+    if [ $count -eq 0 ]; then
+        echo -e "${YELLOW}No OP-Succinct games found.${NC}"
+        return
+    fi
+    
+    # Calculate average interval from all consecutive games
+    local total_intervals=0
+    local sum_intervals=0
+    for ((j=0; j<count-1; j++)); do
+        local interval=$((game_starts[j+1] - game_starts[j]))
+        sum_intervals=$((sum_intervals + interval))
+        total_intervals=$((total_intervals + 1))
+    done
+    local avg_interval=$((sum_intervals / total_intervals))
+    [ $avg_interval -eq 0 ] && avg_interval=10  # Fallback
+    
     # Table header
     printf "${BOLD}%-6s %-8s %-25s %-10s %-10s %-20s %-20s${NC}\n" \
         "Index" "Type" "Block Range" "Blocks" "Txs" "Status" "Proof"
     echo "──────────────────────────────────────────────────────────────────────────────────────────"
     
-    local count=0
-    
-    # Iterate through all games
-    for ((i=0; i<total; i++)); do
-        local game_data=$(cast call $FACTORY_ADDRESS "gameAtIndex(uint256)((uint32,uint64,address))" $i --rpc-url $L1_RPC 2>/dev/null)
-        [ -z "$game_data" ] && continue
+    # Second pass: display games with inferred block ranges
+    for ((j=0; j<count; j++)); do
+        local idx=${game_indices[j]}
+        local addr=${game_addrs[j]}
+        local start=${game_starts[j]}
         
-        # Parse: (type, timestamp, address)
-        local type=$(echo "$game_data" | grep -oE '\([0-9]+' | head -1 | tr -d '(')
-        local addr=$(echo "$game_data" | grep -oE '0x[a-fA-F0-9]{40}')
+        # Infer end block from next game, or use average interval for last game
+        local end blocks
+        if [ $j -lt $((count - 1)) ]; then
+            end=$((game_starts[j+1] - 1))
+            blocks=$((game_starts[j+1] - start))
+        else
+            end=$((start + avg_interval - 1))
+            blocks=$avg_interval
+        fi
         
-        # Only show OP-Succinct games
-        [ "$type" != "$GAME_TYPE" ] && continue
-        
-        count=$((count + 1))
-        
-        # Get game details
-        local start=$(cast call $addr "l2BlockNumber()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
-        [ -z "$start" ] && start=0
-        local end=$((start + PROPOSAL_INTERVAL - 1))
-        local blocks=$PROPOSAL_INTERVAL
         local txs=$(count_transactions $start $end)
         
-        # Get status (5th field in claimData: parentIndex, counteredBy, prover, claim, status, deadline)
+        # Get status
         local claim_hex=$(cast call $addr "claimData()" --rpc-url $L1_RPC 2>/dev/null)
-        # Extract 5th field (bytes 128-160): skip 2 (0x) + 64*4 = 258 chars, take next 64 chars
         local status_hex="0x$(echo "$claim_hex" | cut -c259-322)"
         local status=$(cast --to-dec "$status_hex" 2>/dev/null || echo "0")
         
@@ -158,11 +190,12 @@ list_games() {
         esac
         
         printf "%-6s %-8s %-25s %-10s %-10s %-20s %-20s\n" \
-            "$i" "$type" "$start-$end" "$blocks" "$txs" "$status_text" "$proof_text"
+            "$idx" "$GAME_TYPE" "$start-$end" "$blocks" "$txs" "$status_text" "$proof_text"
     done
     
     echo ""
     echo -e "${CYAN}OP-Succinct Games: $count${NC}"
+    echo -e "${CYAN}Avg Interval: $avg_interval blocks (inferred from L1)${NC}"
     echo ""
 }
 
@@ -193,13 +226,63 @@ analyze_game() {
         return 1
     fi
     
-    # Get block range
+    # Get current game's start block
     local start=$(cast call $addr "l2BlockNumber()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
     [ -z "$start" ] && start=0
-    local end=$((start + PROPOSAL_INTERVAL - 1))
-    local blocks=$PROPOSAL_INTERVAL
     
-    echo -e "${BOLD}Block Range:${NC} $start - $end ($blocks blocks)"
+    # Infer end block from next game or calculate average interval
+    local total=$(cast call $FACTORY_ADDRESS "gameCount()(uint256)" --rpc-url $L1_RPC 2>/dev/null)
+    local next_idx=$((idx + 1))
+    local end blocks
+    
+    # Try to find next OP-Succinct game
+    local found_next=false
+    for ((i=next_idx; i<total; i++)); do
+        local next_data=$(cast call $FACTORY_ADDRESS "gameAtIndex(uint256)((uint32,uint64,address))" $i --rpc-url $L1_RPC 2>/dev/null)
+        [ -z "$next_data" ] && continue
+        
+        local next_type=$(echo "$next_data" | grep -oE '\([0-9]+' | head -1 | tr -d '(')
+        if [ "$next_type" = "$GAME_TYPE" ]; then
+            local next_addr=$(echo "$next_data" | grep -oE '0x[a-fA-F0-9]{40}')
+            local next_start=$(cast call $next_addr "l2BlockNumber()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
+            end=$((next_start - 1))
+            blocks=$((next_start - start))
+            found_next=true
+            break
+        fi
+    done
+    
+    # If no next game found, calculate from average interval
+    if [ "$found_next" = false ]; then
+        # Collect previous games to calculate average
+        declare -a prev_starts
+        for ((i=0; i<idx; i++)); do
+            local prev_data=$(cast call $FACTORY_ADDRESS "gameAtIndex(uint256)((uint32,uint64,address))" $i --rpc-url $L1_RPC 2>/dev/null)
+            [ -z "$prev_data" ] && continue
+            
+            local prev_type=$(echo "$prev_data" | grep -oE '\([0-9]+' | head -1 | tr -d '(')
+            if [ "$prev_type" = "$GAME_TYPE" ]; then
+                local prev_addr=$(echo "$prev_data" | grep -oE '0x[a-fA-F0-9]{40}')
+                local prev_start=$(cast call $prev_addr "l2BlockNumber()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
+                prev_starts+=("$prev_start")
+            fi
+        done
+        prev_starts+=("$start")
+        
+        # Calculate average interval
+        local sum=0 count=0
+        for ((i=0; i<${#prev_starts[@]}-1; i++)); do
+            sum=$((sum + prev_starts[i+1] - prev_starts[i]))
+            count=$((count + 1))
+        done
+        local avg=$((sum / count))
+        [ $avg -eq 0 ] && avg=10
+        
+        end=$((start + avg - 1))
+        blocks=$avg
+    fi
+    
+    echo -e "${BOLD}Block Range:${NC} $start - $end ($blocks blocks) ${CYAN}[inferred from L1]${NC}"
     echo ""
     
     # Get status (5th field in claimData)
@@ -321,14 +404,12 @@ interactive_mode() {
     echo -e "  ${BOLD}L1 RPC:${NC} $L1_RPC"
     echo -e "  ${BOLD}L2 RPC:${NC} $L2_RPC"
     echo -e "  ${BOLD}Game Type:${NC} $GAME_TYPE (OP-Succinct)"
-    echo -e "  ${BOLD}Proposal Interval:${NC} $PROPOSAL_INTERVAL blocks"
     echo ""
     
     # Show game list
     list_games
     
     # Prompt for challenge
-    echo ""
     echo -n "Enter game index (or press ENTER to exit): "
     read -r idx
     
