@@ -33,6 +33,10 @@ L2_NODE_RPC=${L2_NODE_RPC_URL:-"http://localhost:9545"}
 CHALLENGER_KEY=${CHALLENGER_PRIVATE_KEY:-""}
 GAME_TYPE=42  # OP-Succinct game type
 
+# Constants
+# uint32 max value (2^32 - 1) used in contracts to indicate "no parent" for genesis game
+GENESIS_PARENT_INDEX=4294967295
+
 # op-succinct directory
 OP_SUCCINCT_DIR=${OP_SUCCINCT_LOCAL_DIRECTORY:-"/Users/oker/workspace/xlayer/op-succinct"}
 
@@ -50,6 +54,7 @@ BOLD='\033[1m'
 declare -a GAME_INDICES
 declare -a GAME_ADDRS
 declare -a GAME_STARTS
+declare -a GAME_PARENTS
 
 # ════════════════════════════════════════════════════════════════
 # Requirement Checking
@@ -141,7 +146,7 @@ is_valid_game() {
     return 1
 }
 
-# Get game range from cached data (based on actual on-chain intervals)
+# Get game range from cached data (based on proof logic: parent_l2_block to current_l2_block)
 get_game_range() {
     local target_idx=$1
     
@@ -161,24 +166,33 @@ get_game_range() {
         return 1
     fi
     
-    local start=${GAME_STARTS[$pos]}
+    local end=${GAME_STARTS[$pos]}  # Current game's l2_block is the END of proof range
     local addr=${GAME_ADDRS[$pos]}
-    local end blocks
-    local count=${#GAME_INDICES[@]}
+    local parent_idx=${GAME_PARENTS[$pos]}
+    local start blocks
     
-    # For non-last game: use next game's start block (100% accurate)
-    if [ $pos -lt $((count - 1)) ]; then
-        end=$((GAME_STARTS[$pos+1] - 1))
-        blocks=$((GAME_STARTS[$pos+1] - start))
-    # For last game: use previous game's actual interval
-    elif [ $count -gt 1 ]; then
-        local prev_interval=$((start - GAME_STARTS[$pos-1]))
-        end=$((start + prev_interval - 1))
-        blocks=$prev_interval
-    # Only one game: cannot infer
-    else
-        end="?"
+    # Find parent game's l2_block as START of proof range
+    if [ "$parent_idx" = "$GENESIS_PARENT_INDEX" ]; then
+        # Genesis game (no parent): cannot determine start from parent
+        start="?"
         blocks="?"
+    else
+        # Find parent in our cache
+        local parent_found=false
+        for ((j=0; j<${#GAME_INDICES[@]}; j++)); do
+            if [ "${GAME_INDICES[j]}" = "$parent_idx" ]; then
+                start=${GAME_STARTS[$j]}
+                blocks=$((end - start + 1))  # Include both endpoints
+                parent_found=true
+                break
+            fi
+        done
+        
+        if [ "$parent_found" = false ]; then
+            # Parent not in cache (shouldn't happen)
+            start="?"
+            blocks="?"
+        fi
     fi
     
     # Return: start,end,blocks,addr
@@ -248,6 +262,7 @@ list_games() {
     GAME_INDICES=()
     GAME_ADDRS=()
     GAME_STARTS=()
+    GAME_PARENTS=()
     
     for ((i=0; i<total; i++)); do
         local game_data=$(cast call $FACTORY_ADDRESS "gameAtIndex(uint256)((uint32,uint64,address))" $i --rpc-url $L1_RPC 2>/dev/null)
@@ -260,9 +275,14 @@ list_games() {
         local start=$(cast call $addr "l2BlockNumber()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
         [ -z "$start" ] && start=0
         
+        # Get parent index directly from contract
+        local parent=$(cast call $addr "parentIndex()(uint32)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
+        [ -z "$parent" ] && parent=$GENESIS_PARENT_INDEX
+        
         GAME_INDICES+=("$i")
         GAME_ADDRS+=("$addr")
         GAME_STARTS+=("$start")
+        GAME_PARENTS+=("$parent")
     done
     
     local count=${#GAME_INDICES[@]}
@@ -272,36 +292,31 @@ list_games() {
         return 1
     fi
     
-    # Display available game indices
-    echo -n "${BOLD}Available Games"
+    # Count filtered games first
+    local filtered_count=0
     if [ -n "$filter_start" ]; then
-        echo -n " (filtered $filter_start-$filter_end)"
-    fi
-    echo -n ":${NC} "
-    
-    local first=true
-    local displayed=0
-    for idx in "${GAME_INDICES[@]}"; do
-        # Apply filter if specified
-        if [ -n "$filter_start" ]; then
-            if [ $idx -lt $filter_start ] || [ $idx -gt $filter_end ]; then
-                continue
+        for idx in "${GAME_INDICES[@]}"; do
+            if [ $idx -ge $filter_start ] && [ $idx -le $filter_end ]; then
+                filtered_count=$((filtered_count + 1))
             fi
-        fi
-        
-        [ "$first" = false ] && echo -n ", "
-        echo -n "$idx"
-        first=false
-        displayed=$((displayed + 1))
-        
-        # Limit display to avoid too long lines
-        if [ $displayed -ge 50 ]; then
-            echo -n ", ..."
-            break
-        fi
-    done
+        done
+    else
+        filtered_count=$count
+    fi
+    
+    # Display game count before table
+    if [ -n "$filter_start" ]; then
+        echo -e "${CYAN}Showing $filtered_count games (filtered from $count total OP-Succinct games)${NC}"
+    else
+        echo -e "${CYAN}Total OP-Succinct Games: $count${NC}"
+    fi
     echo ""
-    echo ""
+    
+    # Check if filter resulted in no games
+    if [ $filtered_count -eq 0 ]; then
+        echo -e "${YELLOW}No games found in range $filter_start-$filter_end${NC}"
+        return 1
+    fi
     
     # Table header
     printf "${BOLD}%-6s %-8s %-25s %-10s %-10s %-20s${NC}\n" \
@@ -309,7 +324,6 @@ list_games() {
     echo "────────────────────────────────────────────────────────────────────────────────────"
     
     # Display games
-    local filtered_count=0
     for ((j=0; j<count; j++)); do
         local idx=${GAME_INDICES[j]}
         
@@ -321,28 +335,36 @@ list_games() {
         fi
         
         local addr=${GAME_ADDRS[j]}
-        local start=${GAME_STARTS[j]}
+        local end=${GAME_STARTS[j]}  # Current game's l2_block is the END
+        local parent_idx=${GAME_PARENTS[j]}
         
-        # Calculate end block based on actual on-chain intervals
-        local end blocks
-        if [ $j -lt $((count - 1)) ]; then
-            # Non-last game: use next game's start block (100% accurate)
-            end=$((GAME_STARTS[j+1] - 1))
-            blocks=$((GAME_STARTS[j+1] - start))
-        elif [ $count -gt 1 ]; then
-            # Last game: use previous game's actual interval
-            local prev_interval=$((start - GAME_STARTS[j-1]))
-            end=$((start + prev_interval - 1))
-            blocks=$prev_interval
-        else
-            # Only one game: cannot infer
-            end="?"
+        # Calculate proof range: parent_l2_block to current_l2_block
+        local start blocks
+        if [ "$parent_idx" = "$GENESIS_PARENT_INDEX" ]; then
+            # Genesis game (no parent)
+            start="?"
             blocks="?"
+        else
+            # Find parent's l2_block
+            local parent_found=false
+            for ((k=0; k<count; k++)); do
+                if [ "${GAME_INDICES[k]}" = "$parent_idx" ]; then
+                    start=${GAME_STARTS[k]}
+                    blocks=$((end - start + 1))
+                    parent_found=true
+                    break
+                fi
+            done
+            
+            if [ "$parent_found" = false ]; then
+                start="?"
+                blocks="?"
+            fi
         fi
         
         # Count transactions (skip if range unknown)
         local txs
-        if [ "$end" = "?" ]; then
+        if [ "$start" = "?" ] || [ "$end" = "?" ]; then
             txs="?"
         else
             txs=$(count_transactions $start $end)
@@ -354,24 +376,9 @@ list_games() {
         
         printf "%-6s %-8s %-25s %-10s %-10s %-20s\n" \
             "$idx" "$GAME_TYPE" "$start-$end" "$blocks" "$txs" "$status_text"
-        
-        filtered_count=$((filtered_count + 1))
     done
     
     echo ""
-    if [ -n "$filter_start" ]; then
-        echo -e "${CYAN}Showing: $filtered_count games (filtered from $count total)${NC}"
-    else
-        echo -e "${CYAN}OP-Succinct Games: $count${NC}"
-    fi
-    echo ""
-    
-    # Check if filter resulted in no games
-    if [ $filtered_count -eq 0 ]; then
-        echo -e "${YELLOW}No games found in range $filter_start-$filter_end${NC}"
-        return 1
-    fi
-    
     return 0
 }
 
@@ -393,12 +400,19 @@ analyze_game_quick() {
     echo ""
     echo -e "${BOLD}Address:${NC} $addr"
     
-    # Handle case where range is unknown (only one game)
-    if [ "$end" = "?" ]; then
-        echo -e "${BOLD}Block Range:${NC} $start - ? (pending, only one game exists)"
-    else
-        echo -e "${BOLD}Block Range:${NC} $start - $end ($blocks blocks)"
+    # Handle case where range is unknown (genesis game without parent)
+    if [ "$start" = "?" ] || [ "$end" = "?" ]; then
+        echo -e "${BOLD}Block Range:${NC} $start - $end (genesis game, no parent)"
+        echo -e "${BOLD}Status:${NC} $(get_game_status $addr | cut -d'|' -f1)"
+        echo ""
+        echo -e "${YELLOW}⚠️  Cannot count transactions: genesis game has no parent${NC}"
+        echo ""
+        echo -e "${MAGENTA}💡 This is the first game in the chain, proof range starts from genesis${NC}"
+        echo ""
+        return 0
     fi
+    
+    echo -e "${BOLD}Block Range:${NC} $start - $end ($blocks blocks)"
     
     # Get status
     local status_info=$(get_game_status $addr)
@@ -407,15 +421,6 @@ analyze_game_quick() {
     
     echo -e "${BOLD}Status:${NC} $status_text"
     echo ""
-    
-    # Count transactions (skip if range unknown)
-    if [ "$end" = "?" ]; then
-        echo -e "${YELLOW}⚠️  Cannot count transactions: block range unknown (only one game exists)${NC}"
-        echo ""
-        echo -e "${MAGENTA}💡 Wait for the next game to be created to see complete information${NC}"
-        echo ""
-        return 0
-    fi
     
     echo -e "${YELLOW}Counting transactions...${NC}"
     local txs=$(count_transactions $start $end)
@@ -546,9 +551,9 @@ challenge_game() {
     echo ""
     echo -e "${BOLD}Address:${NC} $addr"
     
-    # Handle case where range is unknown
-    if [ "$end" = "?" ]; then
-        echo -e "${BOLD}Block Range:${NC} $start - ? (pending)"
+    # Handle case where range is unknown (genesis game)
+    if [ "$start" = "?" ] || [ "$end" = "?" ]; then
+        echo -e "${BOLD}Block Range:${NC} $start - $end (genesis game, no parent)"
     else
         echo -e "${BOLD}Block Range:${NC} $start - $end ($blocks blocks)"
     fi
