@@ -529,8 +529,9 @@ challenge_game() {
         --private-key $CHALLENGER_KEY \
         --rpc-url $L1_RPC \
         --gas-price 100000000000 \
+        --priority-gas-price 100000000000 \
         --gas-limit 200000 \
-        --timeout 300 \
+        --timeout 30 \
         --confirmations 1 \
         --json 2>&1)
     local exit_code=$?
