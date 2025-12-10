@@ -109,9 +109,10 @@ check_challenger_key() {
 # ════════════════════════════════════════════════════════════════
 
 # Count transactions in block range (fast)
+# Range is [start, end) - exclusive end, matching proof logic
 count_transactions() {
     local start=$1 end=$2 total=0
-    for ((block=start; block<=end; block++)); do
+    for ((block=start; block<end; block++)); do
         local count=$(cast block $block --rpc-url $L2_RPC --json 2>/dev/null | jq '.transactions | length' 2>/dev/null || echo "0")
         total=$((total + count))
     done
@@ -182,7 +183,7 @@ get_game_range() {
         for ((j=0; j<${#GAME_INDICES[@]}; j++)); do
             if [ "${GAME_INDICES[j]}" = "$parent_idx" ]; then
                 start=${GAME_STARTS[$j]}
-                blocks=$((end - start + 1))  # Include both endpoints
+                blocks=$((end - start))  # PROPOSAL_INTERVAL_IN_BLOCKS blocks (exclusive end)
                 parent_found=true
                 break
             fi
@@ -350,7 +351,7 @@ list_games() {
             for ((k=0; k<count; k++)); do
                 if [ "${GAME_INDICES[k]}" = "$parent_idx" ]; then
                     start=${GAME_STARTS[k]}
-                    blocks=$((end - start + 1))
+                    blocks=$((end - start))  # PROPOSAL_INTERVAL_IN_BLOCKS blocks (exclusive end)
                     parent_found=true
                     break
                 fi
@@ -380,63 +381,6 @@ list_games() {
     
     echo ""
     return 0
-}
-
-analyze_game_quick() {
-    local idx=$1
-    
-    local range_info=$(get_game_range $idx)
-    
-    if [ -z "$range_info" ]; then
-        echo -e "${RED}Error: Game #$idx not found${NC}"
-        return 1
-    fi
-    
-    IFS=',' read -r start end blocks addr <<< "$range_info"
-    
-    echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}${BOLD}  Quick Analysis: Game #$idx${NC}"
-    echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "${BOLD}Address:${NC} $addr"
-    
-    # Handle case where range is unknown (genesis game without parent)
-    if [ "$start" = "?" ] || [ "$end" = "?" ]; then
-        echo -e "${BOLD}Block Range:${NC} $start - $end (genesis game, no parent)"
-        echo -e "${BOLD}Status:${NC} $(get_game_status $addr | cut -d'|' -f1)"
-        echo ""
-        echo -e "${YELLOW}⚠️  Cannot count transactions: genesis game has no parent${NC}"
-        echo ""
-        echo -e "${MAGENTA}💡 This is the first game in the chain, proof range starts from genesis${NC}"
-        echo ""
-        return 0
-    fi
-    
-    echo -e "${BOLD}Block Range:${NC} $start - $end ($blocks blocks)"
-    
-    # Get status
-    local status_info=$(get_game_status $addr)
-    local status_text=$(echo "$status_info" | cut -d'|' -f1)
-    local status_code=$(echo "$status_info" | cut -d'|' -f2)
-    
-    echo -e "${BOLD}Status:${NC} $status_text"
-    echo ""
-    
-    echo -e "${YELLOW}Counting transactions...${NC}"
-    local txs=$(count_transactions $start $end)
-    
-    echo ""
-    echo -e "${BOLD}Total Transactions:${NC} $txs"
-    echo ""
-    
-    # Status check
-    if [ "$status_code" != "0" ]; then
-        echo -e "${YELLOW}⚠️  Game status: $status_text${NC}"
-        echo ""
-    fi
-    
-    echo -e "${MAGENTA}💡 For precise cost estimation, use 'Estimate Cost' option${NC}"
-    echo ""
 }
 
 run_estimator_for_game() {
@@ -568,44 +512,15 @@ challenge_game() {
     # Get bond
     local bond=$(cast call $addr "challengerBond()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
     [ -z "$bond" ] && bond="1000000000000000"  # Default: 0.001 ETH
-    local bond_eth=$(echo "scale=4; $bond / 1000000000000000000" | bc)
-    
-    echo ""
-    echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}${BOLD}  Challenge Game #$idx${NC}"
-    echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo -e "${BOLD}Address:${NC} $addr"
-    
-    # Handle case where range is unknown (genesis game)
-    if [ "$start" = "?" ] || [ "$end" = "?" ]; then
-        echo -e "${BOLD}Block Range:${NC} $start - $end (genesis game, no parent)"
-    else
-        echo -e "${BOLD}Block Range:${NC} $start - $end ($blocks blocks)"
-    fi
-    
-    echo -e "${BOLD}Status:${NC} $status_text"
-    echo -e "${BOLD}Required Bond:${NC} $bond_eth ETH"
-    echo ""
     
     # Check if already challenged/resolved
     if [ "$status_code" != "0" ]; then
-        echo -e "${YELLOW}⚠️  This game has status: $status_text${NC}"
+        echo ""
+        echo -e "${YELLOW}⚠️  Game #$idx has status: $status_text${NC}"
         echo -e "${YELLOW}   It may already be challenged or resolved.${NC}"
         echo ""
     fi
     
-    echo -e "${YELLOW}⚠️  WARNING: This will send a transaction with bond deposit!${NC}"
-    echo ""
-    echo -n "Proceed with challenge? [y/N]: "
-    read -r confirm
-    
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "Cancelled"
-        return 0
-    fi
-    
-    echo ""
     echo -e "${CYAN}Sending challenge transaction...${NC}"
     
     # Send challenge transaction
@@ -698,10 +613,7 @@ handle_challenge() {
         break
     done
     
-    # Quick analysis
-    analyze_game_quick "$idx"
-    
-    # Challenge
+    # Challenge directly (no quick analysis)
     challenge_game "$idx"
 }
 
