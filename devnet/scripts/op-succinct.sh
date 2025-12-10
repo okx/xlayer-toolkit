@@ -113,40 +113,6 @@ count_transactions() {
     echo "$total"
 }
 
-# Analyze transaction types (detailed)
-analyze_transactions() {
-    local start=$1 end=$2
-    local native=0 erc20=0 contract=0 system=0
-    
-    for ((block=start; block<=end; block++)); do
-        local txs=$(cast block $block --rpc-url $L2_RPC --json 2>/dev/null | jq -r '.transactions[]?' 2>/dev/null || echo "")
-        [ -z "$txs" ] && continue
-        
-        while IFS= read -r tx; do
-            [ -z "$tx" ] && continue
-            local tx_data=$(cast tx $tx --rpc-url $L2_RPC --json 2>/dev/null || echo '{}')
-            local from=$(echo "$tx_data" | jq -r '.from // "0x0"')
-            local input=$(echo "$tx_data" | jq -r '.input // "0x"')
-            
-            # System transaction
-            if [[ "$from" == *"dead"* ]] || [[ "$from" == *"Dead"* ]]; then
-                system=$((system + 1))
-            # Native transfer
-            elif [ "$input" = "0x" ]; then
-                native=$((native + 1))
-            # ERC20 transfer (0xa9059cbb)
-            elif [[ "$input" == 0xa9059cbb* ]]; then
-                erc20=$((erc20 + 1))
-            # Contract call
-            else
-                contract=$((contract + 1))
-            fi
-        done <<< "$txs"
-    done
-    
-    echo "$native,$erc20,$contract,$system"
-}
-
 # Get game status
 get_game_status() {
     local addr=$1
@@ -251,10 +217,16 @@ show_menu() {
 
 list_games() {
     local show_header=${1:-true}
+    local filter_start=$2
+    local filter_end=$3
     
     if [ "$show_header" = true ]; then
         echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-        echo -e "${BLUE}${BOLD}  OP-Succinct Games (Type $GAME_TYPE)${NC}"
+        if [ -n "$filter_start" ]; then
+            echo -e "${BLUE}${BOLD}  OP-Succinct Games (Type $GAME_TYPE) [Showing $filter_start-$filter_end]${NC}"
+        else
+            echo -e "${BLUE}${BOLD}  OP-Succinct Games (Type $GAME_TYPE)${NC}"
+        fi
         echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
     fi
@@ -300,14 +272,54 @@ list_games() {
         return 1
     fi
     
+    # Display available game indices
+    echo -n "${BOLD}Available Games"
+    if [ -n "$filter_start" ]; then
+        echo -n " (filtered $filter_start-$filter_end)"
+    fi
+    echo -n ":${NC} "
+    
+    local first=true
+    local displayed=0
+    for idx in "${GAME_INDICES[@]}"; do
+        # Apply filter if specified
+        if [ -n "$filter_start" ]; then
+            if [ $idx -lt $filter_start ] || [ $idx -gt $filter_end ]; then
+                continue
+            fi
+        fi
+        
+        [ "$first" = false ] && echo -n ", "
+        echo -n "$idx"
+        first=false
+        displayed=$((displayed + 1))
+        
+        # Limit display to avoid too long lines
+        if [ $displayed -ge 50 ]; then
+            echo -n ", ..."
+            break
+        fi
+    done
+    echo ""
+    echo ""
+    
     # Table header
     printf "${BOLD}%-6s %-8s %-25s %-10s %-10s %-20s${NC}\n" \
         "Index" "Type" "Block Range" "Blocks" "Txs" "Status"
     echo "────────────────────────────────────────────────────────────────────────────────────"
     
     # Display games
+    local filtered_count=0
     for ((j=0; j<count; j++)); do
         local idx=${GAME_INDICES[j]}
+        
+        # Apply filter if specified
+        if [ -n "$filter_start" ]; then
+            if [ $idx -lt $filter_start ] || [ $idx -gt $filter_end ]; then
+                continue
+            fi
+        fi
+        
         local addr=${GAME_ADDRS[j]}
         local start=${GAME_STARTS[j]}
         
@@ -342,11 +354,23 @@ list_games() {
         
         printf "%-6s %-8s %-25s %-10s %-10s %-20s\n" \
             "$idx" "$GAME_TYPE" "$start-$end" "$blocks" "$txs" "$status_text"
+        
+        filtered_count=$((filtered_count + 1))
     done
     
     echo ""
-    echo -e "${CYAN}OP-Succinct Games: $count${NC}"
+    if [ -n "$filter_start" ]; then
+        echo -e "${CYAN}Showing: $filtered_count games (filtered from $count total)${NC}"
+    else
+        echo -e "${CYAN}OP-Succinct Games: $count${NC}"
+    fi
     echo ""
+    
+    # Check if filter resulted in no games
+    if [ $filtered_count -eq 0 ]; then
+        echo -e "${YELLOW}No games found in range $filter_start-$filter_end${NC}"
+        return 1
+    fi
     
     return 0
 }
@@ -384,28 +408,20 @@ analyze_game_quick() {
     echo -e "${BOLD}Status:${NC} $status_text"
     echo ""
     
-    # Analyze transactions (skip if range unknown)
+    # Count transactions (skip if range unknown)
     if [ "$end" = "?" ]; then
-        echo -e "${YELLOW}⚠️  Cannot analyze transactions: block range unknown (only one game exists)${NC}"
+        echo -e "${YELLOW}⚠️  Cannot count transactions: block range unknown (only one game exists)${NC}"
         echo ""
-        echo -e "${MAGENTA}💡 Wait for the next game to be created to see complete analysis${NC}"
+        echo -e "${MAGENTA}💡 Wait for the next game to be created to see complete information${NC}"
         echo ""
         return 0
     fi
     
-    echo -e "${YELLOW}Analyzing transactions...${NC}"
-    local analysis=$(analyze_transactions $start $end)
-    IFS=',' read -r native erc20 contract system <<< "$analysis"
-    local total=$((native + erc20 + contract))
+    echo -e "${YELLOW}Counting transactions...${NC}"
+    local txs=$(count_transactions $start $end)
     
     echo ""
-    echo -e "${BOLD}Transaction Breakdown:${NC}"
-    echo "────────────────────────────────────────────────────────────────"
-    printf "  %-20s ${GREEN}%s${NC}\n" "Native Transfers:" "$native"
-    printf "  %-20s ${CYAN}%s${NC}\n" "ERC20 Transfers:" "$erc20"
-    printf "  %-20s ${BLUE}%s${NC}\n" "Contract Calls:" "$contract"
-    printf "  %-20s ${YELLOW}%s${NC}\n" "System Txs:" "$system"
-    printf "  %-20s ${BOLD}%s${NC}\n" "Total User Txs:" "$total"
+    echo -e "${BOLD}Total Transactions:${NC} $txs"
     echo ""
     
     # Status check
@@ -428,10 +444,9 @@ run_estimator_for_game() {
         echo -e "${YELLOW}⚠️  Precise cost estimation unavailable (missing dependencies)${NC}"
         echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
         echo ""
-        echo -e "${CYAN}💡 The quick analysis above can still help you assess:${NC}"
-        echo -e "   - Transaction complexity (Native/ERC20/Contract breakdown)"
-        echo -e "   - Workload level (Low/Medium/High)"
-        echo -e "   - Whether the game is worth challenging"
+        echo -e "${CYAN}💡 The quick analysis above shows:${NC}"
+        echo -e "   - Total transaction count"
+        echo -e "   - Game status"
         echo ""
         echo -e "${CYAN}To enable precise cost estimation, install:${NC}"
         echo -e "   1. just: ${BOLD}cargo install just${NC} or ${BOLD}brew install just${NC}"
@@ -668,13 +683,16 @@ handle_challenge() {
 # ════════════════════════════════════════════════════════════════
 
 interactive_mode() {
+    local filter_start=$1
+    local filter_end=$2
+    
     check_basic_requirements
     
     # Show header
     show_header
     
-    # List games
-    if ! list_games false; then
+    # List games with optional filtering
+    if ! list_games false "$filter_start" "$filter_end"; then
         echo ""
         echo -e "${RED}No games available.${NC}"
         exit 1
@@ -702,5 +720,41 @@ interactive_mode() {
     done
 }
 
-# Start interactive mode
-interactive_mode
+# ════════════════════════════════════════════════════════════════
+# Main Entry Point
+# ════════════════════════════════════════════════════════════════
+
+# Validate arguments
+if [ $# -eq 1 ]; then
+    echo -e "${RED}Error: Must provide both start and end index, or no arguments${NC}"
+    echo ""
+    echo "Usage: $0 [start_index end_index]"
+    echo ""
+    echo "Examples:"
+    echo "  $0           # Show all games"
+    echo "  $0 10 20     # Show games from index 10 to 20"
+    echo ""
+    exit 1
+fi
+
+if [ $# -eq 2 ]; then
+    if ! [[ "$1" =~ ^[0-9]+$ ]] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}Error: Arguments must be numbers${NC}"
+        exit 1
+    fi
+    
+    if [ $1 -gt $2 ]; then
+        echo -e "${RED}Error: Start index must be <= end index${NC}"
+        exit 1
+    fi
+    
+    # Start with filter
+    interactive_mode "$1" "$2"
+elif [ $# -eq 0 ]; then
+    # Start without filter
+    interactive_mode
+else
+    echo -e "${RED}Error: Too many arguments${NC}"
+    echo "Usage: $0 [start_index end_index]"
+    exit 1
+fi
