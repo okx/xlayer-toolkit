@@ -469,13 +469,39 @@ run_estimator_for_game() {
     
     IFS=',' read -r start end blocks addr <<< "$range_info"
     
+    # Handle genesis game (unknown range)
+    if [ "$start" = "?" ] || [ "$end" = "?" ]; then
+        echo ""
+        echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo -e "${BLUE}${BOLD}  Cost Estimation: Game #$idx${NC}"
+        echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo -e "${BOLD}Address:${NC} $addr"
+        echo -e "${BOLD}Block Range:${NC} $start - $end (genesis game, no parent)"
+        echo -e "${BOLD}Status:${NC} $(get_game_status $addr | cut -d'|' -f1)"
+        echo ""
+        echo -e "${YELLOW}⚠️  Cannot estimate cost: genesis game has no parent${NC}"
+        echo ""
+        return 1
+    fi
+    
+    # Get status
+    local status_info=$(get_game_status $addr)
+    local status_text=$(echo "$status_info" | cut -d'|' -f1)
+    
+    # Count transactions (silently)
+    local txs=$(count_transactions $start $end 2>/dev/null)
+    
     echo ""
     echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}${BOLD}  Precise Cost Estimation: Game #$idx${NC}"
+    echo -e "${BLUE}${BOLD}  Cost Estimation: Game #$idx${NC}"
     echo -e "${BLUE}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo -e "  ${BOLD}Block Range:${NC} $start - $end ($blocks blocks)"
-    echo -e "  ${BOLD}Batch Size:${NC} $blocks"
+    echo -e "${BOLD}Address:${NC} $addr"
+    echo -e "${BOLD}Block Range:${NC} $start - $end ($blocks blocks)"
+    echo -e "${BOLD}Status:${NC} $status_text"
+    echo -e "${BOLD}Total Transactions:${NC} $txs"
+    echo -e "${BOLD}Batch Size:${NC} $blocks"
     echo ""
     echo -e "${YELLOW}⚙️  Building and running cost-estimator...${NC}"
     echo -e "${YELLOW}   This may take 2-5 minutes, please wait...${NC}"
@@ -642,11 +668,7 @@ handle_estimate() {
         break
     done
     
-    # Quick analysis
-    echo ""
-    analyze_game_quick "$idx"
-    
-    # Run estimator
+    # Run estimator (it will display all info in one place)
     run_estimator_for_game "$idx"
 }
 
