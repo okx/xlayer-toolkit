@@ -43,9 +43,6 @@ cp ./l1-geth/execution/genesis-raw.json "$OP_SUCCINCT_DIR"/configs/L1/1337.json
 ANCHOR_STATE_REGISTRY=$(cast call "$OPTIMISM_PORTAL_PROXY_ADDRESS" 'anchorStateRegistry()(address)' -r "$L1_RPC_URL")
 if [ "$MIN_RUN" = "true" ]; then
     "$SCRIPTS_DIR"/update-anchor-root.sh
-
-    sed_inplace "s|^PROPOSAL_INTERVAL_IN_BLOCKS=.*|PROPOSAL_INTERVAL_IN_BLOCKS=10|" "$OP_SUCCINCT_DIR"/.env.proposer
-    sed_inplace "s|^MAX_CONCURRENT_DEFENSE_TASKS=.*|MAX_CONCURRENT_DEFENSE_TASKS=8|" "$OP_SUCCINCT_DIR"/.env.proposer
 fi
 
 # update .env.deploy
@@ -72,10 +69,6 @@ sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS
 sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_NODE_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
 
 sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$OP_SUCCINCT_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.proposer
-if [ "$OP_SUCCINCT_MOCK_MODE" = "true" ]; then
-    sed_inplace "s|^PROPOSAL_INTERVAL_IN_BLOCKS=.*|PROPOSAL_INTERVAL_IN_BLOCKS=10|" "$OP_SUCCINCT_DIR"/.env.proposer
-    sed_inplace "s|^MAX_CONCURRENT_DEFENSE_TASKS=.*|MAX_CONCURRENT_DEFENSE_TASKS=8|" "$OP_SUCCINCT_DIR"/.env.proposer
-fi
 
 # update .env.challenger
 sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger

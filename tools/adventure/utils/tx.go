@@ -18,6 +18,7 @@ import (
 
 	ethcmn "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"golang.org/x/time/rate"
 )
 
 type TxParam struct {
@@ -171,6 +172,15 @@ func RunTxs(e func(ethcmn.Address) []TxParam) {
 
 	tpsman := NewTPSMan(TransferCfg.Rpc[0])
 
+	// Create rate limiter if TargetTPS is set
+	var limiter *rate.Limiter
+	if TransferCfg.TargetTPS > 0 {
+		// Create limiter with targetTPS as rate and burst size
+		// Burst size equals targetTPS to allow smooth operation
+		limiter = rate.NewLimiter(rate.Limit(TransferCfg.TargetTPS), TransferCfg.TargetTPS)
+		log.Printf("🚦 Rate limiter enabled: Target TPS = %d\n", TransferCfg.TargetTPS)
+	}
+
 	concurrency := TransferCfg.Concurrency
 	count := len(accounts) / concurrency
 	for i := 0; i < concurrency; i++ {
@@ -192,7 +202,7 @@ func RunTxs(e func(ethcmn.Address) []TxParam) {
 
 				// Use batch execution
 				cli := clients[gIndex%len(clients)]
-				executeBatch(gIndex, cli, batchAccounts, e)
+				executeBatch(gIndex, cli, batchAccounts, e, limiter)
 			}
 		}(i)
 	}
@@ -297,9 +307,8 @@ func hexToInt(hexStr string) int {
 }
 
 // executeBatch executes transactions for multiple accounts in batch
-func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.Address) []TxParam) {
-	const maxBatchSize = 100
-
+func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.Address) []TxParam, limiter *rate.Limiter) {
+	maxBatchSize := TransferCfg.MaxBatchSize
 	// Check if batch sending is supported
 	ethClient, ok := cli.(*EthClient)
 	if !ok {
@@ -317,7 +326,7 @@ func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.
 	// Calculate total transactions
 	totalTxs := len(accounts)
 
-	// Send in batches, max 100 per batch
+	// Send in batches
 	for i := 0; i < totalTxs; i += maxBatchSize {
 		end := i + maxBatchSize
 		if end > totalTxs {
@@ -330,13 +339,13 @@ func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.
 			endAccountIndex = len(accounts)
 		}
 
-		sendSimpleBatch(gIndex, ethClient, txTemplate, accounts[startAccountIndex:endAccountIndex])
+		sendSimpleBatch(gIndex, ethClient, txTemplate, accounts[startAccountIndex:endAccountIndex], limiter)
 
 		time.Sleep(time.Millisecond * 50)
 	}
 }
 
-func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accounts []*EthAccount) {
+func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accounts []*EthAccount, limiter *rate.Limiter) {
 	if len(accounts) == 0 {
 		return
 	}
@@ -350,7 +359,16 @@ func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accou
 	}
 	signer := types.NewLondonSigner(chainId)
 
+	ctx := context.Background()
 	for _, acc := range accounts {
+		// Apply rate limiting before processing each transaction
+		if limiter != nil {
+			if err := limiter.Wait(ctx); err != nil {
+				log.Printf("[g%d] rate limiter error: %v\n", gIndex, err)
+				continue
+			}
+		}
+
 		acc.Lock()
 		if err := acc.SetNonce(ethClient); err != nil {
 			log.Printf("[g%d] failed to query nonce: %s\n", gIndex, err)
