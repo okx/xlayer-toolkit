@@ -4,6 +4,7 @@ set -e
 # ============================================================================
 # Kailua Setup Script (using local kailua-cli)
 # Supports both Fault Proof and Validity (Fast Finality) modes
+# Supports Mock Mode (dev) and Boundless Mode (production)
 # ============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -59,7 +60,7 @@ echo "📍 Current Anchor Height: $ANCHOR_HEIGHT"
 # Default values (can be overridden in .env)
 KAILUA_STARTING_BLOCK_NUMBER=${KAILUA_STARTING_BLOCK_NUMBER:-$ANCHOR_HEIGHT}
 KAILUA_PROPOSAL_OUTPUT_COUNT=${KAILUA_PROPOSAL_OUTPUT_COUNT:-2}
-KAILUA_OUTPUT_BLOCK_SPAN=${KAILUA_OUTPUT_BLOCK_SPAN:-50}
+KAILUA_OUTPUT_BLOCK_SPAN=${KAILUA_OUTPUT_BLOCK_SPAN:-1}
 KAILUA_COLLATERAL_AMOUNT=${KAILUA_COLLATERAL_AMOUNT:-100000000000000000}  # 0.1 ETH
 KAILUA_CHALLENGE_TIMEOUT=${KAILUA_CHALLENGE_TIMEOUT:-86400}  # 24 hours
 KAILUA_MAX_FAULT_PROVING_DELAY=${KAILUA_MAX_FAULT_PROVING_DELAY:-60}  # 1 min
@@ -72,7 +73,25 @@ KAILUA_FAST_FORWARD_START=${KAILUA_FAST_FORWARD_START:-$KAILUA_STARTING_BLOCK_NU
 KAILUA_FAST_FORWARD_TARGET=${KAILUA_FAST_FORWARD_TARGET:-999999999}
 KAILUA_MAX_VALIDITY_PROVING_DELAY=${KAILUA_MAX_VALIDITY_PROVING_DELAY:-0}
 
-# Determine mode
+# Mock Mode configuration
+# Set KAILUA_MOCK_MODE=false to use Boundless for real proving
+KAILUA_MOCK_MODE=${KAILUA_MOCK_MODE:-true}
+
+# Boundless configuration (required when KAILUA_MOCK_MODE=false)
+BOUNDLESS_RPC_URL=${BOUNDLESS_RPC_URL:-https://ethereum-sepolia-rpc.publicnode.com}
+BOUNDLESS_CHAIN_ID=${BOUNDLESS_CHAIN_ID:-11155111}
+BOUNDLESS_WALLET_KEY=${BOUNDLESS_WALLET_KEY:-}
+BOUNDLESS_MARKET_ADDRESS=${BOUNDLESS_MARKET_ADDRESS:-}
+BOUNDLESS_VERIFIER_ROUTER_ADDRESS=${BOUNDLESS_VERIFIER_ROUTER_ADDRESS:-}
+BOUNDLESS_SET_VERIFIER_ADDRESS=${BOUNDLESS_SET_VERIFIER_ADDRESS:-}
+BOUNDLESS_COLLATERAL_TOKEN_ADDRESS=${BOUNDLESS_COLLATERAL_TOKEN_ADDRESS:-}
+
+# Pinata configuration (required when KAILUA_MOCK_MODE=false)
+KAILUA_JWT_TOKEN=${KAILUA_JWT_TOKEN:-}
+PINATA_API_URL=${PINATA_API_URL:-https://api.pinata.cloud}
+IPFS_GATEWAY_URL=${IPFS_GATEWAY_URL:-https://gateway.pinata.cloud}
+
+# Determine proving mode
 if [ "$KAILUA_FAST_FINALITY" = "true" ]; then
     PROVING_MODE="VALIDITY (Fast Finality)"
     PROVING_MODE_COLOR="\033[0;32m"  # Green
@@ -80,12 +99,33 @@ else
     PROVING_MODE="FAULT PROOF"
     PROVING_MODE_COLOR="\033[0;33m"  # Yellow
 fi
+
+# Determine execution mode
+if [ "$KAILUA_MOCK_MODE" = "true" ]; then
+    EXEC_MODE="MOCK (Dev Mode)"
+    EXEC_MODE_COLOR="\033[0;36m"  # Cyan
+else
+    EXEC_MODE="BOUNDLESS (Production)"
+    EXEC_MODE_COLOR="\033[0;35m"  # Magenta
+    
+    # Validate Boundless configuration
+    if [ -z "$BOUNDLESS_WALLET_KEY" ]; then
+        echo "❌ Error: BOUNDLESS_WALLET_KEY is required when KAILUA_MOCK_MODE=false"
+        exit 1
+    fi
+    if [ -z "$KAILUA_JWT_TOKEN" ]; then
+        echo "❌ Error: KAILUA_JWT_TOKEN is required when KAILUA_MOCK_MODE=false"
+        exit 1
+    fi
+fi
+
 NC="\033[0m"  # No Color
 
 echo "============================================"
 echo "  Kailua Fast-Track Deployment (CLI)"
 echo "============================================"
 echo -e "Proving Mode: ${PROVING_MODE_COLOR}${PROVING_MODE}${NC}"
+echo -e "Execution Mode: ${EXEC_MODE_COLOR}${EXEC_MODE}${NC}"
 echo ""
 echo "Starting Block: $KAILUA_STARTING_BLOCK_NUMBER"
 echo "Output Count: $KAILUA_PROPOSAL_OUTPUT_COUNT"
@@ -93,6 +133,7 @@ echo "Block Span: $KAILUA_OUTPUT_BLOCK_SPAN"
 echo "Collateral: $KAILUA_COLLATERAL_AMOUNT wei"
 echo "Challenge Timeout: $KAILUA_CHALLENGE_TIMEOUT seconds"
 echo "Game Type: $KAILUA_GAME_TYPE"
+
 if [ "$KAILUA_FAST_FINALITY" = "true" ]; then
     echo ""
     echo "Fast Finality Settings:"
@@ -100,6 +141,15 @@ if [ "$KAILUA_FAST_FINALITY" = "true" ]; then
     echo "  Fast Forward Target: $KAILUA_FAST_FORWARD_TARGET"
     echo "  Max Validity Proving Delay: $KAILUA_MAX_VALIDITY_PROVING_DELAY"
 fi
+
+if [ "$KAILUA_MOCK_MODE" = "false" ]; then
+    echo ""
+    echo "Boundless Settings:"
+    echo "  RPC URL: $BOUNDLESS_RPC_URL"
+    echo "  Chain ID: $BOUNDLESS_CHAIN_ID"
+    echo "  Storage: Pinata (IPFS)"
+fi
+
 echo ""
 echo "RPC URLs:"
 echo "  L1: $L1_RPC"
@@ -125,13 +175,19 @@ echo ""
 
 # Deploy Kailua contracts via fast-track (using local kailua-cli)
 echo "🚀 Deploying Kailua contracts..."
-export RISC0_DEV_MODE=1
+
+# Set RISC0_DEV_MODE only in mock mode
+if [ "$KAILUA_MOCK_MODE" = "true" ]; then
+    export RISC0_DEV_MODE=1
+else
+    unset RISC0_DEV_MODE
+fi
+
 export RUST_LOG="kailua=info,alloy=warn,hyper=warn,warn"
 export NO_COLOR=1
 
 # Create log directory
 mkdir -p "$SCRIPT_DIR/kailua/logs"
-
 DEPLOY_LOG="$SCRIPT_DIR/kailua/logs/kailua-deploy.log"
 
 kailua-cli fast-track \
@@ -206,12 +262,11 @@ kailua-cli propose \
   --kailua-game-implementation "$KAILUA_GAME_IMPL" \
   --bypass-chain-registry \
   > "$PROPOSER_LOG" 2>&1 &
-
 PROPOSER_PID=$!
 echo "   ✓ Proposer started (PID: $PROPOSER_PID)"
 
 echo ""
-echo -e "🚀 Starting Kailua validator (${PROVING_MODE_COLOR}${PROVING_MODE}${NC})..."
+echo -e "🚀 Starting Kailua validator (${PROVING_MODE_COLOR}${PROVING_MODE}${NC}, ${EXEC_MODE_COLOR}${EXEC_MODE}${NC})..."
 echo "   Log: $VALIDATOR_LOG"
 
 # Build validator command with optional fast-forward parameters
@@ -235,12 +290,41 @@ if [ "$KAILUA_FAST_FINALITY" = "true" ]; then
   --max-validity-proving-delay \"$KAILUA_MAX_VALIDITY_PROVING_DELAY\""
 fi
 
+# Add Boundless parameters if not in mock mode
+if [ "$KAILUA_MOCK_MODE" = "false" ]; then
+    VALIDATOR_CMD="$VALIDATOR_CMD \
+  --boundless-rpc-url \"$BOUNDLESS_RPC_URL\" \
+  --boundless-wallet-key \"$BOUNDLESS_WALLET_KEY\" \
+  --boundless-chain-id \"$BOUNDLESS_CHAIN_ID\" \
+  --storage-provider pinata \
+  --pinata-jwt \"$KAILUA_JWT_TOKEN\""
+  
+    # Add optional Boundless addresses if provided
+    if [ -n "$BOUNDLESS_MARKET_ADDRESS" ]; then
+        VALIDATOR_CMD="$VALIDATOR_CMD --boundless-market-address \"$BOUNDLESS_MARKET_ADDRESS\""
+    fi
+    if [ -n "$BOUNDLESS_VERIFIER_ROUTER_ADDRESS" ]; then
+        VALIDATOR_CMD="$VALIDATOR_CMD --boundless-verifier-router-address \"$BOUNDLESS_VERIFIER_ROUTER_ADDRESS\""
+    fi
+    if [ -n "$BOUNDLESS_SET_VERIFIER_ADDRESS" ]; then
+        VALIDATOR_CMD="$VALIDATOR_CMD --boundless-set-verifier-address \"$BOUNDLESS_SET_VERIFIER_ADDRESS\""
+    fi
+    if [ -n "$BOUNDLESS_COLLATERAL_TOKEN_ADDRESS" ]; then
+        VALIDATOR_CMD="$VALIDATOR_CMD --boundless-collateral-token-address \"$BOUNDLESS_COLLATERAL_TOKEN_ADDRESS\""
+    fi
+    if [ -n "$PINATA_API_URL" ]; then
+        VALIDATOR_CMD="$VALIDATOR_CMD --pinata-api-url \"$PINATA_API_URL\""
+    fi
+    if [ -n "$IPFS_GATEWAY_URL" ]; then
+        VALIDATOR_CMD="$VALIDATOR_CMD --ipfs-gateway-url \"$IPFS_GATEWAY_URL\""
+    fi
+fi
+
 # Set log level
 export RUST_LOG="warn,kailua=info,kailua_validator=info,kailua_proposer=info,kailua_prover=info,kailua_sync=info,oracle_server=off,oracle_client=off,host_backend=off,risc0_zkvm=off,risc0=off,alloy=warn,alloy_rpc_client=off,alloy_json_rpc=off,alloy_transport_http=off,hyper=off,hyper_util=off,reqwest=off,kona=warn,kona_derive=warn,kona_executor=warn,kona_mpt=warn,batch_validator=warn,hint_writer=off,hint_reader=off,frame_queue=warn,channel_reader=warn,pipeline=warn"
 
 # Execute validator command
 eval "$VALIDATOR_CMD" > "$VALIDATOR_LOG" 2>&1 &
-
 VALIDATOR_PID=$!
 echo "   ✓ Validator started (PID: $VALIDATOR_PID)"
 
@@ -252,7 +336,8 @@ echo ""
 echo "============================================"
 echo "  Kailua Setup Complete"
 echo "============================================"
-echo -e "Mode: ${PROVING_MODE_COLOR}${PROVING_MODE}${NC}"
+echo -e "Proving Mode: ${PROVING_MODE_COLOR}${PROVING_MODE}${NC}"
+echo -e "Execution Mode: ${EXEC_MODE_COLOR}${EXEC_MODE}${NC}"
 echo "Proposer PID: $PROPOSER_PID"
 echo "Validator PID: $VALIDATOR_PID"
 echo ""
@@ -265,6 +350,22 @@ echo "To view logs:"
 echo "  tail -f $PROPOSER_LOG"
 echo "  tail -f $VALIDATOR_LOG"
 echo ""
+
+if [ "$KAILUA_MOCK_MODE" = "true" ]; then
+    echo "📝 Mock Mode is ENABLED (RISC0_DEV_MODE=1)"
+    echo "   Proofs are simulated, not cryptographically verified"
+    echo ""
+    echo "   To use Boundless for real proving, set in .env:"
+    echo "   KAILUA_MOCK_MODE=false"
+    echo "   BOUNDLESS_WALLET_KEY=your_private_key"
+    echo "   KAILUA_JWT_TOKEN=your_pinata_jwt"
+else
+    echo "📝 Boundless Mode is ENABLED"
+    echo "   Proofs are delegated to the Boundless proving network"
+    echo "   Storage: Pinata (IPFS)"
+fi
+echo ""
+
 if [ "$KAILUA_FAST_FINALITY" = "true" ]; then
     echo "📝 Fast Finality Mode is ENABLED"
     echo "   Validator will generate validity proofs for canonical proposals"
