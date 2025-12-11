@@ -107,3 +107,7 @@ if [ "${OP_SUCCINCT_FAST_FINALITY_MODE}" != "true" ]; then
 else
     echo "   ⏭  Challenger skipped (fast finality mode)"
 fi
+
+docker compose down op-challenger
+docker compose down op-dispute-mon
+docker compose down op-proposer
