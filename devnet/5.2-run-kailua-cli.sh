@@ -5,6 +5,7 @@ set -e
 # Kailua Setup Script (using local kailua-cli)
 # Supports both Fault Proof and Validity (Fast Finality) modes
 # Supports Mock Mode (dev) and Boundless Mode (production)
+# Supports Pinata (IPFS) and S3/R2 storage providers
 # ============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -86,10 +87,22 @@ BOUNDLESS_VERIFIER_ROUTER_ADDRESS=${BOUNDLESS_VERIFIER_ROUTER_ADDRESS:-}
 BOUNDLESS_SET_VERIFIER_ADDRESS=${BOUNDLESS_SET_VERIFIER_ADDRESS:-}
 BOUNDLESS_COLLATERAL_TOKEN_ADDRESS=${BOUNDLESS_COLLATERAL_TOKEN_ADDRESS:-}
 
-# Pinata configuration (required when KAILUA_MOCK_MODE=false)
-KAILUA_JWT_TOKEN=${KAILUA_JWT_TOKEN:-}
+# Storage provider configuration (required when KAILUA_MOCK_MODE=false)
+# Options: "pinata" or "s3"
+STORAGE_PROVIDER=${STORAGE_PROVIDER:-pinata}
+
+# Pinata configuration (when STORAGE_PROVIDER=pinata)
+PINATA_JWT=${PINATA_JWT:-}
 PINATA_API_URL=${PINATA_API_URL:-https://api.pinata.cloud}
 IPFS_GATEWAY_URL=${IPFS_GATEWAY_URL:-https://gateway.pinata.cloud}
+
+# S3/R2 configuration (when STORAGE_PROVIDER=s3)
+S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
+S3_SECRET_KEY=${S3_SECRET_KEY:-}
+S3_BUCKET=${S3_BUCKET:-}
+S3_URL=${S3_URL:-}
+AWS_REGION=${AWS_REGION:-auto}
+R2_DOMAIN=${R2_DOMAIN:-}
 
 # Determine proving mode
 if [ "$KAILUA_FAST_FINALITY" = "true" ]; then
@@ -113,8 +126,22 @@ else
         echo "❌ Error: BOUNDLESS_WALLET_KEY is required when KAILUA_MOCK_MODE=false"
         exit 1
     fi
-    if [ -z "$KAILUA_JWT_TOKEN" ]; then
-        echo "❌ Error: KAILUA_JWT_TOKEN is required when KAILUA_MOCK_MODE=false"
+    
+    # Validate storage provider configuration
+    if [ "$STORAGE_PROVIDER" = "pinata" ]; then
+        if [ -z "$PINATA_JWT" ]; then
+            echo "❌ Error: PINATA_JWT is required when STORAGE_PROVIDER=pinata"
+            exit 1
+        fi
+        STORAGE_DESC="Pinata (IPFS)"
+    elif [ "$STORAGE_PROVIDER" = "s3" ]; then
+        if [ -z "$S3_ACCESS_KEY" ] || [ -z "$S3_SECRET_KEY" ] || [ -z "$S3_BUCKET" ] || [ -z "$S3_URL" ]; then
+            echo "❌ Error: S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET, and S3_URL are required when STORAGE_PROVIDER=s3"
+            exit 1
+        fi
+        STORAGE_DESC="S3/R2 ($S3_BUCKET)"
+    else
+        echo "❌ Error: STORAGE_PROVIDER must be 'pinata' or 's3'"
         exit 1
     fi
 fi
@@ -147,7 +174,7 @@ if [ "$KAILUA_MOCK_MODE" = "false" ]; then
     echo "Boundless Settings:"
     echo "  RPC URL: $BOUNDLESS_RPC_URL"
     echo "  Chain ID: $BOUNDLESS_CHAIN_ID"
-    echo "  Storage: Pinata (IPFS)"
+    echo "  Storage: $STORAGE_DESC"
 fi
 
 echo ""
@@ -295,9 +322,31 @@ if [ "$KAILUA_MOCK_MODE" = "false" ]; then
     VALIDATOR_CMD="$VALIDATOR_CMD \
   --boundless-rpc-url \"$BOUNDLESS_RPC_URL\" \
   --boundless-wallet-key \"$BOUNDLESS_WALLET_KEY\" \
-  --boundless-chain-id \"$BOUNDLESS_CHAIN_ID\" \
+  --boundless-chain-id \"$BOUNDLESS_CHAIN_ID\""
+  
+    # Add storage provider configuration
+    if [ "$STORAGE_PROVIDER" = "pinata" ]; then
+        VALIDATOR_CMD="$VALIDATOR_CMD \
   --storage-provider pinata \
-  --pinata-jwt \"$KAILUA_JWT_TOKEN\""
+  --pinata-jwt \"$PINATA_JWT\""
+        if [ -n "$PINATA_API_URL" ]; then
+            VALIDATOR_CMD="$VALIDATOR_CMD --pinata-api-url \"$PINATA_API_URL\""
+        fi
+        if [ -n "$IPFS_GATEWAY_URL" ]; then
+            VALIDATOR_CMD="$VALIDATOR_CMD --ipfs-gateway-url \"$IPFS_GATEWAY_URL\""
+        fi
+    elif [ "$STORAGE_PROVIDER" = "s3" ]; then
+        VALIDATOR_CMD="$VALIDATOR_CMD \
+  --storage-provider s3 \
+  --s3-access-key \"$S3_ACCESS_KEY\" \
+  --s3-secret-key \"$S3_SECRET_KEY\" \
+  --s3-bucket \"$S3_BUCKET\" \
+  --s3-url \"$S3_URL\" \
+  --aws-region \"$AWS_REGION\""
+        if [ -n "$R2_DOMAIN" ]; then
+            VALIDATOR_CMD="$VALIDATOR_CMD --r2-domain \"$R2_DOMAIN\""
+        fi
+    fi
   
     # Add optional Boundless addresses if provided
     if [ -n "$BOUNDLESS_MARKET_ADDRESS" ]; then
@@ -311,12 +360,6 @@ if [ "$KAILUA_MOCK_MODE" = "false" ]; then
     fi
     if [ -n "$BOUNDLESS_COLLATERAL_TOKEN_ADDRESS" ]; then
         VALIDATOR_CMD="$VALIDATOR_CMD --boundless-collateral-token-address \"$BOUNDLESS_COLLATERAL_TOKEN_ADDRESS\""
-    fi
-    if [ -n "$PINATA_API_URL" ]; then
-        VALIDATOR_CMD="$VALIDATOR_CMD --pinata-api-url \"$PINATA_API_URL\""
-    fi
-    if [ -n "$IPFS_GATEWAY_URL" ]; then
-        VALIDATOR_CMD="$VALIDATOR_CMD --ipfs-gateway-url \"$IPFS_GATEWAY_URL\""
     fi
 fi
 
@@ -358,11 +401,22 @@ if [ "$KAILUA_MOCK_MODE" = "true" ]; then
     echo "   To use Boundless for real proving, set in .env:"
     echo "   KAILUA_MOCK_MODE=false"
     echo "   BOUNDLESS_WALLET_KEY=your_private_key"
-    echo "   KAILUA_JWT_TOKEN=your_pinata_jwt"
+    echo ""
+    echo "   For Pinata storage:"
+    echo "   STORAGE_PROVIDER=pinata"
+    echo "   PINATA_JWT=your_pinata_jwt"
+    echo ""
+    echo "   For S3/R2 storage:"
+    echo "   STORAGE_PROVIDER=s3"
+    echo "   S3_ACCESS_KEY=your_access_key"
+    echo "   S3_SECRET_KEY=your_secret_key"
+    echo "   S3_BUCKET=your_bucket"
+    echo "   S3_URL=https://YOUR_ACCOUNT_ID.r2.cloudflarestorage.com"
+    echo "   AWS_REGION=auto"
 else
     echo "📝 Boundless Mode is ENABLED"
     echo "   Proofs are delegated to the Boundless proving network"
-    echo "   Storage: Pinata (IPFS)"
+    echo "   Storage: $STORAGE_DESC"
 fi
 echo ""
 
@@ -381,4 +435,3 @@ echo ""
 
 # Wait for background processes
 wait
-
