@@ -87,6 +87,20 @@ BOUNDLESS_VERIFIER_ROUTER_ADDRESS=${BOUNDLESS_VERIFIER_ROUTER_ADDRESS:-}
 BOUNDLESS_SET_VERIFIER_ADDRESS=${BOUNDLESS_SET_VERIFIER_ADDRESS:-}
 BOUNDLESS_COLLATERAL_TOKEN_ADDRESS=${BOUNDLESS_COLLATERAL_TOKEN_ADDRESS:-}
 
+# Boundless order pricing parameters
+# These control how much you pay provers and how long they have to complete
+BOUNDLESS_CYCLE_MIN_WEI=${BOUNDLESS_CYCLE_MIN_WEI:-200000000}              # Starting price (wei/cycle)
+BOUNDLESS_CYCLE_MAX_WEI=${BOUNDLESS_CYCLE_MAX_WEI:-1000000000}     # Max price (wei/cycle), 2 gwei
+BOUNDLESS_MEGA_CYCLE_COLLATERAL=${BOUNDLESS_MEGA_CYCLE_COLLATERAL:-1000}  # Collateral per megacycle
+
+# Boundless order timing parameters (in seconds per segment, where 1 segment = 1M cycles)
+# lock_timeout = (ramp_up_factor + lock_timeout_factor) * segment_count
+# expiry = (ramp_up_factor + lock_timeout_factor + expiry_factor) * segment_count
+BOUNDLESS_ORDER_BID_DELAY_FACTOR=${BOUNDLESS_ORDER_BID_DELAY_FACTOR:-1.0}      # Delay before price ramp starts
+BOUNDLESS_ORDER_RAMP_UP_FACTOR=${BOUNDLESS_ORDER_RAMP_UP_FACTOR:-5.0}          # Time for price to ramp from min to max
+BOUNDLESS_ORDER_LOCK_TIMEOUT_FACTOR=${BOUNDLESS_ORDER_LOCK_TIMEOUT_FACTOR:-60.0}  # Time for prover to complete after lock
+BOUNDLESS_ORDER_EXPIRY_FACTOR=${BOUNDLESS_ORDER_EXPIRY_FACTOR:-30.0}           # Additional time before order expires
+
 # Storage provider configuration (required when KAILUA_MOCK_MODE=false)
 # Options: "pinata" or "s3"
 STORAGE_PROVIDER=${STORAGE_PROVIDER:-pinata}
@@ -175,6 +189,17 @@ if [ "$KAILUA_MOCK_MODE" = "false" ]; then
     echo "  RPC URL: $BOUNDLESS_RPC_URL"
     echo "  Chain ID: $BOUNDLESS_CHAIN_ID"
     echo "  Storage: $STORAGE_DESC"
+    echo ""
+    echo "Boundless Order Pricing:"
+    echo "  Min Price: $BOUNDLESS_CYCLE_MIN_WEI wei/cycle"
+    echo "  Max Price: $BOUNDLESS_CYCLE_MAX_WEI wei/cycle"
+    echo "  Collateral: $BOUNDLESS_MEGA_CYCLE_COLLATERAL per megacycle"
+    echo ""
+    echo "Boundless Order Timing (factor × segments):"
+    echo "  Bid Delay Factor: $BOUNDLESS_ORDER_BID_DELAY_FACTOR"
+    echo "  Ramp Up Factor: $BOUNDLESS_ORDER_RAMP_UP_FACTOR"
+    echo "  Lock Timeout Factor: $BOUNDLESS_ORDER_LOCK_TIMEOUT_FACTOR"
+    echo "  Expiry Factor: $BOUNDLESS_ORDER_EXPIRY_FACTOR"
 fi
 
 echo ""
@@ -322,7 +347,14 @@ if [ "$KAILUA_MOCK_MODE" = "false" ]; then
     VALIDATOR_CMD="$VALIDATOR_CMD \
   --boundless-rpc-url \"$BOUNDLESS_RPC_URL\" \
   --boundless-wallet-key \"$BOUNDLESS_WALLET_KEY\" \
-  --boundless-chain-id \"$BOUNDLESS_CHAIN_ID\""
+  --boundless-chain-id \"$BOUNDLESS_CHAIN_ID\" \
+  --boundless-cycle-min-wei \"$BOUNDLESS_CYCLE_MIN_WEI\" \
+  --boundless-cycle-max-wei \"$BOUNDLESS_CYCLE_MAX_WEI\" \
+  --boundless-mega-cycle-collateral \"$BOUNDLESS_MEGA_CYCLE_COLLATERAL\" \
+  --boundless-order-bid-delay-factor \"$BOUNDLESS_ORDER_BID_DELAY_FACTOR\" \
+  --boundless-order-ramp-up-factor \"$BOUNDLESS_ORDER_RAMP_UP_FACTOR\" \
+  --boundless-order-lock-timeout-factor \"$BOUNDLESS_ORDER_LOCK_TIMEOUT_FACTOR\" \
+  --boundless-order-expiry-factor \"$BOUNDLESS_ORDER_EXPIRY_FACTOR\""
   
     # Add storage provider configuration
     if [ "$STORAGE_PROVIDER" = "pinata" ]; then
@@ -417,6 +449,12 @@ else
     echo "📝 Boundless Mode is ENABLED"
     echo "   Proofs are delegated to the Boundless proving network"
     echo "   Storage: $STORAGE_DESC"
+    echo ""
+    echo "   Order timing for 100M cycles (100 segments):"
+    echo "   - Bid starts after: $(echo "$BOUNDLESS_ORDER_BID_DELAY_FACTOR * 100" | bc) seconds"
+    echo "   - Price ramps over: $(echo "$BOUNDLESS_ORDER_RAMP_UP_FACTOR * 100" | bc) seconds"
+    echo "   - Lock timeout: $(echo "($BOUNDLESS_ORDER_RAMP_UP_FACTOR + $BOUNDLESS_ORDER_LOCK_TIMEOUT_FACTOR) * 100" | bc) seconds"
+    echo "   - Order expires: $(echo "($BOUNDLESS_ORDER_RAMP_UP_FACTOR + $BOUNDLESS_ORDER_LOCK_TIMEOUT_FACTOR + $BOUNDLESS_ORDER_EXPIRY_FACTOR) * 100" | bc) seconds"
 fi
 echo ""
 
