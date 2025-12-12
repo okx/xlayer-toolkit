@@ -9,6 +9,7 @@ type TransferConfig struct {
 	AccountsFilePath      string   `json:"accountsFilePath"`
 	SenderPrivateKey      string   `json:"senderPrivateKey"`
 	Concurrency           int      `json:"concurrency"`
+	BatchConcurrency      int      `json:"batchConcurrency"`      // Max concurrent batches per goroutine
 	MempoolPauseThreshold int      `json:"mempoolPauseThreshold"`
 	GasPriceGwei          float64  `json:"gasPriceGwei"`
 	SaveTxHashes          bool     `json:"saveTxHashes"`

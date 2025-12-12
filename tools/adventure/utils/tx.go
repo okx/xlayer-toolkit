@@ -299,6 +299,12 @@ func hexToInt(hexStr string) int {
 // executeBatch executes transactions for multiple accounts in batch
 func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.Address) []TxParam) {
 	const maxBatchSize = 100
+	
+	// Get batch concurrency setting (default to 5 if not configured)
+	maxConcurrentBatches := TransferCfg.BatchConcurrency
+	if maxConcurrentBatches <= 0 {
+		maxConcurrentBatches = 5 // Default: limit concurrent batches to avoid nonce issues
+	}
 
 	// Check if batch sending is supported
 	ethClient, ok := cli.(*EthClient)
@@ -317,6 +323,10 @@ func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.
 	// Calculate total transactions
 	totalTxs := len(accounts)
 
+	// Use a WaitGroup and semaphore to control concurrency
+	var wg sync.WaitGroup
+	semaphore := make(chan struct{}, maxConcurrentBatches)
+	
 	// Send in batches, max 100 per batch
 	for i := 0; i < totalTxs; i += maxBatchSize {
 		end := i + maxBatchSize
@@ -330,10 +340,20 @@ func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.
 			endAccountIndex = len(accounts)
 		}
 
-		sendSimpleBatch(gIndex, ethClient, txTemplate, accounts[startAccountIndex:endAccountIndex])
+		// Acquire semaphore slot (blocks if at max concurrency)
+		semaphore <- struct{}{}
 
-		time.Sleep(time.Millisecond * 50)
+		// Send each batch concurrently with controlled concurrency
+		wg.Add(1)
+		go func(batchIndex int, batchAccounts []*EthAccount) {
+			defer wg.Done()
+			defer func() { <-semaphore }() // Release semaphore slot
+			sendSimpleBatch(gIndex, ethClient, txTemplate, batchAccounts)
+		}(i, accounts[startAccountIndex:endAccountIndex])
 	}
+	
+	// Wait for all batches to complete
+	wg.Wait()
 }
 
 func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accounts []*EthAccount) {
@@ -393,7 +413,9 @@ func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accou
 	txHashes, err := ethClient.SendMultipleEthereumTx(signedTxs)
 	if err != nil {
 		log.Printf("[g%d] batch send failed: %v\n", gIndex, err)
-		if strings.Contains(err.Error(), "Transaction already exists") {
+		if strings.Contains(err.Error(), "Transaction already exists") ||
+			strings.Contains(err.Error(), "already known") {
+			// Transaction with same hash already in mempool - increment nonce to move forward
 			noncePlus1(accounts)
 		} else if strings.Contains(err.Error(), "nonce too low") {
 			queryNonce(ethClient, accounts)
