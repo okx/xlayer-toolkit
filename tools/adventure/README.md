@@ -47,7 +47,17 @@ Edit `testdata/config.json` to adjust benchmark parameters:
 - **rpc**: RPC endpoint URLs
 - **accountsFilePath**: Path to test accounts file (20,000 accounts)
 - **senderPrivateKey**: Private key for deploying contracts and distributing tokens
-- **concurrency**: Number of concurrent senders
+- **concurrency**: Number of concurrent senders (effective concurrency = concurrency × accounts_per_sender / 100)
 - **mempoolPauseThreshold**: Mempool size threshold (pause sending when exceeded)
 - **gasPriceGwei**: Gas price in Gwei
 - **saveTxHashes**: Enable saving transaction hashes to `./txhashes.log` (default: false)
+
+### Concurrency Notes
+
+With the improved batch concurrency implementation:
+- Each of the `concurrency` goroutines processes accounts in batches of 100
+- All batches within a goroutine are sent **concurrently** (not sequentially)
+- For 20k accounts and `concurrency: 20`: effective concurrency = **200 concurrent batches**
+- This provides optimal throughput for stress testing
+
+See [CONCURRENCY_FIX.md](./CONCURRENCY_FIX.md) for technical details.

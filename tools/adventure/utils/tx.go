@@ -317,6 +317,9 @@ func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.
 	// Calculate total transactions
 	totalTxs := len(accounts)
 
+	// Use a WaitGroup to send all batches concurrently
+	var wg sync.WaitGroup
+	
 	// Send in batches, max 100 per batch
 	for i := 0; i < totalTxs; i += maxBatchSize {
 		end := i + maxBatchSize
@@ -330,10 +333,16 @@ func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.
 			endAccountIndex = len(accounts)
 		}
 
-		sendSimpleBatch(gIndex, ethClient, txTemplate, accounts[startAccountIndex:endAccountIndex])
-
-		time.Sleep(time.Millisecond * 50)
+		// Send each batch concurrently
+		wg.Add(1)
+		go func(batchIndex int, batchAccounts []*EthAccount) {
+			defer wg.Done()
+			sendSimpleBatch(gIndex, ethClient, txTemplate, batchAccounts)
+		}(i, accounts[startAccountIndex:endAccountIndex])
 	}
+	
+	// Wait for all batches to complete
+	wg.Wait()
 }
 
 func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accounts []*EthAccount) {
@@ -393,7 +402,9 @@ func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accou
 	txHashes, err := ethClient.SendMultipleEthereumTx(signedTxs)
 	if err != nil {
 		log.Printf("[g%d] batch send failed: %v\n", gIndex, err)
-		if strings.Contains(err.Error(), "Transaction already exists") {
+		if strings.Contains(err.Error(), "Transaction already exists") ||
+			strings.Contains(err.Error(), "already known") {
+			// Transaction with same hash already in mempool - increment nonce to move forward
 			noncePlus1(accounts)
 		} else if strings.Contains(err.Error(), "nonce too low") {
 			queryNonce(ethClient, accounts)
