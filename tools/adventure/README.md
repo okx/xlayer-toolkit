@@ -38,6 +38,7 @@ Edit `testdata/config.json` to adjust benchmark parameters:
   "accountsFilePath": "./testdata/accounts-20k.txt",
   "senderPrivateKey": "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
   "concurrency": 20,
+  "batchConcurrency": 5,
   "mempoolPauseThreshold": 50000,
   "gasPriceGwei": 100,
   "saveTxHashes": false
@@ -47,7 +48,8 @@ Edit `testdata/config.json` to adjust benchmark parameters:
 - **rpc**: RPC endpoint URLs
 - **accountsFilePath**: Path to test accounts file (20,000 accounts)
 - **senderPrivateKey**: Private key for deploying contracts and distributing tokens
-- **concurrency**: Number of concurrent senders (effective concurrency = concurrency × accounts_per_sender / 100)
+- **concurrency**: Number of concurrent senders (main goroutines)
+- **batchConcurrency**: Max concurrent batches per goroutine (default: 5, prevents nonce issues)
 - **mempoolPauseThreshold**: Mempool size threshold (pause sending when exceeded)
 - **gasPriceGwei**: Gas price in Gwei
 - **saveTxHashes**: Enable saving transaction hashes to `./txhashes.log` (default: false)
@@ -56,8 +58,13 @@ Edit `testdata/config.json` to adjust benchmark parameters:
 
 With the improved batch concurrency implementation:
 - Each of the `concurrency` goroutines processes accounts in batches of 100
-- All batches within a goroutine are sent **concurrently** (not sequentially)
-- For 20k accounts and `concurrency: 20`: effective concurrency = **200 concurrent batches**
-- This provides optimal throughput for stress testing
+- Within each goroutine, up to `batchConcurrency` batches are sent concurrently
+- **Effective concurrency** = `concurrency × batchConcurrency`
+- For 20k accounts with `concurrency: 20` and `batchConcurrency: 5`: **100 concurrent batches**
+- Adjust `batchConcurrency` based on your node's capacity:
+  - Lower (2-5): More stable, fewer nonce errors
+  - Higher (10-20): Higher throughput, may cause nonce issues under load
+
+**Troubleshooting:** If you see "nonce too low" errors, see [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for solutions.
 
 See [CONCURRENCY_FIX.md](./CONCURRENCY_FIX.md) for technical details.
