@@ -100,9 +100,17 @@ func (tpsman *SimpleTPSManager) TPSDisplay() {
 	}
 	fmt.Println("initHeight", initHeight)
 	lastHeight := initHeight
+	
+	// Track interval-based metrics
+	var intervalStartTime time.Time = initTime
+	var intervalTxCount uint64 = 0
+	var intervalStartHeight uint64 = initHeight
+	
+	// Track overall metrics
 	var avgTPS float64
 	var maxTps float64
 	var minTps float64 = 100000
+	
 	for {
 		newblockNum := tpsman.GetBlockNum()
 		// No tx is executed
@@ -111,27 +119,51 @@ func (tpsman *SimpleTPSManager) TPSDisplay() {
 			continue
 		}
 
+		// Process new blocks
 		for height := lastHeight + 1; height <= newblockNum; height++ {
 			txCount, err := tpsman.transactionCountByHeight(height)
 			if err != nil {
 				panic(err)
 			}
 			totalTxCount += txCount
+			intervalTxCount += txCount
 			lastHeight = height
-
-			avgTPS = float64(totalTxCount) / float64(time.Since(initTime).Seconds())
-			if avgTPS > maxTps {
-				maxTps = avgTPS
-			}
-			if avgTPS < minTps {
-				minTps = avgTPS
-			}
 		}
+		
+		// Calculate interval TPS (actual on-chain throughput for this interval)
+		intervalDuration := time.Since(intervalStartTime).Seconds()
+		var instantTPS float64
+		if intervalDuration > 0 {
+			instantTPS = float64(intervalTxCount) / intervalDuration
+		}
+		
+		// Calculate average TPS (overall throughput)
+		avgTPS = float64(totalTxCount) / float64(time.Since(initTime).Seconds())
+		
+		// Update min/max based on interval TPS (not average)
+		if instantTPS > maxTps {
+			maxTps = instantTPS
+		}
+		if intervalTxCount > 0 && instantTPS < minTps {
+			minTps = instantTPS
+		}
+		
+		// Calculate blocks per interval
+		blocksInInterval := lastHeight - intervalStartHeight
+		
 		fmt.Println("========================================================")
-		fmt.Printf("[TPS log] StartBlock Num: %d, NewBlockNum: %d, totalTxCount:%d\n", initHeight+1, lastHeight, totalTxCount)
-		fmt.Printf("[Summary] Average BTPS: %5.2f, Max TPS: %5.2f, Min TPS: %5.2f, Time Last: %ds\n", avgTPS, maxTps, minTps, int64(time.Since(initTime).Seconds()))
+		fmt.Printf("[TPS log] StartBlock: %d, EndBlock: %d, Blocks: %d, TxsInInterval: %d\n", 
+			intervalStartHeight+1, lastHeight, blocksInInterval, intervalTxCount)
+		fmt.Printf("[Interval] Instant TPS: %5.2f (over last %.1fs)\n", instantTPS, intervalDuration)
+		fmt.Printf("[Overall] Avg TPS: %5.2f, Max TPS: %5.2f, Min TPS: %5.2f, Total Txs: %d, Duration: %ds\n", 
+			avgTPS, maxTps, minTps, totalTxCount, int64(time.Since(initTime).Seconds()))
 		fmt.Println("========================================================")
 
+		// Reset interval counters
+		intervalStartTime = time.Now()
+		intervalTxCount = 0
+		intervalStartHeight = lastHeight
+		
 		time.Sleep(5 * time.Second)
 	}
 

@@ -68,3 +68,41 @@ With the improved batch concurrency implementation:
 **Troubleshooting:** If you see "nonce too low" errors, see [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) for solutions.
 
 See [CONCURRENCY_FIX.md](./CONCURRENCY_FIX.md) for technical details.
+
+## 📊 Understanding TPS Metrics
+
+The tool reports two types of TPS:
+
+### Interval (Instant) TPS
+```
+[Interval] Instant TPS: 0.50 (over last 5.0s)
+```
+- **What it measures**: Actual on-chain transaction processing rate
+- **When to use**: Real-time monitoring of blockchain throughput
+- **Should match**: What you see in Reth/sequencer logs
+
+### Overall (Average) TPS
+```
+[Overall] Avg TPS: 1.25, Total Txs: 10, Duration: 8s
+```
+- **What it measures**: Cumulative transactions over total test duration
+- **When to use**: Long-term performance benchmarking
+
+**Important**: In earlier versions, TPS measured transaction *submission* rate (how fast the tool sent transactions), not actual blockchain *processing* rate. This has been fixed. See [TPS_FIX.md](./TPS_FIX.md) for details.
+
+### Reading the Output
+
+Example output:
+```
+========================================================
+[TPS log] StartBlock: 100, EndBlock: 102, Blocks: 2, TxsInInterval: 2
+[Interval] Instant TPS: 0.40 (over last 5.0s)
+[Overall] Avg TPS: 1.25, Max TPS: 0.50, Min TPS: 0.20, Total Txs: 10, Duration: 8s
+========================================================
+```
+
+- **TxsInInterval**: Transactions confirmed in the last reporting period
+- **Blocks**: Number of new blocks in this interval
+- **Instant TPS**: Current blockchain throughput (TxsInInterval / interval duration)
+- **Avg TPS**: Overall test performance (Total Txs / Total Duration)
+- **Max/Min TPS**: Based on interval measurements, shows performance variance
