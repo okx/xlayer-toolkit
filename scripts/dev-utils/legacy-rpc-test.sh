@@ -289,6 +289,14 @@ call_rpc "eth_getLogs" "[{\"address\":\"$CONTRACT_ADDRESS\"}]" \
 call_rpc "eth_getLogs" "[{\"address\":\"$CONTRACT_ADDRESS\",\"fromBlock\":\"0x$(printf '%x' $BELOW)\",\"toBlock\":\"0x$(printf '%x' $((BELOW + 5)))\"}]" \
     "eth_getLogs (contract address with range before migration) → PROXY"
 
+# Test getLogs with blockHash (Erigon block - before migration)
+call_rpc "eth_getLogs" "[{\"blockHash\":\"$FOR_ERIGON_BLOCK_HASH\"}]" \
+    "eth_getLogs (erigon blockHash) → fallback to PROXY"
+
+# Test getLogs with blockHash (op-geth block - after migration)
+call_rpc "eth_getLogs" "[{\"blockHash\":\"$FOR_OP_BLOCK_HASH\"}]" \
+    "eth_getLogs (op-geth blockHash) → LOCAL"
+
 echo -e "\n${GREEN}=== FilterAPI: Filter Management ===${NC}"
 
 # Create filter before migration
