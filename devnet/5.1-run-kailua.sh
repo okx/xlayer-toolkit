@@ -86,12 +86,19 @@ if [ "$KAILUA_MOCK_MODE" = "true" ]; then
     sed_inplace "s|^RISC0_DEV_MODE=.*|RISC0_DEV_MODE=1|" "$DIR"/.env.deploy
     sed_inplace "s|^RISC0_DEV_MODE=.*|RISC0_DEV_MODE=1|" "$DIR"/.env.proposer
     sed_inplace "s|^RISC0_DEV_MODE=.*|RISC0_DEV_MODE=1|" "$DIR"/.env.validator
+else
+    sed_inplace "s|^RISC0_DEV_MODE=.*|RISC0_DEV_MODE=0|" "$DIR"/.env.deploy
+    sed_inplace "s|^RISC0_DEV_MODE=.*|RISC0_DEV_MODE=0|" "$DIR"/.env.proposer
+    sed_inplace "s|^RISC0_DEV_MODE=.*|RISC0_DEV_MODE=0|" "$DIR"/.env.validator
 fi
 
 # Set fast finality mode
 if [ "$KAILUA_FAST_FINALITY_MODE" = "true" ]; then
     sed_inplace "s|^FAST_FORWARD_START=.*|FAST_FORWARD_START=$STARTING_BLOCK_NUMBER|" "$DIR"/.env.validator
     sed_inplace "s|^FAST_FORWARD_TARGET=.*|FAST_FORWARD_TARGET=999999999|" "$DIR"/.env.validator
+else
+    sed_inplace "s|^FAST_FORWARD_START=.*|FAST_FORWARD_START=0|" "$DIR"/.env.validator
+    sed_inplace "s|^FAST_FORWARD_TARGET=.*|FAST_FORWARD_TARGET=0|" "$DIR"/.env.validator
 fi
 
 docker compose up kailua-contracts
