@@ -905,43 +905,41 @@ services:
       - challenger 
       - --env-file=/app/.env
 
-  # kailua-proposer:
-  #   image: kailua:latest
-  #   container_name: kailua-proposer
-  #   environment:
-  #     - RISC0_DEV_MODE=1
-  #     - NO_COLOR=1
-  #   volumes:
-  #     - ./kailua/propose-data:/data
-  #   command:
-  #     - propose
-  #     - --op-node-url=http://op-seq:9545
-  #     - --op-geth-url=http://op-${SEQ_TYPE}-seq:8545
-  #     - --eth-rpc-url=${L1_RPC_URL_IN_DOCKER}
-  #     - --beacon-rpc-url=${L1_BEACON_URL_IN_DOCKER}
-  #     - --data-dir=/data
-  #     - --proposer-key=${KAILUA_PROPOSER_KEY}
-  #     - --kailua-game-implementation=${KAILUA_GAME_ADDRESS}
-  #     - --bypass-chain-registry
+  kailua-contracts:
+    image: ${KAILUA_IMAGE_TAG}
+    container_name: kailua-contracts
+    environment:
+      - RUST_LOG="kailua=info,alloy=warn,hyper=warn,warn"
+    env_file:
+      - ./kailua/.env.deploy
+    command:
+      - kailua-cli 
+      - fast-track
 
-  # kailua-validator:
-  #   image: kailua:latest
-  #   container_name: kailua-validator
-  #   environment:
-  #     - RISC0_DEV_MODE=1
-  #     - NO_COLOR=1
-  #     - RUST_LOG=warn,kailua=info,kailua_validator=info,kailua_proposer=info,kailua_prover=info,kailua_sync=info,oracle_server=off,oracle_client=off,host_backend=off,risc0_zkvm=off,risc0=off,alloy=warn,alloy_rpc_client=off,alloy_json_rpc=off,alloy_transport_http=off,hyper=off,hyper_util=off,reqwest=off,kona=warn,kona_derive=warn,kona_executor=warn,kona_mpt=warn,batch_validator=warn,hint_writer=off,hint_reader=off,frame_queue=warn,channel_reader=warn,pipeline=warn
-  #   volumes:
-  #     - ./kailua/validate-data:/data
-  #   command:
-  #     - validate
-  #     - --op-node-url=http://op-seq:9545
-  #     - --op-geth-url=http://op-${SEQ_TYPE}-seq:8545
-  #     - --eth-rpc-url=${L1_RPC_URL_IN_DOCKER}
-  #     - --beacon-rpc-url=${L1_BEACON_URL_IN_DOCKER}
-  #     - --data-dir=/data
-  #     - --validator-key=${KAILUA_VALIDATOR_KEY}
-  #     - --kailua-game-implementation=${KAILUA_GAME_ADDRESS}
-  #     - --kailua-cli=/usr/local/bin/kailua-cli
-  #     - --bypass-chain-registry
-  #     - --max-fault-proving-delay=${KAILUA_MAX_FAULT_PROVING_DELAY}
+  kailua-proposer:
+    image: ${KAILUA_IMAGE_TAG}
+    container_name: kailua-proposer
+    env_file:
+      - ./kailua/.env.proposer
+    environment:
+      - RUST_LOG=warn,kailua=info,kailua_proposer=info,hyper=off,hyper_util=off,alloy=warn
+    volumes:
+      - ./kailua/proposer-data:/data
+    command:
+      - kailua-cli 
+      - propose
+      - --data-dir=/data
+
+  kailua-validator:
+    image: ${KAILUA_IMAGE_TAG}
+    container_name: kailua-validator
+    env_file:
+      - ./kailua/.env.validator
+    environment:
+      - RUST_LOG=warn,kailua=info,kailua_validator=info,kailua_prover=info,kailua_sync=info,oracle_server=off,oracle_client=off,host_backend=off,risc0_zkvm=off,risc0=off,alloy=warn,alloy_rpc_client=off,alloy_json_rpc=off,alloy_transport_http=off,hyper=off,hyper_util=off,reqwest=off,kona=warn,kona_derive=warn,kona_executor=warn,kona_mpt=warn,batch_validator=warn,hint_writer=off,hint_reader=off,frame_queue=warn,channel_reader=warn,pipeline=warn
+    volumes:
+      - ./kailua/validator-data:/data
+    command:
+      - kailua-cli 
+      - validate
+      - --data-dir=/data

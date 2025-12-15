@@ -2,14 +2,26 @@
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Kailua Test Fault - Launch malicious challenge using kailua-cli test-fault
+# Uses Docker container to run kailua-cli
 # ═══════════════════════════════════════════════════════════════════════════════
 source ../.env
 
-# Configuration (modify according to your environment)
-L1_RPC=${L1_RPC:-"http://localhost:8545"}
-L1_BEACON=${L1_BEACON:-"http://localhost:3500"}
-L2_RPC=${L2_RPC:-"http://localhost:8123"}
-OP_NODE=${OP_NODE:-"http://localhost:9545"}
+# Docker configuration
+KAILUA_IMAGE_TAG=${KAILUA_IMAGE_TAG:-"kailua:latest"}
+DOCKER_NETWORK=${DOCKER_NETWORK:-"dev-op"}
+
+# Host RPC URLs (for cast commands run on host)
+L1_RPC=${L1_RPC_URL:-"http://localhost:8545"}
+L1_BEACON=${L1_BEACON_URL:-"http://localhost:3500"}
+L2_RPC=${L2_RPC_URL:-"http://localhost:8123"}
+OP_NODE=${L2_NODE_RPC_URL:-"http://localhost:9545"}
+
+# Docker RPC URLs (for kailua-cli inside container)
+L1_RPC_URL_IN_DOCKER=${L1_RPC_URL_IN_DOCKER:-"http://l1-geth:8545"}
+L1_BEACON_URL_IN_DOCKER=${L1_BEACON_URL_IN_DOCKER:-"http://l1-beacon-chain:3500"}
+L2_RPC_URL_IN_DOCKER=${L2_RPC_URL_IN_DOCKER:-"http://op-geth-seq:8545"}
+L2_NODE_RPC_URL_IN_DOCKER=${L2_NODE_RPC_URL_IN_DOCKER:-"http://op-seq:9545"}
+
 ATTACKER_KEY=${ATTACKER_KEY:-"0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"}
 DISPUTE_GAME_FACTORY_ADDRESS=${DISPUTE_GAME_FACTORY_ADDRESS:-"0xd43adf4c4338ae8b6ca3e76779bcec9971f7996f"}
 
@@ -238,33 +250,25 @@ do_challenge() {
     OFFSET=${OFFSET:-1}
     
     echo ""
-    echo -e "${YELLOW}Executing: kailua-cli test-fault --fault-parent $parentIdx --fault-offset $OFFSET${NC}"
+    echo -e "${YELLOW}Executing via Docker: kailua-cli test-fault --fault-parent $parentIdx --fault-offset $OFFSET${NC}"
     echo ""
     
-    # Check if kailua-cli exists
-    if ! command -v kailua-cli &> /dev/null; then
-        echo -e "${RED}Error: kailua-cli not found in PATH${NC}"
-        echo ""
-        echo "Please build and install it:"
-        echo "  cd /Users/oker/rust-workspace/kailua"
-        echo "  RISC0_SKIP_BUILD_KERNELS=1 cargo build --bin kailua-cli --release"
-        echo "  sudo cp target/release/kailua-cli /usr/local/bin/"
-        return 1
-    fi
-    
-    # Execute test-fault
-    RUST_LOG=info RISC0_DEV_MODE=1 kailua-cli test-fault \
-        --eth-rpc-url $L1_RPC \
-        --beacon-rpc-url $L1_BEACON \
-        --op-geth-url $L2_RPC \
-        --op-node-url $OP_NODE \
-        --proposer-key $ATTACKER_KEY \
-        --fault-offset $OFFSET \
-        --fault-parent $parentIdx \
+    # Execute test-fault using Docker
+    docker run --rm \
+        --network "$DOCKER_NETWORK" \
+        -e RUST_LOG=info \
+        -e RISC0_DEV_MODE=1 \
+        "$KAILUA_IMAGE_TAG" \
+        kailua-cli \
+        test-fault \
+        --eth-rpc-url "$L1_RPC_URL_IN_DOCKER" \
+        --beacon-rpc-url "$L1_BEACON_URL_IN_DOCKER" \
+        --op-geth-url "$L2_RPC_URL_IN_DOCKER" \
+        --op-node-url "$L2_NODE_RPC_URL_IN_DOCKER" \
+        --proposer-key "$ATTACKER_KEY" \
+        --fault-offset "$OFFSET" \
+        --fault-parent "$parentIdx" \
         --txn-timeout 300
-        # --exec-gas-premium 5000 \
-        # --blob-gas-premium 5000 \
-        
     
     if [ $? -eq 0 ]; then
         echo ""
@@ -288,12 +292,14 @@ main() {
     
     echo ""
     echo "Configuration:"
-    echo "  L1 RPC:     $L1_RPC"
-    echo "  L1 Beacon:  $L1_BEACON"
-    echo "  L2 RPC:     $L2_RPC"
-    echo "  OP Node:    $OP_NODE"
-    echo "  Factory:    $DISPUTE_GAME_FACTORY_ADDRESS"
-    echo "  Attacker:   $(cast wallet address $ATTACKER_KEY 2>/dev/null)"
+    echo "  Docker Image: $KAILUA_IMAGE_TAG"
+    echo "  Network:      $DOCKER_NETWORK"
+    echo "  L1 RPC:       $L1_RPC (host) / $L1_RPC_URL_IN_DOCKER (docker)"
+    echo "  L1 Beacon:    $L1_BEACON (host) / $L1_BEACON_URL_IN_DOCKER (docker)"
+    echo "  L2 RPC:       $L2_RPC (host) / $L2_RPC_URL_IN_DOCKER (docker)"
+    echo "  OP Node:      $OP_NODE (host) / $L2_NODE_RPC_URL_IN_DOCKER (docker)"
+    echo "  Factory:      $DISPUTE_GAME_FACTORY_ADDRESS"
+    echo "  Attacker:     $(cast wallet address $ATTACKER_KEY 2>/dev/null)"
     
     show_games
     
@@ -303,10 +309,13 @@ main() {
     echo "  r        - Refresh game list"
     echo "  q        - Quit"
     echo ""
-    nc -z localhost 8545 && echo "eth OK" || (echo "eth NOT running" && exit 1)
-    nc -z localhost 3500 && echo "beacon OK" || (echo "beacon NOT running" && exit 1)
-    nc -z localhost 8123 && echo "l2 OK" || (echo "l2 NOT running" && exit 1)
-    nc -z localhost 9545 && echo "op-node OK" || (echo "op-node NOT running" && exit 1)
+    
+    # Check services
+    nc -z localhost 8545 && echo "✓ L1 RPC OK" || (echo "✗ L1 RPC NOT running" && exit 1)
+    nc -z localhost 3500 && echo "✓ L1 Beacon OK" || (echo "✗ L1 Beacon NOT running" && exit 1)
+    nc -z localhost 8123 && echo "✓ L2 RPC OK" || (echo "✗ L2 RPC NOT running" && exit 1)
+    nc -z localhost 9545 && echo "✓ OP Node OK" || (echo "✗ OP Node NOT running" && exit 1)
+    echo ""
     
     while true; do
         read -p "Enter command (idx/d idx/r/q): " input
@@ -345,4 +354,3 @@ main() {
 }
 
 main
-
