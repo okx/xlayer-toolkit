@@ -471,6 +471,7 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
+      - --rpc.http-body-limit-mb=64
     depends_on:
       op-seq:
         condition: service_healthy
@@ -718,6 +719,7 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
+      - --rpc.http-body-limit-mb=64
     depends_on:
       op-seq2:
         condition: service_healthy
@@ -838,6 +840,7 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
+      - --rpc.http-body-limit-mb=64
     depends_on:
       op-seq3:
         condition: service_healthy
