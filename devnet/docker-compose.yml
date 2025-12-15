@@ -483,31 +483,26 @@ services:
       - --log.level=debug
       - --l2-eth-rpc=${OP_BATCHER_L2_ETH_RPC:-http://op-${SEQ_TYPE}-seq:8545}
       - --rollup-rpc=${OP_BATCHER_ROLLUP_RPC:-http://op-seq:9545}
-      # - --txmgr.enable-cell-proofs=true
-      - --wait-node-sync=true
-      - --check-recent-txs-depth=5
-      - --poll-interval=5s
+      - --private-key=${OP_BATCHER_PRIVATE_KEY}
+      - --poll-interval=1s
       - --batch-type=1
       - --compression-algo=brotli-11
       - --data-availability-type=auto
-      - --max-channel-duration=30
-      - --target-num-frames=5
       - --sub-safety-margin=6
       - --num-confirmations=4
-      - --network-timeout=10s
       - --safe-abort-nonce-too-low-count=3
-      - --max-pending-tx=10
       - --resubmission-timeout=30s
       - --rpc.addr=0.0.0.0
       - --rpc.port=8548
       - --rpc.enable-admin
+      - --max-channel-duration=25
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
-      - --private-key=${OP_BATCHER_PRIVATE_KEY}
-      - --throttle.tx-size-upper-limit=0
-      - --throttle.tx-size-lower-limit=0
+      - --max-pending-tx=10
+      - --target-num-frames=5
       - --throttle.block-size-upper-limit=0
       - --throttle.block-size-lower-limit=0
-      - --active-sequencer-check-duration=5s
+      - --throttle.tx-size-lower-limit=0
+      - --throttle.tx-size-upper-limit=0
 
   op-proposer:
     image: "${OP_STACK_IMAGE_TAG}"
