@@ -4,6 +4,45 @@
 # Kailua Test Fault - Launch malicious challenge using kailua-cli test-fault
 # Uses Docker container to run kailua-cli
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Parse arguments
+STATS_MODE="none"
+START_GAME=""
+END_GAME=""
+
+if [ $# -eq 0 ]; then
+    STATS_MODE="none"
+elif [ $# -eq 2 ]; then
+    START_GAME=$1
+    END_GAME=$2
+    
+    # Validate arguments
+    if ! [[ "$START_GAME" =~ ^[0-9]+$ ]] || ! [[ "$END_GAME" =~ ^[0-9]+$ ]]; then
+        echo "Error: Arguments must be numbers"
+        echo ""
+        echo "Usage: $0 [START_IDX END_IDX]"
+        echo ""
+        echo "Examples:"
+        echo "  $0           # List all games with block ranges (fast)"
+        echo "  $0 10 13     # Analyze games 10-13 with transaction stats"
+        exit 1
+    fi
+    
+    if [ $START_GAME -gt $END_GAME ]; then
+        echo "Error: START_IDX must be <= END_IDX"
+        exit 1
+    fi
+    
+    STATS_MODE="range"
+else
+    echo "Usage: $0 [START_IDX END_IDX]"
+    echo ""
+    echo "Examples:"
+    echo "  $0           # List all games with block ranges (fast)"
+    echo "  $0 10 13     # Analyze games 10-13 with transaction stats"
+    exit 1
+fi
+
 source ../.env
 
 # Docker configuration
@@ -64,19 +103,77 @@ proof_status_color() {
     esac
 }
 
+# Count transactions in block range
+count_transactions() {
+    local startBlock=$1
+    local endBlock=$2
+    local total=0
+    
+    local block=$startBlock
+    while [ $block -lt $endBlock ]; do
+        # Convert to hex using bc to avoid scientific notation
+        local hexBlock=$(echo "obase=16; $block" | bc)
+        
+        # Get transaction count
+        local txNum=$(cast rpc eth_getBlockByNumber "0x$hexBlock" false --rpc-url $L2_RPC 2>/dev/null | jq -r '.transactions | length // 0')
+        
+        # Validate and add
+        if [[ "$txNum" =~ ^[0-9]+$ ]]; then
+            total=$((total + txNum))
+        fi
+        
+        block=$((block + 1))
+    done
+    
+    echo "$total"
+}
+
+# Format number with comma separator
+format_number() {
+    printf "%'d" $1 2>/dev/null || echo $1
+}
+
 # Show all games
 show_games() {
     TOTAL=$(cast call $DISPUTE_GAME_FACTORY_ADDRESS "gameCount()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
     
+    # Determine scan range
+    local SCAN_START=0
+    local SCAN_END=-1  # Default: don't scan any games
+    
+    if [ "$STATS_MODE" = "range" ]; then
+        SCAN_START=$START_GAME
+        SCAN_END=$END_GAME
+    fi
+    
     echo ""
-    echo -e "${BLUE}═══════════════════════════════════════════════════════════════════════════════════${NC}"
-    echo -e "${BLUE}                           Kailua Games (Total: $TOTAL)                            ${NC}"
-    echo -e "${BLUE}═══════════════════════════════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════════════════════════════════════${NC}"
+    if [ "$STATS_MODE" = "range" ]; then
+        echo -e "${BLUE}                     Kailua Games $START_GAME-$END_GAME (Total: $TOTAL)                     ${NC}"
+    else
+        echo -e "${BLUE}                              Kailua Games (Total: $TOTAL)                                  ${NC}"
+    fi
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════════════════════════════════════${NC}"
     echo ""
-    echo "Idx   Type  L2Block     Status          Parent  Children  ProofStatus"
-    echo "────  ────  ──────────  ──────────────  ──────  ────────  ───────────"
+    echo "Idx   Type  L2Block     Status          Parent  Children  BlockRange        TxCount    ProofStatus"
+    echo "────  ────  ──────────  ──────────────  ──────  ────────  ────────────────  ─────────  ───────────"
+    
+    local totalTxs=0
+    local scannedBlocks=0
+    local maxTxGame=-1
+    local maxTxCount=0
+    
+    # Store game data for display
+    declare -a gameData
     
     for i in $(seq 0 $((TOTAL-1))); do
+        # Skip games outside range when in range mode
+        if [ "$STATS_MODE" = "range" ]; then
+            if [ $i -lt $START_GAME ] || [ $i -gt $END_GAME ]; then
+                continue
+            fi
+        fi
+        
         gameInfo=$(cast call $DISPUTE_GAME_FACTORY_ADDRESS "gameAtIndex(uint256)(uint32,uint64,address)" $i --rpc-url $L1_RPC 2>/dev/null)
         gameType=$(echo "$gameInfo" | head -1)
         gameAddr=$(echo "$gameInfo" | tail -1)
@@ -91,12 +188,14 @@ show_games() {
         statusStr=$(status_name $statusCode)
         childCount=$(cast call $gameAddr "childCount()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
         
-        # Get parent index
+        # Get parent index and calculate block range
         parentIdx=$(cast call $gameAddr "parentGameIndex()(uint64)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
         if [ -z "$parentIdx" ] || [ "$parentIdx" = "" ]; then
             parentIdx="anchor"
             proofStatusStr="-"
             proofClr="${NC}"
+            parentL2Block=0
+            blockRange="0-$l2Block"
         else
             # Get this game's signature
             signature=$(cast call $gameAddr "signature()(bytes32)" --rpc-url $L1_RPC 2>/dev/null)
@@ -104,6 +203,10 @@ show_games() {
             # Get parent game's address
             parentInfo=$(cast call $DISPUTE_GAME_FACTORY_ADDRESS "gameAtIndex(uint256)(uint32,uint64,address)" $parentIdx --rpc-url $L1_RPC 2>/dev/null)
             parentAddr=$(echo "$parentInfo" | tail -1)
+            
+            # Get parent L2 block
+            parentL2Block=$(cast call $parentAddr "l2BlockNumber()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
+            blockRange="$parentL2Block-$l2Block"
             
             # Query proofStatus
             if [ -n "$parentAddr" ] && [ -n "$signature" ]; then
@@ -123,9 +226,65 @@ show_games() {
             *) clr="${RED}" ;;
         esac
         
-        printf "%4d  %4d  %10d  ${clr}%-14s${NC}  %6s  %8d  ${proofClr}%-11s${NC}\n" \
-            $i "$gameType" "$l2Block" "$statusStr" "$parentIdx" "$childCount" "$proofStatusStr"
+        # Count transactions if in scan range
+        txCountStr="-"
+        txCount=0
+        if [ $i -ge $SCAN_START ] && [ $i -le $SCAN_END ]; then
+            # Show progress
+            current=$((i - SCAN_START + 1))
+            total=$((SCAN_END - SCAN_START + 1))
+            echo -ne "\r${CYAN}[Scanning $current/$total: Game $i]${NC}\033[K"
+            
+            # Count transactions
+            txCount=$(count_transactions $parentL2Block $l2Block)
+            txCountStr=$(format_number $txCount)
+            totalTxs=$((totalTxs + txCount))
+            scannedBlocks=$((scannedBlocks + l2Block - parentL2Block))
+            
+            # Track max
+            if [ $txCount -gt $maxTxCount ]; then
+                maxTxCount=$txCount
+                maxTxGame=$i
+            fi
+            
+            # Clear progress line
+            echo -ne "\r\033[K"
+        fi
+        
+        # Store game data for later display
+        gameData[$i]="$i|$gameType|$l2Block|$statusStr|$clr|$parentIdx|$childCount|$blockRange|$txCountStr|$txCount|$proofStatusStr|$proofClr"
     done
+    
+    # Display all stored games with proper star marking
+    for idx in "${!gameData[@]}"; do
+        IFS='|' read -r i gameType l2Block statusStr clr parentIdx childCount blockRange txCountStr txCount proofStatusStr proofClr <<< "${gameData[$idx]}"
+        
+        # Add star marker for max tx game
+        if [ "$idx" = "$maxTxGame" ] && [ $txCount -gt 0 ]; then
+            printf "%4d  %4d  %10d  ${clr}%-14s${NC}  %6s  %8d  %-16s  %-9s ★  ${proofClr}%-11s${NC}\n" \
+                "$i" "$gameType" "$l2Block" "$statusStr" "$parentIdx" "$childCount" "$blockRange" "$txCountStr" "$proofStatusStr"
+        else
+            printf "%4d  %4d  %10d  ${clr}%-14s${NC}  %6s  %8d  %-16s  %-9s    ${proofClr}%-11s${NC}\n" \
+                "$i" "$gameType" "$l2Block" "$statusStr" "$parentIdx" "$childCount" "$blockRange" "$txCountStr" "$proofStatusStr"
+        fi
+    done
+    
+    # Summary
+    echo ""
+    if [ "$STATS_MODE" = "none" ]; then
+        echo -e "${GREEN}Game list loaded.${NC}"
+        echo ""
+        echo -e "${CYAN}💡 To see transaction statistics, run:${NC}"
+        echo -e "${CYAN}   $0 START_IDX END_IDX${NC}"
+    else
+        scannedGames=$((SCAN_END - SCAN_START + 1))
+        echo -e "${GREEN}Analysis complete!${NC} (Scanned $scannedGames games, $(format_number $scannedBlocks) blocks, $(format_number $totalTxs) total txs)"
+        
+        if [ $maxTxGame -ge 0 ]; then
+            echo -e "${YELLOW}★${NC} Game $maxTxGame has the highest transaction count ($(format_number $maxTxCount) txs)"
+            echo "  Recommended for stress testing"
+        fi
+    fi
     echo ""
 }
 
@@ -241,15 +400,15 @@ do_challenge() {
     echo -e "Target Game:      ${YELLOW}$target_idx${NC} (L2=$targetL2)"
     echo -e "Target's Parent:  ${YELLOW}$parentIdx${NC}"
     echo -e "New Game Index:   ${GREEN}$currentCount${NC} (will be created)"
+    echo -e "Fault Offset:     ${CYAN}1${NC} (auto)"
     echo ""
     echo "This will create a new faulty proposal as a sibling of Game $target_idx,"
     echo "both extending from Parent Game $parentIdx."
     echo ""
     
-    read -p "Enter fault-offset (1-10, default=1): " OFFSET
-    OFFSET=${OFFSET:-1}
+    # Auto-set fault-offset to 1
+    OFFSET=1
     
-    echo ""
     echo -e "${YELLOW}Executing via Docker: kailua-cli test-fault --fault-parent $parentIdx --fault-offset $OFFSET${NC}"
     echo ""
     
@@ -289,68 +448,47 @@ main() {
     echo -e "${RED}╔═══════════════════════════════════════════════════════════════════╗${NC}"
     echo -e "${RED}║          Kailua Malicious Challenge Tool (test-fault)             ║${NC}"
     echo -e "${RED}╚═══════════════════════════════════════════════════════════════════╝${NC}"
-    
     echo ""
-    echo "Configuration:"
-    echo "  Docker Image: $KAILUA_IMAGE_TAG"
-    echo "  Network:      $DOCKER_NETWORK"
-    echo "  L1 RPC:       $L1_RPC (host) / $L1_RPC_URL_IN_DOCKER (docker)"
-    echo "  L1 Beacon:    $L1_BEACON (host) / $L1_BEACON_URL_IN_DOCKER (docker)"
-    echo "  L2 RPC:       $L2_RPC (host) / $L2_RPC_URL_IN_DOCKER (docker)"
-    echo "  OP Node:      $OP_NODE (host) / $L2_NODE_RPC_URL_IN_DOCKER (docker)"
-    echo "  Factory:      $DISPUTE_GAME_FACTORY_ADDRESS"
-    echo "  Attacker:     $(cast wallet address $ATTACKER_KEY 2>/dev/null)"
+    
+    # Check services (silent unless error)
+    nc -z localhost 8545 2>/dev/null || (echo -e "${RED}✗ Error: L1 RPC (localhost:8545) NOT running${NC}" && exit 1)
+    nc -z localhost 3500 2>/dev/null || (echo -e "${RED}✗ Error: L1 Beacon (localhost:3500) NOT running${NC}" && exit 1)
+    nc -z localhost 8123 2>/dev/null || (echo -e "${RED}✗ Error: L2 RPC (localhost:8123) NOT running${NC}" && exit 1)
+    nc -z localhost 9545 2>/dev/null || (echo -e "${RED}✗ Error: OP Node (localhost:9545) NOT running${NC}" && exit 1)
+    
+    # Get game count
+    TOTAL_GAMES=$(cast call $DISPUTE_GAME_FACTORY_ADDRESS "gameCount()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
+    echo "Found ${GREEN}$TOTAL_GAMES${NC} Kailua games."
+    echo ""
+    
+    # Show mode-specific tips
+    if [ "$STATS_MODE" = "none" ]; then
+        echo -e "${CYAN}💡 Tip: To analyze transaction statistics, specify a game range:${NC}"
+        echo -e "${CYAN}   Usage: $0 START_IDX END_IDX${NC}"
+        echo -e "${CYAN}   Example: $0 10 13${NC}"
+        echo ""
+        echo "Loading game list (showing block ranges only)..."
+    else
+        echo -e "${CYAN}📊 Analyzing games $START_GAME-$END_GAME with transaction statistics...${NC}"
+        echo "(Only showing specified range)"
+    fi
     
     show_games
     
-    echo "Commands:"
-    echo "  <idx>    - Challenge game at index <idx>"
-    echo "  d <idx>  - Show detailed info for game <idx>"
-    echo "  r        - Refresh game list"
-    echo "  q        - Quit"
-    echo ""
+    read -p "Enter game index to challenge: " game_idx
     
-    # Check services
-    nc -z localhost 8545 && echo "✓ L1 RPC OK" || (echo "✗ L1 RPC NOT running" && exit 1)
-    nc -z localhost 3500 && echo "✓ L1 Beacon OK" || (echo "✗ L1 Beacon NOT running" && exit 1)
-    nc -z localhost 8123 && echo "✓ L2 RPC OK" || (echo "✗ L2 RPC NOT running" && exit 1)
-    nc -z localhost 9545 && echo "✓ OP Node OK" || (echo "✗ OP Node NOT running" && exit 1)
-    echo ""
+    # Validate input
+    if [ -z "$game_idx" ]; then
+        echo -e "${RED}Error: No index provided${NC}"
+        exit 1
+    fi
     
-    while true; do
-        read -p "Enter command (idx/d idx/r/q): " input
-        
-        # Parse command
-        cmd=$(echo "$input" | awk '{print $1}')
-        arg=$(echo "$input" | awk '{print $2}')
-        
-        case "$cmd" in
-            q|Q|quit|exit)
-                echo "Bye!"
-                exit 0
-                ;;
-            r|R|refresh)
-                show_games
-                ;;
-            d|D|detail)
-                if [ -n "$arg" ] && [[ "$arg" =~ ^[0-9]+$ ]]; then
-                    show_game_detail $arg
-                else
-                    echo -e "${RED}Usage: d <game_index>${NC}"
-                fi
-                ;;
-            ''|*[!0-9]*)
-                echo -e "${RED}Invalid input. Enter a number, 'd <idx>', 'r', or 'q'.${NC}"
-                ;;
-            *)
-                do_challenge $cmd
-                echo ""
-                echo "─────────────────────────────────────────────────────────────────────"
-                read -p "Press Enter to continue..."
-                show_games
-                ;;
-        esac
-    done
+    if ! [[ "$game_idx" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}Error: Invalid index. Must be a number.${NC}"
+        exit 1
+    fi
+    
+    do_challenge $game_idx
 }
 
 main
