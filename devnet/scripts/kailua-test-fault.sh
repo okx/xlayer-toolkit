@@ -417,6 +417,8 @@ do_challenge() {
         --network "$DOCKER_NETWORK" \
         -e RUST_LOG=info \
         -e RISC0_DEV_MODE=1 \
+        -e EXEC_GAS_PREMIUM=100000 \
+        -e BLOB_GAS_PREMIUM=100000 \
         "$KAILUA_IMAGE_TAG" \
         kailua-cli \
         test-fault \
