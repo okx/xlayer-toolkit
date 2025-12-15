@@ -102,7 +102,7 @@ func (tpsman *SimpleTPSManager) TPSDisplay() {
 	lastHeight := initHeight
 	
 	// Track interval-based metrics
-	var intervalStartTime time.Time = initTime
+	var intervalStartTime time.Time = time.Now()  // Start from now, not initTime
 	var intervalTxCount uint64 = 0
 	var intervalStartHeight uint64 = initHeight
 	
@@ -110,6 +110,9 @@ func (tpsman *SimpleTPSManager) TPSDisplay() {
 	var avgTPS float64
 	var maxTps float64
 	var minTps float64 = 100000
+	
+	// Minimum interval duration to avoid artificially high TPS from sub-second intervals
+	const minIntervalDuration = 3.0 // seconds
 	
 	for {
 		newblockNum := tpsman.GetBlockNum()
@@ -132,37 +135,41 @@ func (tpsman *SimpleTPSManager) TPSDisplay() {
 		
 		// Calculate interval TPS (actual on-chain throughput for this interval)
 		intervalDuration := time.Since(intervalStartTime).Seconds()
-		var instantTPS float64
-		if intervalDuration > 0 {
-			instantTPS = float64(intervalTxCount) / intervalDuration
-		}
 		
-		// Calculate average TPS (overall throughput)
-		avgTPS = float64(totalTxCount) / float64(time.Since(initTime).Seconds())
-		
-		// Update min/max based on interval TPS (not average)
-		if instantTPS > maxTps {
-			maxTps = instantTPS
-		}
-		if intervalTxCount > 0 && instantTPS < minTps {
-			minTps = instantTPS
-		}
-		
-		// Calculate blocks per interval
-		blocksInInterval := lastHeight - intervalStartHeight
-		
-		fmt.Println("========================================================")
-		fmt.Printf("[TPS log] StartBlock: %d, EndBlock: %d, Blocks: %d, TxsInInterval: %d\n", 
-			intervalStartHeight+1, lastHeight, blocksInInterval, intervalTxCount)
-		fmt.Printf("[Interval] Instant TPS: %5.2f (over last %.1fs)\n", instantTPS, intervalDuration)
-		fmt.Printf("[Overall] Avg TPS: %5.2f, Max TPS: %5.2f, Min TPS: %5.2f, Total Txs: %d, Duration: %ds\n", 
-			avgTPS, maxTps, minTps, totalTxCount, int64(time.Since(initTime).Seconds()))
-		fmt.Println("========================================================")
+		// Only report if we have sufficient interval duration to avoid inflated TPS
+		if intervalDuration >= minIntervalDuration {
+			var instantTPS float64
+			if intervalDuration > 0 {
+				instantTPS = float64(intervalTxCount) / intervalDuration
+			}
+			
+			// Calculate average TPS (overall throughput)
+			avgTPS = float64(totalTxCount) / float64(time.Since(initTime).Seconds())
+			
+			// Update min/max based on interval TPS (not average)
+			if instantTPS > maxTps {
+				maxTps = instantTPS
+			}
+			if intervalTxCount > 0 && instantTPS < minTps {
+				minTps = instantTPS
+			}
+			
+			// Calculate blocks per interval
+			blocksInInterval := lastHeight - intervalStartHeight
+			
+			fmt.Println("========================================================")
+			fmt.Printf("[TPS log] StartBlock: %d, EndBlock: %d, Blocks: %d, TxsInInterval: %d\n", 
+				intervalStartHeight+1, lastHeight, blocksInInterval, intervalTxCount)
+			fmt.Printf("[Interval] Instant TPS: %5.2f (over last %.1fs)\n", instantTPS, intervalDuration)
+			fmt.Printf("[Overall] Avg TPS: %5.2f, Max TPS: %5.2f, Min TPS: %5.2f, Total Txs: %d, Duration: %ds\n", 
+				avgTPS, maxTps, minTps, totalTxCount, int64(time.Since(initTime).Seconds()))
+			fmt.Println("========================================================")
 
-		// Reset interval counters
-		intervalStartTime = time.Now()
-		intervalTxCount = 0
-		intervalStartHeight = lastHeight
+			// Reset interval counters
+			intervalStartTime = time.Now()
+			intervalTxCount = 0
+			intervalStartHeight = lastHeight
+		}
 		
 		time.Sleep(5 * time.Second)
 	}
