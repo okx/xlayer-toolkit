@@ -924,7 +924,7 @@ services:
     environment:
       - RUST_LOG=warn,kailua=info,kailua_proposer=info,hyper=off,hyper_util=off,alloy=warn
     volumes:
-      - ./kailua/proposer-data:/data
+      - ./data/kailua-proposer:/data
     command:
       - kailua-cli 
       - propose
@@ -938,7 +938,7 @@ services:
     environment:
       - RUST_LOG=warn,kailua=info,kailua_validator=info,kailua_prover=info,kailua_sync=info,oracle_server=off,oracle_client=off,host_backend=off,risc0_zkvm=off,risc0=off,alloy=warn,alloy_rpc_client=off,alloy_json_rpc=off,alloy_transport_http=off,hyper=off,hyper_util=off,reqwest=off,kona=warn,kona_derive=warn,kona_executor=warn,kona_mpt=warn,batch_validator=warn,hint_writer=off,hint_reader=off,frame_queue=warn,channel_reader=warn,pipeline=warn
     volumes:
-      - ./kailua/validator-data:/data
+      - ./data/kailua-validator:/data
     command:
       - kailua-cli 
       - validate
