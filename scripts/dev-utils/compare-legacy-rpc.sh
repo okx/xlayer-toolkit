@@ -23,7 +23,76 @@ CONTRACT_TEST_BLOCK="42811521"         # Block for contract state queries
 ACTIVE_EOA_ADDRESS="0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001"  # Address with nonce > 0
 EXPECTED_NONCE="1500"                  # Expected nonce value
 
-RETH_URL="${1:-http://localhost:8545}"
+# Parse command line arguments
+RETH_URL="http://localhost:8545"
+TARGET_PHASE=""
+
+show_usage() {
+    echo "Usage: $0 [OPTIONS] [RPC_URL]"
+    echo ""
+    echo "Options:"
+    echo "  --phase PHASE        Run only the specified phase (1-12)"
+    echo "  --list-phases        List all available test phases"
+    echo "  --help               Show this help message"
+    echo ""
+    echo "Arguments:"
+    echo "  RPC_URL              Reth RPC URL (default: http://localhost:8545)"
+    echo ""
+    echo "Examples:"
+    echo "  $0                                    # Run all phases with default URL"
+    echo "  $0 http://localhost:9545              # Run all phases with custom URL"
+    echo "  $0 --phase 5                          # Run only Phase 5 (eth_getLogs)"
+    echo "  $0 --phase 7 http://localhost:9545    # Run Phase 7 with custom URL"
+    exit 0
+}
+
+list_phases() {
+    echo "Available Test Phases:"
+    echo ""
+    echo "  Phase 1:   Basic Block Query Tests"
+    echo "  Phase 2:   Transaction Count Tests"
+    echo "  Phase 3:   Transaction Query Tests"
+    echo "  Phase 4:   State Query Tests"
+    echo "  Phase 5:   eth_getLogs Tests"
+    echo "  Phase 6:   Additional Methods"
+    echo "  Phase 7:   New Legacy RPC Methods (eth_call, eth_estimateGas, etc.)"
+    echo "  Phase 8:   BlockHash Parameter Tests"
+    echo "  Phase 9:   Special BlockTag Tests"
+    echo "  Phase 10:  Enhanced Data Consistency for Tolerant Methods"
+    echo "  Phase 11:  Edge Cases and Invalid Inputs"
+    echo "  Phase 12:  Internal Transactions Tests"
+    echo ""
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --phase)
+            TARGET_PHASE="$2"
+            shift 2
+            ;;
+        --list-phases)
+            list_phases
+            ;;
+        --help|-h)
+            show_usage
+            ;;
+        *)
+            RETH_URL="$1"
+            shift
+            ;;
+    esac
+done
+
+# Validate phase parameter
+if [ -n "$TARGET_PHASE" ]; then
+    if ! [[ "$TARGET_PHASE" =~ ^[0-9]+$ ]] || [ "$TARGET_PHASE" -lt 1 ] || [ "$TARGET_PHASE" -gt 12 ]; then
+        echo "Error: Invalid phase number '$TARGET_PHASE'. Phase must be between 1 and 12."
+        echo ""
+        echo "Use --list-phases to see available phases."
+        exit 1
+    fi
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -66,6 +135,48 @@ log_section() {
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}$1${NC}"
     echo -e "${BLUE}========================================${NC}"
+}
+
+# Check if a phase should run
+should_run_phase() {
+    local phase_num=$1
+    if [ -z "$TARGET_PHASE" ]; then
+        return 0  # Run all phases if no specific phase is targeted
+    fi
+    if [ "$TARGET_PHASE" = "$phase_num" ]; then
+        return 0  # Run this phase
+    fi
+    return 1  # Skip this phase
+}
+
+# Calculate boundary blocks based on cutoff
+# Sets global variables for boundary blocks and their hex equivalents
+calculate_boundary_blocks() {
+    # Calculate adjacent boundary blocks (cutoff ± 1)
+    LAST_LEGACY=$((CUTOFF_BLOCK - 1))
+    FIRST_LOCAL=$((CUTOFF_BLOCK + 1))
+    LAST_LEGACY_HEX=$(printf "0x%x" $LAST_LEGACY)
+    FIRST_LOCAL_HEX=$(printf "0x%x" $FIRST_LOCAL)
+    
+    # Calculate test blocks (cutoff ± 1000)
+    LEGACY_BLOCK=$((CUTOFF_BLOCK - 1000))
+    LOCAL_BLOCK=$((CUTOFF_BLOCK + 1000))
+    BOUNDARY_BLOCK=$CUTOFF_BLOCK
+    
+    LEGACY_BLOCK_HEX=$(printf "0x%x" $LEGACY_BLOCK)
+    LOCAL_BLOCK_HEX=$(printf "0x%x" $LOCAL_BLOCK)
+    BOUNDARY_BLOCK_HEX=$(printf "0x%x" $BOUNDARY_BLOCK)
+}
+
+# Calculate boundary blocks if not already set
+# This is used in phases that might run independently
+ensure_boundary_blocks() {
+    if [ -z "$LAST_LEGACY_HEX" ] || [ -z "$FIRST_LOCAL_HEX" ]; then
+        LAST_LEGACY=$((CUTOFF_BLOCK - 1))
+        FIRST_LOCAL=$((CUTOFF_BLOCK + 1))
+        LAST_LEGACY_HEX=$(printf "0x%x" $LAST_LEGACY)
+        FIRST_LOCAL_HEX=$(printf "0x%x" $FIRST_LOCAL)
+    fi
 }
 
 # RPC call helper (Reth)
@@ -259,6 +370,8 @@ check_data_consistency() {
         
         # Otherwise, it's a real Reth error
         log_error "$test_name - Reth returned error"
+        echo "       Method: $method"
+        echo "       Params: $params"
         echo "       Reth error: $reth_error_msg"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         FAILED_TEST_NAMES+=("$test_name")
@@ -292,6 +405,8 @@ check_data_consistency() {
         return 0
     else
         log_error "$test_name - Data MISMATCH ✗"
+        echo "       Method: $method"
+        echo "       Params: $params"
         echo "       Reth result:   $(echo "$reth_result" | jq -c . | head -c 200)..."
         echo "       Legacy result: $(echo "$legacy_result" | jq -c . | head -c 200)..."
         
@@ -314,11 +429,15 @@ check_data_consistency() {
 check_result() {
     local response=$1
     local test_name=$2
+    local method=$3
+    local params=$4
 
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
     if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
         log_error "$test_name"
+        [ -n "$method" ] && echo "       Method: $method"
+        [ -n "$params" ] && echo "       Params: $params"
         echo "       Error: $(echo "$response" | jq -r '.error.message')"
         echo "       Response: $(echo "$response" | jq -c .)"
         FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -330,6 +449,8 @@ check_result() {
         return 0
     else
         log_error "$test_name - Invalid response format"
+        [ -n "$method" ] && echo "       Method: $method"
+        [ -n "$params" ] && echo "       Params: $params"
         echo "       Response: $(echo "$response" | jq -c .)"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         FAILED_TEST_NAMES+=("$test_name")
@@ -341,11 +462,15 @@ check_result() {
 check_result_not_null() {
     local response=$1
     local test_name=$2
+    local method=$3
+    local params=$4
 
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
     if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
         log_error "$test_name"
+        [ -n "$method" ] && echo "       Method: $method"
+        [ -n "$params" ] && echo "       Params: $params"
         echo "       Error: $(echo "$response" | jq -r '.error.message')"
         echo "       Response: $(echo "$response" | jq -c .)"
         FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -357,6 +482,8 @@ check_result_not_null() {
         return 0
     else
         log_warning "$test_name - Result is null (may be expected)"
+        [ -n "$method" ] && echo "       Method: $method"
+        [ -n "$params" ] && echo "       Params: $params"
         echo "       Response: $(echo "$response" | jq -c .)"
         SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
         return 0
@@ -367,12 +494,16 @@ check_result_not_null() {
 check_result_legacy_tolerant() {
     local response=$1
     local test_name=$2
+    local method=$3
+    local params=$4
 
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
 
     if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
         error_msg=$(echo "$response" | jq -r '.error.message')
         log_warning "$test_name - $error_msg (legacy endpoint may not support this method)"
+        [ -n "$method" ] && echo "       Method: $method"
+        [ -n "$params" ] && echo "       Params: $params"
         echo "       Response: $(echo "$response" | jq -c .)"
         SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
         return 0
@@ -382,6 +513,8 @@ check_result_legacy_tolerant() {
         return 0
     else
         log_warning "$test_name - Invalid response format"
+        [ -n "$method" ] && echo "       Method: $method"
+        [ -n "$params" ] && echo "       Params: $params"
         echo "       Response: $(echo "$response" | jq -c .)"
         SKIPPED_TESTS=$((SKIPPED_TESTS + 1))
         return 0
@@ -430,18 +563,21 @@ log_info "Latest Block: $LATEST_BLOCK ($LATEST_BLOCK_DEC)"
 log_info "Cutoff Block: $CUTOFF_BLOCK"
 
 # Calculate test block numbers
-LEGACY_BLOCK=$((CUTOFF_BLOCK - 1000))
-LOCAL_BLOCK=$((CUTOFF_BLOCK + 1000))
-BOUNDARY_BLOCK=$CUTOFF_BLOCK
-
-LEGACY_BLOCK_HEX=$(printf "0x%x" $LEGACY_BLOCK)
-LOCAL_BLOCK_HEX=$(printf "0x%x" $LOCAL_BLOCK)
-BOUNDARY_BLOCK_HEX=$(printf "0x%x" $BOUNDARY_BLOCK)
+calculate_boundary_blocks
 
 log_info "Test Blocks:"
 log_info "  Legacy Block:   $LEGACY_BLOCK_HEX ($LEGACY_BLOCK) → Should route to Erigon"
 log_info "  Boundary Block: $BOUNDARY_BLOCK_HEX ($BOUNDARY_BLOCK) → Migration point"
 log_info "  Local Block:    $LOCAL_BLOCK_HEX ($LOCAL_BLOCK) → Should use Reth"
+
+# Display which phase(s) will be run
+if [ -n "$TARGET_PHASE" ]; then
+    echo ""
+    log_info "🎯 Running Phase $TARGET_PHASE only"
+else
+    echo ""
+    log_info "🎯 Running all phases (1-12)"
+fi
 
 # Validate that current block height is reasonable
 if [ $LATEST_BLOCK_DEC -lt $CUTOFF_BLOCK ]; then
@@ -562,6 +698,7 @@ echo "  ━━━━━━━━━━━━━━━━━━━━━━━━
 # Phase 1: Basic Block Query Tests
 # ========================================
 
+if should_run_phase 1; then
 log_section "Phase 1: Basic Block Query Tests"
 
 # Test 1.1: eth_getBlockByNumber (legacy)
@@ -585,10 +722,7 @@ response=$(rpc_call "eth_getBlockByNumber" "[\"$BOUNDARY_BLOCK_HEX\",false]")
 check_result_not_null "$response" "eth_getBlockByNumber (cutoff: $BOUNDARY_BLOCK_HEX)"
 
 # Calculate boundary blocks
-LAST_LEGACY=$((CUTOFF_BLOCK - 1))
-FIRST_LOCAL=$((CUTOFF_BLOCK + 1))
-LAST_LEGACY_HEX=$(printf "0x%x" $LAST_LEGACY)
-FIRST_LOCAL_HEX=$(printf "0x%x" $FIRST_LOCAL)
+calculate_boundary_blocks
 
 # Test 1.3.1: eth_getBlockByNumber (cutoff - 1)
 log_info "Test 1.3.1: eth_getBlockByNumber (cutoff - 1)"
@@ -605,11 +739,17 @@ log_info "Test 1.4: eth_getBlockByNumber (full transactions)"
 response=$(rpc_call "eth_getBlockByNumber" "[\"$LEGACY_BLOCK_HEX\",true]")
 check_result_not_null "$response" "eth_getBlockByNumber (full tx)"
 
+fi
+
 # ========================================
 # Phase 2: Transaction Count Tests
 # ========================================
 
+if should_run_phase 2; then
 log_section "Phase 2: Transaction Count Tests"
+
+# Calculate boundary blocks if not already set
+ensure_boundary_blocks
 
 # Get a block hash first
 BLOCK_HASH=$(rpc_call "eth_getBlockByNumber" "[\"$LEGACY_BLOCK_HEX\",false]" | jq -r '.result.hash')
@@ -689,6 +829,9 @@ elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "Future block should return error or null ✗"
+    echo "       Method: eth_getBlockTransactionCountByNumber"
+    echo "       Params: [\"$FUTURE_BLOCK_HEX_TEMP\"]"
+    echo "       Response: $(echo "$response" | jq -c .)"
     FAILED_TESTS=$((FAILED_TESTS + 1))
     FAILED_TEST_NAMES+=("getBlockTransactionCount future block")
 fi
@@ -715,6 +858,9 @@ elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "All-zero block hash should return error or null ✗"
+    echo "       Method: eth_getBlockTransactionCountByHash"
+    echo "       Params: [\"$ZERO_BLOCK_HASH\"]"
+    echo "       Response: $(echo "$response" | jq -c .)"
     FAILED_TESTS=$((FAILED_TESTS + 1))
     FAILED_TEST_NAMES+=("getBlockTransactionCountByHash all-zero")
 fi
@@ -733,6 +879,9 @@ elif echo "$response" | jq -e '.result == null' > /dev/null 2>&1; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "Random block hash should return error or null ✗"
+    echo "       Method: eth_getBlockTransactionCountByHash"
+    echo "       Params: [\"$RANDOM_BLOCK_HASH\"]"
+    echo "       Response: $(echo "$response" | jq -c .)"
     FAILED_TESTS=$((FAILED_TESTS + 1))
     FAILED_TEST_NAMES+=("getBlockTransactionCountByHash random")
 fi
@@ -766,10 +915,13 @@ log_info "  and proper error handling for invalid inputs."
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+fi
+
 # ========================================
 # Phase 3: Transaction Query Tests
 # ========================================
 
+if should_run_phase 3; then
 log_section "Phase 3: Transaction Query Tests"
 
 # Get a transaction hash first
@@ -818,6 +970,9 @@ if [ -n "$TX_HASH" ] && [ "$TX_HASH" != "null" ]; then
         PASSED_TESTS=$((PASSED_TESTS + 1))
     else
         log_error "Invalid index should return null or error ✗"
+        echo "       Method: eth_getTransactionByBlockHashAndIndex"
+        echo "       Params: [\"$BLOCK_HASH\",\"0x999999\"]"
+        echo "       Response: $(echo "$response" | jq -c .)"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         FAILED_TEST_NAMES+=("getTransactionByBlockHashAndIndex invalid index")
     fi
@@ -849,6 +1004,9 @@ if [ -n "$TX_HASH" ] && [ "$TX_HASH" != "null" ]; then
         PASSED_TESTS=$((PASSED_TESTS + 1))
     else
         log_error "Invalid index should return null or error ✗"
+        echo "       Method: eth_getTransactionByBlockNumberAndIndex"
+        echo "       Params: [\"$LEGACY_BLOCK_HEX\",\"0x999999\"]"
+        echo "       Response: $(echo "$response" | jq -c .)"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         FAILED_TEST_NAMES+=("getTransactionByBlockNumberAndIndex invalid index")
     fi
@@ -923,6 +1081,9 @@ elif echo "$response" | jq -e '.error' > /dev/null 2>&1; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "All-zero tx hash should return null or error ✗"
+    echo "       Method: eth_getTransactionByHash"
+    echo "       Params: [\"$ZERO_TX_HASH\"]"
+    echo "       Response: $(echo "$response" | jq -c .)"
     FAILED_TESTS=$((FAILED_TESTS + 1))
     FAILED_TEST_NAMES+=("getTransactionByHash all-zero hash")
 fi
@@ -941,6 +1102,9 @@ elif echo "$response" | jq -e '.error' > /dev/null 2>&1; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "Random tx hash should return null or error ✗"
+    echo "       Method: eth_getTransactionByHash"
+    echo "       Params: [\"$RANDOM_TX_HASH\"]"
+    echo "       Response: $(echo "$response" | jq -c .)"
     FAILED_TESTS=$((FAILED_TESTS + 1))
     FAILED_TEST_NAMES+=("getTransactionByHash random hash")
 fi
@@ -958,6 +1122,9 @@ elif echo "$response" | jq -e '.error' > /dev/null 2>&1; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "All-zero tx hash receipt should return null or error ✗"
+    echo "       Method: eth_getTransactionReceipt"
+    echo "       Params: [\"$ZERO_TX_HASH\"]"
+    echo "       Response: $(echo "$response" | jq -c .)"
     FAILED_TESTS=$((FAILED_TESTS + 1))
     FAILED_TEST_NAMES+=("getTransactionReceipt all-zero hash")
 fi
@@ -975,6 +1142,9 @@ elif echo "$response" | jq -e '.error' > /dev/null 2>&1; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "Random tx hash receipt should return null or error ✗"
+    echo "       Method: eth_getTransactionReceipt"
+    echo "       Params: [\"$RANDOM_TX_HASH\"]"
+    echo "       Response: $(echo "$response" | jq -c .)"
     FAILED_TESTS=$((FAILED_TESTS + 1))
     FAILED_TEST_NAMES+=("getTransactionReceipt random hash")
 fi
@@ -987,11 +1157,17 @@ log_info "  for non-existent transactions. Should return null or error."
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+fi
+
 # ========================================
 # Phase 4: State Query Tests
 # ========================================
 
+if should_run_phase 4; then
 log_section "Phase 4: State Query Tests"
+
+# Calculate boundary blocks if not already set
+ensure_boundary_blocks
 
 # Use a known address or get one from a block
 TEST_ADDR="0x0000000000000000000000000000000000000000"
@@ -1096,11 +1272,17 @@ log_info "Test 4.4.3: eth_getTransactionCount (cutoff+1)"
 response=$(rpc_call "eth_getTransactionCount" "[\"$ACTIVE_EOA_ADDRESS\",\"$FIRST_LOCAL_HEX\"]")
 check_result "$response" "eth_getTransactionCount (cutoff+1)"
 
+fi
+
 # ========================================
 # Phase 5: eth_getLogs Tests
 # ========================================
 
+if should_run_phase 5; then
 log_section "Phase 5: eth_getLogs Tests"
+
+# Calculate boundary blocks if not already set
+ensure_boundary_blocks
 
 # Test 5.1: Pure legacy range
 log_info "Test 5.1: eth_getLogs (pure legacy range)"
@@ -1185,6 +1367,8 @@ if check_result "$response" "eth_getLogs (CROSS-BOUNDARY)"; then
             log_success "  → Logs are properly sorted ✓"
         else
             log_error "  → Logs are NOT properly sorted ✗"
+            echo "       Method: eth_getLogs"
+            echo "       Params: [{\"fromBlock\":\"$CROSS_FROM_HEX\",\"toBlock\":\"$CROSS_TO_HEX\"}]"
             FAILED_TESTS=$((FAILED_TESTS + 1))
             FAILED_TEST_NAMES+=("Log sorting verification")
         fi
@@ -1233,6 +1417,8 @@ if [ "$SAMPLE_LOGS_COUNT" -gt 0 ]; then
                     PASSED_TESTS=$((PASSED_TESTS + 1))
                 else
                     log_error "  → Some logs don't match topic filter ✗"
+                    echo "       Method: eth_getLogs"
+                    echo "       Params: [{\"fromBlock\":\"$LEGACY_FROM_HEX\",\"toBlock\":\"$LEGACY_TO_HEX\",\"topics\":[\"$SAMPLE_TOPIC\"]}]"
                     FAILED_TESTS=$((FAILED_TESTS + 1))
                     FAILED_TEST_NAMES+=("getLogs topic filter validation")
                 fi
@@ -1304,6 +1490,8 @@ if check_result_not_null "$response" "eth_getTransactionByHash (real legacy)"; t
         log_success "  → Block number matches: $TX_BLOCK ✓"
     else
         log_error "  → Block number mismatch! Expected $REAL_LEGACY_BLOCK, got $TX_BLOCK_DEC ✗"
+        echo "       Method: eth_getTransactionByHash"
+        echo "       Params: [\"$REAL_LEGACY_TX\"]"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         FAILED_TEST_NAMES+=("Real legacy tx block verification")
     fi
@@ -1319,6 +1507,8 @@ if check_result_not_null "$response" "eth_getTransactionByHash (real local)"; th
         log_success "  → Block number matches: $TX_BLOCK ✓"
     else
         log_error "  → Block number mismatch! Expected $REAL_LOCAL_BLOCK, got $TX_BLOCK_DEC ✗"
+        echo "       Method: eth_getTransactionByHash"
+        echo "       Params: [\"$REAL_LOCAL_TX\"]"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         FAILED_TEST_NAMES+=("Real local tx block verification")
     fi
@@ -1344,6 +1534,8 @@ if check_result_not_null "$response" "eth_getTransactionReceipt (real legacy)"; 
         log_success "  → Receipt has all required fields ✓"
     else
         log_error "  → Receipt missing required fields ✗"
+        echo "       Method: eth_getTransactionReceipt"
+        echo "       Params: [\"$REAL_LEGACY_TX\"]"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         FAILED_TEST_NAMES+=("Real legacy receipt field verification")
     fi
@@ -1369,6 +1561,8 @@ if check_result_not_null "$response" "eth_getTransactionReceipt (real local)"; t
         log_success "  → Receipt has all required fields ✓"
     else
         log_error "  → Receipt missing required fields ✗"
+        echo "       Method: eth_getTransactionReceipt"
+        echo "       Params: [\"$REAL_LOCAL_TX\"]"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         FAILED_TEST_NAMES+=("Real local receipt field verification")
     fi
@@ -1389,6 +1583,8 @@ if check_result "$response" "eth_getLogs (real legacy block)"; then
             log_success "  → All logs have valid structure ✓"
         else
             log_error "  → Some logs have invalid structure ✗"
+            echo "       Method: eth_getLogs"
+            echo "       Params: [{\"fromBlock\":\"$REAL_LEGACY_BLOCK_HEX\",\"toBlock\":\"$REAL_LEGACY_BLOCK_HEX\"}]"
             FAILED_TESTS=$((FAILED_TESTS + 1))
             FAILED_TEST_NAMES+=("Real legacy logs structure validation")
         fi
@@ -1410,6 +1606,8 @@ if check_result "$response" "eth_getLogs (real local block)"; then
             log_success "  → All logs have valid structure ✓"
         else
             log_error "  → Some logs have invalid structure ✗"
+            echo "       Method: eth_getLogs"
+            echo "       Params: [{\"fromBlock\":\"$REAL_LOCAL_BLOCK_HEX\",\"toBlock\":\"$REAL_LOCAL_BLOCK_HEX\"}]"
             FAILED_TESTS=$((FAILED_TESTS + 1))
             FAILED_TEST_NAMES+=("Real local logs structure validation")
         fi
@@ -1472,6 +1670,8 @@ if check_result "$response" "eth_getLogs (near-cutoff cross-boundary)"; then
             log_success "  → Logs properly sorted across boundary ✓"
         else
             log_error "  → Logs NOT sorted properly ✗"
+            echo "       Method: eth_getLogs"
+            echo "       Params: [{\"fromBlock\":\"$NEAR_CROSS_FROM_HEX\",\"toBlock\":\"$NEAR_CROSS_TO_HEX\"}]"
             FAILED_TESTS=$((FAILED_TESTS + 1))
             FAILED_TEST_NAMES+=("Near-cutoff cross-boundary log sorting")
         fi
@@ -1580,10 +1780,14 @@ legacy_response=$(rpc_call_legacy "eth_getLogs" "[{\"fromBlock\":\"$CROSS_FROM_H
 
 if echo "$reth_response" | jq -e '.error' > /dev/null 2>&1; then
     log_error "  Reth returned error: $(echo "$reth_response" | jq -r '.error.message')"
+    echo "       Method: eth_getLogs"
+    echo "       Params: [{\"fromBlock\":\"$CROSS_FROM_HEX\",\"toBlock\":\"$CROSS_TO_HEX\"}]"
     FAILED_TESTS=$((FAILED_TESTS + 1))
     FAILED_TEST_NAMES+=("Cross-boundary getLogs consistency")
 elif echo "$legacy_response" | jq -e '.error' > /dev/null 2>&1; then
     log_error "  Legacy RPC returned error: $(echo "$legacy_response" | jq -r '.error.message')"
+    echo "       Method: eth_getLogs"
+    echo "       Params: [{\"fromBlock\":\"$CROSS_FROM_HEX\",\"toBlock\":\"$CROSS_TO_HEX\"}]"
     FAILED_TESTS=$((FAILED_TESTS + 1))
     FAILED_TEST_NAMES+=("Cross-boundary getLogs consistency")
 else
@@ -1631,6 +1835,8 @@ else
             log_success "  ✓ Logs properly sorted across boundary"
         else
             log_error "  ✗ Logs NOT sorted properly!"
+            echo "       Method: eth_getLogs"
+            echo "       Params: [{\"fromBlock\":\"$CROSS_FROM_HEX\",\"toBlock\":\"$CROSS_TO_HEX\"}]"
             FAILED_TESTS=$((FAILED_TESTS + 1))
             FAILED_TEST_NAMES+=("Cross-boundary getLogs sorting")
             echo ""
@@ -1643,6 +1849,8 @@ else
             log_success "  ✓ No duplicate logs"
         else
             log_error "  ✗ Found duplicate logs!"
+            echo "       Method: eth_getLogs"
+            echo "       Params: [{\"fromBlock\":\"$CROSS_FROM_HEX\",\"toBlock\":\"$CROSS_TO_HEX\"}]"
             FAILED_TESTS=$((FAILED_TESTS + 1))
             FAILED_TEST_NAMES+=("Cross-boundary getLogs duplicates")
             echo ""
@@ -1654,6 +1862,8 @@ else
         
     else
         log_error "  ✗ Legacy part MISMATCH!"
+        echo "    Method: eth_getLogs"
+        echo "    Params: [{\"fromBlock\":\"$CROSS_FROM_HEX\",\"toBlock\":\"$CROSS_TO_HEX\"}]"
         echo "    Expected $legacy_total logs from legacy RPC"
         echo "    But Reth's legacy part has $reth_legacy_count logs"
         
@@ -1684,10 +1894,13 @@ log_info "  Any mismatch indicates a forwarding or data transformation issue."
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+fi
+
 # ========================================
 # Phase 6: Additional Methods
 # ========================================
 
+if should_run_phase 6; then
 log_section "Phase 6: Additional Methods"
 
 # Test 6.1: eth_getBlockReceipts (legacy block)
@@ -1731,6 +1944,8 @@ if check_result "$response" "eth_getBlockReceipts (cutoff)"; then
         fi
     else
         log_error "  → Invalid response: not an array ✗"
+        echo "       Method: eth_getBlockReceipts"
+        echo "       Params: [\"$BOUNDARY_BLOCK_HEX\"]"
         FAILED_TESTS=$((FAILED_TESTS + 1))
         FAILED_TEST_NAMES+=("getBlockReceipts array validation")
     fi
@@ -1756,6 +1971,8 @@ for test_block in $LAST_LEGACY $BOUNDARY_BLOCK $FIRST_LOCAL; do
             log_success "  → Block $test_block_hex: $tx_count txs = $receipts_count receipts ✓"
         else
             log_error "  → Block $test_block_hex: mismatch! $tx_count txs != $receipts_count receipts ✗"
+            echo "       Method: eth_getBlockReceipts"
+            echo "       Params: [\"$test_block_hex\"]"
             FAILED_TESTS=$((FAILED_TESTS + 1))
             FAILED_TEST_NAMES+=("getBlockReceipts count mismatch at block $test_block")
         fi
@@ -1767,6 +1984,8 @@ for test_block in $LAST_LEGACY $BOUNDARY_BLOCK $FIRST_LOCAL; do
                 log_success "  → Empty block correctly handled (PR #125 case) ✓"
             else
                 log_error "  → Empty block bug! Should return [], got: $(echo "$receipts_response" | jq -c .result) ✗"
+                echo "       Method: eth_getBlockReceipts"
+                echo "       Params: [\"$test_block_hex\"]"
                 FAILED_TESTS=$((FAILED_TESTS + 1))
                 FAILED_TEST_NAMES+=("Empty block handling (PR #125)")
             fi
@@ -1812,6 +2031,9 @@ echo ""
 log_info "🔍 Testing eth_getBlockByHash with boundary blocks and data consistency"
 echo ""
 
+# Calculate boundary blocks if not already set
+ensure_boundary_blocks
+
 # Get boundary block hashes (need to fetch them here since this phase runs before Phase 8)
 LAST_LEGACY_HASH=$(rpc_call "eth_getBlockByNumber" "[\"$LAST_LEGACY_HEX\",false]" | jq -r '.result.hash')
 CUTOFF_HASH=$(rpc_call "eth_getBlockByNumber" "[\"$BOUNDARY_BLOCK_HEX\",false]" | jq -r '.result.hash')
@@ -1825,6 +2047,12 @@ log_info "    Cutoff hash:   $CUTOFF_HASH"
 log_info "    Cutoff+1 hash: $FIRST_LOCAL_HASH"
 log_info "    Legacy hash:   $LEGACY_BLOCK_HASH_PHASE6"
 echo ""
+
+# Verify hashes were retrieved successfully
+if [ -z "$LAST_LEGACY_HASH" ] || [ "$LAST_LEGACY_HASH" = "null" ]; then
+    log_error "Failed to retrieve cutoff-1 block hash. Skipping hash-based tests."
+    log_info "  Attempted to fetch block: $LAST_LEGACY_HEX"
+else
 
 # Test 6.5.1: eth_getBlockByHash (cutoff-1)
 log_info "Test 6.5.1: eth_getBlockByHash (cutoff-1)"
@@ -1858,6 +2086,8 @@ if [ "$block_by_number" = "$block_by_hash" ] && [ "$block_by_number" != "null" ]
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "eth_getBlockByHash: Data MISMATCH with getBlockByNumber ✗"
+    echo "  Methods: eth_getBlockByNumber vs eth_getBlockByHash"
+    echo "  Params: [\"$LEGACY_BLOCK_HEX\",false] vs [\"$LEGACY_BLOCK_HASH_PHASE6\",false]"
     echo "  BlockNumber result hash: $(echo "$block_by_number" | jq -r '.hash')"
     echo "  BlockHash result hash:   $(echo "$block_by_hash" | jq -r '.hash')"
     FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -1876,6 +2106,8 @@ if check_result_not_null "$response" "eth_getBlockByHash (full tx)"; then
     log_info "  → Block has $tx_count transactions"
 fi
 
+fi # End of hash validation check
+
 echo ""
 log_info "📊 Phase 6.5 Summary:"
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -1885,10 +2117,13 @@ log_info "  data to BlockNumber-based queries."
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+fi
+
 # ========================================
 # Phase 7: New Legacy RPC Methods (eth_call, eth_estimateGas, etc.)
 # ========================================
 
+if should_run_phase 7; then
 log_section "Phase 7: New Legacy RPC Methods Tests"
 
 echo ""
@@ -1958,6 +2193,9 @@ if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "Future block eth_call should return error ✗"
+    echo "       Method: eth_call"
+    echo "       Params: [$CALL_REQUEST,\"0xffffffff\"]"
+    echo "       Response: $(echo "$response" | jq -c .)"
     FAILED_TESTS=$((FAILED_TESTS + 1))
     FAILED_TEST_NAMES+=("eth_call future block error handling")
 fi
@@ -1975,6 +2213,8 @@ if [ "$reth_call_result" = "$legacy_call_result" ] && [ "$reth_call_result" != "
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "eth_call: Data MISMATCH ✗"
+    echo "  Method: eth_call"
+    echo "  Params: [$CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]"
     echo "  Reth:   ${reth_call_result:0:50}..."
     echo "  Legacy: ${legacy_call_result:0:50}..."
     FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -2058,6 +2298,8 @@ if [ "$reth_gas" = "$legacy_gas" ] && [ "$reth_gas" != "null" ]; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "eth_estimateGas: Data MISMATCH ✗"
+    echo "  Method: eth_estimateGas"
+    echo "  Params: [$CALL_REQUEST,\"$LEGACY_BLOCK_HEX\"]"
     echo "  Reth:   $reth_gas"
     echo "  Legacy: $legacy_gas"
     FAILED_TESTS=$((FAILED_TESTS + 1))
@@ -2073,6 +2315,9 @@ if echo "$response" | jq -e '.error' > /dev/null 2>&1; then
     PASSED_TESTS=$((PASSED_TESTS + 1))
 else
     log_error "Future block eth_estimateGas should return error ✗"
+    echo "       Method: eth_estimateGas"
+    echo "       Params: [$CALL_REQUEST,\"0xffffffff\"]"
+    echo "       Response: $(echo "$response" | jq -c .)"
     FAILED_TESTS=$((FAILED_TESTS + 1))
     FAILED_TEST_NAMES+=("eth_estimateGas future block error handling")
 fi
@@ -2307,10 +2552,13 @@ log_info "  Total: 30 new tests covering all test dimensions"
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+fi
+
 # ========================================
 # Phase 8: BlockHash Parameter Tests
 # ========================================
 
+if should_run_phase 8; then
 log_section "Phase 8: BlockHash Parameter Tests (Critical Missing Tests)"
 
 echo ""
@@ -2552,10 +2800,13 @@ log_info "  to ensure state consistency."
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+fi
+
 # ========================================
 # Phase 9: Special BlockTag Tests
 # ========================================
 
+if should_run_phase 9; then
 log_section "Phase 9: Special BlockTag Tests"
 
 echo ""
@@ -2718,10 +2969,13 @@ log_info "  data source (Legacy RPC or local Reth DB)."
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+fi
+
 # ========================================
 # Phase 10: Enhanced Data Consistency for Tolerant Methods
 # ========================================
 
+if should_run_phase 10; then
 log_section "Phase 10: Enhanced Consistency Tests for Hash-Based Methods"
 
 echo ""
@@ -2756,10 +3010,13 @@ log_info "  just 'work' but return IDENTICAL data to Legacy RPC."
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+fi
+
 # ========================================
 # Phase 11: Edge Cases and Invalid Inputs
 # ========================================
 
+if should_run_phase 11; then
 log_section "Phase 11: Edge Cases and Invalid Block Identifiers"
 
 echo ""
@@ -3151,11 +3408,17 @@ log_info "  - Confusion between 'not found' and 'empty result'"
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+fi
+
 # ========================================
 # Phase 12: Internal Transactions Tests
 # ========================================
 
+if should_run_phase 12; then
 log_section "Phase 12: Internal Transactions Tests"
+
+# Calculate boundary blocks if not already set
+ensure_boundary_blocks
 
 echo ""
 log_info "🔍 Testing internal transaction query methods"
@@ -3393,6 +3656,8 @@ log_info "  Total: 21 new tests covering all test dimensions"
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+fi
+
 # ========================================
 # Test Summary
 # ========================================
@@ -3436,9 +3701,9 @@ echo ""
 
 if [ $FAILED_TESTS -eq 0 ]; then
     echo -e "${GREEN}╔════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║   ✓ ALL TESTS PASSED!                 ║${NC}"
-    echo -e "${GREEN}║   Legacy RPC is working correctly!    ║${NC}"
-    echo -e "${GREEN}║   XLayer Mainnet migration validated ✓║${NC}"
+    echo -e "${GREEN}║   ✓ ALL TESTS PASSED!                  ║${NC}"
+    echo -e "${GREEN}║   Legacy RPC is working correctly!     ║${NC}"
+    echo -e "${GREEN}║   XLayer Mainnet migration validated ✓ ║${NC}"
     echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
     exit 0
 else
