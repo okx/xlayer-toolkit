@@ -485,9 +485,9 @@ services:
       - --l2-eth-rpc=${OP_BATCHER_L2_ETH_RPC:-http://op-${SEQ_TYPE}-seq:8545}
       - --rollup-rpc=${OP_BATCHER_ROLLUP_RPC:-http://op-seq:9545}
       - --private-key=${OP_BATCHER_PRIVATE_KEY}
-      - --poll-interval=1s
+      - --poll-interval=5s
       - --batch-type=1
-      - --compression-algo=brotli-11
+      - --compression-algo=brotli-10
       - --data-availability-type=auto
       - --sub-safety-margin=6
       - --num-confirmations=4
@@ -496,10 +496,10 @@ services:
       - --rpc.addr=0.0.0.0
       - --rpc.port=8548
       - --rpc.enable-admin
-      - --max-channel-duration=25
+      - --max-channel-duration=150
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --max-pending-tx=10
-      - --target-num-frames=5
+      - --target-num-frames=6
       - --throttle.block-size-upper-limit=0
       - --throttle.block-size-lower-limit=0
       - --throttle.tx-size-lower-limit=0
