@@ -809,11 +809,27 @@ download_snapshot() {
     local snapshot_file
     
     if [ "$network" = "testnet" ]; then
-        snapshot_url="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/xlayerdata_new.tar.gz"
-        snapshot_file="geth-testnet.tar.gz"
+        # Use configuration from network-presets.env
+        snapshot_url="${TESTNET_SNAPSHOT_BASE_URL}/${TESTNET_SNAPSHOT_FILE}"
+        snapshot_file="${TESTNET_SNAPSHOT_FILENAME}"
     elif [ "$network" = "mainnet" ]; then
-        snapshot_url="https://okg-pub-hk.oss-cn-hongkong.aliyuncs.com/cdn/chain/xlayer/snapshot/mainnet-geth.tar.gz"
-        snapshot_file="mainnet-geth.tar.gz"
+        # Get latest snapshot filename
+        print_info "Fetching latest mainnet snapshot filename..."
+        local latest_filename
+        latest_filename=$(curl -s -f "${MAINNET_SNAPSHOT_LATEST_URL}" | tr -d '\n\r' | xargs)
+        
+        if [ -z "$latest_filename" ]; then
+            print_error "Failed to fetch latest snapshot filename from server"
+            exit 1
+        fi
+        
+        snapshot_url="${MAINNET_SNAPSHOT_BASE_URL}/${latest_filename}"
+        snapshot_file="$latest_filename"
+        
+        # Export filename for extract_snapshot to use
+        export MAINNET_SNAPSHOT_FILE="$snapshot_file"
+        
+        print_info "Latest mainnet snapshot: $snapshot_file"
     else
         print_error "Unsupported network for snapshot: $network"
         exit 1
@@ -870,7 +886,18 @@ extract_snapshot() {
     if [ "$network" = "testnet" ]; then
         snapshot_file="geth-testnet.tar.gz"
     elif [ "$network" = "mainnet" ]; then
-        snapshot_file="mainnet-geth.tar.gz"
+        # Use the filename from download_snapshot if available, otherwise fallback to default
+        if [ -n "$MAINNET_SNAPSHOT_FILE" ]; then
+            snapshot_file="$MAINNET_SNAPSHOT_FILE"
+        else
+            # Fallback: try to find any mainnet snapshot file in current directory
+            snapshot_file=$(ls -t mainnet-geth*.tar.gz 2>/dev/null | head -1)
+            if [ -z "$snapshot_file" ]; then
+                print_error "Mainnet snapshot file not found. Please run download_snapshot first."
+                exit 1
+            fi
+            print_info "Using existing snapshot file: $snapshot_file"
+        fi
     else
         print_error "Unsupported network for snapshot: $network"
         exit 1
