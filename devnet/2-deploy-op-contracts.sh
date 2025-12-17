@@ -223,18 +223,3 @@ docker run --rm \
   "
 
 echo "genesis.json and rollup.json are generated in deployments folder"
-
-echo "🎉 OP Stack deployment preparation completed!"
-
-echo ""
-echo "🔧 Setting up Custom Gas Token (CGT)..."
-docker run --rm \
-  --network "$DOCKER_NETWORK" \
-  -v "$PWD_DIR/scripts:/scripts" \
-  -v "$PWD_DIR/.env:/app/.env" \
-  -v "$PWD_DIR/config-op:/config-op" \
-  "${OP_STACK_IMAGE_TAG}" \
-  bash -c "/scripts/setup-cgt-function.sh /app /config-op ${L1_RPC_URL_IN_DOCKER}"
-
-echo ""
-echo "🎉 Complete setup with Custom Gas Token finished!"
