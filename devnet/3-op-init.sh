@@ -27,15 +27,9 @@ sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"
 NEXT_BLOCK_NUMBER=$((FORK_BLOCK + 1))
 NEXT_BLOCK_NUMBER_HEX=$(printf "0x%x" "$NEXT_BLOCK_NUMBER")
 sed_inplace 's/"number": 0/"number": '"$NEXT_BLOCK_NUMBER"'/' ./config-op/rollup.json
-
-# Extract EIP-1559 parameters from genesis.json and update rollup.json
-EIP1559_ELASTICITY=$(jq -r '.config.optimism.eip1559Elasticity' ./config-op/genesis.json)
-EIP1559_DENOMINATOR=$(jq -r '.config.optimism.eip1559Denominator' ./config-op/genesis.json)
-EIP1559_DENOMINATOR_CANYON=$(jq -r '.config.optimism.eip1559DenominatorCanyon' ./config-op/genesis.json)
-
-sed_inplace 's/"eip1559Elasticity": [0-9]*/"eip1559Elasticity": '"$EIP1559_ELASTICITY"'/' ./config-op/rollup.json
-sed_inplace 's/"eip1559Denominator": [0-9]*/"eip1559Denominator": '"$EIP1559_DENOMINATOR"'/' ./config-op/rollup.json
-sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"$EIP1559_DENOMINATOR_CANYON"'/' ./config-op/rollup.json
+sed_inplace 's/"eip1559Elasticity": [0-9]*/"eip1559Elasticity": '"$(jq -r '.config.optimism.eip1559Elasticity' ./config-op/genesis.json)"'/' ./config-op/rollup.json
+sed_inplace 's/"eip1559Denominator": [0-9]*/"eip1559Denominator": '"$(jq -r '.config.optimism.eip1559Denominator' ./config-op/genesis.json)"'/' ./config-op/rollup.json
+sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"$(jq -r '.config.optimism.eip1559DenominatorCanyon' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 
 cp ./config-op/genesis.json ./config-op/genesis-reth.json
 sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
