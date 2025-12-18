@@ -97,7 +97,6 @@ services:
       - --gcmode=archive
       - --ipcdisable
       - --rpc.allow-unprotected-txs
-      - --txpool.locals=0x70997970C51812dc3A010C7d01b50e0d17dc79C8,0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266,0x7d18A1B858253b5588f61fb5739d52e4b84e2cdA
       - --verbosity=3
     ports:
       - 8551:8551
