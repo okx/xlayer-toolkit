@@ -39,7 +39,7 @@ run-geth-test:
 		echo "Using current branch"; \
 	fi && \
 	echo "Running E2E tests..."; \
-	MallocNanoZone=0 go test -count=1 -failfast -v -p 1 -timeout 600s ./test/e2e/...; \
+	MallocNanoZone=0 go test -count=1 -failfast -v -p 1 -timeout 600s ./test/e2e/...
 
 .PHONY: run-reth-test
 run-reth-test:
