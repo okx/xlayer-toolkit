@@ -27,30 +27,34 @@ ROLLUP_CONFIG_PATH="${ROLLUP_CONFIG_PATH:-./rollup.json}"
 DISK_PATH="${DISK_PATH:-./result}"
 STORAGE_TYPE="${STORAGE_TYPE:-disk}"
 BLOCK_COUNT="${BLOCK_COUNT:-1}"
+BENCHMARK_START_BLOCK="${BENCHMARK_START_BLOCK:-0}"
 
 echo "Starting Replayor in $(pwd)"
-echo "$CONTINUOUS_MODE"
+echo "Continuous mode: $CONTINUOUS_MODE"
+if [ "$BENCHMARK_START_BLOCK" != "0" ]; then
+  echo "Benchmark start block: $BENCHMARK_START_BLOCK"
+fi
+
+# Build base command arguments
+BASE_ARGS=(
+  --engine-api-secret="$ENGINE_API_SECRET"
+  --engine-api-url="$ENGINE_API_URL"
+  --execution-url="$EXECUTION_URL"
+  --source-node-url="$SOURCE_NODE_URL"
+  --strategy="$STRATEGY"
+  --rollup-config-path="$ROLLUP_CONFIG_PATH"
+  --disk-path="$DISK_PATH"
+  --storage-type="$STORAGE_TYPE"
+)
+
+# Add benchmark start block if specified
+if [ "$BENCHMARK_START_BLOCK" != "0" ]; then
+  BASE_ARGS+=(--benchmark-start-block="$BENCHMARK_START_BLOCK")
+fi
+
 if [ "$CONTINUOUS_MODE" = "true" ]; then
-  exec "$REPLAYOR_BINARY" \
-    --engine-api-secret="$ENGINE_API_SECRET" \
-    --engine-api-url="$ENGINE_API_URL" \
-    --execution-url="$EXECUTION_URL" \
-    --source-node-url="$SOURCE_NODE_URL" \
-    --strategy="$STRATEGY" \
-    --rollup-config-path="$ROLLUP_CONFIG_PATH" \
-    --disk-path="$DISK_PATH" \
-    --storage-type="$STORAGE_TYPE" \
-    --continuous
+  exec "$REPLAYOR_BINARY" "${BASE_ARGS[@]}" --continuous
 else
-  exec "$REPLAYOR_BINARY" \
-    --engine-api-secret="$ENGINE_API_SECRET" \
-    --engine-api-url="$ENGINE_API_URL" \
-    --execution-url="$EXECUTION_URL" \
-    --source-node-url="$SOURCE_NODE_URL" \
-    --strategy="$STRATEGY" \
-    --rollup-config-path="$ROLLUP_CONFIG_PATH" \
-    --disk-path="$DISK_PATH" \
-    --storage-type="$STORAGE_TYPE" \
-    --block-count="$BLOCK_COUNT"
+  exec "$REPLAYOR_BINARY" "${BASE_ARGS[@]}" --block-count="$BLOCK_COUNT"
 fi
 

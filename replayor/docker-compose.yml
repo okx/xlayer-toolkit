@@ -3,16 +3,42 @@ networks:
     name: ${DOCKER_NETWORK:-dev-replayor}
 
 services:
-#  node: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
-#    build: ./geth
-#    ports:
-#      - 8545:8545
-#      - 8551:8551
-#    command: [ "/app/geth" ]
-#    volumes:
-#      - ./geth-data:/data
-#      - ./secret:/secret
-#    env_file: "test-configs/base-mainnet-replay.env"
+  # Geth node service (for snapshot-based replay)
+  node-geth:
+    image: "${OP_GETH_IMAGE_TAG:-xlayer/op-geth:v0.1.2}"
+    container_name: replayor-geth
+    entrypoint: geth
+    networks:
+      - default
+    ports:
+      - "${GETH_HTTP_PORT:-8123}:8545"
+      - "${GETH_ENGINE_API_PORT:-8552}:8552"
+      - "${GETH_WS_PORT:-8546}:8546"
+    volumes:
+      - ${GETH_DATA_PATH:-./mainnet-geth}:/data
+      - ${JWT_TXT_PATH:-./jwt.txt}:/jwt.txt:ro
+      - ${GETH_CONFIG_PATH:-./geth-config.toml}:/config.toml:ro
+      - ${LOGS_PATH:-./logs}:/logs
+    command:
+      - --verbosity=3
+      - --datadir=/data
+      - --config=/config.toml
+      - --db.engine=pebble
+      - --gcmode=archive
+      - --nodiscover
+      - --maxpeers=0
+      - --rollup.disabletxpoolgossip
+      - --log.file=/logs/geth.log
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+    depends_on: []
+
+  # Reth node service (original implementation)
   node-unwind: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
     image: "op-reth:latest"
     ports:
@@ -43,11 +69,12 @@ services:
       - ${ROLLUP_JSON_PATH:-./rollup.json}:/app/rollup.json:ro
       - ${JWT_TXT_PATH:-./jwt.txt}:/app/jwt.txt:ro
       - ${RETH_DATA_PATH:-./reth-data}:/app/reth-data
-  node: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
-    image: "op-reth:latest"
+  # Reth node service
+  node: # this is Optimism's reth client
+    image: "${OP_RETH_IMAGE_TAG:-op-reth:latest}"
     ports:
-      - 9123:9123
-      - 8553:8553
+      - "${RETH_HTTP_PORT:-9123}:9123"
+      - "${RETH_ENGINE_API_PORT:-8553}:8553"
     environment:
       - ENV_FILE=reth.docker.env
     working_dir: /app
@@ -58,6 +85,8 @@ services:
       - ${ROLLUP_JSON_PATH:-./rollup.json}:/app/rollup.json:ro
       - ${JWT_TXT_PATH:-./jwt.txt}:/app/jwt.txt:ro
       - ${RETH_DATA_PATH:-./reth-data}:/app/reth-data
+    networks:
+      - default
   replayor:
     build: .
     command: [ "bash", "/app/replayor.sh" ]
@@ -69,3 +98,11 @@ services:
     volumes:
       - ./:/app
       - ${ROLLUP_JSON_PATH:-./rollup.json}:/app/rollup.json:ro
+    networks:
+      - default
+    # Note: depends_on is commented out to allow flexible node selection
+    # When using geth: uncomment depends_on: [node-geth] and comment out node service
+    # When using reth: uncomment depends_on: [node] and comment out node-geth service
+    # depends_on:
+    #   - node-geth  # Uncomment for geth
+    #   - node       # Uncomment for reth

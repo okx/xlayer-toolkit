@@ -1,0 +1,28 @@
+[Node]
+HTTPHost = "0.0.0.0"
+HTTPPort = 8545
+HTTPCors = ["*"]
+HTTPVirtualHosts = ["*"]
+HTTPModules = ["web3", "debug", "eth", "txpool", "net", "engine", "miner", "admin"]
+WSHost = "0.0.0.0"
+WSPort = 8546
+WSOrigins = ["*"]
+WSModules = ["debug", "eth", "txpool", "net", "engine"]
+AuthAddr = "0.0.0.0"
+AuthPort = 8552
+AuthVirtualHosts = ["*"]
+JWTSecret = "/jwt.txt"
+
+[Node.P2P]
+MaxPeers = 0
+DiscoveryV5 = false
+
+[Eth]
+SyncMode = "full"
+
+[Eth.TxPool]
+GlobalSlots = 100000
+GlobalQueue = 100000
+AccountSlots = 100000
+AccountQueue = 10000
+
