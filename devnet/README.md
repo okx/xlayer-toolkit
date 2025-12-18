@@ -85,7 +85,7 @@ devnet/
 ├── 3-op-init.sh        # Environment initialization script
 ├── 4-op-start-service.sh    # Service startup script
 ├── 5-run-op-succinct.sh # OP-Succinct components setup script
-├── 5.1-run-kailua.sh   # Kailua components setup script
+├── 6-run-kailua.sh   # Kailua components setup script
 ├── docker-compose.yml  # Docker Compose configuration
 ├── Makefile            # Build automation
 ├── scripts/            # Utility scripts
@@ -205,7 +205,7 @@ Run `./5-run-op-succinct.sh`:
   - op-succinct-challenger: Optional challenger (disabled if `OP_SUCCINCT_FAST_FINALITY_MODE=true`)
 
 ### 5.1 Kailua Setup (Optional)
-Run `./5.1-run-kailua.sh`:
+Run `./6-run-kailua.sh`:
 - Only runs if `KAILUA_ENABLE=true` and `OWNER_TYPE=safe` in `.env`
 - Deploys Kailua contracts via `kailua-cli fast-track` (RISC0-based ZK proofs)
 - Starts services:
