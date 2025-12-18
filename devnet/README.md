@@ -10,7 +10,8 @@ Configure `example.env` (do not modify `.env` directly) and run `./clean.sh` to 
 | **Reth as Sequencer** | `SEQ_TYPE=reth`<br>`SKIP_OP_RETH_BUILD=false`<br>`OP_RETH_LOCAL_DIRECTORY=/absolute/path/to/reth/repository`<br>`OP_RETH_BRANCH=dev` |
 | **Geth as RPC** | `RPC_TYPE=geth`<br>`LAUNCH_RPC_NODE=true`<br>`SKIP_OP_RETH_BUILD=true`<br>`DB_ENGINE=pebble` |
 | **Reth as RPC** | `RPC_TYPE=reth`<br>`LAUNCH_RPC_NODE=true`<br>`SKIP_OP_RETH_BUILD=false`<br>`OP_RETH_LOCAL_DIRECTORY=/absolute/path/to/reth/repository`<br>`OP_RETH_BRANCH=dev` |
-| **OP-Succinct Enabled** | `OP_SUCCINCT_ENABLE=true`<br>`OP_SUCCINCT_MOCK_MODE=true` (optional, for testing)<br>`OP_SUCCINCT_FAST_FINALITY_MODE=true` (optional, skip challenger)<br>|
+| **OP-Succinct Enabled** | `OP_SUCCINCT_ENABLE=true`<br>`OP_SUCCINCT_MOCK_MODE=true` (optional, for testing)<br>`OP_SUCCINCT_FAST_FINALITY_MODE=true` (optional, skip challenger) |
+| **Kailua Enabled** | `KAILUA_ENABLE=true`<br> `OWNER_TYPE=safe`<br> `KAILUA_MOCK_MODE=true` (optional, use RISC0_DEV_MODE)<br>`KAILUA_FAST_FINALITY_MODE=true` (optional, enable validity proofs) |
 
 **Notes:**
 - Always modify `example.env`, then run `./clean.sh` to sync to `.env`
@@ -84,6 +85,7 @@ devnet/
 ├── 3-op-init.sh        # Environment initialization script
 ├── 4-op-start-service.sh    # Service startup script
 ├── 5-run-op-succinct.sh # OP-Succinct components setup script
+├── 6-run-kailua.sh   # Kailua components setup script
 ├── docker-compose.yml  # Docker Compose configuration
 ├── Makefile            # Build automation
 ├── scripts/            # Utility scripts
@@ -103,11 +105,14 @@ devnet/
 │   ├── stop-rpc.sh              # Stop RPC node
 │   ├── test-cgt.sh              # Test CGT functionality
 │   ├── trusted-peers.sh         # Configure trusted peers
-│   └── update-anchor-root.sh    # Update anchor root by creating and resolving a dispute game
+│   ├── update-anchor-root.sh    # Update anchor root by creating and resolving a dispute game
+│   └── kailua-test-fault.sh     # Kailua malicious challenge testing tool
 ├── config-op/          # Configuration directory
 ├── entrypoint/         # Container entrypoint scripts
 ├── l1-geth/            # L1 Geth configuration and data
 ├── saved-cannon-data/  # Pre-generated cannon/dispute game data
+├── op-succinct/        # OP-Succinct configuration files
+├── kailua/             # Kailua configuration files
 ├── contracts/          # Smart contracts
 ├── images/             # Documentation images
 ├── example.env         # Environment template
@@ -198,6 +203,15 @@ Run `./5-run-op-succinct.sh`:
 - Starts services:
   - op-succinct-proposer: ZK validity proof proposer
   - op-succinct-challenger: Optional challenger (disabled if `OP_SUCCINCT_FAST_FINALITY_MODE=true`)
+
+### 5.1 Kailua Setup (Optional)
+Run `./6-run-kailua.sh`:
+- Only runs if `KAILUA_ENABLE=true` and `OWNER_TYPE=safe` in `.env`
+- Deploys Kailua contracts via `kailua-cli fast-track` (RISC0-based ZK proofs)
+- Starts services:
+  - kailua-proposer: Proposes L2 state to L1
+  - kailua-validator: Validates proposals and generates fault/validity proofs
+- Test fault proofs: `./scripts/kailua-test-fault.sh` submits malicious proposals to verify dispute resolution
 
 ### 6. Conductor Management
 The test environment includes a 3-node conductor cluster for sequencer high availability (HA).

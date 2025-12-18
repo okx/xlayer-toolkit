@@ -901,3 +901,42 @@ services:
     command:
       - challenger 
       - --env-file=/app/.env
+
+  kailua-contracts:
+    image: ${KAILUA_IMAGE_TAG}
+    container_name: kailua-contracts
+    environment:
+      - RUST_LOG="kailua=info,alloy=warn,hyper=warn,warn"
+    env_file:
+      - ./kailua/.env.deploy
+    command:
+      - kailua-cli 
+      - fast-track
+
+  kailua-proposer:
+    image: ${KAILUA_IMAGE_TAG}
+    container_name: kailua-proposer
+    env_file:
+      - ./kailua/.env.proposer
+    environment:
+      - RUST_LOG=warn,kailua=info,kailua_proposer=info,hyper=off,hyper_util=off,alloy=warn
+    volumes:
+      - ./data/kailua-proposer:/data
+    command:
+      - kailua-cli 
+      - propose
+      - --data-dir=/data
+
+  kailua-validator:
+    image: ${KAILUA_IMAGE_TAG}
+    container_name: kailua-validator
+    env_file:
+      - ./kailua/.env.validator
+    environment:
+      - RUST_LOG=warn,kailua=info,kailua_validator=info,kailua_prover=info,kailua_sync=info,oracle_server=off,oracle_client=off,host_backend=off,risc0_zkvm=off,risc0=off,alloy=warn,alloy_rpc_client=off,alloy_json_rpc=off,alloy_transport_http=off,hyper=off,hyper_util=off,reqwest=off,kona=warn,kona_derive=warn,kona_executor=warn,kona_mpt=warn,batch_validator=warn,hint_writer=off,hint_reader=off,frame_queue=warn,channel_reader=warn,pipeline=warn
+    volumes:
+      - ./data/kailua-validator:/data
+    command:
+      - kailua-cli 
+      - validate
+      - --data-dir=/data
