@@ -16,8 +16,8 @@ sed_inplace() {
   fi
 }
 
-if [ "$KAILUA_ENABLE" = "false" ]; then
-  echo "skip launching kailua"
+if [ "$PROOF_ENGINE" != "kailua" ]; then
+  echo "skip launching kailua (PROOF_ENGINE=$PROOF_ENGINE)"
   exit 0
 fi
 
@@ -82,7 +82,7 @@ sed_inplace "s|^ETH_RPC_URL=.*|ETH_RPC_URL=$L1_RPC_URL_IN_DOCKER|" "$DIR"/.env.v
 sed_inplace "s|^BEACON_RPC_URL=.*|BEACON_RPC_URL=$L1_BEACON_URL_IN_DOCKER|" "$DIR"/.env.validator
 
 # Set RISC0_DEV_MODE based on mock mode
-if [ "$KAILUA_MOCK_MODE" = "true" ]; then
+if [ "$PROOF_MOCK_MODE" = "true" ]; then
     sed_inplace "s|^RISC0_DEV_MODE=.*|RISC0_DEV_MODE=1|" "$DIR"/.env.deploy
     sed_inplace "s|^RISC0_DEV_MODE=.*|RISC0_DEV_MODE=1|" "$DIR"/.env.proposer
     sed_inplace "s|^RISC0_DEV_MODE=.*|RISC0_DEV_MODE=1|" "$DIR"/.env.validator
@@ -93,7 +93,7 @@ else
 fi
 
 # Set fast finality mode
-if [ "$KAILUA_FAST_FINALITY_MODE" = "true" ]; then
+if [ "$PROOF_FAST_FINALITY_MODE" = "true" ]; then
     sed_inplace "s|^FAST_FORWARD_START=.*|FAST_FORWARD_START=$STARTING_BLOCK_NUMBER|" "$DIR"/.env.validator
     sed_inplace "s|^FAST_FORWARD_TARGET=.*|FAST_FORWARD_TARGET=999999999|" "$DIR"/.env.validator
 else
