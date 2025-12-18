@@ -15,9 +15,9 @@ services:
       - "${GETH_ENGINE_API_PORT:-8552}:8552"
       - "${GETH_WS_PORT:-8546}:8546"
     volumes:
-      - ${GETH_DATA_PATH:-./mainnet-geth}:/data
+      - ${GETH_DATA_PATH:-./mainnet-geth/data/op-geth}:/data
       - ${JWT_TXT_PATH:-./jwt.txt}:/jwt.txt:ro
-      - ${GETH_CONFIG_PATH:-./geth-config.toml}:/config.toml:ro
+      - ${GETH_CONFIG_PATH:-./mainnet-geth/config/op-geth-config-${NETWORK_TYPE}:/config.toml:ro
       - ${LOGS_PATH:-./logs}:/logs
     command:
       - --verbosity=3
