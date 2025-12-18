@@ -17,9 +17,6 @@ scripts/dev-utils/*.processing
 devnet/.env
 devnet/*/.env*
 devnet/op-succinct/configs/
-devnet/kailua/logs/
-devnet/kailua/*-data/
-devnet/risc0-*
 devnet/l1-geth/consensus/beacondata
 devnet/l1-geth/consensus/validatordata
 devnet/config-op/genesis.json
