@@ -326,6 +326,46 @@ The `scripts/mempool-rebroadcaster-scheduler.sh` script facilitates running the 
 |Pending| Next nonce transactions with no nonce gap | Next nonce transactions with a fee higher than the base fee|
 |Queued| Transactions with a nonce gap | Transactions below the base fee, even if they are next nonce, and transactions with a nonce gap|
 
+## Testing
+
+### End-to-end (e2e) Testing
+
+#### 1. Geth
+
+To run e2e tests for geth, first build op-stack using geth as the sequencer and rpc by setting the following environment variables
+```
+SEQ_TYPE=geth
+RPC_TYPE=geth
+DB_ENGINE="pebble"
+```
+
+After devnet is started, run the e2e test:
+```
+make run-geth-test
+```
+
+#### 2. Reth
+
+To run e2e tests for reth, first build op-stack using reth as the sequencer and rpc and set the following environment variables
+```
+SEQ_TYPE=reth
+RPC_TYPE=reth
+FLASHBLOCK_ENABLED=true
+FLASHBLOCK_P2P_ENABLED=true
+ENABLE_INNERTX_SEQ=true
+ENABLE_INNERTX_RPC=true
+```
+
+After devnet is started, run the reth e2e test without benchmark and comparison tests (non-flashblock node not started):
+```
+make run-reth-test
+```
+
+To run the full reth e2e test suite for flashblocks (starts the non-flashblock node):
+```
+make run-reth-test-all
+```
+
 ## Troubleshooting
 
 ### Common Issues
