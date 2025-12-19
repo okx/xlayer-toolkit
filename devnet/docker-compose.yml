@@ -98,6 +98,14 @@ services:
       - --ipcdisable
       - --rpc.allow-unprotected-txs
       - --verbosity=3
+      - --miner.gasprice=1
+      - --txpool.pricelimit=0
+      - --txpool.pricebump=10
+      - --txpool.accountslots=100000
+      - --txpool.globalslots=100000
+      - --txpool.accountqueue=100000
+      - --txpool.globalqueue=100000
+      - --miner.gaslimit=100000000
     ports:
       - 8551:8551
       - 8545:8545
