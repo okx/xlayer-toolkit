@@ -29,7 +29,7 @@ run-geth-test:
 		echo "Using custom local directory: $(OP_GETH_LOCAL_DIRECTORY)"; \
 		cd $(OP_GETH_LOCAL_DIRECTORY); \
 	else \
-		echo "Using default submodule: $(OP_STACK_LOCAL_DIRECTORY)/op-geth"; \
+		echo "Using op-stack default submodule"; \
 		if [ -z "$(OP_STACK_LOCAL_DIRECTORY)" ]; then \
 			echo "Please set OP_STACK_LOCAL_DIRECTORY in .env"; \
 			exit 1; \
