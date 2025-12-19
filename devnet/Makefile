@@ -23,14 +23,18 @@ run: stop
 
 .PHONY: run-geth-test
 run-geth-test:
-	@echo "OP_GETH_LOCAL_DIRECTORY: $$OP_GETH_LOCAL_DIRECTORY"
+	@echo "OP_GETH_LOCAL_DIRECTORY: $(OP_GETH_LOCAL_DIRECTORY)"
 	@echo "OP_GETH_BRANCH: $(OP_GETH_BRANCH)"
-	@if [ -n "$$OP_GETH_LOCAL_DIRECTORY" ]; then \
-		echo "Using custom local directory: $$OP_GETH_LOCAL_DIRECTORY"; \
-		cd "$$OP_GETH_LOCAL_DIRECTORY"; \
+	@if [ -n "$(OP_GETH_LOCAL_DIRECTORY)" ]; then \
+		echo "Using custom local directory: $(OP_GETH_LOCAL_DIRECTORY)"; \
+		cd $(OP_GETH_LOCAL_DIRECTORY); \
 	else \
-		echo "Using default submodule: ../op-geth"; \
-		cd ../op-geth; \
+		echo "Using default submodule: $(OP_STACK_LOCAL_DIRECTORY)/op-geth"; \
+		if [ -z "$(OP_STACK_LOCAL_DIRECTORY)" ]; then \
+			echo "Please set OP_STACK_LOCAL_DIRECTORY in .env"; \
+			exit 1; \
+		fi; \
+		cd $(OP_STACK_LOCAL_DIRECTORY)/op-geth; \
 	fi && \
 	if [ -n "$(OP_GETH_BRANCH)" ]; then \
 		echo "Switching to branch: $(OP_GETH_BRANCH)"; \
