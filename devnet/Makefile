@@ -23,27 +23,10 @@ run: stop
 
 .PHONY: run-geth-test
 run-geth-test:
-	@echo "OP_GETH_LOCAL_DIRECTORY: $(OP_GETH_LOCAL_DIRECTORY)"
-	@echo "OP_GETH_BRANCH: $(OP_GETH_BRANCH)"
-	@if [ -n "$(OP_GETH_LOCAL_DIRECTORY)" ]; then \
-		echo "Using custom local directory: $(OP_GETH_LOCAL_DIRECTORY)"; \
-		cd $(OP_GETH_LOCAL_DIRECTORY); \
-	else \
-		echo "Using op-stack default submodule"; \
-		if [ -z "$(OP_STACK_LOCAL_DIRECTORY)" ]; then \
-			echo "Please set OP_STACK_LOCAL_DIRECTORY in .env"; \
-			exit 1; \
-		fi; \
-		cd $(OP_STACK_LOCAL_DIRECTORY)/op-geth; \
-	fi && \
-	if [ -n "$(OP_GETH_BRANCH)" ]; then \
-		echo "Switching to branch: $(OP_GETH_BRANCH)"; \
-		git fetch origin && git checkout "$(OP_GETH_BRANCH)" && git pull origin "$(OP_GETH_BRANCH)"; \
-	else \
-		echo "Using current branch"; \
-	fi && \
-	echo "Running E2E tests..."; \
-	MallocNanoZone=0 go test -count=1 -failfast -v -p 1 -timeout 600s ./test/e2e/...
+	@echo "Setting up op-geth dependencies..."
+	@cd ./scripts && ./setup-op-geth-test-deps.sh
+	@echo "Running Geth E2E tests..."
+	@cd ./op-geth && MallocNanoZone=0 go test -count=1 -failfast -v -p 1 -timeout 600s ./test/e2e/...
 
 .PHONY: run-reth-test
 run-reth-test:
