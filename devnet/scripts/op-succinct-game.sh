@@ -30,7 +30,7 @@ L1_RPC=${L1_RPC_URL:-"http://localhost:8545"}
 L1_BEACON_RPC=${L1_BEACON_RPC:-"http://localhost:3500"}
 L2_RPC=${L2_RPC_URL:-"http://localhost:8123"}
 L2_NODE_RPC=${L2_NODE_RPC_URL:-"http://localhost:9545"}
-CHALLENGER_KEY=${CHALLENGER_PRIVATE_KEY:-""}
+CHALLENGER_KEY=${OP_CHALLENGER_PRIVATE_KEY:-""}
 GAME_TYPE=42  # OP-Succinct game type
 
 # Constants
