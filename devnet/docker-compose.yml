@@ -80,12 +80,12 @@ services:
     container_name: l1-geth
     command:
       - --http
-      - --http.api=eth,net,web3,debug,admin
+      - --http.api=eth,net,web3,debug,admin,txpool
       - --http.addr=0.0.0.0
       - --http.corsdomain=*
       - --http.vhosts=*
       - --ws
-      - --ws.api=eth,net,web3,debug
+      - --ws.api=eth,net,web3,debug,txpool
       - --ws.addr=0.0.0.0
       - --ws.origins=*
       - --authrpc.vhosts=*
