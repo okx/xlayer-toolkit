@@ -221,9 +221,10 @@ services:
       - ./config-op/genesis-reth.json:/genesis.json
       - ./entrypoint:/entrypoint
       - ./.env:/.env
+      - ./logs/op-reth-seq:/logs/reth
       # Profiling data directory
       - ./profiling/op-reth-seq:/profiling
-      # Kernel tracing filesystem for perf profiling
+       # Kernel tracing filesystem for perf profiling
       - /sys/kernel/tracing:/sys/kernel/tracing:ro
     ports:
       - "8123:8545"
@@ -281,7 +282,7 @@ services:
       - ./.env:/.env
       # Profiling data directory
       - ./profiling/op-reth-rpc:/profiling
-      # Kernel tracing filesystem for perf profiling
+       # Kernel tracing filesystem for perf profiling
       - /sys/kernel/tracing:/sys/kernel/tracing:ro
     ports:
       - "8124:8545"
@@ -902,7 +903,7 @@ services:
       - challenger 
       - --env-file=/app/.env
 
-  kailua-contracts:
+    kailua-contracts:
     image: ${KAILUA_IMAGE_TAG}
     container_name: kailua-contracts
     environment:

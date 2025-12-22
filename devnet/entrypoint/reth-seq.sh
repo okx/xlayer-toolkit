@@ -48,6 +48,8 @@ CMD="op-reth node \
       --rpc.eth-proof-window=10000 \
       --txpool.pending-max-size=2000 \
       --txpool.basefee-max-size=2000 \
+      --log.file.directory=/logs/reth \
+      --log.file.filter=debug,rpc=trace,engine=trace,engine_api=trace \
       $INNERTX_FLAG"
 
 # For flashblocks architecture
