@@ -30,4 +30,39 @@ exec op-reth node \
       --txpool.queued-max-count=100000 \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
-      --txpool.max-new-txns=100000
+      --txpool.max-new-txns=100000 \
+      --rpc.eth-proof-window=10000 \
+      --txpool.pending-max-size=2000 \
+      --txpool.basefee-max-size=2000 \
+      --log.file.directory=/logs/reth \
+      --log.file.filter=debug,rpc=trace,engine=trace,engine_api=trace \
+      $INNERTX_FLAG"
+
+# For flashblocks architecture
+if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
+    CMD="$CMD \
+        --flashblocks.enabled \
+        --flashblocks.disable-rollup-boost \
+        --flashblocks.disable-state-root \
+        --flashblocks.addr=0.0.0.0 \
+        --flashblocks.port=1111 \
+        --flashblocks.block-time=200"
+
+    if [ "$FLASHBLOCK_P2P_ENABLED" = "true" ] && [ "$CONDUCTOR_ENABLED" = "true" ]; then
+        CMD="$CMD \
+            --flashblocks.p2p_enabled \
+            --flashblocks.p2p_port=9009 \
+            --flashblocks.p2p_private_key_file=/datadir/fb-p2p-key"
+
+        INDEX="${1:-}"
+        if [ -z "$INDEX" ]; then
+            # op-reth-seq connects to op-reth-seq2
+            CMD="$CMD --flashblocks.p2p_known_peers=/dns4/op-reth-seq2/tcp/9009/p2p/12D3KooWGnxtRXJWhNtwKmRjpqj5QFQPskjWJkC7AkGWhCXBM6ed"
+        else
+            # op-reth-seq2 connects to op-reth-seq
+            CMD="$CMD --flashblocks.p2p_known_peers=/dns4/op-reth-seq/tcp/9009/p2p/12D3KooWC6qFQzcS6V6Tp53nRqw2pmU1snjSYq7H4Q6ckTWAskTt"
+        fi
+    fi
+fi
+
+exec $CMD
