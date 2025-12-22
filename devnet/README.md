@@ -10,6 +10,8 @@ Configure `example.env` (do not modify `.env` directly) and run `./clean.sh` to 
 | **Reth as Sequencer** | `SEQ_TYPE=reth`<br>`SKIP_OP_RETH_BUILD=false`<br>`OP_RETH_LOCAL_DIRECTORY=/absolute/path/to/reth/repository`<br>`OP_RETH_BRANCH=dev` |
 | **Geth as RPC** | `RPC_TYPE=geth`<br>`LAUNCH_RPC_NODE=true`<br>`SKIP_OP_RETH_BUILD=true`<br>`DB_ENGINE=pebble` |
 | **Reth as RPC** | `RPC_TYPE=reth`<br>`LAUNCH_RPC_NODE=true`<br>`SKIP_OP_RETH_BUILD=false`<br>`OP_RETH_LOCAL_DIRECTORY=/absolute/path/to/reth/repository`<br>`OP_RETH_BRANCH=dev` |
+| **OP-Succinct Enabled** | `OP_SUCCINCT_ENABLE=true`<br>`OP_SUCCINCT_MOCK_MODE=true` (optional, for testing)<br>`OP_SUCCINCT_FAST_FINALITY_MODE=true` (optional, skip challenger) |
+| **Kailua Enabled** | `KAILUA_ENABLE=true`<br> `OWNER_TYPE=safe`<br> `KAILUA_MOCK_MODE=true` (optional, use RISC0_DEV_MODE)<br>`KAILUA_FAST_FINALITY_MODE=true` (optional, enable validity proofs) |
 
 **Notes:**
 - Always modify `example.env`, then run `./clean.sh` to sync to `.env`
@@ -82,6 +84,8 @@ devnet/
 ├── 2-deploy-op-contracts.sh  # Contract deployment script
 ├── 3-op-init.sh        # Environment initialization script
 ├── 4-op-start-service.sh    # Service startup script
+├── 5-run-op-succinct.sh # OP-Succinct components setup script
+├── 6-run-kailua.sh   # Kailua components setup script
 ├── docker-compose.yml  # Docker Compose configuration
 ├── Makefile            # Build automation
 ├── scripts/            # Utility scripts
@@ -100,11 +104,15 @@ devnet/
 │   ├── start-rpc.sh             # Start RPC node
 │   ├── stop-rpc.sh              # Stop RPC node
 │   ├── test-cgt.sh              # Test CGT functionality
-│   └── trusted-peers.sh         # Configure trusted peers
+│   ├── trusted-peers.sh         # Configure trusted peers
+│   ├── update-anchor-root.sh    # Update anchor root by creating and resolving a dispute game
+│   └── kailua-test-fault.sh     # Kailua malicious challenge testing tool
 ├── config-op/          # Configuration directory
 ├── entrypoint/         # Container entrypoint scripts
 ├── l1-geth/            # L1 Geth configuration and data
 ├── saved-cannon-data/  # Pre-generated cannon/dispute game data
+├── op-succinct/        # OP-Succinct configuration files
+├── kailua/             # Kailua configuration files
 ├── contracts/          # Smart contracts
 ├── images/             # Documentation images
 ├── example.env         # Environment template
@@ -113,10 +121,15 @@ devnet/
 ## Quick Start
 
 ### One-Click Deployment
-Run `./0-all.sh` to automatically:
-- Initialize the environment
-- Start all required components
-- Complete all configurations and deployments
+
+```bash
+make run
+```
+
+This command automatically:
+- Cleans up previous deployment
+- Builds Docker images
+- Deploys complete environment
 
 ⚠️ **Important Notes**:
 
@@ -129,6 +142,16 @@ Run `./0-all.sh` to automatically:
    - Clean all data directories
 
 > Note: For first-time setup, we recommend following the step-by-step deployment process to better understand each component and troubleshoot any potential issues.
+
+### Fast Verify Deployment
+```bash
+# Send test transaction
+cast send 0x14dC79964da2C08b23698B3D3cc7Ca32193d9955 \
+  --value 1 \
+  --gas-price 2000000000 \
+  --private-key 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d \
+  --rpc-url http://localhost:8124
+```
 
 ### Step-by-Step Deployment
 For more granular control or troubleshooting, follow the steps below.
@@ -173,7 +196,24 @@ Run `./4-op-start-service.sh`:
   - op-dispute-mon: Dispute monitoring
   - op-conductor: Sequencer HA management
 
-### 5. Conductor Management
+### 5. OP-Succinct Setup (Optional)
+Run `./5-run-op-succinct.sh`:
+- Only runs if `OP_SUCCINCT_ENABLE=true` in `.env`
+- Deploys OP-Succinct contracts (AccessManager, Verifier, FaultDisputeGame)
+- Starts services:
+  - op-succinct-proposer: ZK validity proof proposer
+  - op-succinct-challenger: Optional challenger (disabled if `OP_SUCCINCT_FAST_FINALITY_MODE=true`)
+
+### 5.1 Kailua Setup (Optional)
+Run `./6-run-kailua.sh`:
+- Only runs if `KAILUA_ENABLE=true` and `OWNER_TYPE=safe` in `.env`
+- Deploys Kailua contracts via `kailua-cli fast-track` (RISC0-based ZK proofs)
+- Starts services:
+  - kailua-proposer: Proposes L2 state to L1
+  - kailua-validator: Validates proposals and generates fault/validity proofs
+- Test fault proofs: `./scripts/kailua-test-fault.sh` submits malicious proposals to verify dispute resolution
+
+### 6. Conductor Management
 The test environment includes a 3-node conductor cluster for sequencer high availability (HA).
 
 #### Architecture
@@ -300,6 +340,46 @@ The `scripts/mempool-rebroadcaster-scheduler.sh` script facilitates running the 
 |Pending| Next nonce transactions with no nonce gap | Next nonce transactions with a fee higher than the base fee|
 |Queued| Transactions with a nonce gap | Transactions below the base fee, even if they are next nonce, and transactions with a nonce gap|
 
+## Testing
+
+### End-to-end (e2e) Testing
+
+#### 1. Geth
+
+To run e2e tests for geth, first build op-stack using geth as the sequencer and rpc by setting the following environment variables
+```
+SEQ_TYPE=geth
+RPC_TYPE=geth
+DB_ENGINE="pebble"
+```
+
+After devnet is started, run the e2e test:
+```
+make run-geth-test
+```
+
+#### 2. Reth
+
+To run e2e tests for reth, first build op-stack using reth as the sequencer and rpc and set the following environment variables
+```
+SEQ_TYPE=reth
+RPC_TYPE=reth
+FLASHBLOCK_ENABLED=true
+FLASHBLOCK_P2P_ENABLED=true
+ENABLE_INNERTX_SEQ=true
+ENABLE_INNERTX_RPC=true
+```
+
+After devnet is started, run the reth e2e test without benchmark and comparison tests (non-flashblock node not started):
+```
+make run-reth-test
+```
+
+To run the full reth e2e test suite for flashblocks (starts the non-flashblock node):
+```
+make run-reth-test-all
+```
+
 ## Troubleshooting
 
 ### Common Issues
@@ -355,3 +435,12 @@ The `scripts/mempool-rebroadcaster-scheduler.sh` script facilitates running the 
 | **Other Services** | | |
 | op-batcher | 8548 | Batcher RPC |
 | op-proposer | 8560 | Proposer RPC |
+
+## Profiling Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Profiling Reth](../docs/PROFILING_RETH.md) | Main profiling guide for op-reth with CPU and memory profiling |
+| [Off-CPU Profiling](../docs/OFFCPU_PROFILING.md) | Guide for profiling lock contention, I/O waits, and scheduler delays |
+| [Memory Profiling](../docs/MEMORY_PROFILING.md) | Jemalloc heap profiling for memory leaks and allocation patterns |
+| [Perf TUI Reference](../docs/PERF_TUI_REFERENCE.md) | Quick reference for perf report interactive commands |

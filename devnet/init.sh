@@ -21,6 +21,7 @@ function build_and_tag_image() {
   docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
   docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
   echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
+  cd -
 }
 
 # Build OP_STACK image
@@ -34,6 +35,7 @@ else
     echo "🔨 Building op-stack"
     cd "$OP_STACK_LOCAL_DIRECTORY"
     git submodule update --init --recursive
+    cd -
     build_and_tag_image "op-stack" "$OP_STACK_IMAGE_TAG" "$OP_STACK_LOCAL_DIRECTORY" "Dockerfile-opstack"
   fi
 fi
@@ -48,6 +50,7 @@ else
     git submodule update --init --recursive
     OP_GETH_DIR="$OP_STACK_LOCAL_DIRECTORY/op-geth"
     echo "📍 Using op-geth submodule of op-stack"
+    cd -
   else
     OP_GETH_DIR="$OP_GETH_LOCAL_DIRECTORY"
     echo "📍 Using op-geth local directory: $OP_GETH_LOCAL_DIRECTORY"
@@ -60,7 +63,7 @@ else
     git fetch origin
     git checkout "$OP_GETH_BRANCH"
     git pull origin "$OP_GETH_BRANCH"
-    cd "$PWD_DIR"
+    cd -
   else
     echo "📍 Using op-geth default branch"
   fi
@@ -80,6 +83,7 @@ else
     echo "🔨 Building $OP_CONTRACTS_IMAGE_TAG..."
     cd "$OP_STACK_LOCAL_DIRECTORY"
     git submodule update --init --recursive
+    cd -
     build_and_tag_image "op-contracts" "$OP_CONTRACTS_IMAGE_TAG" "$OP_STACK_LOCAL_DIRECTORY" "Dockerfile-contracts"
   fi
 fi
@@ -102,6 +106,7 @@ else
     else
       echo "📍 Using op-reth branch: $(git branch --show-current)"
     fi
+    cd -
 
     # Check if profiling is enabled and build accordingly
     if [ "$RETH_PROFILING_ENABLED" = "true" ]; then
@@ -114,5 +119,36 @@ else
     fi
 
     cd "$OP_STACK_LOCAL_DIRECTORY"
+  fi
+fi
+
+# Build OP_SUCCINCT image if not skipping
+if [ "$SKIP_OP_SUCCINCT_BUILD" = "true" ]; then
+  echo "⏭️  Skipping op-succinct build"
+else
+  if [ "$OP_SUCCINCT_LOCAL_DIRECTORY" = "" ]; then
+    echo "❌ Please set OP_SUCCINCT_LOCAL_DIRECTORY in .env"
+    exit 1
+  else
+    echo "🔨 Building op-succinct images"
+
+    cd "$OP_SUCCINCT_LOCAL_DIRECTORY"
+    build_and_tag_image "op-succinct" "$OP_SUCCINCT_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile"
+    build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.contract"
+  fi
+fi
+
+# Build Kailua image
+if [ "$SKIP_KAILUA_BUILD" = "true" ]; then
+  echo "⏭️  Skipping kailua build"
+else
+  if [ "$KAILUA_LOCAL_DIRECTORY" = "" ]; then
+    echo "❌ Please set KAILUA_LOCAL_DIRECTORY in .env"
+    exit 1
+  else
+    echo "🔨 Building kailua image"
+    
+    cd "$KAILUA_LOCAL_DIRECTORY"
+    build_and_tag_image "kailua" "$KAILUA_IMAGE_TAG" "$KAILUA_LOCAL_DIRECTORY" "Dockerfile.local"
   fi
 fi

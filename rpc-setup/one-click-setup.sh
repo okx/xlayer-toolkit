@@ -53,6 +53,7 @@ load_configuration() {
 # User input variables (runtime values, not in config file)
 NETWORK_TYPE=""
 RPC_TYPE=""
+SYNC_MODE=""  # Sync mode: genesis or snapshot
 L1_RPC_URL=""
 L1_BEACON_URL=""
 TARGET_DIR=""  # Target directory for configuration (${NETWORK_TYPE}-${RPC_TYPE})
@@ -308,14 +309,14 @@ get_file_from_source() {
 check_required_files() {
     print_info "Checking required files..."
     
-    local files=("Makefile" "docker-compose.yml")
+    # Always need Makefile
+    if ! get_file_from_source "Makefile"; then
+        print_error "Failed to get required file: Makefile"
+        exit 1
+    fi
     
-    for file in "${files[@]}"; do
-        if ! get_file_from_source "$file"; then
-            print_error "Failed to get required file: $file"
-            exit 1
-        fi
-    done
+    # docker-compose.yml will be generated later based on sync mode
+    # For genesis mode, we'll get it from source; for snapshot mode, we'll generate it
     
     print_success "Required files ready"
 }
@@ -395,8 +396,37 @@ validate_rpc_type() {
     [[ "$1" =~ ^(geth|reth)$ ]] || { print_error "Invalid RPC type"; return 1; }
 }
 
+validate_sync_mode() {
+    [[ "$1" =~ ^(genesis|snapshot)$ ]] || { print_error "Invalid sync mode. Must be 'genesis' or 'snapshot'"; return 1; }
+}
+
 validate_url() {
     [[ "$1" =~ ^https?:// ]] || { print_error "Please enter a valid HTTP/HTTPS URL"; return 1; }
+}
+
+# Validate if snapshot mode is supported for the given RPC type and network
+validate_snapshot_support() {
+    local rpc_type=$1
+    local network=$2
+    
+    if [ "$rpc_type" != "geth" ]; then
+        print_error "Snapshot mode is currently only supported for geth"
+        print_info "Supported combinations:"
+        print_info "  - geth + testnet: ✅ snapshot supported"
+        print_info "  - geth + mainnet: ✅ snapshot supported"
+        print_info "  - reth + testnet: ❌ snapshot not supported"
+        print_info "  - reth + mainnet: ❌ snapshot not supported"
+        print_info ""
+        print_info "Please use 'genesis' sync mode for your selected configuration"
+        return 1
+    fi
+    
+    if [ "$network" != "testnet" ] && [ "$network" != "mainnet" ]; then
+        print_error "Snapshot mode is currently only supported for testnet and mainnet"
+        return 1
+    fi
+    
+    return 0
 }
 
 check_existing_data() {
@@ -415,9 +445,12 @@ check_existing_data() {
     echo "  📂 Location: $target_dir"
     echo "  💾 Size: $size"
     
-    # Check if initialized
+    # Check if initialized (different structure for snapshot vs genesis mode)
+    # Note: SYNC_MODE is not yet set when this function is called, so we check both structures
     if [ -d "$target_dir/data" ] && [ "$(ls -A "$target_dir/data" 2>/dev/null)" ]; then
-        echo "  ✅ Status: Initialized with data"
+        echo "  ✅ Status: Initialized with data (genesis mode)"
+    elif [ -d "$target_dir/op-geth" ] && [ "$(ls -A "$target_dir/op-geth" 2>/dev/null)" ]; then
+        echo "  ✅ Status: Initialized with data (snapshot mode)"
     else
         echo "  ⚠️  Status: Empty or incomplete"
     fi
@@ -472,9 +505,19 @@ get_user_input() {
     # Set target directory
     TARGET_DIR="${NETWORK_TYPE}-${RPC_TYPE}"
     
-    # Step 2-3: L1 URLs (required)
+    # Step 1.5: Sync mode (interactive)
+    SYNC_MODE=$(prompt_input "2. Sync mode (genesis/snapshot) [default: genesis]: " "genesis" "validate_sync_mode")
+    
+    # Validate snapshot support
+    if [ "$SYNC_MODE" = "snapshot" ]; then
+        if ! validate_snapshot_support "$RPC_TYPE" "$NETWORK_TYPE"; then
+            exit 1
+        fi
+    fi
+    
+    # Step 3-4: L1 URLs (required)
     while true; do
-        print_prompt "2. L1 RPC URL (Ethereum L1 RPC endpoint): "
+        print_prompt "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
         if ! read -r L1_RPC_URL </dev/tty 2>/dev/null && ! read -r L1_RPC_URL; then
             print_error "Failed to read input"
             exit 1
@@ -483,7 +526,7 @@ get_user_input() {
     done
     
     while true; do
-        print_prompt "3. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
+        print_prompt "4. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
         if ! read -r L1_BEACON_URL </dev/tty 2>/dev/null && ! read -r L1_BEACON_URL; then
             print_error "Failed to read input"
             exit 1
@@ -507,11 +550,11 @@ get_user_input() {
     print_info "Press Enter to use default values, or type new values:"
     echo ""
     
-    RPC_PORT=$(prompt_input "4. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
-    WS_PORT=$(prompt_input "5. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "") || WS_PORT="$DEFAULT_WS_PORT"
-    NODE_RPC_PORT=$(prompt_input "6. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
-    GETH_P2P_PORT=$(prompt_input "7. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
-    NODE_P2P_PORT=$(prompt_input "8. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
+    RPC_PORT=$(prompt_input "5. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
+    WS_PORT=$(prompt_input "6. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "") || WS_PORT="$DEFAULT_WS_PORT"
+    NODE_RPC_PORT=$(prompt_input "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
+    GETH_P2P_PORT=$(prompt_input "8. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
+    NODE_P2P_PORT=$(prompt_input "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
     
     print_info "Using ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT"
     
@@ -558,24 +601,52 @@ generate_config_files() {
         EXEC_CLIENT="op-geth"
     fi
     
-    # Use TARGET_DIR directly
-    DATA_DIR="${TARGET_DIR}/data"
-    CONFIG_DIR="${TARGET_DIR}/config"
-    LOGS_DIR="${TARGET_DIR}/logs"
-    GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-    
-    # Create directory structure
-    mkdir -p "$CONFIG_DIR" "$LOGS_DIR" "$DATA_DIR/op-node/p2p"
-    
-    # Create execution client specific data directory
-    if [ "$RPC_TYPE" = "reth" ]; then
-        mkdir -p "$DATA_DIR/op-reth"
+    # Use different directory structure based on sync mode and network
+    # Mainnet snapshot uses the same structure as genesis mode (nested: data/, config/, logs/)
+    # Testnet snapshot uses flat structure (op-geth/, op-node/) - TODO: will be unified with mainnet
+    if [ "$SYNC_MODE" = "snapshot" ] && [ "$NETWORK_TYPE" = "testnet" ]; then
+        # Testnet snapshot: flat structure (op-geth, op-node at root) - temporary special handling
+        CONFIG_DIR="${TARGET_DIR}/config"  # Not used in testnet snapshot mode
+        LOGS_DIR="${TARGET_DIR}/logs"  # Not used in testnet snapshot mode
+        GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
+        DATA_DIR="${TARGET_DIR}/data"  # Not used in testnet snapshot mode
+        
+        # Ensure snapshot directory exists (should be created by extract_snapshot)
+        if [ ! -d "$TARGET_DIR" ]; then
+            print_error "Snapshot directory not found: $TARGET_DIR. Please run extract_snapshot first."
+            exit 1
+        fi
+        
+        print_info "Using snapshot data directory: $TARGET_DIR (flat structure: op-geth, op-node)"
     else
-        mkdir -p "$DATA_DIR/op-geth"
+        # Genesis mode OR mainnet snapshot: nested structure (data/, config/, logs/)
+        DATA_DIR="${TARGET_DIR}/data"
+        CONFIG_DIR="${TARGET_DIR}/config"
+        LOGS_DIR="${TARGET_DIR}/logs"
+        GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
+        
+        if [ "$SYNC_MODE" = "snapshot" ]; then
+            # Mainnet snapshot: directory already exists from extraction, just verify
+            if [ ! -d "$TARGET_DIR" ]; then
+                print_error "Snapshot directory not found: $TARGET_DIR. Please run extract_snapshot first."
+                exit 1
+            fi
+            print_info "Using snapshot data directory: $TARGET_DIR (nested structure: data/, config/, logs/)"
+        else
+            # Genesis mode: create directory structure
+            mkdir -p "$CONFIG_DIR" "$LOGS_DIR" "$DATA_DIR/op-node/p2p"
+            
+            # Create execution client specific data directory
+            if [ "$RPC_TYPE" = "reth" ]; then
+                mkdir -p "$DATA_DIR/op-reth"
+            else
+                mkdir -p "$DATA_DIR/op-geth"
+            fi
+            
+            # Generate and verify JWT
+            generate_or_verify_jwt "$CONFIG_DIR/jwt.txt"
+        fi
     fi
-    
-    # Generate and verify JWT
-    generate_or_verify_jwt "$CONFIG_DIR/jwt.txt"
     
     # Note: Configuration files are already downloaded to CONFIG_DIR by download_config_files()
     
@@ -606,6 +677,7 @@ generate_env_file() {
 # Network Configuration
 NETWORK_TYPE=$NETWORK_TYPE
 RPC_TYPE=$RPC_TYPE
+SYNC_MODE=$SYNC_MODE
 CHAIN_NAME=$chain_name
 
 # Directory Configuration
@@ -727,6 +799,197 @@ extract_genesis() {
     print_success "Genesis file extracted to $target_dir/$target_file"
 }
 
+# Download snapshot for geth testnet
+download_snapshot() {
+    local target_dir=$1  # Target directory (e.g., testnet-geth or mainnet-geth)
+    local network=$2     # Network type (testnet or mainnet)
+    
+    # Determine snapshot URL and file name based on network
+    local snapshot_url
+    local snapshot_file
+    
+    if [ "$network" = "testnet" ]; then
+        # Use configuration from network-presets.env
+        snapshot_url="${TESTNET_SNAPSHOT_BASE_URL}/${TESTNET_SNAPSHOT_FILE}"
+        snapshot_file="${TESTNET_SNAPSHOT_FILENAME}"
+    elif [ "$network" = "mainnet" ]; then
+        # Get latest snapshot filename
+        print_info "Fetching latest mainnet snapshot filename..."
+        local latest_filename
+        latest_filename=$(curl -s -f "${MAINNET_SNAPSHOT_LATEST_URL}" | tr -d '\n\r' | xargs)
+        
+        if [ -z "$latest_filename" ]; then
+            print_error "Failed to fetch latest snapshot filename from server"
+            exit 1
+        fi
+        
+        snapshot_url="${MAINNET_SNAPSHOT_BASE_URL}/${latest_filename}"
+        snapshot_file="$latest_filename"
+        
+        # Export filename for extract_snapshot to use
+        export MAINNET_SNAPSHOT_FILE="$snapshot_file"
+        
+        print_info "Latest mainnet snapshot: $snapshot_file"
+    else
+        print_error "Unsupported network for snapshot: $network"
+        exit 1
+    fi
+    
+    # Check if target directory already exists (data already extracted)
+    # For testnet: check for op-geth and op-node directories (flat structure)
+    # For mainnet: check for data, config, logs directories (nested structure)
+    if [ "$network" = "testnet" ]; then
+        if [ -n "$target_dir" ] && [ -d "$target_dir" ] && [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
+            print_success "Target directory already exists: $target_dir, skipping download"
+            return 0
+        fi
+    elif [ "$network" = "mainnet" ]; then
+        if [ -n "$target_dir" ] && [ -d "$target_dir" ] && [ -d "$target_dir/data" ] && [ -d "$target_dir/config" ]; then
+            print_success "Target directory already exists: $target_dir, skipping download"
+            return 0
+        fi
+    fi
+    
+    # Check if snapshot file already exists
+    if [ -f "$snapshot_file" ]; then
+        local file_size=$(du -h "$snapshot_file" 2>/dev/null | cut -f1 || echo "unknown")
+        print_success "Using existing snapshot file: $snapshot_file ($file_size)"
+        return 0
+    fi
+    
+    # Check if xlayerdata exists (from previous extraction, not yet renamed) - only for testnet
+    if [ "$network" = "testnet" ]; then
+        if [ -d "xlayerdata" ] && [ -d "xlayerdata/op-geth" ] && [ -d "xlayerdata/op-node" ]; then
+            print_success "Found existing xlayerdata directory, skipping download"
+            return 0
+        fi
+    fi
+    
+    print_info "Downloading snapshot (this may take a while)..."
+    
+    if ! wget -c "$snapshot_url" -O "$snapshot_file"; then
+        print_error "Failed to download snapshot file"
+        rm -f "$snapshot_file"
+        exit 1
+    fi
+    
+    print_success "Snapshot downloaded: $snapshot_file"
+}
+
+# Extract snapshot
+extract_snapshot() {
+    local target_dir=$1
+    local network=$2
+    
+    # Determine snapshot file name based on network
+    local snapshot_file
+    if [ "$network" = "testnet" ]; then
+        snapshot_file="geth-testnet.tar.gz"
+    elif [ "$network" = "mainnet" ]; then
+        # Use the filename from download_snapshot if available, otherwise fallback to default
+        if [ -n "$MAINNET_SNAPSHOT_FILE" ]; then
+            snapshot_file="$MAINNET_SNAPSHOT_FILE"
+        else
+            # Fallback: try to find any mainnet snapshot file in current directory
+            snapshot_file=$(ls -t mainnet-geth*.tar.gz 2>/dev/null | head -1)
+            if [ -z "$snapshot_file" ]; then
+                print_error "Mainnet snapshot file not found. Please run download_snapshot first."
+                exit 1
+            fi
+            print_info "Using existing snapshot file: $snapshot_file"
+        fi
+    else
+        print_error "Unsupported network for snapshot: $network"
+        exit 1
+    fi
+    
+    # Priority 1: Check if target directory already exists with valid data
+    # If it exists, skip everything (no download, no extract, no rename)
+    if [ "$network" = "testnet" ]; then
+        # Testnet: flat structure with op-geth and op-node
+        if [ -d "$target_dir" ] && [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
+            print_success "Found existing snapshot directory: $target_dir, skipping extraction"
+            return 0
+        fi
+    elif [ "$network" = "mainnet" ]; then
+        # Mainnet: nested structure with data, config, logs
+        if [ -d "$target_dir" ] && [ -d "$target_dir/data" ] && [ -d "$target_dir/config" ]; then
+            print_success "Found existing snapshot directory: $target_dir, skipping extraction"
+            return 0
+        fi
+    fi
+    
+    # Priority 2: Check if xlayerdata exists (from previous extraction, not yet renamed) - only for testnet
+    if [ "$network" = "testnet" ]; then
+        if [ -d "xlayerdata" ] && [ -d "xlayerdata/op-geth" ] && [ -d "xlayerdata/op-node" ]; then
+            print_info "Found xlayerdata directory, renaming to $target_dir..."
+            if [ -d "$target_dir" ]; then
+                print_error "Target directory $target_dir already exists but doesn't contain valid snapshot data"
+                print_info "Please remove $target_dir and try again"
+                exit 1
+            fi
+            mv xlayerdata "$target_dir"
+            print_success "Renamed xlayerdata to $target_dir"
+            return 0
+        fi
+    fi
+    
+    # Priority 3: Extract from snapshot file (only if target directory doesn't exist)
+    # Check if snapshot file exists before extracting
+    if [ ! -f "$snapshot_file" ]; then
+        print_error "Snapshot file not found: $snapshot_file"
+        print_info "Please run download_snapshot() first"
+        exit 1
+    fi
+    
+    print_info "Extracting snapshot (this may take a while)..."
+    
+    if ! tar -zxvf "$snapshot_file"; then
+        print_error "Failed to extract snapshot file"
+        exit 1
+    fi
+    
+    if [ "$network" = "testnet" ]; then
+        # Testnet: extracts to xlayerdata, need to rename
+        if [ ! -d "xlayerdata" ]; then
+            print_error "Snapshot extraction failed: xlayerdata directory not found"
+            exit 1
+        fi
+        
+        # Rename xlayerdata to target directory name (e.g., testnet-geth)
+        if [ -d "$target_dir" ]; then
+            print_warning "Target directory $target_dir already exists (this shouldn't happen)"
+            if [ -d "$target_dir/op-geth" ] && [ -d "$target_dir/op-node" ]; then
+                print_info "Target directory already contains snapshot data, using existing directory"
+                rm -rf xlayerdata
+            else
+                print_error "Target directory exists but doesn't contain valid snapshot data"
+                print_info "Please remove $target_dir and try again"
+                exit 1
+            fi
+        else
+            print_info "Renaming xlayerdata to $target_dir..."
+            mv xlayerdata "$target_dir"
+            print_success "Snapshot extracted and renamed to $target_dir"
+        fi
+    elif [ "$network" = "mainnet" ]; then
+        # Mainnet: extracts directly to mainnet-geth (already correct name)
+        if [ ! -d "$target_dir" ]; then
+            print_error "Snapshot extraction failed: $target_dir directory not found"
+            exit 1
+        fi
+        
+        # Verify structure
+        if [ ! -d "$target_dir/data" ] || [ ! -d "$target_dir/config" ]; then
+            print_error "Snapshot extraction failed: invalid structure in $target_dir"
+            print_info "Expected: $target_dir/data and $target_dir/config"
+            exit 1
+        fi
+        
+        print_success "Snapshot extracted to $target_dir"
+    fi
+}
+
 init_geth() {
     local data_dir=$1
     local genesis_file=$2
@@ -800,52 +1063,252 @@ initialize_node() {
     
     cd "$WORK_DIR" || exit 1
     
-    # Download and extract genesis
-    download_genesis "$GENESIS_URL" "$NETWORK_TYPE"
-    extract_genesis "$CONFIG_DIR" "$GENESIS_FILE"
-    
-    # Initialize execution client
-    if [ "$RPC_TYPE" = "reth" ]; then
-        init_reth "$DATA_DIR/op-reth" "$CONFIG_DIR/$GENESIS_FILE"
-    else
-        init_geth "$DATA_DIR/op-geth" "$CONFIG_DIR/$GENESIS_FILE"
-    fi
-    
-    print_success "Node initialization completed"
-    print_info "Directory structure created at: ${TARGET_DIR}"
-    print_info "  - data/"
-    if [ "$RPC_TYPE" = "reth" ]; then
-        print_info "    - op-reth/: Reth blockchain data"
-    else
-        print_info "    - op-geth/: Geth blockchain data"
-    fi
-    print_info "    - op-node/: Op-node data"
-    print_info "  - config/: Configuration files"
-    print_info "  - logs/: Log files"
-    
-    # Clean up genesis file after initialization (only for reth)
-    if [ "$RPC_TYPE" = "reth" ]; then
-        echo ""
-        print_info "Cleaning up genesis file (no longer needed for reth startup)..."
+    if [ "$SYNC_MODE" = "snapshot" ]; then
+        # Snapshot mode: download and extract snapshot
+        download_snapshot "$TARGET_DIR" "$NETWORK_TYPE"
+        extract_snapshot "$TARGET_DIR" "$NETWORK_TYPE"
         
-        # Remove extracted genesis file
-        if [ -f "$CONFIG_DIR/$GENESIS_FILE" ]; then
-            rm -f "$CONFIG_DIR/$GENESIS_FILE"
-            print_success "Removed $GENESIS_FILE (6.8GB freed)"
+        if [ "$NETWORK_TYPE" = "testnet" ]; then
+            # Testnet snapshot: temporary special handling (flat structure)
+            # TODO: Remove this when testnet snapshot structure is unified with mainnet
+            # Remove EnableInnerTx = true from config.toml
+            local config_file="$TARGET_DIR/op-geth/config.toml"
+            if [ -f "$config_file" ]; then
+                print_info "Removing EnableInnerTx = true from config.toml..."
+                sed -i '/^EnableInnerTx = true$/d' "$config_file"
+                print_success "Updated config.toml"
+            fi
+            
+            # Ensure op-node logs directory exists (needed for log output)
+            if [ ! -d "$TARGET_DIR/op-node/logs" ]; then
+                mkdir -p "$TARGET_DIR/op-node/logs"
+                print_info "Created logs directory for op-node"
+            fi
+            
+            print_success "Node initialization completed (snapshot mode - testnet)"
+            print_info "Using snapshot data directory: $TARGET_DIR"
+            print_info "  - $TARGET_DIR/op-geth/: Geth blockchain data (from snapshot)"
+            print_info "  - $TARGET_DIR/op-node/: Op-node data (from snapshot)"
+        else
+            # Mainnet snapshot: uses same structure as genesis mode, no special handling needed
+            print_success "Node initialization completed (snapshot mode - mainnet)"
+            print_info "Using snapshot data directory: $TARGET_DIR"
+            print_info "  - $TARGET_DIR/data/: Blockchain data (from snapshot)"
+            print_info "  - $TARGET_DIR/config/: Configuration files (from snapshot)"
+            print_info "  - $TARGET_DIR/logs/: Service logs (from snapshot)"
+        fi
+    else
+        # Genesis mode: download and extract genesis, then initialize
+        download_genesis "$GENESIS_URL" "$NETWORK_TYPE"
+        extract_genesis "$CONFIG_DIR" "$GENESIS_FILE"
+        
+        # Initialize execution client
+        if [ "$RPC_TYPE" = "reth" ]; then
+            init_reth "$DATA_DIR/op-reth" "$CONFIG_DIR/$GENESIS_FILE"
+        else
+            init_geth "$DATA_DIR/op-geth" "$CONFIG_DIR/$GENESIS_FILE"
         fi
         
-        # Remove genesis tarball in standalone mode
-        local genesis_tarball="genesis-${NETWORK_TYPE}.tar.gz"
-        if [ "$IN_REPO" = false ] && [ -f "$genesis_tarball" ]; then
-            rm -f "$genesis_tarball"
-            print_info "Removed genesis tarball"
-        elif [ "$IN_REPO" = true ] && [ -f "$genesis_tarball" ]; then
-            print_info "Kept genesis tarball for repository mode: $genesis_tarball"
+        print_success "Node initialization completed"
+        print_info "Directory structure created at: ${TARGET_DIR}"
+        print_info "  - data/"
+        if [ "$RPC_TYPE" = "reth" ]; then
+            print_info "    - op-reth/: Reth blockchain data"
+        else
+            print_info "    - op-geth/: Geth blockchain data"
         fi
+        print_info "    - op-node/: Op-node data"
+        print_info "  - config/: Configuration files"
+        print_info "  - logs/: Log files"
         
-        print_success "Optimization enabled: Fast startup mode"
-        print_info "Subsequent restarts will use built-in 'xlayer-${NETWORK_TYPE}' chain for <1s startup"
-        print_info "Genesis file cleaned up - 6.8GB disk space saved!"
+        # Clean up genesis file after initialization (only for reth)
+        if [ "$RPC_TYPE" = "reth" ]; then
+            echo ""
+            print_info "Cleaning up genesis file (no longer needed for reth startup)..."
+            
+            # Remove extracted genesis file
+            if [ -f "$CONFIG_DIR/$GENESIS_FILE" ]; then
+                rm -f "$CONFIG_DIR/$GENESIS_FILE"
+                print_success "Removed $GENESIS_FILE (6.8GB freed)"
+            fi
+            
+            # Remove genesis tarball in standalone mode
+            local genesis_tarball="genesis-${NETWORK_TYPE}.tar.gz"
+            if [ "$IN_REPO" = false ] && [ -f "$genesis_tarball" ]; then
+                rm -f "$genesis_tarball"
+                print_info "Removed genesis tarball"
+            elif [ "$IN_REPO" = true ] && [ -f "$genesis_tarball" ]; then
+                print_info "Kept genesis tarball for repository mode: $genesis_tarball"
+            fi
+            
+            print_success "Optimization enabled: Fast startup mode"
+            print_info "Subsequent restarts will use built-in 'xlayer-${NETWORK_TYPE}' chain for <1s startup"
+            print_info "Genesis file cleaned up - 6.8GB disk space saved!"
+        fi
+    fi
+}
+
+# Generate docker-compose.yml based on sync mode
+generate_docker_compose() {
+    print_info "Generating docker-compose.yml..."
+    
+    cd "$WORK_DIR" || exit 1
+
+    # Mainnet snapshot uses the same docker-compose.yml as genesis mode (same structure)
+    # Only testnet snapshot needs special docker-compose.yml (flat structure) - TODO: will be unified
+    if [ "$SYNC_MODE" = "snapshot" ] && [ "$NETWORK_TYPE" = "testnet" ]; then
+        # Generate snapshot mode docker-compose.yml for testnet (flat structure) - temporary special handling
+        cat > docker-compose.yml << 'EOF'
+networks:
+  xlayer-network:
+    name: xlayer-network
+
+services:
+  op-node:
+    image: "${OP_STACK_IMAGE_TAG}"
+    container_name: xlayer-${NETWORK_TYPE}-op-node
+    entrypoint: sh
+    networks:
+      - xlayer-network
+    ports:
+      - "${NODE_RPC_PORT:-9545}:9545"
+      - "${NODE_P2P_PORT:-9223}:9223"
+      - "${NODE_P2P_PORT:-9223}:9223/udp"
+    volumes:
+      - ./${TARGET_DIR}/op-node:/data
+      - ./${TARGET_DIR}/op-node/rollup.json:/rollup.json
+      - ./${TARGET_DIR}/op-node/jwt.txt:/jwt.txt
+      - ./${TARGET_DIR}/op-node/logs:/logs
+    command:
+      - -c
+      - |
+        exec /app/op-node/bin/op-node \
+          --log.level=info \
+          --l2=${L2_ENGINE_URL} \
+          --l2.jwt-secret=/jwt.txt \
+          --sequencer.enabled=false \
+          --verifier.l1-confs=1 \
+          --rollup.config=/rollup.json \
+          --rpc.addr=0.0.0.0 \
+          --rpc.port=9545 \
+          --p2p.listen.tcp=9223 \
+          --p2p.listen.udp=9223 \
+          --p2p.peerstore.path=/data/p2p/opnode_peerstore_db \
+          --p2p.discovery.path=/data/p2p/opnode_discovery_db \
+          --p2p.bootnodes=${OP_NODE_BOOTNODE} \
+          --p2p.static=${P2P_STATIC_PEERS} \
+          --rpc.enable-admin=true \
+          --l1=${L1_RPC_URL} \
+          --l1.beacon=${L1_BEACON_URL} \
+          --l1.rpckind=standard \
+          --conductor.enabled=false \
+          --safedb.path=/data/safedb \
+          --l2.enginekind=${RPC_TYPE} \
+          2>&1 | tee /logs/op-node.log
+    restart: unless-stopped
+
+  op-geth:
+    image: "${OP_GETH_IMAGE_TAG}"
+    container_name: xlayer-${NETWORK_TYPE}-op-geth
+    entrypoint: geth
+    networks:
+      - xlayer-network
+    ports:
+      - "${HTTP_RPC_PORT:-8123}:8545"
+      - "${ENGINE_API_PORT:-8552}:8552"
+      - "${WEBSOCKET_PORT:-8546}:8546"
+      - "${P2P_TCP_PORT:-30303}:30303"
+      - "${P2P_UDP_PORT:-30303}:30303/udp"
+    volumes:
+      - ./${TARGET_DIR}/op-geth/data:/data
+      - ./${TARGET_DIR}/op-geth/jwt.txt:/jwt.txt
+      - ./${TARGET_DIR}/op-geth/config.toml:/config.toml
+      - ./${TARGET_DIR}/op-geth/data/logs:/logs
+    command:
+      - --verbosity=3
+      - --datadir=/data
+      - --config=/config.toml
+      - --db.engine=pebble
+      - --gcmode=archive
+      - --pp-rpc-url=${LEGACY_RPC_URL}
+      - --rollup.enabletxpooladmission
+      - --rollup.sequencerhttp=${SEQUENCER_HTTP_URL}
+      - --log.file=/logs/geth.log
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  op-reth:
+    image: "${OP_RETH_IMAGE_TAG}"
+    container_name: xlayer-${NETWORK_TYPE}-op-reth
+    entrypoint: sh
+    networks:
+      - xlayer-network
+    ports:
+      - "${HTTP_RPC_PORT:-8123}:8545"
+      - "${WEBSOCKET_PORT:-8546}:8546"
+      - "${ENGINE_API_PORT:-8552}:8552"
+      - "${P2P_TCP_PORT:-30303}:30303"
+      - "${P2P_UDP_PORT:-30303}:30303/udp"
+    volumes:
+      - ./${TARGET_DIR}/data/op-reth:/datadir
+      - ./${TARGET_DIR}/config/jwt.txt:/jwt.txt
+      - ./${TARGET_DIR}/config/op-reth-config-${NETWORK_TYPE}.toml:/config.toml
+      - ./${TARGET_DIR}/logs:/logs
+    command:
+      - -c
+      - |
+        exec op-reth node \
+          --datadir=/datadir \
+          --chain=${CHAIN_NAME:-xlayer-mainnet} \
+          --config=/config.toml \
+          --http \
+          --http.corsdomain=* \
+          --http.port=8545 \
+          --http.addr=0.0.0.0 \
+          --http.api=web3,debug,eth,txpool,net,miner \
+          --ws \
+          --ws.addr=0.0.0.0 \
+          --ws.port=8546 \
+          --ws.origins=* \
+          --ws.api=debug,eth,txpool,net \
+          --authrpc.addr=0.0.0.0 \
+          --authrpc.port=8552 \
+          --authrpc.jwtsecret=/jwt.txt \
+          --rollup.disable-tx-pool-gossip \
+          --rollup.sequencer-http=${SEQUENCER_HTTP_URL} \
+          --disable-discovery \
+          --max-outbound-peers=0 \
+          --max-inbound-peers=0 \
+          --rpc.legacy-url=${LEGACY_RPC_URL} \
+          --rpc.legacy-timeout=${LEGACY_RPC_TIMEOUT} \
+          --log.stdout.filter=info \
+          --log.file.directory=/logs/ \
+          --log.file.filter=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "--data", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+EOF
+        print_success "docker-compose.yml generated (snapshot mode - testnet)"
+    else
+        # Genesis mode OR mainnet snapshot: use standard docker-compose.yml (same structure)
+        if ! get_file_from_source "docker-compose.yml"; then
+            print_error "Failed to get docker-compose.yml"
+            exit 1
+        fi
+        if [ "$SYNC_MODE" = "snapshot" ]; then
+            print_success "docker-compose.yml generated (snapshot mode - mainnet, using standard structure)"
+        else
+            print_success "docker-compose.yml generated (genesis mode)"
+        fi
     fi
 }
 
@@ -906,20 +1369,39 @@ main() {
     echo ""
     check_existing_configurations
     
+    # Generate docker-compose.yml based on sync mode
+    generate_docker_compose
+    
     # Conditional initialization
     if [ "$SKIP_INIT" -eq 0 ]; then
         # Full initialization process
         print_info "Performing full initialization..."
-        download_config_files
-        generate_config_files
-        initialize_node
+        if [ "$SYNC_MODE" = "snapshot" ] && [ "$NETWORK_TYPE" = "testnet" ]; then
+            # Testnet snapshot: extract snapshot, then generate .env file
+            initialize_node
+            load_network_config "$NETWORK_TYPE"  # Load network config for .env generation
+            generate_env_file
+        elif [ "$SYNC_MODE" = "snapshot" ]; then
+            # Mainnet snapshot: uses same structure as genesis, need to set directory variables
+            initialize_node
+            generate_config_files  # Set CONFIG_DIR, DATA_DIR, LOGS_DIR variables (no dir creation)
+            load_network_config "$NETWORK_TYPE"  # Load network config for .env generation
+            generate_env_file
+        else
+            # Genesis mode: download config files and initialize
+            download_config_files
+            generate_config_files
+            initialize_node
+        fi
         start_services
     else
         # Skip initialization, only generate .env
         print_info "Skipping initialization, updating configuration only..."
         
-        # Ensure basic directory structure exists
-        mkdir -p "$TARGET_DIR/config" "$TARGET_DIR/logs" "$TARGET_DIR/data"
+        # Ensure basic directory structure exists (only for genesis mode)
+        if [ "$SYNC_MODE" != "snapshot" ]; then
+            mkdir -p "$TARGET_DIR/config" "$TARGET_DIR/logs" "$TARGET_DIR/data"
+        fi
         
         # Load network config for .env generation
         load_network_config "$NETWORK_TYPE"
@@ -928,7 +1410,9 @@ main() {
         generate_env_file
         
         print_success "Configuration updated"
-        print_info "Ready to run: make run"
+        
+        # Auto-start services after configuration update
+        start_services
     fi
     
     # Cleanup for standalone mode

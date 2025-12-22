@@ -1,0 +1,11 @@
+{
+  "rpc": ["http://127.0.0.1:8123"],
+  "accountsFilePath": "./testdata/accounts-20k.txt",
+  "senderPrivateKey": "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+  "concurrency": 20,
+  "mempoolPauseThreshold": 50000,
+  "targetTPS": 0,
+  "maxBatchSize": 100,
+  "gasPriceGwei": 100,
+  "saveTxHashes": false
+}

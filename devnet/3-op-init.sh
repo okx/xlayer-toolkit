@@ -23,9 +23,14 @@ FORK_BLOCK_HEX=$(printf "0x%x" "$FORK_BLOCK")
 sed_inplace '/"config": {/,/}/ s/"optimism": {/"legacyXLayerBlock": '"$((FORK_BLOCK + 1))"',\n    "optimism": {/' ./config-op/genesis.json
 sed_inplace 's/"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"/"parentHash": "'"$PARENT_HASH"'"/' ./config-op/genesis.json
 sed_inplace '/"70997970c51812dc3a010c7d01b50e0d17dc79c8": {/,/}/ s/"balance": "[^"]*"/"balance": "0x446c3b15f9926687d2c40534fdb564000000000000"/' ./config-op/genesis.json
+sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"$(jq -r '.config.optimism.eip1559Denominator' ./config-op/genesis.json)"'/' ./config-op/genesis.json
 NEXT_BLOCK_NUMBER=$((FORK_BLOCK + 1))
 NEXT_BLOCK_NUMBER_HEX=$(printf "0x%x" "$NEXT_BLOCK_NUMBER")
 sed_inplace 's/"number": 0/"number": '"$NEXT_BLOCK_NUMBER"'/' ./config-op/rollup.json
+sed_inplace 's/"eip1559Elasticity": [0-9]*/"eip1559Elasticity": '"$(jq -r '.config.optimism.eip1559Elasticity' ./config-op/genesis.json)"'/' ./config-op/rollup.json
+sed_inplace 's/"eip1559Denominator": [0-9]*/"eip1559Denominator": '"$(jq -r '.config.optimism.eip1559Denominator' ./config-op/genesis.json)"'/' ./config-op/rollup.json
+sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"$(jq -r '.config.optimism.eip1559DenominatorCanyon' ./config-op/genesis.json)"'/' ./config-op/rollup.json
+
 cp ./config-op/genesis.json ./config-op/genesis-reth.json
 sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
 
@@ -191,6 +196,10 @@ if [ "$SEQ_TYPE" = "reth" ]; then
   echo -n "1aba031aeb5aa8aedadaf04159d20e7d58eeefb3280176c7d59040476c2ab21b" > $OP_RETH_DATADIR/discovery-secret
   if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     echo -n "934ee1c6d37504aa6397b13348d2b5788a0bae5d3a77c71645f8b28be54590d9" > $OP_RETH_DATADIR2/discovery-secret
+    if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
+        echo -n "60a4284707ef52c2b8486410be2bc7bf3bf803fcd85f0059b87b8b772eba62b421ef496e2a44135cfd9e74133e2e2b3e30a4a6c428d3f41e3537eea14eaf9ea3" > $OP_RETH_DATADIR/fb-p2p-key
+        echo -n "6c899cb8b6dadfc34ddde60a57a61b3bdc655247a72feae16b851204fd41596f67a5e73ff50c90ec1755bcf640de7333322cce8612f722732f1244af23be007a" > $OP_RETH_DATADIR2/fb-p2p-key
+    fi
   fi
     echo "✅ Set p2p nodekey for reth sequencer"
 fi
@@ -199,6 +208,13 @@ echo "✅ Finished init op-$SEQ_TYPE-seq and op-$RPC_TYPE-rpc."
 
 # genesis.json is too large to embed in go, so we compress it now and decompress it in go code
 gzip -c config-op/genesis.json > config-op/genesis.json.gz
+
+# Check if MIN_RUN mode is enabled
+if [ "$MIN_RUN" = "true" ]; then
+    echo "⚡ MIN_RUN mode enabled: Skipping op-program prestate build"
+    echo "✅ Initialization completed for minimal run (no dispute game support)"
+    exit 0
+fi
 
 # Ensure prestate files exist and devnetL1.json is consistent before deploying contracts
 EXPORT_DIR="$PWD_DIR/data/cannon-data"

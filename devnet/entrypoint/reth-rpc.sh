@@ -4,7 +4,25 @@ set -e
 
 source /.env
 
-exec op-reth node \
+# Enable jemalloc profiling if requested
+# Note: tikv-jemalloc (used by Rust) uses _RJEM_MALLOC_CONF, not MALLOC_CONF
+if [ "${JEMALLOC_PROFILING:-false}" = "true" ]; then
+    export _RJEM_MALLOC_CONF="prof:true,prof_prefix:/profiling/jeprof,lg_prof_interval:30"
+    echo "Jemalloc profiling enabled: _RJEM_MALLOC_CONF=$_RJEM_MALLOC_CONF"
+fi
+
+# Build the optional innertx flag
+INNERTX_FLAG=""
+if [ "${ENABLE_INNERTX_RPC:-false}" = "true" ]; then
+    INNERTX_FLAG="--xlayer.enable-innertx"
+    echo "Inner transaction tracking enabled for RPC"
+fi
+
+# Read the first argument (1 or 0), default to 0 if not provided
+FLASHBLOCKS_RPC=${FLASHBLOCKS_RPC:-"true"}
+
+# Build the command with common arguments
+CMD="op-reth node \
       --datadir=/datadir \
       --chain=/genesis.json \
       --config=/config.toml \
@@ -24,11 +42,22 @@ exec op-reth node \
       --authrpc.addr=0.0.0.0 \
       --authrpc.port=8552 \
       --authrpc.jwtsecret=/jwt.txt \
-      --trusted-peers="${TRUSTED_PEERS}" \
+      --trusted-peers=$TRUSTED_PEERS \
       --tx-propagation-policy=all \
       --txpool.max-account-slots=100000 \
       --txpool.pending-max-count=100000 \
       --txpool.queued-max-count=100000 \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
-      --txpool.max-new-txns=100000
+      --txpool.max-new-txns=100000 \
+      --rpc.eth-proof-window=10000
+      $INNERTX_FLAG"
+
+# For flashblocks architecture. Enable flashblocks RPC
+if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
+    CMD="$CMD \
+        --flashblocks-url=ws://op-reth-seq:1111 \
+        --flashblock-consensus"
+fi
+
+exec $CMD

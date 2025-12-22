@@ -90,6 +90,14 @@ fi
 
 docker compose up -d op-batcher
 
+# Check if MIN_RUN mode is enabled
+if [ "$MIN_RUN" = "true" ]; then
+    echo ""
+    echo "🎉 MIN_RUN deployment completed successfully!"
+    echo ""
+    exit 0
+fi
+
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd $PWD_DIR
 EXPORT_DIR="$PWD_DIR/data/cannon-data"
@@ -110,8 +118,18 @@ VM="0x${VM_RAW: -40}"
 ANCHOR_STATE_REGISTRY=$(cast call --rpc-url $L1_RPC_URL $PERMISSIONED_GAME "anchorStateRegistry()")
 L2_CHAIN_ID=$(cast call --rpc-url $L1_RPC_URL $PERMISSIONED_GAME "l2ChainId()")
 
-# Call the function to add game type 1 (permissioned)
-"$SCRIPTS_DIR/add-game-type.sh" 1 true $TEMP_CLOCK_EXTENSION $TEMP_MAX_CLOCK_DURATION $ABSOLUTE_PRESTATE
+echo "✅ Game type 1 (permissioned) already deployed by op-deployer at: $PERMISSIONED_GAME"
+
+echo "🔧 Adding new game type 1 with correct prestate..."
+# Add new game type 1 using the correct prestate from file
+"$SCRIPTS_DIR/add-game-type.sh" 1 true $CLOCK_EXTENSION $MAX_CLOCK_DURATION $ABSOLUTE_PRESTATE
+NEW_GAME_TYPE_1=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDRESS "gameImpls(uint32)(address)" 1)
+if [ "$NEW_GAME_TYPE_1" != "$PERMISSIONED_GAME" ] && [ "$NEW_GAME_TYPE_1" != "0x0000000000000000000000000000000000000000" ]; then
+    echo " ✅ Game type 1 updated with correct prestate: $NEW_GAME_TYPE_1"
+    PERMISSIONED_GAME=$NEW_GAME_TYPE_1
+else
+    echo " ⚠️  Game type 1 may not have been updated, using original: $PERMISSIONED_GAME"
+fi
 
 export GAME_TYPE=1
 docker compose up -d op-proposer
@@ -144,6 +162,7 @@ docker compose stop op-proposer
 
 echo "⏰ Sleeping for ($TEMP_MAX_CLOCK_DURATION seconds)..."
 sleep $TEMP_MAX_CLOCK_DURATION
+sleep 10
 
 echo "🔧 Executing dispute resolution sequence using op-challenger..."
 
@@ -204,7 +223,6 @@ echo " ✅ Dispute resolution sequence completed using op-challenger commands!"
 # Retrieve existing values from chain for reference
 # Get permissioned game implementation
 PERMISSIONED_GAME=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDRESS "gameImpls(uint32)(address)" 1)
-ABSOLUTE_PRESTATE=$(cast call --rpc-url $L1_RPC_URL $PERMISSIONED_GAME "absolutePrestate()")
 ANCHOR_STATE_REGISTRY=$(cast call --rpc-url $L1_RPC_URL $PERMISSIONED_GAME "anchorStateRegistry()")
 
 # Call the function to add game type 0 (permissionless)

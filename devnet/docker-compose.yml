@@ -18,12 +18,12 @@ services:
       - ./l1-geth/consensus:/consensus
 
   l1-create-beacon-chain-genesis:
-    image: "gcr.io/prysmaticlabs/prysm/cmd/prysmctl:v5.1.2"
+    image: "gcr.io/prysmaticlabs/prysm/cmd/prysmctl:v7.0.0"
     container_name: l1-create-beacon-chain-genesis
     command:
       - testnet
       - generate-genesis
-      - --fork=deneb
+      - --fork=fulu
       - --num-validators=4
       - --genesis-time-delay=0
       - --output-ssz=/consensus/genesis.ssz
@@ -48,12 +48,14 @@ services:
         echo "Fixing genesis.json fork times..."
         sed -i 's/"shanghaiTime": [0-9]*/"shanghaiTime": 0/g' /execution/genesis.json
         sed -i 's/"cancunTime": [0-9]*/"cancunTime": 0/g' /execution/genesis.json
-        echo "Adding blobSchedule for Cancun..."
-        jq '.config.blobSchedule = {"cancun": {"target": 3, "max": 6, "baseFeeUpdateFraction": 3338477}}' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
+        echo "Adding pragueTime for Pectra support..."
+        jq '.config.pragueTime = 0' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
+        echo "Adding osakaTime for Fusaka support..."
+        jq '.config.osakaTime = 0' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
         echo "Removing terminalTotalDifficultyPassed for op-node compatibility..."
         jq 'del(.config.terminalTotalDifficultyPassed)' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
-        echo "Genesis.json: shanghai=0, cancun=0 (MCOPY enabled), blobSchedule added, terminalTotalDifficultyPassed removed"
-        cat /execution/genesis.json | jq '.config | {shanghaiTime, cancunTime, terminalTotalDifficulty, blobSchedule}'
+        echo "Genesis.json: shanghai=0, cancun=0, osaka=0 (Fusaka enabled), blobSchedule added, terminalTotalDifficultyPassed removed"
+        cat /execution/genesis.json | jq '.config | {shanghaiTime, cancunTime, osakaTime, terminalTotalDifficulty, blobSchedule}'
     volumes:
       - ./l1-geth/execution:/execution
     depends_on:
@@ -61,7 +63,7 @@ services:
         condition: service_completed_successfully
 
   l1-geth-genesis:
-    image: "ethereum/client-go:v1.15.11"
+    image: "ethereum/client-go:v1.16.7"
     container_name: l1-geth-genesis
     command: --datadir=/execution --gcmode=archive init --state.scheme=hash /execution/genesis.json
     volumes:
@@ -74,7 +76,7 @@ services:
         condition: service_completed_successfully
 
   l1-geth:
-    image: "ethereum/client-go:v1.15.11"
+    image: "ethereum/client-go:v1.16.7"
     container_name: l1-geth
     command:
       - --http
@@ -113,7 +115,7 @@ services:
       retries: 5
 
   l1-beacon-chain:
-    image: "gcr.io/prysmaticlabs/prysm/beacon-chain:v5.1.2"
+    image: "gcr.io/prysmaticlabs/prysm/beacon-chain:v7.0.0"
     container_name: l1-beacon-chain
     command:
       - --datadir=/consensus/beacondata
@@ -131,7 +133,6 @@ services:
       - --jwt-secret=/execution/jwtsecret
       - --suggested-fee-recipient=0x123463a4b065722e99115d6c222f267d9cabb524
       - --minimum-peers-per-subnet=0
-      - --enable-debug-rpc-endpoints
       - --verbosity=info
     depends_on:
       l1-create-beacon-chain-genesis:
@@ -150,7 +151,7 @@ services:
       - ./l1-geth/execution/jwtsecret:/execution/jwtsecret
 
   l1-validator:
-    image: "gcr.io/prysmaticlabs/prysm/validator:v5.1.2"
+    image: "gcr.io/prysmaticlabs/prysm/validator:v7.0.0"
     container_name: l1-validator
     command:
       - --beacon-rpc-provider=l1-beacon-chain:4000
@@ -220,14 +221,18 @@ services:
       - ./config-op/genesis-reth.json:/genesis.json
       - ./entrypoint:/entrypoint
       - ./.env:/.env
+      - ./logs/op-reth-seq:/logs/reth
       # Profiling data directory
       - ./profiling/op-reth-seq:/profiling
+       # Kernel tracing filesystem for perf profiling
+      - /sys/kernel/tracing:/sys/kernel/tracing:ro
     ports:
       - "8123:8545"
       - "7546:7546"
       - "8552:8552"
       - "30303:30303"
       - "30303:30303/udp"
+      - "11111:1111" # outbound flashblocks ws port
     healthcheck:
       test: ["CMD", "curl", "-f", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
       interval: 3s
@@ -277,6 +282,8 @@ services:
       - ./.env:/.env
       # Profiling data directory
       - ./profiling/op-reth-rpc:/profiling
+       # Kernel tracing filesystem for perf profiling
+      - /sys/kernel/tracing:/sys/kernel/tracing:ro
     ports:
       - "8124:8545"
       - "30304:30303"
@@ -299,11 +306,13 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=debug
+      - --log.format=logfmtms
       - --l2=http://op-${SEQ_TYPE}-seq:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
       - --sequencer.l1-confs=5
       - --verifier.l1-confs=1
+      - --l1.epoch-poll-interval=10s
       - --rollup.config=/rollup.json
       - --rpc.addr=0.0.0.0
       - --p2p.listen.tcp=9223
@@ -347,10 +356,12 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=debug
+      - --log.format=logfmtms
       - --l2=http://op-${RPC_TYPE}-rpc:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled=false
       - --verifier.l1-confs=1
+      - --l1.epoch-poll-interval=10s
       - --rollup.config=/rollup.json
       - --rpc.addr=0.0.0.0
       - --rpc.port=9545
@@ -368,8 +379,67 @@ services:
       - --rollup.l1-chain-config=/l1-genesis.json
       - --safedb.path=/data/safedb
       - --l2.enginekind=${RPC_TYPE}
+      - --syncmode=execution-layer
     depends_on:
       - op-${RPC_TYPE}-rpc
+
+  op-rpc2:
+    image: "${OP_STACK_IMAGE_TAG}"
+    container_name: op-rpc2
+    volumes:
+      - ./data/op-rpc2:/data
+      - ./config-op/rollup.json:/rollup.json
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./l1-geth/execution/genesis.json:/l1-genesis.json
+    ports:
+      - "9565:9545"
+    command:
+      - /app/op-node/bin/op-node
+      - --log.level=debug
+      - --log.format=logfmtms
+      - --l2=http://op-${RPC_TYPE}-rpc2:8552
+      - --l2.jwt-secret=/jwt.txt
+      - --sequencer.enabled=false
+      - --verifier.l1-confs=1
+      - --rollup.config=/rollup.json
+      - --rpc.addr=0.0.0.0
+      - --rpc.port=9545
+      - --p2p.listen.tcp=9223
+      - --p2p.listen.udp=9223
+      - --p2p.priv.raw=096648ce9102985f9a57a12fa8138c4892a881f7b99dc7e84ede99b7ba24ffe7
+      - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
+      - --p2p.discovery.path=/data/p2p/opnode_discovery_db
+      - --p2p.static=/dns4/op-seq/tcp/9223/p2p/16Uiu2HAkzHdkbmS2VrCsccLibsu7MvGHpmFUMJnMTkKifrtS5m65
+      - --p2p.no-discovery
+      - --rpc.enable-admin=true
+      - --l1=${L1_RPC_URL_IN_DOCKER}
+      - --l1.beacon=${L1_BEACON_URL_IN_DOCKER}
+      - --l1.rpckind=standard
+      - --rollup.l1-chain-config=/l1-genesis.json
+      - --safedb.path=/data/safedb
+      - --l2.enginekind=reth
+    depends_on:
+      - op-reth-rpc2
+
+  op-reth-rpc2:
+    image: "${OP_RETH_IMAGE_TAG}"
+    container_name: op-reth-rpc2
+    environment:
+      - FLASHBLOCKS_RPC=false
+    entrypoint: "/entrypoint/reth-rpc.sh"
+    env_file:
+      - .env
+    volumes:
+      - ./data/op-reth-rpc2:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/genesis-reth.json:/genesis.json
+      - ./config-op/test.reth.rpc.config.toml:/config.toml
+      - ./entrypoint:/entrypoint
+      - ./.env:/.env
+    ports:
+      - "8128:8545"
+      - "30309:30303"
+      - "30309:30303/udp"
 
   op-conductor:
     image: "${OP_STACK_IMAGE_TAG}"
@@ -402,6 +472,7 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
+      - --rpc.http-body-limit-mb=64
     depends_on:
       op-seq:
         condition: service_healthy
@@ -414,28 +485,26 @@ services:
       - --log.level=debug
       - --l2-eth-rpc=${OP_BATCHER_L2_ETH_RPC:-http://op-${SEQ_TYPE}-seq:8545}
       - --rollup-rpc=${OP_BATCHER_ROLLUP_RPC:-http://op-seq:9545}
-      # - --txmgr.enable-cell-proofs=true
-      - --wait-node-sync=true
-      - --check-recent-txs-depth=5
+      - --private-key=${OP_BATCHER_PRIVATE_KEY}
       - --poll-interval=5s
       - --batch-type=1
-      - --compression-algo=brotli-11
+      - --compression-algo=brotli-10
       - --data-availability-type=auto
-      - --max-channel-duration=30
-      - --target-num-frames=5
       - --sub-safety-margin=6
       - --num-confirmations=4
-      - --network-timeout=10s
       - --safe-abort-nonce-too-low-count=3
-      - --max-pending-tx=10
       - --resubmission-timeout=30s
       - --rpc.addr=0.0.0.0
       - --rpc.port=8548
       - --rpc.enable-admin
+      - --max-channel-duration=150
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
-      - --private-key=${OP_BATCHER_PRIVATE_KEY}
-      - --throttle.block-size-upper-limit=1300000
-      - --active-sequencer-check-duration=5s
+      - --max-pending-tx=10
+      - --target-num-frames=6
+      - --throttle.block-size-upper-limit=0
+      - --throttle.block-size-lower-limit=0
+      - --throttle.tx-size-lower-limit=0
+      - --throttle.tx-size-upper-limit=0
 
   op-proposer:
     image: "${OP_STACK_IMAGE_TAG}"
@@ -445,7 +514,7 @@ services:
     command:
       - /app/op-proposer/bin/op-proposer
       - --log.level=debug
-      - --poll-interval=20s
+      - --poll-interval=5s
       - --wait-node-sync=true
       - --allow-non-finalized=false
       - --num-confirmations=1
@@ -454,7 +523,7 @@ services:
       - --rpc.port=8560
       - --rollup-rpc=http://op-seq:9545
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
-      - --proposal-interval=1m
+      - --proposal-interval=10s
       - --private-key=${OP_PROPOSER_PRIVATE_KEY}
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --game-type=${GAME_TYPE:-0}
@@ -481,7 +550,7 @@ services:
       - --log.level=debug
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
-      - --l2-eth-rpc=http://op-${RPC_TYPE}-seq:8545
+      - --l2-eth-rpc=http://op-${SEQ_TYPE}-seq:8545
       - --rollup-rpc=http://op-seq:9545
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
       - --cannon-bin=/app/cannon/bin/cannon
@@ -543,7 +612,7 @@ services:
   op-reth-seq2:
     image: "${OP_RETH_IMAGE_TAG}"
     container_name: op-reth-seq2
-    entrypoint: /entrypoint/reth-seq.sh
+    entrypoint: /entrypoint/reth-seq.sh 2
     env_file:
       - ./.env
     volumes:
@@ -556,6 +625,7 @@ services:
       - "8223:8545"
       - "30305:30303"
       - "30305:30303/udp"
+      - "11112:1111" # outbound flashblocks ws port
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
       interval: 3s
@@ -583,12 +653,14 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=info
+      - --log.format=logfmtms
       - --l2=http://op-${SEQ_TYPE}-seq2:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
       - --sequencer.stopped
       - --sequencer.l1-confs=5
       - --verifier.l1-confs=1
+      - --l1.epoch-poll-interval=10s
       - --rollup.config=/rollup.json
       - --rpc.addr=0.0.0.0
       - --p2p.listen.tcp=9223
@@ -648,6 +720,7 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
+      - --rpc.http-body-limit-mb=64
     depends_on:
       op-seq2:
         condition: service_healthy
@@ -701,12 +774,14 @@ services:
     command:
       - /app/op-node/bin/op-node
       - --log.level=info
+      - --log.format=logfmtms
       - --l2=http://op-geth-seq3:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
       - --sequencer.stopped
       - --sequencer.l1-confs=5
       - --verifier.l1-confs=1
+      - --l1.epoch-poll-interval=10s
       - --rollup.config=/rollup.json
       - --rpc.addr=0.0.0.0
       - --p2p.listen.tcp=9223
@@ -766,6 +841,7 @@ services:
       - --healthcheck.unsafe-interval=3
       - --healthcheck.min-peer-count=1
       - --rollup.config=/rollup.json
+      - --rpc.http-body-limit-mb=64
     depends_on:
       op-seq3:
         condition: service_healthy
@@ -776,3 +852,92 @@ services:
     command:
       - --geth-mempool-endpoint=http://op-geth-seq3:8545
       - --reth-mempool-endpoint=http://op-reth-seq:8545
+
+  op-succinct-fetch-config:
+    image: "${OP_SUCCINCT_IMAGE_TAG}"
+    container_name: fetch-config
+    volumes:
+      - ./op-succinct/.env.deploy:/app/.env
+      - ./op-succinct/configs:/app/configs
+    command:
+      - fetch-fault-dispute-game-config
+
+  op-succinct-contracts:
+    image: "${OP_SUCCINCT_CONTRACTS_IMAGE_TAG}"
+    container_name: op-succinct-contracts
+    volumes:
+      - ./op-succinct/configs/opsuccinctfdgconfig.json:/app/contracts/opsuccinctfdgconfig.json
+    env_file:
+      - ./op-succinct/.env.deploy
+    command:
+      - forge
+      - script
+      - script/fp/DeployOPSuccinctLite.s.sol:DeployOPSuccinctLite
+      - -vvv
+      - --private-key=${DEPLOYER_PRIVATE_KEY}
+      - --rpc-url=${L1_RPC_URL_IN_DOCKER}
+      - --broadcast
+
+  op-succinct-proposer:
+    image: "${OP_SUCCINCT_IMAGE_TAG}"
+    container_name: op-succinct-proposer
+    volumes:
+      - ./op-succinct/.env.proposer:/app/.env
+      - ./op-succinct/configs:/app/configs
+    environment:
+      - RUST_LOG=info
+    ports:
+      - "9000:9000"
+    command:
+      - proposer
+      - --env-file=/app/.env
+
+  op-succinct-challenger:
+    image: "${OP_SUCCINCT_IMAGE_TAG}"
+    container_name: op-succinct-challenger
+    volumes:
+      - ./op-succinct/.env.challenger:/app/.env
+    ports:
+      - "9001:9001"
+    command:
+      - challenger 
+      - --env-file=/app/.env
+
+    kailua-contracts:
+    image: ${KAILUA_IMAGE_TAG}
+    container_name: kailua-contracts
+    environment:
+      - RUST_LOG="kailua=info,alloy=warn,hyper=warn,warn"
+    env_file:
+      - ./kailua/.env.deploy
+    command:
+      - kailua-cli 
+      - fast-track
+
+  kailua-proposer:
+    image: ${KAILUA_IMAGE_TAG}
+    container_name: kailua-proposer
+    env_file:
+      - ./kailua/.env.proposer
+    environment:
+      - RUST_LOG=warn,kailua=info,kailua_proposer=info,hyper=off,hyper_util=off,alloy=warn
+    volumes:
+      - ./data/kailua-proposer:/data
+    command:
+      - kailua-cli 
+      - propose
+      - --data-dir=/data
+
+  kailua-validator:
+    image: ${KAILUA_IMAGE_TAG}
+    container_name: kailua-validator
+    env_file:
+      - ./kailua/.env.validator
+    environment:
+      - RUST_LOG=warn,kailua=info,kailua_validator=info,kailua_prover=info,kailua_sync=info,oracle_server=off,oracle_client=off,host_backend=off,risc0_zkvm=off,risc0=off,alloy=warn,alloy_rpc_client=off,alloy_json_rpc=off,alloy_transport_http=off,hyper=off,hyper_util=off,reqwest=off,kona=warn,kona_derive=warn,kona_executor=warn,kona_mpt=warn,batch_validator=warn,hint_writer=off,hint_reader=off,frame_queue=warn,channel_reader=warn,pipeline=warn
+    volumes:
+      - ./data/kailua-validator:/data
+    command:
+      - kailua-cli 
+      - validate
+      - --data-dir=/data
