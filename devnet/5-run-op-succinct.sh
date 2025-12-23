@@ -102,7 +102,7 @@ docker compose up -d op-succinct-proposer
 echo "   ✓ Proposer started"
 
 # Start challenger if fast finality mode is disabled
-if [ "${PROOF_FAST_FINALITY_MODE}" = "true" ]; then
+if [ "${PROOF_FAST_FINALITY_MODE}" != "true" ]; then
     docker compose up -d op-succinct-challenger
     echo "   ✓ Challenger started"
 else
