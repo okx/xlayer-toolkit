@@ -16,8 +16,8 @@ sed_inplace() {
   fi
 }
 
-if [ "$OP_SUCCINCT_ENABLE" = "false" ]; then
-  echo "skip launching op succinct"
+if [ "$PROOF_ENGINE" != "op-succinct" ]; then
+  echo "skip launching op succinct (PROOF_ENGINE=$PROOF_ENGINE)"
   exit 0
 fi
 
@@ -56,7 +56,7 @@ sed_inplace "s|^ANCHOR_STATE_REGISTRY=.*|ANCHOR_STATE_REGISTRY=$ANCHOR_STATE_REG
 sed_inplace "s|^TRANSACTOR_ADDRESS=.*|TRANSACTOR_ADDRESS=$TRANSACTOR|" "$OP_SUCCINCT_DIR"/.env.deploy
 sed_inplace "s|^STARTING_L2_BLOCK_NUMBER=.*|STARTING_L2_BLOCK_NUMBER=$((FORK_BLOCK + 1))|" "$OP_SUCCINCT_DIR"/.env.deploy
 
-sed_inplace "s|^OP_SUCCINCT_MOCK=.*|OP_SUCCINCT_MOCK=$OP_SUCCINCT_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.deploy
+sed_inplace "s|^OP_SUCCINCT_MOCK=.*|OP_SUCCINCT_MOCK=$PROOF_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.deploy
 
 STARTING_L2_BLOCK_NUMBER=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json | jq -r '.[1]')
 sed_inplace "s|^STARTING_L2_BLOCK_NUMBER=.*|STARTING_L2_BLOCK_NUMBER=$STARTING_L2_BLOCK_NUMBER|" "$OP_SUCCINCT_DIR"/.env.deploy
@@ -69,7 +69,7 @@ sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS
 sed_inplace "s|^DGF_ADDRESS=.*|DGF_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.proposer
 sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_NODE_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
 
-sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$OP_SUCCINCT_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.proposer
+sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$PROOF_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.proposer
 
 # update .env.challenger
 sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
@@ -102,7 +102,7 @@ docker compose up -d op-succinct-proposer
 echo "   ✓ Proposer started"
 
 # Start challenger if fast finality mode is disabled
-if [ "${OP_SUCCINCT_FAST_FINALITY_MODE}" != "true" ]; then
+if [ "${PROOF_FAST_FINALITY_MODE}" != "true" ]; then
     docker compose up -d op-succinct-challenger
     echo "   ✓ Challenger started"
 else

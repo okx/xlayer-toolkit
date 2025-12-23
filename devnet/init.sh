@@ -137,3 +137,18 @@ else
     build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.contract"
   fi
 fi
+
+# Build Kailua image
+if [ "$SKIP_KAILUA_BUILD" = "true" ]; then
+  echo "⏭️  Skipping kailua build"
+else
+  if [ "$KAILUA_LOCAL_DIRECTORY" = "" ]; then
+    echo "❌ Please set KAILUA_LOCAL_DIRECTORY in .env"
+    exit 1
+  else
+    echo "🔨 Building kailua image"
+    
+    cd "$KAILUA_LOCAL_DIRECTORY"
+    build_and_tag_image "kailua" "$KAILUA_IMAGE_TAG" "$KAILUA_LOCAL_DIRECTORY" "Dockerfile.local"
+  fi
+fi
