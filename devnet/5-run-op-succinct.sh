@@ -100,6 +100,12 @@ done
 docker compose up -d op-succinct-proposer
 echo "   ✓ Proposer started"
 
+if [ "$MIN_RUN" = "false" ]; then
+    docker-compose down op-proposer
+    docker-compose down op-challenger
+    echo "   ✓ Older proposer and challenger stopped"
+fi
+
 # Start challenger if fast finality mode is disabled
 if [ "${PROOF_FAST_FINALITY_MODE}" != "true" ]; then
     docker compose up -d op-succinct-challenger
