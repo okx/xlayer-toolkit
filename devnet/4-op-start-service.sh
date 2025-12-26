@@ -58,7 +58,7 @@ jq ".genesis.l2.hash = \"$NEW_BLOCK_HASH\"" config-op/rollup.json > config-op/ro
 mv config-op/rollup.json.tmp config-op/rollup.json
 
 if [ "$CONDUCTOR_ENABLED" = "true" ]; then
-    docker compose up -d op-conductor op-conductor2 op-conductor3
+    docker compose up -d op-conductor op-conductor2 op-conductor3 op-conductor4
     sleep 10
     $SCRIPTS_DIR/active-sequencer.sh
 else
@@ -77,8 +77,8 @@ fi
 if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     echo "🔧 Configuring op-batcher for conductor mode with conductor RPC endpoints..."
     # Set conductor mode endpoints
-    export OP_BATCHER_L2_ETH_RPC="http://op-conductor:8547,http://op-conductor2:8547,http://op-conductor3:8547"
-    export OP_BATCHER_ROLLUP_RPC="http://op-conductor:8547,http://op-conductor2:8547,http://op-conductor3:8547"
+    export OP_BATCHER_L2_ETH_RPC="http://op-conductor:8547,http://op-conductor2:8547,http://op-conductor3:8547,http://op-conductor4:8547"
+    export OP_BATCHER_ROLLUP_RPC="http://op-conductor:8547,http://op-conductor2:8547,http://op-conductor3:8547,http://op-conductor4:8547"
     echo "✅ op-batcher configured for conductor mode (connecting to conductor RPC endpoints)"
 else
     echo "🔧 Configuring op-batcher for single sequencer mode..."
