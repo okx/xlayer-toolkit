@@ -285,6 +285,7 @@ services:
       - /sys/kernel/tracing:/sys/kernel/tracing:ro
     ports:
       - "8124:8545"
+      - "7547:7546"
       - "30304:30303"
       - "30304:30303/udp"
 
