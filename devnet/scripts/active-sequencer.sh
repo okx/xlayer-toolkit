@@ -1,5 +1,31 @@
 #!/bin/bash
 
+# Load environment variables
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$(dirname "$SCRIPT_DIR")/.env"
+source "$ENV_FILE"
+
+# Function to add conductor to cluster (voter or nonvoter based on config)
+add_conductor_to_cluster() {
+    local conductor_id=$1
+    local conductor_name=$2
+    local conductor_addr=$3
+    local is_voter_var="CONDUCTOR${conductor_id}_VOTER"
+    local is_voter="${!is_voter_var:-true}"  # default to voter if not set
+    
+    if [ "$is_voter" = "true" ]; then
+        echo "Adding $conductor_name as voter..."
+        curl -X POST -H "Content-Type: application/json" \
+            --data "{\"jsonrpc\":\"2.0\",\"method\":\"conductor_addServerAsVoter\",\"params\":[\"$conductor_name\", \"$conductor_addr\", 0],\"id\":1}" \
+            http://localhost:$LEADER_CONDUCTOR_PORT
+    else
+        echo "Adding $conductor_name as nonvoter..."
+        curl -X POST -H "Content-Type: application/json" \
+            --data "{\"jsonrpc\":\"2.0\",\"method\":\"conductor_addServerAsNonvoter\",\"params\":[\"$conductor_name\", \"$conductor_addr\", 0],\"id\":1}" \
+            http://localhost:$LEADER_CONDUCTOR_PORT
+    fi
+}
+
 # Function to detect leader conductor and set ports
 detect_leader() {
     echo "Detecting leader conductor..."
@@ -79,14 +105,17 @@ echo "Sequencer successfully activated"
 # 5. try to add other three conductors to raft consensus cluster
 SERVER_COUNT=$(curl -sS -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_clusterMembership","params":[],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT  | jq '.result.servers | length')
 if (( $SERVER_COUNT < 4 )); then
-    curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_addServerAsVoter","params":["conductor-2", "op-conductor2:50050", 0],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT
-    curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_addServerAsVoter","params":["conductor-3", "op-conductor3:50050", 0],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT
-    curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_addServerAsVoter","params":["conductor-4", "op-conductor4:50050", 0],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT
+    add_conductor_to_cluster 2 "conductor-2" "op-conductor2:50050"
+    add_conductor_to_cluster 3 "conductor-3" "op-conductor3:50050"
+    add_conductor_to_cluster 4 "conductor-4" "op-conductor4:50050"
     SERVER_COUNT=$(curl -sS -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_clusterMembership","params":[],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT  | jq '.result.servers | length')
     if (( $SERVER_COUNT != 4 )); then
         echo "unexpected server count, expected: 4, real: $SERVER_COUNT"
         exit 1
     fi
 
-    echo "add 3 new voters to raft consensus cluster successfully!"
+    echo "add 3 new conductors to raft consensus cluster successfully!"
+    echo "  CONDUCTOR2_VOTER=${CONDUCTOR2_VOTER:-true}"
+    echo "  CONDUCTOR3_VOTER=${CONDUCTOR3_VOTER:-true}"
+    echo "  CONDUCTOR4_VOTER=${CONDUCTOR4_VOTER:-true}"
 fi
