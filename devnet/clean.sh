@@ -31,5 +31,6 @@ rm -rf l1-geth/execution/genesis.json
 rm -rf l1-geth/execution/geth/
 rm -rf l1-geth/execution/keystore/
 rm -rf init.log
+rm -rf op-succinct/configs
 
 echo " ✅ Cleanup completed!"
