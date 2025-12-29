@@ -1,0 +1,71 @@
+networks:
+  default:
+    name: ${DOCKER_NETWORK:-dev-replayor}
+
+services:
+#  node: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
+#    build: ./geth
+#    ports:
+#      - 8545:8545
+#      - 8551:8551
+#    command: [ "/app/geth" ]
+#    volumes:
+#      - ./geth-data:/data
+#      - ./secret:/secret
+#    env_file: "test-configs/base-mainnet-replay.env"
+  node-unwind: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
+    image: "op-reth:latest"
+    ports:
+      - 9123:9123
+      - 8553:8553
+    environment:
+      - ENV_FILE=reth.docker.env
+    working_dir: /app
+    entrypoint: [ "bash", "/app/unwind.sh" ]
+    volumes:
+      - ./:/app
+      - ${GENESIS_JSON_PATH:-./genesis.json}:/app/genesis.json:ro
+      - ${ROLLUP_JSON_PATH:-./rollup.json}:/app/rollup.json:ro
+      - ${JWT_TXT_PATH:-./jwt.txt}:/app/jwt.txt:ro
+      - ${RETH_DATA_PATH:-./reth-data}:/app/reth-data
+  node-init: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
+    image: "op-reth:latest"
+    ports:
+      - 9123:9123
+      - 8553:8553
+    environment:
+      - ENV_FILE=reth.docker.env
+    working_dir: /app
+    entrypoint: [ "bash", "/app/op-reth-init.sh" ]
+    volumes:
+      - ./:/app
+      - ${GENESIS_JSON_PATH:-./genesis.json}:/app/genesis.json:ro
+      - ${ROLLUP_JSON_PATH:-./rollup.json}:/app/rollup.json:ro
+      - ${JWT_TXT_PATH:-./jwt.txt}:/app/jwt.txt:ro
+      - ${RETH_DATA_PATH:-./reth-data}:/app/reth-data
+  node: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
+    image: "op-reth:latest"
+    ports:
+      - 9123:9123
+      - 8553:8553
+    environment:
+      - ENV_FILE=reth.docker.env
+    working_dir: /app
+    entrypoint: [ "bash", "/app/reth.sh" ]
+    volumes:
+      - ./:/app
+      - ${GENESIS_JSON_PATH:-./genesis.json}:/app/genesis.json:ro
+      - ${ROLLUP_JSON_PATH:-./rollup.json}:/app/rollup.json:ro
+      - ${JWT_TXT_PATH:-./jwt.txt}:/app/jwt.txt:ro
+      - ${RETH_DATA_PATH:-./reth-data}:/app/reth-data
+  replayor:
+    image: "replayor:latest"
+    command: [ "bash", "/app/replayor.sh" ]
+    working_dir: /app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - ENV_FILE=replayor.docker.env
+    volumes:
+      - ./:/app
+      - ${ROLLUP_JSON_PATH:-./rollup.json}:/app/rollup.json:ro
