@@ -63,6 +63,7 @@ WS_PORT=""
 NODE_RPC_PORT=""
 GETH_P2P_PORT=""
 NODE_P2P_PORT=""
+ENGINE_API_PORT=""
 
 print_info() { echo -e "\033[0;34mℹ️  $1\033[0m"; }
 print_success() { echo -e "\033[0;32m✅ $1\033[0m"; }
@@ -555,8 +556,9 @@ get_user_input() {
     NODE_RPC_PORT=$(prompt_input "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
     GETH_P2P_PORT=$(prompt_input "8. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
     NODE_P2P_PORT=$(prompt_input "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
+    ENGINE_API_PORT=$(prompt_input "10. Engine API port [default: $DEFAULT_ENGINE_API_PORT]: " "$DEFAULT_ENGINE_API_PORT" "") || ENGINE_API_PORT="$DEFAULT_ENGINE_API_PORT"
     
-    print_info "Using ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT"
+    print_info "Using ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
     
     print_success "Configuration input completed"
 }
@@ -703,7 +705,7 @@ OP_RETH_IMAGE_TAG=$OP_RETH_IMAGE_TAG
 # Port Configuration
 HTTP_RPC_PORT=${RPC_PORT:-8123}
 WEBSOCKET_PORT=${WS_PORT:-8546}
-ENGINE_API_PORT=8552
+ENGINE_API_PORT=${ENGINE_API_PORT:-8552}
 NODE_RPC_PORT=${NODE_RPC_PORT:-9545}
 P2P_TCP_PORT=${GETH_P2P_PORT:-30303}
 P2P_UDP_PORT=${GETH_P2P_PORT:-30303}
