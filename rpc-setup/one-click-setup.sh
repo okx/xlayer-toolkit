@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-BRANCH="main"
+BRANCH="leo/op-rpc-setup"
 REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/rpc-setup"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
