@@ -1163,12 +1163,12 @@ generate_docker_compose() {
         cat > docker-compose.yml << 'EOF'
 networks:
   xlayer-network:
-    name: xlayer-network
+    name: xlayer-${NETWORK_TYPE}-${RPC_TYPE}-network
 
 services:
   op-node:
     image: "${OP_STACK_IMAGE_TAG}"
-    container_name: xlayer-${NETWORK_TYPE}-op-node
+    container_name: xlayer-${NETWORK_TYPE}-${RPC_TYPE}-op-node
     entrypoint: sh
     networks:
       - xlayer-network
@@ -1211,7 +1211,7 @@ services:
 
   op-geth:
     image: "${OP_GETH_IMAGE_TAG}"
-    container_name: xlayer-${NETWORK_TYPE}-op-geth
+    container_name: xlayer-${NETWORK_TYPE}-${RPC_TYPE}-op-geth
     entrypoint: geth
     networks:
       - xlayer-network
@@ -1246,7 +1246,7 @@ services:
 
   op-reth:
     image: "${OP_RETH_IMAGE_TAG}"
-    container_name: xlayer-${NETWORK_TYPE}-op-reth
+    container_name: xlayer-${NETWORK_TYPE}-${RPC_TYPE}-op-reth
     entrypoint: sh
     networks:
       - xlayer-network
