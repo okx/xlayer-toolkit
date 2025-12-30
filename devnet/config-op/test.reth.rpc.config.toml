@@ -88,7 +88,7 @@ high = "15m"
 max = "1h"
 
 [sessions]
-session_command_buffer = 32
+session_command_buffer = 4096
 session_event_buffer = 260
 
 [sessions.limits]
