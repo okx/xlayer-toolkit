@@ -621,6 +621,7 @@ services:
       - ./config-op/genesis-reth.json:/genesis.json
       - ./entrypoint:/entrypoint
       - ./.env:/.env
+      - ./config-op/test.reth.seq.config.toml:/config.toml
     ports:
       - "8223:8545"
       - "30305:30303"
