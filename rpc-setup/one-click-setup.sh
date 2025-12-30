@@ -410,23 +410,25 @@ validate_snapshot_support() {
     local rpc_type=$1
     local network=$2
     
-    if [ "$rpc_type" != "geth" ]; then
-        print_error "Snapshot mode is currently only supported for geth"
-        print_info "Supported combinations:"
-        print_info "  - geth + testnet: ✅ snapshot supported"
-        print_info "  - geth + mainnet: ✅ snapshot supported"
-        print_info "  - reth + testnet: ❌ snapshot not supported"
-        print_info "  - reth + mainnet: ❌ snapshot not supported"
-        print_info ""
-        print_info "Please use 'genesis' sync mode for your selected configuration"
-        return 1
-    fi
-    
     if [ "$network" != "testnet" ] && [ "$network" != "mainnet" ]; then
         print_error "Snapshot mode is currently only supported for testnet and mainnet"
         return 1
     fi
     
+    if [ "$network" = "testnet" ] && [ "$rpc_type" != "geth" ]; then
+        print_error "Testnet snapshot is currently only supported for geth"
+        print_info "Supported combinations:"
+        print_info "  - geth + testnet: ✅ snapshot supported"
+        print_info "  - geth + mainnet: ✅ snapshot supported"
+        print_info "  - reth + testnet: ❌ snapshot not supported (use genesis mode)"
+        print_info "  - reth + mainnet: ✅ snapshot supported"
+        print_info ""
+        print_info "Please use 'genesis' sync mode for reth + testnet configuration"
+        return 1
+    fi
+    
+    # Mainnet supports both geth and reth snapshots
+    # Testnet only supports geth snapshot
     return 0
 }
 
@@ -507,7 +509,7 @@ get_user_input() {
     TARGET_DIR="${NETWORK_TYPE}-${RPC_TYPE}"
     
     # Step 1.5: Sync mode (interactive)
-    SYNC_MODE=$(prompt_input "2. Sync mode (genesis/snapshot) [default: genesis]: " "genesis" "validate_sync_mode")
+    SYNC_MODE=$(prompt_input "2. Sync mode (genesis/snapshot) [default: $DEFAULT_SYNC_MODE]: " "$DEFAULT_SYNC_MODE" "validate_sync_mode")
     
     # Validate snapshot support
     if [ "$SYNC_MODE" = "snapshot" ]; then
@@ -801,24 +803,40 @@ extract_genesis() {
     print_success "Genesis file extracted to $target_dir/$target_file"
 }
 
-# Download snapshot for geth testnet
+# Download snapshot for geth/reth testnet/mainnet
 download_snapshot() {
     local target_dir=$1  # Target directory (e.g., testnet-geth or mainnet-geth)
     local network=$2     # Network type (testnet or mainnet)
+    local rpc_type=$3    # RPC type (geth or reth)
     
-    # Determine snapshot URL and file name based on network
+    # Determine snapshot URL and file name based on network and RPC type
     local snapshot_url
     local snapshot_file
     
     if [ "$network" = "testnet" ]; then
+        # Testnet currently only supports geth snapshot
+        if [ "$rpc_type" != "geth" ]; then
+            print_error "Testnet snapshot is currently only supported for geth"
+            exit 1
+        fi
         # Use configuration from network-presets.env
         snapshot_url="${TESTNET_SNAPSHOT_BASE_URL}/${TESTNET_SNAPSHOT_FILE}"
         snapshot_file="${TESTNET_SNAPSHOT_FILENAME}"
     elif [ "$network" = "mainnet" ]; then
-        # Get latest snapshot filename
-        print_info "Fetching latest mainnet snapshot filename..."
+        # Get latest snapshot filename based on RPC type
+        print_info "Fetching latest mainnet snapshot filename for $rpc_type..."
+        local latest_url
+        if [ "$rpc_type" = "geth" ]; then
+            latest_url="${MAINNET_GETH_SNAPSHOT_LATEST_URL}"
+        elif [ "$rpc_type" = "reth" ]; then
+            latest_url="${MAINNET_RETH_SNAPSHOT_LATEST_URL}"
+        else
+            print_error "Unsupported RPC type for snapshot: $rpc_type"
+            exit 1
+        fi
+        
         local latest_filename
-        latest_filename=$(curl -s -f "${MAINNET_SNAPSHOT_LATEST_URL}" | tr -d '\n\r' | xargs)
+        latest_filename=$(curl -s -f "$latest_url" | tr -d '\n\r' | xargs)
         
         if [ -z "$latest_filename" ]; then
             print_error "Failed to fetch latest snapshot filename from server"
@@ -831,7 +849,7 @@ download_snapshot() {
         # Export filename for extract_snapshot to use
         export MAINNET_SNAPSHOT_FILE="$snapshot_file"
         
-        print_info "Latest mainnet snapshot: $snapshot_file"
+        print_info "Latest mainnet $rpc_type snapshot: $snapshot_file"
     else
         print_error "Unsupported network for snapshot: $network"
         exit 1
@@ -882,10 +900,12 @@ download_snapshot() {
 extract_snapshot() {
     local target_dir=$1
     local network=$2
+    local rpc_type=$3
     
-    # Determine snapshot file name based on network
+    # Determine snapshot file name based on network and RPC type
     local snapshot_file
     if [ "$network" = "testnet" ]; then
+        # Testnet currently only supports geth
         snapshot_file="geth-testnet.tar.gz"
     elif [ "$network" = "mainnet" ]; then
         # Use the filename from download_snapshot if available, otherwise fallback to default
@@ -893,9 +913,16 @@ extract_snapshot() {
             snapshot_file="$MAINNET_SNAPSHOT_FILE"
         else
             # Fallback: try to find any mainnet snapshot file in current directory
-            snapshot_file=$(ls -t mainnet-geth*.tar.gz 2>/dev/null | head -1)
+            if [ "$rpc_type" = "geth" ]; then
+                snapshot_file=$(ls -t mainnet-geth*.tar.gz 2>/dev/null | head -1)
+            elif [ "$rpc_type" = "reth" ]; then
+                snapshot_file=$(ls -t mainnet-reth*.tar.gz 2>/dev/null | head -1)
+            else
+                print_error "Unsupported RPC type for snapshot: $rpc_type"
+                exit 1
+            fi
             if [ -z "$snapshot_file" ]; then
-                print_error "Mainnet snapshot file not found. Please run download_snapshot first."
+                print_error "Mainnet $rpc_type snapshot file not found. Please run download_snapshot first."
                 exit 1
             fi
             print_info "Using existing snapshot file: $snapshot_file"
@@ -1067,8 +1094,8 @@ initialize_node() {
     
     if [ "$SYNC_MODE" = "snapshot" ]; then
         # Snapshot mode: download and extract snapshot
-        download_snapshot "$TARGET_DIR" "$NETWORK_TYPE"
-        extract_snapshot "$TARGET_DIR" "$NETWORK_TYPE"
+        download_snapshot "$TARGET_DIR" "$NETWORK_TYPE" "$RPC_TYPE"
+        extract_snapshot "$TARGET_DIR" "$NETWORK_TYPE" "$RPC_TYPE"
         
         if [ "$NETWORK_TYPE" = "testnet" ]; then
             # Testnet snapshot: temporary special handling (flat structure)
@@ -1093,7 +1120,7 @@ initialize_node() {
             print_info "  - $TARGET_DIR/op-node/: Op-node data (from snapshot)"
         else
             # Mainnet snapshot: uses same structure as genesis mode, no special handling needed
-            print_success "Node initialization completed (snapshot mode - mainnet)"
+            print_success "Node initialization completed (snapshot mode - mainnet $RPC_TYPE)"
             print_info "Using snapshot data directory: $TARGET_DIR"
             print_info "  - $TARGET_DIR/data/: Blockchain data (from snapshot)"
             print_info "  - $TARGET_DIR/config/: Configuration files (from snapshot)"
