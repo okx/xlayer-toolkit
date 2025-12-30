@@ -80,12 +80,12 @@ services:
     container_name: l1-geth
     command:
       - --http
-      - --http.api=eth,net,web3,debug,admin
+      - --http.api=eth,net,web3,debug,admin,txpool
       - --http.addr=0.0.0.0
       - --http.corsdomain=*
       - --http.vhosts=*
       - --ws
-      - --ws.api=eth,net,web3,debug
+      - --ws.api=eth,net,web3,debug,txpool
       - --ws.addr=0.0.0.0
       - --ws.origins=*
       - --authrpc.vhosts=*
@@ -98,6 +98,14 @@ services:
       - --ipcdisable
       - --rpc.allow-unprotected-txs
       - --verbosity=3
+      - --miner.gasprice=1
+      - --txpool.pricelimit=0
+      - --txpool.pricebump=10
+      - --txpool.accountslots=100000
+      - --txpool.globalslots=100000
+      - --txpool.accountqueue=100000
+      - --txpool.globalqueue=100000
+      - --miner.gaslimit=100000000
     ports:
       - 8551:8551
       - 8545:8545
@@ -133,6 +141,7 @@ services:
       - --jwt-secret=/execution/jwtsecret
       - --suggested-fee-recipient=0x123463a4b065722e99115d6c222f267d9cabb524
       - --minimum-peers-per-subnet=0
+      - --blob-retention-epochs=75600
       - --verbosity=info
     depends_on:
       l1-create-beacon-chain-genesis:
