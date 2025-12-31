@@ -131,6 +131,7 @@ else
     echo " ⚠️  Game type 1 may not have been updated, using original: $PERMISSIONED_GAME"
 fi
 
+export PROPOSER_GENESIS_HEIGHT=$((FORK_BLOCK + 1))
 export GAME_TYPE=1
 docker compose up -d op-proposer
 

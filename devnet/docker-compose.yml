@@ -525,19 +525,18 @@ services:
       - --log.level=debug
       - --poll-interval=5s
       - --wait-node-sync=true
-      - --allow-non-finalized=false
       - --num-confirmations=1
       - --safe-abort-nonce-too-low-count=3
       - --resubmission-timeout=30s
       - --rpc.port=8560
       - --rollup-rpc=http://op-seq:9545
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
-      - --proposal-interval=10s
+      - --proposal-interval=300s
       - --private-key=${OP_PROPOSER_PRIVATE_KEY}
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --game-type=${GAME_TYPE:-0}
       - --allow-non-finalized
-      - --genesis-height=${FORK_BLOCK}
+      - --genesis-height=${PROPOSER_GENESIS_HEIGHT}
     depends_on:
       - op-batcher
 
