@@ -162,6 +162,8 @@ docker run --rm \
       --withdrawal-delay-seconds $WITHDRAWAL_DELAY_SECONDS \
       --proof-maturity-delay-seconds $WITHDRAWAL_DELAY_SECONDS \
       --dispute-game-finality-delay-seconds $DISPUTE_GAME_FINALITY_DELAY_SECONDS \
+      --dispute-clock-extension $TEMP_CLOCK_EXTENSION \
+      --dispute-max-clock-duration $TEMP_MAX_CLOCK_DURATION \
       --dev-feature-bitmap 0x0000000000000000000000000000000000000000000000000000000000001000
   "
 # Enable custom gas token feature: --dev-feature-bitmap 0x0000000000000000000000000000000000000000000000000000000000001000
