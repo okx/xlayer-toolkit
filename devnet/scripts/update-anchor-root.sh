@@ -22,7 +22,6 @@ set -e
 
 source .env
 export GAME_TYPE=1
-export PROPOSER_GENESIS_HEIGHT=$((FORK_BLOCK + 1))
 docker compose up -d op-proposer
 
 echo "Waiting for op-proposer to create a game..."

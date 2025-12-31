@@ -535,8 +535,7 @@ services:
       - --private-key=${OP_PROPOSER_PRIVATE_KEY}
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --game-type=${GAME_TYPE:-0}
-      - --allow-non-finalized
-      - --genesis-height=${PROPOSER_GENESIS_HEIGHT}
+      - --genesis-height=${FORK_BLOCK}
     depends_on:
       - op-batcher
 
