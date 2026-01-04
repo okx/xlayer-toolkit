@@ -949,3 +949,83 @@ services:
       - kailua-cli 
       - validate
       - --data-dir=/data
+
+  # ==============================================================================
+  # RAILGUN Privacy System Services
+  # ==============================================================================
+  
+  railgun-poi-mongodb:
+    image: mongo:5.0
+    container_name: railgun-poi-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: railgun
+      MONGO_INITDB_ROOT_PASSWORD: ${RAILGUN_POI_DB_PASSWORD:-railgun-poi-pass}
+    volumes:
+      - ./data/railgun-mongodb:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  railgun-poi-node:
+    image: ${RAILGUN_POI_IMAGE_TAG:-railgun-poi-node:latest}
+    container_name: railgun-poi-node
+    restart: unless-stopped
+    depends_on:
+      railgun-poi-mongodb:
+        condition: service_healthy
+    env_file:
+      - ./railgun/.env.poi
+    environment:
+      - RPC_URL=http://op-seq-el:8545
+      - CHAIN_ID=${CHAIN_ID}
+      - NETWORK_NAME=XLayer DevNet
+      - RAILGUN_SMART_WALLET_ADDRESS=${RAILGUN_SMART_WALLET_ADDRESS:-}
+      - MONGODB_URL=mongodb://railgun:${RAILGUN_POI_DB_PASSWORD:-railgun-poi-pass}@railgun-poi-mongodb:27017
+      - MONGODB_DATABASE=poi-xlayer-devnet
+      - API_PORT=8080
+      - LOG_LEVEL=info
+    ports:
+      - "${RAILGUN_POI_PORT:-8080}:8080"
+    volumes:
+      - ./railgun/config:/app/config
+      - ./data/railgun-poi:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - default
+
+  railgun-broadcaster:
+    image: ${RAILGUN_BROADCASTER_IMAGE_TAG:-railgun-broadcaster:latest}
+    container_name: railgun-broadcaster
+    restart: unless-stopped
+    depends_on:
+      railgun-poi-node:
+        condition: service_healthy
+    env_file:
+      - ./railgun/.env.broadcaster
+    environment:
+      - RPC_URL=http://op-seq-el:8545
+      - CHAIN_ID=${CHAIN_ID}
+      - NETWORK_NAME=XLayer_DevNet
+      - POI_NODE_URL=http://railgun-poi-node:8080
+      - WALLET_PRIVATE_KEY=${DEPLOYER_PRIVATE_KEY}
+      - LOG_LEVEL=info
+      - DEBUG=true
+    ports:
+      - "${RAILGUN_BROADCASTER_API_PORT:-3000}:3000"
+      - "${RAILGUN_WAKU_PORT_1:-60001}:60001"
+      - "${RAILGUN_WAKU_PORT_2:-60002}:60002"
+    volumes:
+      - ./railgun/config:/app/config
+      - ./data/railgun-broadcaster:/app/data
+    networks:
+      - default
