@@ -153,43 +153,71 @@ else
   fi
 fi
 
-# Build RAILGUN images
+# Build RAILGUN images (using devnet-managed Dockerfiles)
+
 if [ "$SKIP_RAILGUN_CONTRACT_BUILD" = "true" ]; then
   echo "⏭️  Skipping RAILGUN contract build"
 else
-  if [ "$RAILGUN_LOCAL_DIRECTORY" = "" ]; then
-    echo "❌ Please set RAILGUN_LOCAL_DIRECTORY in .env"
+  if [ -z "$RAILGUN_CONTRACT_DIRECTORY" ]; then
+    echo "❌ Please set RAILGUN_CONTRACT_DIRECTORY in .env"
     exit 1
-  else
-    echo "🔨 Building RAILGUN contract image"
-    build_and_tag_image "railgun-contract" "$RAILGUN_CONTRACT_IMAGE_TAG" "$RAILGUN_LOCAL_DIRECTORY/contract" "Dockerfile"
   fi
+  
+  if [ ! -d "$RAILGUN_CONTRACT_DIRECTORY" ]; then
+    echo "❌ Contract directory not found: $RAILGUN_CONTRACT_DIRECTORY"
+    exit 1
+  fi
+  
+  echo "🔨 Building RAILGUN contract image from: $RAILGUN_CONTRACT_DIRECTORY"
+  # Copy devnet-managed Dockerfile (fixes yarn vs npm issue)
+  cp "$PWD_DIR/railgun/Dockerfile.contract" "$RAILGUN_CONTRACT_DIRECTORY/Dockerfile.devnet"
+  docker build -t "$RAILGUN_CONTRACT_IMAGE_TAG" -f "$RAILGUN_CONTRACT_DIRECTORY/Dockerfile.devnet" "$RAILGUN_CONTRACT_DIRECTORY"
+  rm -f "$RAILGUN_CONTRACT_DIRECTORY/Dockerfile.devnet"
+  echo "✅ Built RAILGUN contract image: $RAILGUN_CONTRACT_IMAGE_TAG"
 fi
 
 if [ "$SKIP_RAILGUN_POI_BUILD" = "true" ]; then
   echo "⏭️  Skipping RAILGUN POI node build"
 else
-  if [ "$RAILGUN_LOCAL_DIRECTORY" = "" ]; then
-    echo "❌ Please set RAILGUN_LOCAL_DIRECTORY in .env"
+  if [ -z "$RAILGUN_POI_DIRECTORY" ]; then
+    echo "❌ Please set RAILGUN_POI_DIRECTORY in .env"
     exit 1
+  fi
+  
+  if [ ! -d "$RAILGUN_POI_DIRECTORY" ]; then
+    echo "⚠️  Warning: POI directory not found: $RAILGUN_POI_DIRECTORY, skipping"
   else
-    echo "🔨 Building RAILGUN POI node image"
-    build_and_tag_image "railgun-poi-node" "$RAILGUN_POI_IMAGE_TAG" "$RAILGUN_LOCAL_DIRECTORY" "Dockerfile.poi-node"
+    echo "🔨 Building RAILGUN POI node image from: $RAILGUN_POI_DIRECTORY"
+    # Copy devnet-managed Dockerfile
+    cp "$PWD_DIR/railgun/Dockerfile.poi-node" "$RAILGUN_POI_DIRECTORY/Dockerfile.devnet"
+    docker build -t "$RAILGUN_POI_IMAGE_TAG" -f "$RAILGUN_POI_DIRECTORY/Dockerfile.devnet" "$RAILGUN_POI_DIRECTORY"
+    rm -f "$RAILGUN_POI_DIRECTORY/Dockerfile.devnet"
+    echo "✅ Built RAILGUN POI node image: $RAILGUN_POI_IMAGE_TAG"
   fi
 fi
 
 if [ "$SKIP_RAILGUN_BROADCASTER_BUILD" = "true" ]; then
   echo "⏭️  Skipping RAILGUN broadcaster build"
 else
-  if [ "$RAILGUN_LOCAL_DIRECTORY" = "" ]; then
-    echo "❌ Please set RAILGUN_LOCAL_DIRECTORY in .env"
+  if [ -z "$RAILGUN_BROADCASTER_DIRECTORY" ]; then
+    echo "❌ Please set RAILGUN_BROADCASTER_DIRECTORY in .env"
     exit 1
+  fi
+  
+  RAILGUN_BROADCASTER_DIR="$RAILGUN_BROADCASTER_DIRECTORY/docker"
+  if [ ! -d "$RAILGUN_BROADCASTER_DIR" ]; then
+    echo "⚠️  Warning: Broadcaster directory not found: $RAILGUN_BROADCASTER_DIR, skipping"
   else
-    echo "🔨 Building RAILGUN broadcaster image"
-    # Broadcaster uses Docker Swarm, build separately
-    cd "$RAILGUN_LOCAL_DIRECTORY/ppoi-safe-broadcaster-example/docker"
+    echo "🔨 Building RAILGUN broadcaster image from: $RAILGUN_BROADCASTER_DIR"
+    # Broadcaster has its own build.sh script which requires .env file
+    cd "$RAILGUN_BROADCASTER_DIR"
+    
+    # Create .env from devnet-managed template
+    echo "   Creating .env from devnet template for build..."
+    cp "$PWD_DIR/railgun/example.env.broadcaster-build" .env
+    
     ./build.sh --no-swag
     cd "$PWD_DIR"
-    echo "✅ RAILGUN broadcaster image built"
+    echo "✅ Built RAILGUN broadcaster image"
   fi
 fi

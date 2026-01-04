@@ -67,7 +67,9 @@ vim example.env
 
 # 修改以下配置:
 RAILGUN_ENABLE=true
-RAILGUN_LOCAL_DIRECTORY=/Users/oker/workspace/xlayer/pt
+RAILGUN_CONTRACT_DIRECTORY=/Users/oker/workspace/xlayer/pt/contract
+RAILGUN_POI_DIRECTORY=/Users/oker/workspace/xlayer/pt/private-proof-of-innocence
+RAILGUN_BROADCASTER_DIRECTORY=/Users/oker/workspace/xlayer/pt/ppoi-safe-broadcaster-example
 
 # 首次部署需要构建镜像
 SKIP_RAILGUN_CONTRACT_BUILD=false
@@ -119,10 +121,22 @@ vim example.env
 # 启用/禁用 RAILGUN
 RAILGUN_ENABLE=false              # 改为 true 启用
 
-# RAILGUN 源码路径（必填）
-RAILGUN_LOCAL_DIRECTORY=/Users/oker/workspace/xlayer/pt
+# ==============================================================================
+# RAILGUN 源码目录配置
+# ==============================================================================
+# 配置各个 RAILGUN 组件的源码路径
+# 示例: 如果你的目录结构是:
+#   /Users/oker/workspace/xlayer/pt/contract
+#   /Users/oker/workspace/xlayer/pt/private-proof-of-innocence
+#   /Users/oker/workspace/xlayer/pt/ppoi-safe-broadcaster-example
+# 则配置为:
+RAILGUN_CONTRACT_DIRECTORY=/Users/oker/workspace/xlayer/pt/contract
+RAILGUN_POI_DIRECTORY=/Users/oker/workspace/xlayer/pt/private-proof-of-innocence
+RAILGUN_BROADCASTER_DIRECTORY=/Users/oker/workspace/xlayer/pt/ppoi-safe-broadcaster-example
 
+# ==============================================================================
 # Docker 镜像配置
+# ==============================================================================
 RAILGUN_CONTRACT_IMAGE_TAG=railgun-contract:latest
 RAILGUN_POI_IMAGE_TAG=railgun-poi-node:latest
 RAILGUN_BROADCASTER_IMAGE_TAG=railgun-broadcaster:latest
@@ -132,10 +146,17 @@ SKIP_RAILGUN_CONTRACT_BUILD=true  # false = 构建镜像
 SKIP_RAILGUN_POI_BUILD=true       # false = 构建镜像
 SKIP_RAILGUN_BROADCASTER_BUILD=true
 
+# ==============================================================================
 # 合约地址（部署后自动填充）
+# ==============================================================================
 RAILGUN_SMART_WALLET_ADDRESS=
 RAILGUN_RELAY_ADAPT_ADDRESS=
 ```
+
+**配置说明**:
+- `RAILGUN_CONTRACT_DIRECTORY`: RAILGUN 合约源码目录
+- `RAILGUN_POI_DIRECTORY`: POI 节点源码目录
+- `RAILGUN_BROADCASTER_DIRECTORY`: Broadcaster 源码目录（包含 `docker/` 子目录）
 
 ### 子配置文件
 
@@ -149,11 +170,13 @@ RAILGUN_RELAY_ADAPT_ADDRESS=
 
 ### 💡 配置简化说明
 
-**最小化配置** - 对于快速测试，只需配置以下 2 项：
+**最小化配置** - 对于快速测试，只需配置以下 4 项：
 
 ```bash
 RAILGUN_ENABLE=true
-RAILGUN_LOCAL_DIRECTORY=/Users/oker/workspace/xlayer/pt
+RAILGUN_CONTRACT_DIRECTORY=/Users/oker/workspace/xlayer/pt/contract
+RAILGUN_POI_DIRECTORY=/Users/oker/workspace/xlayer/pt/private-proof-of-innocence
+RAILGUN_BROADCASTER_DIRECTORY=/Users/oker/workspace/xlayer/pt/ppoi-safe-broadcaster-example
 ```
 
 **所有默认值已硬编码**：
@@ -287,6 +310,23 @@ db.events.find().limit(5)
 
 ## 🐛 故障排查
 
+### 问题 0: Contract 镜像构建失败 - npm ci 错误
+
+**症状**: 运行 `./init.sh` 时构建 RAILGUN contract 镜像失败
+
+```
+npm error The `npm ci` command can only install with an existing package-lock.json
+```
+
+**原因**: RAILGUN contract 使用 `yarn`（有 yarn.lock），但 Dockerfile 使用 `npm ci`
+
+**解决**: 已自动修复
+- ✅ devnet 包含修复版 Dockerfile (`railgun/Dockerfile.contract`)
+- ✅ init.sh 自动使用修复版构建
+- ✅ 使用 `yarn install --frozen-lockfile` 代替 `npm ci`
+
+**无需手动操作**，直接运行 `./init.sh` 即可。
+
 ### 问题 1: 脚本跳过 RAILGUN 部署
 
 **症状**: 运行 `./7-run-railgun.sh` 显示 "Skipping RAILGUN"
@@ -308,7 +348,7 @@ vim example.env
 
 ### 问题 2: 找不到 RAILGUN 源码目录
 
-**症状**: 错误信息 "RAILGUN_LOCAL_DIRECTORY not set"
+**症状**: 错误信息 "Please set RAILGUN_CONTRACT_DIRECTORY in .env"
 
 **原因**: 未配置 RAILGUN 源码路径
 
@@ -316,7 +356,10 @@ vim example.env
 ```bash
 # 编辑 example.env
 vim example.env
-# 设置 RAILGUN_LOCAL_DIRECTORY=/Users/oker/workspace/xlayer/pt
+# 设置:
+# RAILGUN_CONTRACT_DIRECTORY=/Users/oker/workspace/xlayer/pt/contract
+# RAILGUN_POI_DIRECTORY=/Users/oker/workspace/xlayer/pt/private-proof-of-innocence
+# RAILGUN_BROADCASTER_DIRECTORY=/Users/oker/workspace/xlayer/pt/ppoi-safe-broadcaster-example
 
 # 同步配置
 ./clean.sh
@@ -445,19 +488,24 @@ docker stats --no-stream \
 ```bash
 # 1. RAILGUN 合约部署镜像
 if [ "$SKIP_RAILGUN_CONTRACT_BUILD" != "true" ]; then
-  build_and_tag_image "railgun-contract" "$RAILGUN_CONTRACT_IMAGE_TAG" \
-    "$RAILGUN_LOCAL_DIRECTORY/contract" "Dockerfile"
+  # 从 devnet/railgun/ 复制 Dockerfile 到源码目录
+  cp "$PWD_DIR/railgun/Dockerfile.contract" "$RAILGUN_CONTRACT_DIRECTORY/Dockerfile.devnet"
+  docker build -t "$RAILGUN_CONTRACT_IMAGE_TAG" \
+    -f "$RAILGUN_CONTRACT_DIRECTORY/Dockerfile.devnet" "$RAILGUN_CONTRACT_DIRECTORY"
+  rm -f "$RAILGUN_CONTRACT_DIRECTORY/Dockerfile.devnet"
 fi
 
 # 2. POI 节点镜像
 if [ "$SKIP_RAILGUN_POI_BUILD" != "true" ]; then
-  build_and_tag_image "railgun-poi-node" "$RAILGUN_POI_IMAGE_TAG" \
-    "$RAILGUN_LOCAL_DIRECTORY" "Dockerfile.poi-node"
+  cp "$PWD_DIR/railgun/Dockerfile.poi-node" "$RAILGUN_POI_DIRECTORY/Dockerfile.devnet"
+  docker build -t "$RAILGUN_POI_IMAGE_TAG" \
+    -f "$RAILGUN_POI_DIRECTORY/Dockerfile.devnet" "$RAILGUN_POI_DIRECTORY"
+  rm -f "$RAILGUN_POI_DIRECTORY/Dockerfile.devnet"
 fi
 
 # 3. Broadcaster 镜像
 if [ "$SKIP_RAILGUN_BROADCASTER_BUILD" != "true" ]; then
-  cd "$RAILGUN_LOCAL_DIRECTORY/ppoi-safe-broadcaster-example/docker"
+  cd "$RAILGUN_BROADCASTER_DIRECTORY/docker"
   ./build.sh --no-swag
 fi
 ```
