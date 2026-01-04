@@ -152,3 +152,44 @@ else
     build_and_tag_image "kailua" "$KAILUA_IMAGE_TAG" "$KAILUA_LOCAL_DIRECTORY" "Dockerfile.local"
   fi
 fi
+
+# Build RAILGUN images
+if [ "$SKIP_RAILGUN_CONTRACT_BUILD" = "true" ]; then
+  echo "⏭️  Skipping RAILGUN contract build"
+else
+  if [ "$RAILGUN_LOCAL_DIRECTORY" = "" ]; then
+    echo "❌ Please set RAILGUN_LOCAL_DIRECTORY in .env"
+    exit 1
+  else
+    echo "🔨 Building RAILGUN contract image"
+    build_and_tag_image "railgun-contract" "$RAILGUN_CONTRACT_IMAGE_TAG" "$RAILGUN_LOCAL_DIRECTORY/contract" "Dockerfile"
+  fi
+fi
+
+if [ "$SKIP_RAILGUN_POI_BUILD" = "true" ]; then
+  echo "⏭️  Skipping RAILGUN POI node build"
+else
+  if [ "$RAILGUN_LOCAL_DIRECTORY" = "" ]; then
+    echo "❌ Please set RAILGUN_LOCAL_DIRECTORY in .env"
+    exit 1
+  else
+    echo "🔨 Building RAILGUN POI node image"
+    build_and_tag_image "railgun-poi-node" "$RAILGUN_POI_IMAGE_TAG" "$RAILGUN_LOCAL_DIRECTORY" "Dockerfile.poi-node"
+  fi
+fi
+
+if [ "$SKIP_RAILGUN_BROADCASTER_BUILD" = "true" ]; then
+  echo "⏭️  Skipping RAILGUN broadcaster build"
+else
+  if [ "$RAILGUN_LOCAL_DIRECTORY" = "" ]; then
+    echo "❌ Please set RAILGUN_LOCAL_DIRECTORY in .env"
+    exit 1
+  else
+    echo "🔨 Building RAILGUN broadcaster image"
+    # Broadcaster uses Docker Swarm, build separately
+    cd "$RAILGUN_LOCAL_DIRECTORY/ppoi-safe-broadcaster-example/docker"
+    ./build.sh --no-swag
+    cd "$PWD_DIR"
+    echo "✅ RAILGUN broadcaster image built"
+  fi
+fi

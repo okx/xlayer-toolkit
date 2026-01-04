@@ -75,26 +75,8 @@ if [ -n "$RAILGUN_SMART_WALLET_ADDRESS" ] && [ "$RAILGUN_SMART_WALLET_ADDRESS" !
     echo "   ⚠️  RAILGUN contracts already deployed at: $RAILGUN_SMART_WALLET_ADDRESS"
     echo "   ⏭️  Skipping contract deployment"
 else
-    echo "   🔨 Building RAILGUN contract image..."
-    
-    if [ "$SKIP_RAILGUN_CONTRACT_BUILD" != "true" ]; then
-        if [ -z "$RAILGUN_LOCAL_DIRECTORY" ]; then
-            echo "   ❌ Error: RAILGUN_LOCAL_DIRECTORY not set in .env"
-            exit 1
-        fi
-        
-        if [ ! -d "$RAILGUN_LOCAL_DIRECTORY/contract" ]; then
-            echo "   ❌ Error: Contract directory not found at $RAILGUN_LOCAL_DIRECTORY/contract"
-            exit 1
-        fi
-        
-        docker build -t $RAILGUN_CONTRACT_IMAGE_TAG "$RAILGUN_LOCAL_DIRECTORY/contract"
-        echo "   ✓ Contract image built successfully"
-    else
-        echo "   ⏭️  Skipping contract build (using existing image: $RAILGUN_CONTRACT_IMAGE_TAG)"
-    fi
-    
-    echo "   🚀 Deploying contracts..."
+    echo "   🚀 Deploying contracts using image: $RAILGUN_CONTRACT_IMAGE_TAG"
+    echo "   ℹ️  Note: If image not found, run './init.sh' first to build images"
     
     # Deploy contracts using Docker
     docker run --rm \
@@ -150,21 +132,7 @@ docker compose up -d railgun-poi-mongodb
 sleep 5
 echo "   ✓ MongoDB started"
 
-# Build POI node image if needed
-if [ "$SKIP_RAILGUN_POI_BUILD" != "true" ]; then
-    if [ -z "$RAILGUN_LOCAL_DIRECTORY" ]; then
-        echo "   ❌ Error: RAILGUN_LOCAL_DIRECTORY not set in .env"
-        exit 1
-    fi
-    
-    echo "   🔨 Building POI node image..."
-    docker build -f "$RAILGUN_LOCAL_DIRECTORY/Dockerfile.poi-node" -t $RAILGUN_POI_IMAGE_TAG "$RAILGUN_LOCAL_DIRECTORY"
-    echo "   ✓ POI node image built successfully"
-else
-    echo "   ⏭️  Skipping POI node build (using existing image: $RAILGUN_POI_IMAGE_TAG)"
-fi
-
-# Start POI node
+# Start POI node (image should be built by init.sh)
 echo "   🛡️  Starting POI node..."
 docker compose up -d railgun-poi-node
 echo "   ✓ POI node started"
@@ -186,24 +154,7 @@ if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
     echo "   ⚠️  Warning: POI node health check timeout (continuing anyway)"
 fi
 
-# Build Broadcaster image if needed
-if [ "$SKIP_RAILGUN_BROADCASTER_BUILD" != "true" ]; then
-    if [ -z "$RAILGUN_LOCAL_DIRECTORY" ]; then
-        echo "   ❌ Error: RAILGUN_LOCAL_DIRECTORY not set in .env"
-        exit 1
-    fi
-    
-    echo "   🔨 Building Broadcaster image..."
-    # Note: Broadcaster uses Docker Swarm, build separately if needed
-    cd "$RAILGUN_LOCAL_DIRECTORY/ppoi-safe-broadcaster-example/docker"
-    ./build.sh --no-swag
-    cd "$PWD_DIR"
-    echo "   ✓ Broadcaster image built successfully"
-else
-    echo "   ⏭️  Skipping Broadcaster build (using existing image: $RAILGUN_BROADCASTER_IMAGE_TAG)"
-fi
-
-# Start Broadcaster (if using docker-compose, otherwise skip)
+# Start Broadcaster (image should be built by init.sh)
 echo "   📡 Starting Broadcaster service..."
 if docker compose config | grep -q "railgun-broadcaster"; then
     docker compose up -d railgun-broadcaster
@@ -262,8 +213,5 @@ echo "   1. Test POI node:  curl http://localhost:${RAILGUN_POI_PORT}/health"
 echo "   2. View logs:      docker compose logs -f railgun-poi-node"
 echo "   3. Check services: docker compose ps | grep railgun"
 echo ""
-echo "📚 Documentation:"
-echo "   Deployment Guide: $RAILGUN_LOCAL_DIRECTORY/DevNet部署指南-ChainID195.md"
-echo "   Configuration:    $RAILGUN_DIR/"
 echo ""
 

@@ -35,9 +35,10 @@ SKIP_RAILGUN_BROADCASTER_BUILD=false
 ```
 
 **注意**：
-- ✅ 端口配置使用默认值（8080, 3000, 60001, 60002）
+- ✅ 所有端口和密码已硬编码为默认值
+- ✅ POI: 8080, Broadcaster: 3000, Waku: 60001/60002
+- ✅ MongoDB 密码: railgun-poi-pass
 - ✅ Native token (OKB/ETH) 默认支持，无需额外配置
-- ✅ 测试代币（USDC/DAI）为可选项
 
 ### 2. 同步配置
 

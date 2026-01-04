@@ -960,7 +960,7 @@ services:
     restart: unless-stopped
     environment:
       MONGO_INITDB_ROOT_USERNAME: railgun
-      MONGO_INITDB_ROOT_PASSWORD: ${RAILGUN_POI_DB_PASSWORD:-railgun-poi-pass}
+      MONGO_INITDB_ROOT_PASSWORD: railgun-poi-pass
     volumes:
       - ./data/railgun-mongodb:/data/db
     ports:
@@ -985,12 +985,12 @@ services:
       - CHAIN_ID=${CHAIN_ID}
       - NETWORK_NAME=XLayer DevNet
       - RAILGUN_SMART_WALLET_ADDRESS=${RAILGUN_SMART_WALLET_ADDRESS:-}
-      - MONGODB_URL=mongodb://railgun:${RAILGUN_POI_DB_PASSWORD:-railgun-poi-pass}@railgun-poi-mongodb:27017
+      - MONGODB_URL=mongodb://railgun:railgun-poi-pass@railgun-poi-mongodb:27017
       - MONGODB_DATABASE=poi-xlayer-devnet
       - API_PORT=8080
       - LOG_LEVEL=info
     ports:
-      - "${RAILGUN_POI_PORT:-8080}:8080"
+      - "8080:8080"
     volumes:
       - ./railgun/config:/app/config
       - ./data/railgun-poi:/app/data
@@ -1021,9 +1021,9 @@ services:
       - LOG_LEVEL=info
       - DEBUG=true
     ports:
-      - "${RAILGUN_BROADCASTER_API_PORT:-3000}:3000"
-      - "${RAILGUN_WAKU_PORT_1:-60001}:60001"
-      - "${RAILGUN_WAKU_PORT_2:-60002}:60002"
+      - "3000:3000"
+      - "60001:60001"
+      - "60002:60002"
     volumes:
       - ./railgun/config:/app/config
       - ./data/railgun-broadcaster:/app/data

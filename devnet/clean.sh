@@ -33,4 +33,12 @@ rm -rf l1-geth/execution/keystore/
 rm -rf init.log
 rm -rf op-succinct/configs
 
+echo " 🗑️  Removing RAILGUN data..."
+rm -rf railgun/deployments/*
+rm -rf railgun/config/*
+# Keep .env files but could optionally remove them
+# rm -rf railgun/.env.contract
+# rm -rf railgun/.env.poi
+# rm -rf railgun/.env.broadcaster
+
 echo " ✅ Cleanup completed!"
