@@ -36,9 +36,7 @@ rm -rf op-succinct/configs
 echo " 🗑️  Removing RAILGUN data..."
 rm -rf railgun/deployments/*
 rm -rf railgun/config/*
-# Keep .env files but could optionally remove them
+# Keep .env.contract file but could optionally remove it
 # rm -rf railgun/.env.contract
-# rm -rf railgun/.env.poi
-# rm -rf railgun/.env.broadcaster
 
 echo " ✅ Cleanup completed!"

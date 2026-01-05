@@ -7,4 +7,12 @@ set -e
 ./4-op-start-service.sh
 ./5-run-op-succinct.sh
 ./6-run-kailua.sh
-./7-run-railgun.sh
+
+# RAILGUN Privacy System (Optional, controlled by RAILGUN_ENABLE)
+./7-deploy-railgun.sh
+./8-deploy-subgraph.sh
+./9-test-wallet.sh
+
+echo ""
+echo "🎉 Complete DevNet deployment finished!"
+echo ""

@@ -953,79 +953,80 @@ services:
   # ==============================================================================
   # RAILGUN Privacy System Services
   # ==============================================================================
-  
-  railgun-poi-mongodb:
-    image: mongo:5.0
-    container_name: railgun-poi-mongodb
-    restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: railgun
-      MONGO_INITDB_ROOT_PASSWORD: railgun-poi-pass
-    volumes:
-      - ./data/railgun-mongodb:/data/db
-    ports:
-      - "27017:27017"
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # Note: RAILGUN contract deployment is handled by 7-run-railgun.sh
 
-  railgun-poi-node:
-    image: ${RAILGUN_POI_IMAGE_TAG:-railgun-poi-node:latest}
-    container_name: railgun-poi-node
+  # PostgreSQL database for Graph Node
+  railgun-postgres:
+    image: postgres:14
+    container_name: railgun-postgres
     restart: unless-stopped
-    depends_on:
-      railgun-poi-mongodb:
-        condition: service_healthy
-    env_file:
-      - ./railgun/.env.poi
+    command: ["postgres", "-cshared_preload_libraries=pg_stat_statements"]
     environment:
-      - RPC_URL=http://op-seq-el:8545
-      - CHAIN_ID=${CHAIN_ID}
-      - NETWORK_NAME=XLayer DevNet
-      - RAILGUN_SMART_WALLET_ADDRESS=${RAILGUN_SMART_WALLET_ADDRESS:-}
-      - MONGODB_URL=mongodb://railgun:railgun-poi-pass@railgun-poi-mongodb:27017
-      - MONGODB_DATABASE=poi-xlayer-devnet
-      - API_PORT=8080
-      - LOG_LEVEL=info
-    ports:
-      - "8080:8080"
+      POSTGRES_USER: graph-node
+      POSTGRES_PASSWORD: let-me-in
+      POSTGRES_DB: graph-node
     volumes:
-      - ./railgun/config:/app/config
-      - ./data/railgun-poi:/app/data
+      - ./data/railgun-subgraph/postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD-SHELL", "pg_isready -U graph-node"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
     networks:
       - default
 
-  railgun-broadcaster:
-    image: ${RAILGUN_BROADCASTER_IMAGE_TAG:-railgun-broadcaster:latest}
-    container_name: railgun-broadcaster
+  # IPFS for Subgraph metadata storage
+  railgun-ipfs:
+    image: ipfs/go-ipfs:v0.10.0
+    container_name: railgun-ipfs
+    restart: unless-stopped
+    volumes:
+      - ./data/railgun-subgraph/ipfs:/data/ipfs
+    ports:
+      - "5001:5001"
+    healthcheck:
+      test: ["CMD", "ipfs", "id"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+  # Graph Node for RAILGUN event indexing
+  railgun-graph-node:
+    image: graphprotocol/graph-node:latest
+    container_name: railgun-graph-node
     restart: unless-stopped
     depends_on:
-      railgun-poi-node:
+      railgun-postgres:
         condition: service_healthy
-    env_file:
-      - ./railgun/.env.broadcaster
+      railgun-ipfs:
+        condition: service_healthy
     environment:
-      - RPC_URL=http://op-seq-el:8545
-      - CHAIN_ID=${CHAIN_ID}
-      - NETWORK_NAME=XLayer_DevNet
-      - POI_NODE_URL=http://railgun-poi-node:8080
-      - WALLET_PRIVATE_KEY=${DEPLOYER_PRIVATE_KEY}
-      - LOG_LEVEL=info
-      - DEBUG=true
+      postgres_host: railgun-postgres
+      postgres_user: graph-node
+      postgres_pass: let-me-in
+      postgres_db: graph-node
+      ipfs: 'railgun-ipfs:5001'
+      ethereum: 'xlayer:http://op-seq-el:8545'
+      GRAPH_LOG: info
+      RUST_LOG: info
+      ETHEREUM_POLLING_INTERVAL: 1000
     ports:
-      - "3000:3000"
-      - "60001:60001"
-      - "60002:60002"
+      - "8000:8000"  # GraphQL HTTP
+      - "8001:8001"  # GraphQL WebSocket
+      - "8020:8020"  # JSON-RPC (admin)
+      - "8030:8030"  # Index status
+      - "8040:8040"  # Metrics
     volumes:
-      - ./railgun/config:/app/config
-      - ./data/railgun-broadcaster:/app/data
+      - ./data/railgun-subgraph/graph-node:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - default
