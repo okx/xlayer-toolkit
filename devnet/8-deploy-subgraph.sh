@@ -16,6 +16,8 @@ if [ "$RAILGUN_ENABLE" != "true" ]; then
   exit 0
 fi
 
+docker compose up -d railgun-postgres railgun-ipfs railgun-graph-node
+
 echo "🚀 Starting RAILGUN Subgraph deployment..."
 
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

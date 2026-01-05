@@ -159,31 +159,29 @@ else
         echo "   ✓ Backed up original config"
     fi
     
-    # Create a temporary modified config
     cd "$RAILGUN_CONTRACT_DIR"
     
-    # Add networks configuration in the config object (before the closing brace and export)
-    awk '
-    /^};$/ && !done {
-        print "  networks: {"
-        print "    \"xlayer-devnet\": {"
-        print "      url: process.env.RPC_URL || \"http://localhost:8123\","
-        print "      chainId: parseInt(process.env.CHAIN_ID || \"195\"),"
-        print "      accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],"
-        print "      gasPrice: 1000000000,"
-        print "    },"
-        print "  },"
-        done = 1
-    }
-    { print }
-    ' "$HARDHAT_CONFIG_FILE" > "$HARDHAT_CONFIG_FILE.tmp"
+    # Insert networks config after etherscan section (which is the last property)
+    sed -i.tmp '/etherscan: {/,/},/ {
+        /},/ a\
+  networks: {\
+    "xlayer-devnet": {\
+      url: process.env.RPC_URL || "http://localhost:8123",\
+      chainId: parseInt(process.env.CHAIN_ID || "195"),\
+      accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],\
+      gasPrice: 1000000000,\
+    },\
+  },
+    }' "$HARDHAT_CONFIG_FILE"
     
-    # Replace original file
-    mv "$HARDHAT_CONFIG_FILE.tmp" "$HARDHAT_CONFIG_FILE"
+    # Remove the temporary file
+    rm -f "$HARDHAT_CONFIG_FILE.tmp"
     
     cd "$PWD_DIR"
     
     echo "   ✅ Added xlayer-devnet network to hardhat.config.ts"
+    echo "   ℹ️  If deployment fails, restore from backup:"
+    echo "       cp $HARDHAT_CONFIG_FILE.devnet.backup $HARDHAT_CONFIG_FILE"
 fi
 
 # ============================================================================
@@ -218,8 +216,22 @@ echo ""
 export RPC_URL="$L2_RPC_URL"
 export DEPLOYER_PRIVATE_KEY="$OP_PROPOSER_PRIVATE_KEY"
 
-# Run Hardhat deployment
-npx hardhat deploy:test --network xlayer-devnet || {
+# Run Hardhat deployment and capture output (with real-time display)
+echo "   📝 Deploying contracts (this may take a few minutes)..."
+echo ""
+
+# Use tee to display output in real-time AND capture to file
+TEMP_DEPLOY_LOG="/tmp/railgun-deploy-$$.log"
+npx hardhat deploy:test --network xlayer-devnet 2>&1 | tee "$TEMP_DEPLOY_LOG"
+DEPLOY_STATUS=${PIPESTATUS[0]}
+
+# Read captured output for parsing
+DEPLOY_OUTPUT=$(cat "$TEMP_DEPLOY_LOG")
+
+echo ""
+
+# Check if deployment succeeded
+if [ $DEPLOY_STATUS -ne 0 ]; then
     echo ""
     echo "   ❌ Contract deployment failed"
     echo ""
@@ -228,9 +240,10 @@ npx hardhat deploy:test --network xlayer-devnet || {
     echo "      2. Check if deployer has sufficient balance"
     echo "      3. Check Hardhat deploy scripts exist (scripts/deploy-*.ts)"
     echo ""
+    rm -f "$TEMP_DEPLOY_LOG" 2>/dev/null
     cd "$PWD_DIR"
     exit 1
-}
+fi
 
 cd "$PWD_DIR"
 
@@ -242,51 +255,72 @@ echo "   ✅ Contracts deployed successfully"
 echo ""
 echo "🔍 Step 4: Extracting contract addresses..."
 
-# Try to find deployment artifacts in common locations
-DEPLOYMENT_DIRS=(
-    "$RAILGUN_CONTRACT_DIR/deployments"
-    "$RAILGUN_CONTRACT_DIR/artifacts/deployments"
-    "$RAILGUN_CONTRACT_DIR/.openzeppelin"
-)
+# Method 1: Parse from deployment output (RAILGUN contract outputs to stdout)
+echo "   📝 Parsing deployment output..."
 
-FOUND_ADDRESS=""
+# Extract proxy address (this is the RailgunSmartWallet)
+PROXY_ADDR=$(echo "$DEPLOY_OUTPUT" | grep -A 20 "DEPLOY CONFIG:" | grep "proxy:" | sed -n "s/.*proxy: '\([^']*\)'.*/\1/p" | head -1)
 
-for DEPLOY_DIR in "${DEPLOYMENT_DIRS[@]}"; do
-    if [ -d "$DEPLOY_DIR" ]; then
-        echo "   🔍 Checking: $DEPLOY_DIR"
-        
-        # Try to find RailgunSmartWallet address
-        WALLET_ADDR=$(find "$DEPLOY_DIR" -name "*.json" -type f -exec cat {} \; 2>/dev/null | \
-            jq -r 'select(.contractName=="RailgunSmartWallet" or .name=="RailgunSmartWallet") | .address' 2>/dev/null | \
-            head -1)
-        
-        if [ -n "$WALLET_ADDR" ] && [ "$WALLET_ADDR" != "null" ]; then
-            FOUND_ADDRESS="$WALLET_ADDR"
-            echo "   ✅ Found RailgunSmartWallet: $FOUND_ADDRESS"
-            break
-        fi
-    fi
-done
+# Extract relayAdapt address
+RELAY_ADAPT_ADDR=$(echo "$DEPLOY_OUTPUT" | grep -A 20 "DEPLOY CONFIG:" | grep "relayAdapt:" | sed -n "s/.*relayAdapt: '\([^']*\)'.*/\1/p" | head -1)
 
-if [ -z "$FOUND_ADDRESS" ]; then
-    echo "   ⚠️  Could not automatically find contract address"
-    echo ""
-    echo "   Please manually check deployment output above and enter the contract address:"
-    read -p "   RailgunSmartWallet address: " MANUAL_ADDRESS
+if [ -n "$PROXY_ADDR" ] && [ "$PROXY_ADDR" != "null" ]; then
+    echo "   ✅ Found RailgunSmartWallet (proxy): $PROXY_ADDR"
+    FOUND_ADDRESS="$PROXY_ADDR"
+else
+    # Method 2: Try to find in deployment artifacts (fallback)
+    echo "   ⚠️  Could not parse from output, trying artifact files..."
     
-    if [ -n "$MANUAL_ADDRESS" ]; then
-        FOUND_ADDRESS="$MANUAL_ADDRESS"
-    else
-        echo "   ❌ No address provided"
-        exit 1
+    DEPLOYMENT_DIRS=(
+        "$RAILGUN_CONTRACT_DIR/deployments"
+        "$RAILGUN_CONTRACT_DIR/artifacts/deployments"
+        "$RAILGUN_CONTRACT_DIR/.openzeppelin"
+    )
+    
+    for DEPLOY_DIR in "${DEPLOYMENT_DIRS[@]}"; do
+        if [ -d "$DEPLOY_DIR" ]; then
+            echo "   🔍 Checking: $DEPLOY_DIR"
+            
+            WALLET_ADDR=$(find "$DEPLOY_DIR" -name "*.json" -type f -exec cat {} \; 2>/dev/null | \
+                jq -r 'select(.contractName=="RailgunSmartWallet" or .name=="RailgunSmartWallet" or .contractName=="Proxy") | .address' 2>/dev/null | \
+                head -1)
+            
+            if [ -n "$WALLET_ADDR" ] && [ "$WALLET_ADDR" != "null" ]; then
+                FOUND_ADDRESS="$WALLET_ADDR"
+                echo "   ✅ Found in artifacts: $FOUND_ADDRESS"
+                break
+            fi
+        fi
+    done
+    
+    # Method 3: Manual input (last resort)
+    if [ -z "$FOUND_ADDRESS" ]; then
+        echo "   ⚠️  Could not automatically find contract address"
+        echo ""
+        echo "   Please check deployment output above and enter the contract address:"
+        echo "   (Look for 'proxy:' in DEPLOY CONFIG section)"
+        read -p "   RailgunSmartWallet address: " MANUAL_ADDRESS
+        
+        if [ -n "$MANUAL_ADDRESS" ]; then
+            FOUND_ADDRESS="$MANUAL_ADDRESS"
+        else
+            echo "   ❌ No address provided"
+            exit 1
+        fi
     fi
 fi
 
-# Update .env with the deployed address
+# Update .env with the deployed addresses
 export RAILGUN_SMART_WALLET_ADDRESS="$FOUND_ADDRESS"
 sed_inplace "s|^RAILGUN_SMART_WALLET_ADDRESS=.*|RAILGUN_SMART_WALLET_ADDRESS=$RAILGUN_SMART_WALLET_ADDRESS|" .env
 
-echo "   ✅ Updated .env with contract address"
+if [ -n "$RELAY_ADAPT_ADDR" ] && [ "$RELAY_ADAPT_ADDR" != "null" ]; then
+    echo "   ✅ Found RelayAdapt: $RELAY_ADAPT_ADDR"
+    export RAILGUN_RELAY_ADAPT_ADDRESS="$RELAY_ADAPT_ADDR"
+    sed_inplace "s|^RAILGUN_RELAY_ADAPT_ADDRESS=.*|RAILGUN_RELAY_ADAPT_ADDRESS=$RAILGUN_RELAY_ADAPT_ADDRESS|" .env
+fi
+
+echo "   ✅ Updated .env with contract addresses"
 
 # ============================================================================
 # Step 5: Verification
@@ -327,4 +361,7 @@ echo "💡 Contract Info:"
 echo "   • Address saved to .env: RAILGUN_SMART_WALLET_ADDRESS"
 echo "   • Source code: $RAILGUN_CONTRACT_DIR"
 echo ""
+
+# Clean up temporary files
+rm -f "$TEMP_DEPLOY_LOG" 2>/dev/null
 
