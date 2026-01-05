@@ -28,8 +28,7 @@ RETH_VERBOSITY="${RETH_VERBOSITY:--vvvv}"
 RETH_HTTP_API="${RETH_HTTP_API:-web3,debug,eth,txpool,net,miner,admin}"
 RETH_WS_API="${RETH_WS_API:-web3,debug,eth,txpool,net}"
 
-exec "$RETH_BINARY" node \
-      $RETH_VERBOSITY \
+exec "$RETH_BINARY" node --color=never -v \
       --datadir="$RETH_DATA_DIR" \
       --chain="$RETH_CHAIN" \
       --http \

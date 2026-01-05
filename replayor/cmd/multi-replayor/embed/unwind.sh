@@ -33,7 +33,7 @@ fi
 
 echo "Unwinding to block $TARGET_BLOCK"
 
-exec "$RETH_BINARY" stage unwind \
+exec "$RETH_BINARY" stage unwind --color=never \
   --datadir="$RETH_DATA_DIR" \
   --chain="$RETH_CHAIN" \
   to-block "$TARGET_BLOCK"

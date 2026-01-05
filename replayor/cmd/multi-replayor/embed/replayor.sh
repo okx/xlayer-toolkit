@@ -40,6 +40,7 @@ if [ "$CONTINUOUS_MODE" = "true" ]; then
     --rollup-config-path="$ROLLUP_CONFIG_PATH" \
     --disk-path="$DISK_PATH" \
     --storage-type="$STORAGE_TYPE" \
+    --log.level warn \
     --continuous
 else
   exec "$REPLAYOR_BINARY" \
@@ -51,6 +52,7 @@ else
     --rollup-config-path="$ROLLUP_CONFIG_PATH" \
     --disk-path="$DISK_PATH" \
     --storage-type="$STORAGE_TYPE" \
+    --log.level warn \
     --block-count="$BLOCK_COUNT"
 fi
 
