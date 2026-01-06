@@ -320,6 +320,28 @@ if [ -n "$RELAY_ADAPT_ADDR" ] && [ "$RELAY_ADAPT_ADDR" != "null" ]; then
     sed_inplace "s|^RAILGUN_RELAY_ADAPT_ADDRESS=.*|RAILGUN_RELAY_ADAPT_ADDRESS=$RAILGUN_RELAY_ADAPT_ADDRESS|" .env
 fi
 
+if [ -n "$POSEIDON_T4_ADDR" ] && [ "$POSEIDON_T4_ADDR" != "null" ]; then
+    echo "   ✅ Found PoseidonT4: $POSEIDON_T4_ADDR"
+    export POSEIDON_T4_ADDRESS="$POSEIDON_T4_ADDR"
+    sed_inplace "s|^POSEIDON_T4_ADDRESS=.*|POSEIDON_T4_ADDRESS=$POSEIDON_T4_ADDRESS|" .env
+    
+    # Update V2 Subgraph contracts.ts if it exists
+    if [ -n "$RAILGUN_SUBGRAPH_DIR" ] && [ -f "$RAILGUN_SUBGRAPH_DIR/src/contracts.ts" ]; then
+        echo "   📝 Updating V2 Subgraph contracts.ts..."
+        CONTRACTS_FILE="$RAILGUN_SUBGRAPH_DIR/src/contracts.ts"
+        
+        # Check if case 195 exists
+        if grep -q "case 195:" "$CONTRACTS_FILE"; then
+            # Update existing case 195
+            sed_inplace "s|case 195:.*|case 195:|" "$CONTRACTS_FILE"
+            sed_inplace "/case 195:/!b;n;s|return '0x[^']*';.*|return '$POSEIDON_T4_ADDR'; // XLayer DevNet (auto-updated)|" "$CONTRACTS_FILE"
+            echo "   ✅ Updated PoseidonT4 address in Subgraph contracts.ts"
+        else
+            echo "   ⚠️  Case 195 not found in contracts.ts (already added manually?)"
+        fi
+    fi
+fi
+
 echo "   ✅ Updated .env with contract addresses"
 
 # ============================================================================

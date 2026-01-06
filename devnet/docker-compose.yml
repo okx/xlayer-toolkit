@@ -953,7 +953,32 @@ services:
   # ==============================================================================
   # RAILGUN Privacy System Services
   # ==============================================================================
-  # Note: RAILGUN contract deployment is handled by 7-run-railgun.sh
+  # Note: RAILGUN contract deployment is handled by 7-deploy-railgun.sh
+
+  # RAILGUN Test Wallet (Node.js v16 environment)
+  railgun-test-wallet:
+    build:
+      context: ./railgun-test
+      dockerfile: Dockerfile
+    container_name: railgun-test-wallet
+    environment:
+      - RPC_URL=http://op-seq-el:8545
+      - CHAIN_ID=${CHAIN_ID:-195}
+      - CHAIN_NAME=XLayerDevNet
+      - RAILGUN_ADDRESS=${RAILGUN_SMART_WALLET_ADDRESS}
+      - RAILGUN_RELAY_ADAPT_ADDRESS=${RAILGUN_RELAY_ADAPT_ADDRESS}
+      - SUBGRAPH_URL=http://railgun-graph-node:8000/subgraphs/name/${RAILGUN_SUBGRAPH_NAME:-railgun-xlayer-devnet}
+      - DEPLOYER_PRIVATE_KEY=${OP_PROPOSER_PRIVATE_KEY}
+    depends_on:
+      op-seq:
+        condition: service_healthy
+      railgun-graph-node:
+        condition: service_started
+    networks:
+      - default
+    # Do not auto-start (run manually via docker compose run or 9-test-wallet.sh)
+    profiles:
+      - test
 
   # PostgreSQL database for Graph Node
   railgun-postgres:
@@ -965,6 +990,8 @@ services:
       POSTGRES_USER: graph-node
       POSTGRES_PASSWORD: let-me-in
       POSTGRES_DB: graph-node
+      # Graph Node requires C locale for proper indexing
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
     volumes:
       - ./data/railgun-subgraph/postgres:/var/lib/postgresql/data
     ports:
@@ -1010,7 +1037,7 @@ services:
       postgres_pass: let-me-in
       postgres_db: graph-node
       ipfs: 'railgun-ipfs:5001'
-      ethereum: 'xlayer:http://op-seq-el:8545'
+      ethereum: 'xlayer-devnet:http://op-seq-el:8545'
       GRAPH_LOG: info
       RUST_LOG: info
       ETHEREUM_POLLING_INTERVAL: 1000

@@ -56,7 +56,7 @@ echo "   ✓ Contract deployed at: $RAILGUN_SMART_WALLET_ADDRESS"
 # Check if Subgraph directory is configured
 if [ -z "$RAILGUN_SUBGRAPH_DIR" ]; then
     echo "   ❌ RAILGUN_SUBGRAPH_DIR is not set in .env"
-    echo "   ℹ️  Example: RAILGUN_SUBGRAPH_DIR=/Users/oker/workspace/xlayer/pt/subgraph-v3-template"
+    echo "   ℹ️  Example: RAILGUN_SUBGRAPH_DIR=/Users/oker/workspace/xlayer/pt/subgraph-v2-template"
     exit 1
 fi
 
@@ -167,9 +167,42 @@ cat > networks.json << EOF
 EOF
 echo "   ✓ Created networks.json"
 
-# Create subgraph.yaml for devnet
-echo "   📝 Creating subgraph.yaml..."
-cat > subgraph.yaml << EOF
+# Auto-detect Subgraph version (V2 or V3) based on files
+echo "   🔍 Detecting Subgraph version..."
+if [ -f "abis/RailgunSmartWallet.json" ]; then
+    SUBGRAPH_VERSION="v2"
+    echo "   ✓ Detected V2 Subgraph (RailgunSmartWallet.json found)"
+elif [ -f "abis/PoseidonMerkleAccumulator.json" ]; then
+    SUBGRAPH_VERSION="v3"
+    echo "   ✓ Detected V3 Subgraph (PoseidonMerkleAccumulator.json found)"
+else
+    echo "   ❌ Could not detect Subgraph version (neither V2 nor V3 ABI found)"
+    exit 1
+fi
+
+# Create subgraph.yaml based on version
+echo "   📝 Creating subgraph.yaml for $SUBGRAPH_VERSION..."
+
+if [ "$SUBGRAPH_VERSION" = "v2" ]; then
+    # V2 Subgraph configuration (uses RailgunSmartWallet)
+    # Note: V2 has multiple event signatures, we'll restore from backup if available
+    if [ -f "subgraph.yaml.devnet.backup" ]; then
+        # Restore original and update only address/startBlock
+        cp subgraph.yaml.devnet.backup subgraph.yaml
+        # Update address using sed (works on both Linux and macOS)
+        sed -i.tmp "s/address: '[^']*'/address: '$RAILGUN_SMART_WALLET_ADDRESS'/" subgraph.yaml
+        sed -i.tmp "s/startBlock: [0-9]*/startBlock: $DEPLOY_BLOCK/" subgraph.yaml
+        sed -i.tmp "s/network: [a-zA-Z-]*/network: xlayer-devnet/" subgraph.yaml
+        rm -f subgraph.yaml.tmp
+        echo "   ✓ Restored and updated subgraph.yaml from backup"
+    else
+        echo "   ⚠️  No backup found, V2 requires manual eventHandlers configuration"
+        echo "   ℹ️  Please ensure subgraph.yaml has correct event signatures"
+        exit 1
+    fi
+else
+    # V3 Subgraph configuration (uses PoseidonMerkleAccumulator)
+    cat > subgraph.yaml << EOF
 specVersion: 0.0.5
 schema:
   file: ./schema.graphql
@@ -196,11 +229,12 @@ dataSources:
         - name: PoseidonT4
           file: ./abis/PoseidonT4.json
       eventHandlers:
-        - event: AccumulatorStateUpdate((bytes32[],(bytes32[],uint8,uint32,(bytes32,(uint8,address,uint256),uint120),bytes32)[],(address,(bytes32,(uint8,address,uint256),uint120),(bytes32[3],bytes32))[],(bytes,bytes32,bytes32)[],(bytes32,uint256)[],bytes),uint32,uint224))
+        - event: AccumulatorStateUpdate((bytes32[],(bytes32[],uint8,uint32,(bytes32,(uint8,address,uint256),uint120),bytes32)[],(address,(bytes32,(uint8,address,uint256),uint120),(bytes32[3],bytes32))[],(bytes,bytes32,bytes32)[],(bytes32,uint256)[],bytes),uint32,uint224)
           handler: handleAccumulatorStateUpdate
       file: ./src/poseidon-merkle-accumulator-events.ts
 EOF
-echo "   ✓ Created subgraph.yaml"
+    echo "   ✓ Created subgraph.yaml for V3"
+fi
 
 # Update chain ID in source files if script exists
 if [ -f "./replace-chain-id" ]; then
@@ -235,11 +269,13 @@ echo "🚀 Step 4: Deploying Subgraph to Graph Node..."
 echo "   📦 Creating subgraph..."
 graph create --node http://localhost:8020 "$RAILGUN_SUBGRAPH_NAME" 2>/dev/null || true
 
-# Deploy Subgraph
-echo "   🚀 Deploying..."
+# Deploy Subgraph with auto-generated version
+SUBGRAPH_VERSION="${RAILGUN_SUBGRAPH_VERSION:-v1.0.0-$(date +%s)}"
+echo "   🚀 Deploying (version: $SUBGRAPH_VERSION)..."
 graph deploy \
   --node http://localhost:8020 \
   --ipfs http://localhost:5001 \
+  --version-label "$SUBGRAPH_VERSION" \
   "$RAILGUN_SUBGRAPH_NAME" || {
     echo ""
     echo "   ❌ Subgraph deployment failed"
