@@ -12,6 +12,7 @@ tps.log
 test_tps.log
 genesis.json
 /multi-replayor
+/reth-data-templates
 
 # Environment configuration files (keep .example files)
 *.env
