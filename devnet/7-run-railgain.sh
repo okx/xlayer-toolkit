@@ -136,8 +136,11 @@ echo ""
 
 TEMP_DEPLOY_LOG="/tmp/railgun-deploy-$$.log"
 
+# Convert localhost to host.docker.internal for Docker container
+DOCKER_RPC_URL="${L2_RPC_URL/localhost/host.docker.internal}"
+
 docker run --rm \
-  -e RPC_URL="$L2_RPC_URL" \
+  -e RPC_URL="$DOCKER_RPC_URL" \
   -e CHAIN_ID="$CHAIN_ID" \
   -e DEPLOYER_PRIVATE_KEY="$OP_PROPOSER_PRIVATE_KEY" \
   --network host \

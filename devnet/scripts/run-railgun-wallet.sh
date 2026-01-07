@@ -65,9 +65,12 @@ echo "🚀 Running tests in Docker container..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+# Convert localhost to host.docker.internal for Docker container
+DOCKER_RPC_URL="${L2_RPC_URL/localhost/host.docker.internal}"
+
 docker run --rm \
   -e CHAIN_ID="$CHAIN_ID" \
-  -e RPC_URL="$L2_RPC_URL" \
+  -e RPC_URL="$DOCKER_RPC_URL" \
   -e RAILGUN_ADDRESS="$RAILGUN_SMART_WALLET_ADDRESS" \
   -e RAILGUN_RELAY_ADAPT_ADDRESS="${RAILGUN_RELAY_ADAPT_ADDRESS}" \
   -e TOKEN_ADDRESS="$RAILGUN_TEST_TOKEN_ADDRESS" \
