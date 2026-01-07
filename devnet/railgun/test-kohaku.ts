@@ -7,10 +7,6 @@ import {
   type RailgunNetworkConfig,
 } from '@kohaku-eth/railgun';
 
-// ============================================================================
-// RAILGUN Privacy Transaction Test - Using kohaku-eth/railgun
-// ============================================================================
-
 const CONFIG = {
   chainId: parseInt(process.env.CHAIN_ID || '195'),
   chainName: process.env.CHAIN_NAME || 'XLayerDevNet',
@@ -58,10 +54,6 @@ let devnetConfig: RailgunNetworkConfig;
 let indexer: Awaited<ReturnType<typeof createRailgunIndexer>>;
 let aliceAccount: Awaited<ReturnType<typeof createRailgunAccount>>;
 let bobAccount: Awaited<ReturnType<typeof createRailgunAccount>>;
-
-// ============================================================================
-// Step 1: Setup Environment
-// ============================================================================
 
 async function setupEnvironment() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -112,10 +104,6 @@ async function setupEnvironment() {
     throw new Error(`Token contract at ${tokenAddress} is invalid or not deployed`);
   }
 }
-
-// ============================================================================
-// Step 2: Setup Kohaku RAILGUN
-// ============================================================================
 
 async function setupKohakuRailgun() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -220,10 +208,6 @@ async function setupKohakuRailgun() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }
 
-// ============================================================================
-// Step 3: Shield (Privacy Deposit)
-// ============================================================================
-
 async function handleShield() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔒 Step 3: Shield - Alice deposits tokens into privacy pool');
@@ -314,10 +298,6 @@ async function handleShield() {
   console.log('   🙈 Hidden: Who deposited (Alice)\n');
 }
 
-// ============================================================================
-// Step 4: Transfer (Private Transfer)
-// ============================================================================
-
 async function handleTransfer() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔄 Step 4: Transfer - Alice sends tokens to Bob privately');
@@ -330,10 +310,6 @@ async function handleTransfer() {
     await indexer.sync({ toBlock: latestBlock, logProgress: false });
   }
   console.log(`   ✓ Indexer synced to block ${latestBlock}\n`);
-
-  // Check Merkle roots (for debugging if needed)
-  // const aliceRoot = aliceAccount.getLatestMerkleRoot();
-  // const bobRoot = bobAccount.getLatestMerkleRoot();
 
   const symbol = await tokenContract.symbol();
   const bobRailgunAddress = await bobAccount.getRailgunAddress();
@@ -446,20 +422,7 @@ async function handleUnshield() {
   console.log('   🙈 Hidden: Which private account belongs to Bob\n');
 }
 
-// ============================================================================
-// Summary
-// ============================================================================
-
 async function summary() {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('📊 Privacy Analysis');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-  
-  console.log('🔍 What observers can see on-chain:');
-  console.log('   1. "Someone deposited 500 tokens"');
-  console.log('   2. "A transfer happened"');
-  console.log('   3. "Someone withdrew 100 tokens to Bob\'s address"\n');
-  
   console.log('🙈 What is hidden:');
   console.log('   ✗ Alice deposited 500 tokens');
   console.log('   ✗ Alice sent 100 tokens to Bob');
@@ -467,21 +430,10 @@ async function summary() {
   console.log('   ✗ Alice still has 400 tokens in privacy pool');
   console.log('   ✗ Relationship between Alice and Bob\n');
   
-  console.log('🔑 Key Technologies:');
-  console.log('   • Zero-Knowledge Proofs: Prove "I can spend" without revealing "I am"');
-  console.log('   • Commitments: Encrypted "checks" only owner can decrypt');
-  console.log('   • Nullifiers: Prevent double-spending without revealing spender');
-  console.log('   • Merkle Tree: Efficiently prove Commitment exists');
-  console.log('   • Kohaku SDK: Simplified TypeScript SDK for RAILGUN\n');
-  
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('✅ RAILGUN Privacy Demo Complete (Kohaku SDK)!');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }
-
-// ============================================================================
-// Main
-// ============================================================================
 
 async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');

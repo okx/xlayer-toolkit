@@ -163,14 +163,32 @@ else
   fi
 fi
 
-# Build RAILGUN Test image
-if [ "$SKIP_RAILGUN_TEST_BUILD" = "true" ]; then
-  echo "⏭️  Skipping railgun-test build"
+# Build RAILGUN SDK Test image
+if [ "$SKIP_RAILGUN_SDK_BUILD" = "true" ]; then
+  echo "⏭️  Skipping railgun SDK build"
 else
   if [ -z "$RAILGUN_KOHAKU_LOCAL_DIRECTORY" ]; then
     echo "❌ Please set RAILGUN_KOHAKU_LOCAL_DIRECTORY in .env"
     exit 1
   fi
-  echo "🔨 Building railgun-test image"
-  build_and_tag_image "railgun-test" "${RAILGUN_KOHAKUT_IMAGE_TAG:-xlayer/railgun-test:latest}" "$PWD_DIR/railgun-test" "Dockerfile" "--build-context" "kohaku=$RAILGUN_KOHAKU_LOCAL_DIRECTORY" "--progress=plain"
+  echo "🔨 Building railgun SDK image"
+  build_and_tag_image "railgun-sdk" "${RAILGUN_SDK_IMAGE_TAG:-railgun-sdk:latest}" "$PWD_DIR/railgun" "Dockerfile.sdk" "--build-context" "kohaku=$RAILGUN_KOHAKU_LOCAL_DIRECTORY" "--progress=plain"
+fi
+
+# Build RAILGUN Contract Deploy image
+if [ "$SKIP_RAILGUN_CONTRACT_BUILD" = "true" ]; then
+  echo "⏭️  Skipping railgun contract build"
+else
+  if [ -z "$RAILGUN_CONTRACT_DIR" ]; then
+    echo "❌ Please set RAILGUN_CONTRACT_DIR in .env"
+    exit 1
+  fi
+  
+  if [ ! -d "$RAILGUN_CONTRACT_DIR" ]; then
+    echo "❌ Contract directory not found: $RAILGUN_CONTRACT_DIR"
+    exit 1
+  fi
+  
+  echo "🔨 Building railgun contract image"
+  build_and_tag_image "railgun-contract" "${RAILGUN_CONTRACT_IMAGE_TAG:-railgun-contract:latest}" "$PWD_DIR/railgun" "Dockerfile.contract" "--build-context" "contract=$RAILGUN_CONTRACT_DIR" "--progress=plain"
 fi

@@ -35,7 +35,6 @@ fi
 
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RAILGUN_DIR="$PWD_DIR/railgun"
-RAILGUN_TEST_DIR="$PWD_DIR/railgun-test"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🎯 RAILGUN Complete Test Flow (Kohaku SDK)"
@@ -88,28 +87,31 @@ fi
 echo "   ✅ Node.js v$NODE_VERSION (compatible with Kohaku SDK)"
 
 # ============================================================================
-# Step 1: Deploy RAILGUN Contracts
+# Step 1: Deploy RAILGUN Contracts (Using Docker)
 # ============================================================================
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📜 Step 1/3: Deploying RAILGUN Contracts"
+echo "📜 Step 1/3: Deploying RAILGUN Contracts (Docker)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
 # Verify prerequisites
 echo "📝 Verifying prerequisites..."
 
-if [ -z "$RAILGUN_CONTRACT_DIR" ]; then
-    echo "   ❌ RAILGUN_CONTRACT_DIR is not set in .env"
-    echo "   ℹ️  Example: RAILGUN_CONTRACT_DIR=/Users/oker/workspace/xlayer/pt/contract"
-    exit 1
-fi
+# Check if Docker image exists
+RAILGUN_CONTRACT_IMAGE_TAG="${RAILGUN_CONTRACT_IMAGE_TAG:-railgun-contract:latest}"
 
-if [ ! -d "$RAILGUN_CONTRACT_DIR" ]; then
-    echo "   ❌ Contract directory not found: $RAILGUN_CONTRACT_DIR"
+if ! docker image inspect "$RAILGUN_CONTRACT_IMAGE_TAG" >/dev/null 2>&1; then
+    echo "   ❌ Docker image '$RAILGUN_CONTRACT_IMAGE_TAG' not found"
+    echo ""
+    echo "   Please build the image first:"
+    echo "     cd $PWD_DIR"
+    echo "     ./init.sh"
+    echo ""
+    echo "   Or set SKIP_RAILGUN_CONTRACT_BUILD=false in .env and run ./init.sh"
     exit 1
 fi
-echo "   ✓ Contract directory: $RAILGUN_CONTRACT_DIR"
+echo "   ✓ Docker image found: $RAILGUN_CONTRACT_IMAGE_TAG"
 
 # Check if L2 is running
 if ! curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' "$L2_RPC_URL" > /dev/null 2>&1; then
@@ -119,90 +121,30 @@ if ! curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0
 fi
 echo "   ✓ L2 RPC is running: $L2_RPC_URL"
 
-# Check if node_modules exists
-if [ ! -d "$RAILGUN_CONTRACT_DIR/node_modules" ]; then
-    echo "   ⚠️  node_modules not found, installing dependencies..."
-    
-    if [ -f "$RAILGUN_CONTRACT_DIR/yarn.lock" ]; then
-        echo "   📦 Using yarn..."
-        cd "$RAILGUN_CONTRACT_DIR"
-        yarn install --frozen-lockfile --network-timeout 300000
-        cd "$PWD_DIR"
-    else
-        echo "   📦 Using npm..."
-        cd "$RAILGUN_CONTRACT_DIR"
-        npm install
-        cd "$PWD_DIR"
-    fi
-fi
-echo "   ✓ Dependencies installed"
-
-# Configure Hardhat Network
+# Deploy contracts using Docker
 echo ""
-echo "📝 Configuring Hardhat for devnet..."
-
-HARDHAT_CONFIG_FILE="$RAILGUN_CONTRACT_DIR/hardhat.config.ts"
-
-if [ ! -f "$HARDHAT_CONFIG_FILE" ]; then
-    echo "   ❌ hardhat.config.ts not found in $RAILGUN_CONTRACT_DIR"
-    exit 1
-fi
-
-if grep -q "xlayer-devnet" "$HARDHAT_CONFIG_FILE"; then
-    echo "   ✓ xlayer-devnet network already configured"
-else
-    echo "   ℹ️  Adding xlayer-devnet network to hardhat.config.ts..."
-    
-    if [ ! -f "$HARDHAT_CONFIG_FILE.devnet.backup" ]; then
-        cp "$HARDHAT_CONFIG_FILE" "$HARDHAT_CONFIG_FILE.devnet.backup"
-        echo "   ✓ Backed up original config"
-    fi
-    
-    cd "$RAILGUN_CONTRACT_DIR"
-    
-    sed -i.tmp '/etherscan: {/,/},/ {
-        /},/ a\
-  networks: {\
-    "xlayer-devnet": {\
-      url: process.env.RPC_URL || "http://localhost:8123",\
-      chainId: parseInt(process.env.CHAIN_ID || "195"),\
-      accounts: process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [],\
-      gasPrice: 1000000000,\
-    },\
-  },
-    }' "$HARDHAT_CONFIG_FILE"
-    
-    rm -f "$HARDHAT_CONFIG_FILE.tmp"
-    cd "$PWD_DIR"
-    
-    echo "   ✅ Added xlayer-devnet network to hardhat.config.ts"
-fi
-
-# Deploy contracts
-echo ""
-echo "📜 Deploying RAILGUN smart contracts to L2..."
-
-mkdir -p "$RAILGUN_DIR/deployments"
-
-# Deploy contracts
-cd "$RAILGUN_CONTRACT_DIR"
-
-echo "   🚀 Deploying contracts using Hardhat..."
+echo "📜 Deploying RAILGUN smart contracts using Docker..."
 echo "   ℹ️  Network: xlayer-devnet"
 echo "   ℹ️  RPC: $L2_RPC_URL"
 echo "   ℹ️  Chain ID: $CHAIN_ID"
 echo ""
 
-export RPC_URL="$L2_RPC_URL"
-export DEPLOYER_PRIVATE_KEY="$OP_PROPOSER_PRIVATE_KEY"
+mkdir -p "$RAILGUN_DIR/deployments"
 
 echo "   📝 Deploying contracts (this may take a few minutes)..."
 echo ""
 
 TEMP_DEPLOY_LOG="/tmp/railgun-deploy-$$.log"
-npx hardhat deploy:test --network xlayer-devnet 2>&1 | tee "$TEMP_DEPLOY_LOG"
-DEPLOY_STATUS=${PIPESTATUS[0]}
 
+docker run --rm \
+  -e RPC_URL="$L2_RPC_URL" \
+  -e CHAIN_ID="$CHAIN_ID" \
+  -e DEPLOYER_PRIVATE_KEY="$OP_PROPOSER_PRIVATE_KEY" \
+  --network host \
+  "$RAILGUN_CONTRACT_IMAGE_TAG" \
+  deploy:test --network xlayer-devnet 2>&1 | tee "$TEMP_DEPLOY_LOG"
+
+DEPLOY_STATUS=${PIPESTATUS[0]}
 DEPLOY_OUTPUT=$(cat "$TEMP_DEPLOY_LOG")
 
 echo ""
@@ -210,11 +152,8 @@ echo ""
 if [ $DEPLOY_STATUS -ne 0 ]; then
     echo "   ❌ Contract deployment failed"
     rm -f "$TEMP_DEPLOY_LOG" 2>/dev/null
-    cd "$PWD_DIR"
     exit 1
 fi
-
-cd "$PWD_DIR"
 
 echo "   ✅ Contracts deployed successfully"
 
