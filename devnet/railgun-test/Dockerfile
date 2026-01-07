@@ -61,10 +61,6 @@ COPY test-kohaku.ts ./
 # Note: Need devDependencies (tsx, typescript) to run tests
 RUN pnpm install --no-frozen-lockfile
 
-# Note: Circuit artifacts (~500MB) will be downloaded on first run
-# This avoids build timeout issues with slow networks
-# Artifacts are cached in the container's node_modules after first download
-
 # Cleanup
 RUN rm -f kohaku-railgun.tgz
 

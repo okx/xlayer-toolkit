@@ -352,20 +352,6 @@ async function demonstrateTransfer() {
   
   console.log('   ✓ Transfer transaction generated\n');
 
-  // Test transaction first with eth_call (disabled for cleaner output)
-  // Uncomment for debugging:
-  // try {
-  //   await provider.call({
-  //     from: signerA.address,
-  //     to: transferTxData.to,
-  //     data: transferTxData.data,
-  //     value: transferTxData.value || 0n,
-  //   });
-  // } catch (callError: any) {
-  //   console.error('   ❌ eth_call failed:', callError.message);
-  //   throw new Error(`Transfer would revert: ${callError.message}`);
-  // }
-
   // Submit transaction
   console.log('   📤 Submitting Transfer transaction...');
   const transferTx = await signerA.sendTransaction({

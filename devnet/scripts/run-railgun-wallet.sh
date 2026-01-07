@@ -30,7 +30,7 @@ else
 fi
 
 # Set default image tag if not configured
-RAILGUN_TEST_IMAGE_TAG="${RAILGUN_TEST_IMAGE_TAG:-xlayer/railgun-test:latest}"
+RAILGUN_KOHAKUT_IMAGE_TAG="${RAILGUN_KOHAKUT_IMAGE_TAG:-xlayer/railgun-test:latest}"
 
 # ============================================================================
 # Pre-flight Checks
@@ -40,8 +40,8 @@ RAILGUN_TEST_IMAGE_TAG="${RAILGUN_TEST_IMAGE_TAG:-xlayer/railgun-test:latest}"
 echo ""
 echo "🔍 Checking Docker image..."
 
-if ! docker image inspect "$RAILGUN_TEST_IMAGE_TAG" >/dev/null 2>&1; then
-    echo "❌ Docker image '$RAILGUN_TEST_IMAGE_TAG' not found"
+if ! docker image inspect "$RAILGUN_KOHAKUT_IMAGE_TAG" >/dev/null 2>&1; then
+    echo "❌ Docker image '$RAILGUN_KOHAKUT_IMAGE_TAG' not found"
     echo ""
     echo "Please build the image first:"
     echo "  cd $PWD_DIR"
@@ -51,7 +51,7 @@ if ! docker image inspect "$RAILGUN_TEST_IMAGE_TAG" >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "   ✓ Docker image found: $RAILGUN_TEST_IMAGE_TAG"
+echo "   ✓ Docker image found: $RAILGUN_KOHAKUT_IMAGE_TAG"
 
 # Check required environment variables
 echo ""
@@ -125,7 +125,7 @@ docker run --rm \
   -e TOKEN_ADDRESS="$RAILGUN_TEST_TOKEN_ADDRESS" \
   -e RAILGUN_DEPLOY_BLOCK="${RAILGUN_DEPLOY_BLOCK:-0}" \
   --network host \
-  "$RAILGUN_TEST_IMAGE_TAG" || {
+  "$RAILGUN_KOHAKUT_IMAGE_TAG" || {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "❌ Test failed"
@@ -150,7 +150,7 @@ echo "🎉 RAILGUN Wallet Test Completed!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "📊 Test Summary:"
-echo "   Image:      $RAILGUN_TEST_IMAGE_TAG"
+echo "   Image:      $RAILGUN_KOHAKUT_IMAGE_TAG"
 echo "   Chain ID:   $CHAIN_ID"
 echo "   RPC URL:    $L2_RPC_URL"
 echo "   Contract:   $RAILGUN_SMART_WALLET_ADDRESS"

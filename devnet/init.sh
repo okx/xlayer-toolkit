@@ -15,12 +15,22 @@ function build_and_tag_image() {
   local image_tag=$2
   local build_dir=$3
   local dockerfile=$4
+  shift 4
+  local extra_args="$@"
 
   cd "$build_dir"
-  GITTAG=$(git rev-parse --short HEAD)
-  docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
-  docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
-  echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
+  
+  # Use git tag if available, otherwise use 'latest'
+  if git rev-parse --short HEAD 2>/dev/null; then
+    GITTAG=$(git rev-parse --short HEAD)
+    docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" $extra_args .
+    docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
+    echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
+  else
+    docker build -t "${image_tag}" -f "$dockerfile" $extra_args .
+    echo "✅ Built image: ${image_tag}"
+  fi
+  
   cd -
 }
 
@@ -153,17 +163,14 @@ else
   fi
 fi
 
+# Build RAILGUN Test image
 if [ "$SKIP_RAILGUN_TEST_BUILD" = "true" ]; then
   echo "⏭️  Skipping railgun-test build"
 else
-  echo "✓ Using Kohaku source: $KOHAKU_LOCAL_DIRECTORY"
-  cd "$PWD_DIR/railgun-test"
-  
-  docker build \
-    --build-context kohaku="$KOHAKU_LOCAL_DIRECTORY" \
-    -t "${RAILGUN_TEST_IMAGE_TAG:-xlayer/railgun-test:latest}" \
-    --progress=plain \
-    . ;
-  
-  cd "$PWD_DIR"
+  if [ -z "$RAILGUN_KOHAKU_LOCAL_DIRECTORY" ]; then
+    echo "❌ Please set RAILGUN_KOHAKU_LOCAL_DIRECTORY in .env"
+    exit 1
+  fi
+  echo "🔨 Building railgun-test image"
+  build_and_tag_image "railgun-test" "${RAILGUN_KOHAKUT_IMAGE_TAG:-xlayer/railgun-test:latest}" "$PWD_DIR/railgun-test" "Dockerfile" "--build-context" "kohaku=$RAILGUN_KOHAKU_LOCAL_DIRECTORY" "--progress=plain"
 fi
