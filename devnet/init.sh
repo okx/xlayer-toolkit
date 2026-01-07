@@ -152,3 +152,18 @@ else
     build_and_tag_image "kailua" "$KAILUA_IMAGE_TAG" "$KAILUA_LOCAL_DIRECTORY" "Dockerfile.local"
   fi
 fi
+
+if [ "$SKIP_RAILGUN_TEST_BUILD" = "true" ]; then
+  echo "⏭️  Skipping railgun-test build"
+else
+  echo "✓ Using Kohaku source: $KOHAKU_LOCAL_DIRECTORY"
+  cd "$PWD_DIR/railgun-test"
+  
+  docker build \
+    --build-context kohaku="$KOHAKU_LOCAL_DIRECTORY" \
+    -t "${RAILGUN_TEST_IMAGE_TAG:-xlayer/railgun-test:latest}" \
+    --progress=plain \
+    . ;
+  
+  cd "$PWD_DIR"
+fi

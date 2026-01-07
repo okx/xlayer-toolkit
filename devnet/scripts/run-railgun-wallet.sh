@@ -2,43 +2,56 @@
 set -e
 
 # ============================================================================
-# RAILGUN Wallet Test Script (Kohaku SDK)
+# RAILGUN Wallet Test Script (Docker)
 # ============================================================================
-# This script runs RAILGUN wallet tests without deploying contracts.
+# This script runs RAILGUN wallet tests in a Docker container
 # Use this for quick testing after contracts are already deployed.
 # ============================================================================
 
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd .. && pwd)"
-RAILGUN_TEST_DIR="$PWD_DIR/railgun-test"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🧪 RAILGUN Wallet Test (Kohaku SDK)"
+echo "🧪 RAILGUN Wallet Test (Docker)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
 # ============================================================================
-# Pre-flight Checks
+# Load Environment
 # ============================================================================
 
-# Load environment variables
 if [ -f "$PWD_DIR/.env" ]; then
     echo "📝 Loading environment from .env..."
     source "$PWD_DIR/.env"
     echo "   ✓ Environment loaded"
 else
     echo "❌ .env file not found"
-    echo "   Please run ./7-run-railgain.sh first to deploy contracts"
+    echo "   Please run ./init.sh first"
     exit 1
 fi
 
-# Debug: Show what was loaded
+# Set default image tag if not configured
+RAILGUN_TEST_IMAGE_TAG="${RAILGUN_TEST_IMAGE_TAG:-xlayer/railgun-test:latest}"
+
+# ============================================================================
+# Pre-flight Checks
+# ============================================================================
+
+# Check if Docker image exists
 echo ""
-echo "🔍 Environment variables:"
-echo "   CHAIN_ID=${CHAIN_ID:-<not set>}"
-echo "   L2_RPC_URL=${L2_RPC_URL:-<not set>}"
-echo "   RAILGUN_SMART_WALLET_ADDRESS=${RAILGUN_SMART_WALLET_ADDRESS:-<not set>}"
-echo "   RAILGUN_TEST_TOKEN_ADDRESS=${RAILGUN_TEST_TOKEN_ADDRESS:-<not set>}"
-echo "   RAILGUN_DEPLOY_BLOCK=${RAILGUN_DEPLOY_BLOCK:-<not set>}"
+echo "🔍 Checking Docker image..."
+
+if ! docker image inspect "$RAILGUN_TEST_IMAGE_TAG" >/dev/null 2>&1; then
+    echo "❌ Docker image '$RAILGUN_TEST_IMAGE_TAG' not found"
+    echo ""
+    echo "Please build the image first:"
+    echo "  cd $PWD_DIR"
+    echo "  ./init.sh"
+    echo ""
+    echo "Or set SKIP_RAILGUN_TEST_BUILD=false in .env and run ./init.sh"
+    exit 1
+fi
+
+echo "   ✓ Docker image found: $RAILGUN_TEST_IMAGE_TAG"
 
 # Check required environment variables
 echo ""
@@ -85,183 +98,63 @@ if ! curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0
 fi
 echo "   ✓ L2 RPC is running: $L2_RPC_URL"
 
-# Verify contracts are deployed
+# Display configuration
 echo ""
-echo "🔍 Verifying contracts..."
-
-VERIFICATION_RESPONSE=$(curl -s -X POST \
-    -H "Content-Type: application/json" \
-    --data "{\"jsonrpc\":\"2.0\",\"method\":\"eth_getCode\",\"params\":[\"$RAILGUN_SMART_WALLET_ADDRESS\",\"latest\"],\"id\":1}" \
-    "$L2_RPC_URL" 2>/dev/null)
-
-if echo "$VERIFICATION_RESPONSE" | grep -q '"result":"0x"'; then
-    echo "   ❌ RAILGUN contract not found at: $RAILGUN_SMART_WALLET_ADDRESS"
-    echo "   ℹ️  Please run ./7-run-railgain.sh to deploy contracts"
-    exit 1
-fi
-
-echo "   ✓ RAILGUN contract: $RAILGUN_SMART_WALLET_ADDRESS"
-echo "   ✓ Test token: $RAILGUN_TEST_TOKEN_ADDRESS"
+echo "📊 Test Configuration:"
+echo "   Chain ID:      $CHAIN_ID"
+echo "   RPC URL:       $L2_RPC_URL"
+echo "   Contract:      $RAILGUN_SMART_WALLET_ADDRESS"
+echo "   Token:         $RAILGUN_TEST_TOKEN_ADDRESS"
+echo "   Deploy Block:  ${RAILGUN_DEPLOY_BLOCK:-0}"
 
 # ============================================================================
-# Setup Kohaku SDK
+# Run Docker Container
 # ============================================================================
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "📦 Setting up Kohaku SDK"
+echo "🚀 Running tests in Docker container..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-cd "$RAILGUN_TEST_DIR"
-
-# Check if Kohaku is cloned
-if [ ! -d "kohaku" ]; then
-    echo "📦 Cloning Kohaku SDK..."
-    git clone https://github.com/ethereum/kohaku.git
-    echo "   ✓ Kohaku cloned"
-else
-    echo "   ✓ Kohaku already cloned"
-fi
-
-# Build Kohaku
-echo ""
-echo "🔨 Building Kohaku SDK..."
-
-cd kohaku
-
-if [ ! -d "node_modules" ]; then
-    echo "   📦 Installing Kohaku dependencies..."
-    npx -y pnpm install
-fi
-
-echo "   🔧 Building Kohaku packages..."
-echo "   ℹ️  Note: docs package may fail on Node.js < 22 (this is OK)"
-echo ""
-
-# Build all packages, capture output but don't fail
-BUILD_OUTPUT=$(npx -y pnpm -r build 2>&1) || true
-BUILD_EXIT_CODE=$?
-
-# Check if railgun package was built successfully
-echo ""
-echo "   🔍 Verifying railgun package build..."
-
-if [ -d "packages/railgun/dist" ] && [ -f "packages/railgun/dist/index.d.ts" ]; then
-    echo "   ✅ Railgun package built successfully"
-    
-    # Check if docs failed (expected on Node.js < 22)
-    if echo "$BUILD_OUTPUT" | grep -q "docs.*Failed"; then
-        echo "   ℹ️  Docs package build failed (not required for tests)"
-    fi
-else
-    echo "   ❌ Railgun package build failed"
-    echo ""
-    echo "   Build output:"
-    echo "$BUILD_OUTPUT" | tail -20
-    echo ""
-    cd "$RAILGUN_TEST_DIR"
-    exit 1
-fi
-
-cd "$RAILGUN_TEST_DIR"
-echo "   ✓ Kohaku railgun package built successfully"
-
-# ============================================================================
-# Install Test Dependencies
-# ============================================================================
-echo ""
-echo "📦 Installing test dependencies..."
-
-if [ ! -d "node_modules" ]; then
-    npx -y pnpm install
-fi
-echo "   ✓ Test dependencies installed"
-
-# ============================================================================
-# Check Circuit Artifacts
-# ============================================================================
-echo ""
-echo "🔍 Checking Circuit Artifacts..."
-
-ARTIFACTS_PATH="kohaku/node_modules/@railgun-community/circuit-artifacts"
-
-if [ ! -d "$ARTIFACTS_PATH" ]; then
-    echo "   ⚠️  Circuit artifacts not pre-installed"
-    echo "   ℹ️  They will be downloaded automatically on first use (~500MB)"
-    echo "   ℹ️  This may take a few minutes for Transfer/Unshield operations"
-    echo ""
-else
-    echo "   ✓ Circuit artifacts found"
-fi
-
-# ============================================================================
-# Prepare Environment and Run Tests
-# ============================================================================
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🧪 Running RAILGUN Wallet Tests"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-# Prepare environment variables
-echo "📝 Setting environment variables..."
-
-export CHAIN_ID="$CHAIN_ID"
-export CHAIN_NAME="XLayerDevNet"
-export RPC_URL="$L2_RPC_URL"
-export RAILGUN_ADDRESS="$RAILGUN_SMART_WALLET_ADDRESS"
-export RAILGUN_RELAY_ADAPT_ADDRESS="$RAILGUN_RELAY_ADAPT_ADDRESS"
-export POSEIDON_ADDRESS="$RAILGUN_POSEIDONT4_ADDRESS"
-export TOKEN_ADDRESS="$RAILGUN_TEST_TOKEN_ADDRESS"
-export RAILGUN_DEPLOY_BLOCK="${RAILGUN_DEPLOY_BLOCK:-0}"
-
-echo "   ✓ Environment variables set:"
-echo "      CHAIN_ID=$CHAIN_ID"
-echo "      RPC_URL=$RPC_URL"
-echo "      RAILGUN_ADDRESS=$RAILGUN_ADDRESS"
-echo "      TOKEN_ADDRESS=$TOKEN_ADDRESS"
-echo "      DEPLOY_BLOCK=$RAILGUN_DEPLOY_BLOCK"
-
-# Run Kohaku test
-echo ""
-echo "🚀 Starting Kohaku SDK test..."
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-npx -y pnpm test:kohaku || {
+docker run --rm \
+  -e CHAIN_ID="$CHAIN_ID" \
+  -e RPC_URL="$L2_RPC_URL" \
+  -e RAILGUN_ADDRESS="$RAILGUN_SMART_WALLET_ADDRESS" \
+  -e RAILGUN_RELAY_ADAPT_ADDRESS="${RAILGUN_RELAY_ADAPT_ADDRESS}" \
+  -e TOKEN_ADDRESS="$RAILGUN_TEST_TOKEN_ADDRESS" \
+  -e RAILGUN_DEPLOY_BLOCK="${RAILGUN_DEPLOY_BLOCK:-0}" \
+  --network host \
+  "$RAILGUN_TEST_IMAGE_TAG" || {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    echo "❌ Kohaku test failed"
+    echo "❌ Test failed"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "💡 Troubleshooting:"
     echo "   • Check logs above for specific errors"
     echo "   • Verify L2 services are running: docker compose ps"
     echo "   • Verify contract is deployed: echo \$RAILGUN_SMART_WALLET_ADDRESS"
     echo "   • Check if token is deployed: echo \$TOKEN_ADDRESS"
-    echo "   • Review test output for balance sync issues"
-    echo ""
-    echo "📚 Documentation:"
-    echo "   • Quick Start: $RAILGUN_TEST_DIR/QUICK_START.md"
-    echo "   • README: $RAILGUN_TEST_DIR/README_KOHAKU.md"
     echo ""
     exit 1
-}
+  }
 
 # ============================================================================
 # Complete
 # ============================================================================
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🎉 RAILGUN Wallet Test Completed Successfully!"
+echo "🎉 RAILGUN Wallet Test Completed!"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "📊 Test Summary:"
-echo "   SDK:        Kohaku (kohaku-eth/railgun)"
+echo "   Image:      $RAILGUN_TEST_IMAGE_TAG"
 echo "   Chain ID:   $CHAIN_ID"
 echo "   RPC URL:    $L2_RPC_URL"
-echo "   Contract:   $RAILGUN_ADDRESS"
-echo "   Token:      $TOKEN_ADDRESS"
+echo "   Contract:   $RAILGUN_SMART_WALLET_ADDRESS"
+echo "   Token:      $RAILGUN_TEST_TOKEN_ADDRESS"
 echo ""
 echo "   ✅ All privacy transactions tested"
+echo ""

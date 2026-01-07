@@ -8,7 +8,10 @@
     "test:kohaku": "tsx test-kohaku.ts"
   },
   "dependencies": {
-    "ethers": "^6.10.0"
+    "@kohaku-eth/railgun": "file:./kohaku-railgun.tgz",
+    "ethers": "^6.10.0",
+    "snarkjs": "^0.7.5",
+    "@railgun-community/circuit-artifacts": "https://ipfs-lb.com/ipfs/QmPvs6Lws1MS4CTMAQ6P3WfyFpWFKGu7o6cSbWCu3vgXLW/railgun-circuit-test-artifacts-0.0.1.tgz"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -19,4 +22,3 @@
     "node": ">=14.0.0"
   }
 }
-

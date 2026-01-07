@@ -5,7 +5,7 @@ import {
   EthersProviderAdapter,
   EthersSignerAdapter,
   type RailgunNetworkConfig,
-} from './kohaku/packages/railgun/dist/index.js';
+} from '@kohaku-eth/railgun';
 
 // ============================================================================
 // RAILGUN Privacy Transaction Test - Using kohaku-eth/railgun
