@@ -224,7 +224,7 @@ async function setupKohakuRailgun() {
 // Step 3: Shield (Privacy Deposit)
 // ============================================================================
 
-async function demonstrateShield() {
+async function handleShield() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔒 Step 3: Shield - Alice deposits tokens into privacy pool');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
@@ -318,7 +318,7 @@ async function demonstrateShield() {
 // Step 4: Transfer (Private Transfer)
 // ============================================================================
 
-async function demonstrateTransfer() {
+async function handleTransfer() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔄 Step 4: Transfer - Alice sends tokens to Bob privately');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
@@ -398,7 +398,7 @@ async function demonstrateTransfer() {
 // Step 5: Unshield (Privacy Withdrawal)
 // ============================================================================
 
-async function demonstrateUnshield() {
+async function handleUnshield() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔓 Step 5: Unshield - Bob withdraws to public address');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
@@ -496,13 +496,13 @@ async function main() {
     await setupKohakuRailgun();
 
     // Step 3: Shield - Alice deposits tokens
-    await demonstrateShield();
+    await handleShield();
 
     // Step 4: Transfer - Alice sends to Bob
-    await demonstrateTransfer();
+    await handleTransfer();
 
     // Step 5: Unshield - Bob withdraws to public address
-    await demonstrateUnshield();
+    await handleUnshield();
 
     // Summary
     await summary();
@@ -515,11 +515,6 @@ async function main() {
     console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.error(`Error: ${error.message}`);
     console.error(`Stack: ${error.stack}`);
-    console.error('\n💡 Common Issues:');
-    console.error('   • Missing circuit artifacts (run: pnpm add @railgun-community/circuit-artifacts@...)');
-    console.error('   • WETH not deployed (native ETH shielding requires WETH)');
-    console.error('   • Insufficient gas limits');
-    console.error('   • Network sync issues\n');
     process.exit(1);
   }
 }
