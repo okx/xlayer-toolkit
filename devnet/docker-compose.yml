@@ -954,6 +954,7 @@ services:
   # RAILGUN Privacy System Services
   # ==============================================================================
   # Note: RAILGUN contract deployment is handled by 7-deploy-railgun.sh
+  # Note: No Subgraph needed - events are parsed directly from transaction receipts
 
   # RAILGUN Test Wallet (Node.js v16 environment)
   railgun-test-wallet:
@@ -966,94 +967,14 @@ services:
       - CHAIN_ID=${CHAIN_ID:-195}
       - CHAIN_NAME=XLayerDevNet
       - RAILGUN_ADDRESS=${RAILGUN_SMART_WALLET_ADDRESS}
-      - RAILGUN_RELAY_ADAPT_ADDRESS=${RAILGUN_RELAY_ADAPT_ADDRESS}
-      - SUBGRAPH_URL=http://railgun-graph-node:8000/subgraphs/name/${RAILGUN_SUBGRAPH_NAME:-railgun-xlayer-devnet}
+      - POSEIDON_ADDRESS=${RAILGUN_POSEIDONT4_ADDRESS}
+      - TOKEN_ADDRESS=${TOKEN_ADDRESS}
       - DEPLOYER_PRIVATE_KEY=${OP_PROPOSER_PRIVATE_KEY}
     depends_on:
       op-seq:
         condition: service_healthy
-      railgun-graph-node:
-        condition: service_started
     networks:
       - default
     # Do not auto-start (run manually via docker compose run or 9-test-wallet.sh)
     profiles:
       - test
-
-  # PostgreSQL database for Graph Node
-  railgun-postgres:
-    image: postgres:14
-    container_name: railgun-postgres
-    restart: unless-stopped
-    command: ["postgres", "-cshared_preload_libraries=pg_stat_statements"]
-    environment:
-      POSTGRES_USER: graph-node
-      POSTGRES_PASSWORD: let-me-in
-      POSTGRES_DB: graph-node
-      # Graph Node requires C locale for proper indexing
-      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
-    volumes:
-      - ./data/railgun-subgraph/postgres:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U graph-node"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - default
-
-  # IPFS for Subgraph metadata storage
-  railgun-ipfs:
-    image: ipfs/go-ipfs:v0.10.0
-    container_name: railgun-ipfs
-    restart: unless-stopped
-    volumes:
-      - ./data/railgun-subgraph/ipfs:/data/ipfs
-    ports:
-      - "5001:5001"
-    healthcheck:
-      test: ["CMD", "ipfs", "id"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - default
-
-  # Graph Node for RAILGUN event indexing
-  railgun-graph-node:
-    image: graphprotocol/graph-node:latest
-    container_name: railgun-graph-node
-    restart: unless-stopped
-    depends_on:
-      railgun-postgres:
-        condition: service_healthy
-      railgun-ipfs:
-        condition: service_healthy
-    environment:
-      postgres_host: railgun-postgres
-      postgres_user: graph-node
-      postgres_pass: let-me-in
-      postgres_db: graph-node
-      ipfs: 'railgun-ipfs:5001'
-      ethereum: 'xlayer-devnet:http://op-seq-el:8545'
-      GRAPH_LOG: info
-      RUST_LOG: info
-      ETHEREUM_POLLING_INTERVAL: 1000
-    ports:
-      - "8000:8000"  # GraphQL HTTP
-      - "8001:8001"  # GraphQL WebSocket
-      - "8020:8020"  # JSON-RPC (admin)
-      - "8030:8030"  # Index status
-      - "8040:8040"  # Metrics
-    volumes:
-      - ./data/railgun-subgraph/graph-node:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-    networks:
-      - default
