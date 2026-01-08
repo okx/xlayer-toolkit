@@ -26,23 +26,19 @@ if [ "$RAILGUN_ENABLE" != "true" ]; then
   exit 0
 fi
 
-# Initialize RAILGUN internal config file (if not exists)
 if [ ! -f "$RAILGUN_ENV_FILE" ]; then
   cp "$RAILGUN_DIR/example.env.railgun" "$RAILGUN_ENV_FILE"
 fi
 
 echo "📜 Step 1/3: Deploying RAILGUN Contracts (Docker)"
 
-# Check if Docker image exists
 RAILGUN_CONTRACT_IMAGE_TAG="${RAILGUN_CONTRACT_IMAGE_TAG:-railgun-contract:latest}"
 
 # Deploy contracts using Docker
-echo ""
 echo "📜 Deploying RAILGUN smart contracts using Docker..."
 echo "   ℹ️  Network: xlayer-devnet"
 echo "   ℹ️  RPC: $L2_RPC_URL"
 echo "   ℹ️  Chain ID: $CHAIN_ID"
-echo ""
 
 TEMP_DEPLOY_LOG="/tmp/railgun-deploy-$$.log"
 
@@ -60,20 +56,14 @@ docker run --rm \
 DEPLOY_STATUS=${PIPESTATUS[0]}
 DEPLOY_OUTPUT=$(cat "$TEMP_DEPLOY_LOG")
 
-echo ""
-
 if [ $DEPLOY_STATUS -ne 0 ]; then
     echo "   ❌ Contract deployment failed"
     rm -f "$TEMP_DEPLOY_LOG" 2>/dev/null
     exit 1
 fi
-
 echo "   ✅ Contracts deployed successfully"
 
-# Extract contract addresses
-echo ""
 echo "🔍 Extracting contract addresses..."
-
 PROXY_ADDR=$(echo "$DEPLOY_OUTPUT" | grep -A 20 "DEPLOY CONFIG:" | grep "proxy:" | sed -n "s/.*proxy: '\([^']*\)'.*/\1/p" | head -1)
 RELAY_ADAPT_ADDR=$(echo "$DEPLOY_OUTPUT" | grep -A 20 "DEPLOY CONFIG:" | grep "relayAdapt:" | sed -n "s/.*relayAdapt: '\([^']*\)'.*/\1/p" | head -1)
 POSEIDON_T4_ADDR=$(echo "$DEPLOY_OUTPUT" | grep -A 20 "DEPLOY CONFIG:" | grep "poseidonT4:" | sed -n "s/.*poseidonT4: '\([^']*\)'.*/\1/p" | head -1)
@@ -96,8 +86,6 @@ if [ -n "$POSEIDON_T4_ADDR" ] && [ "$POSEIDON_T4_ADDR" != "null" ]; then
     sed_inplace "s|^RAILGUN_POSEIDONT4_ADDRESS=.*|RAILGUN_POSEIDONT4_ADDRESS=$POSEIDON_T4_ADDR|" "$RAILGUN_ENV_FILE"
 fi
 
-# Verify contract
-echo ""
 echo "🔍 Verifying contract deployment..."
 
 VERIFICATION_RESPONSE=$(curl -s -X POST \
@@ -112,8 +100,6 @@ else
     echo "   ✅ Contract verified on L2"
 fi
 
-# Get and save deployment block height
-echo ""
 echo "🔍 Getting deployment block height..."
 
 BLOCK_RESPONSE=$(curl -s -X POST \
@@ -140,18 +126,15 @@ else
 fi
 
 rm -f "$TEMP_DEPLOY_LOG" 2>/dev/null
-
 echo "✅ Contract deployment completed"
 
 echo "🪙 Step 2/3: Deploying Test ERC20 Token"
-
 ./scripts/deploy-test-token.sh || {
     echo "❌ Failed to deploy test token"
     exit 1
 }
 
 echo "🧪 Step 3/3: Run Wallet Tests"
-
 ./scripts/run-railgun-wallet.sh || {
     echo "❌ Wallet test failed"
     exit 1

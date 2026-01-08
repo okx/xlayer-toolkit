@@ -21,7 +21,6 @@ function build_and_tag_image() {
   docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
   docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
   echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
-  
   cd -
 }
 
