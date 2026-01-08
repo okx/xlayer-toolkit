@@ -129,8 +129,6 @@ echo "   ℹ️  RPC: $L2_RPC_URL"
 echo "   ℹ️  Chain ID: $CHAIN_ID"
 echo ""
 
-mkdir -p "$RAILGUN_DIR/deployments"
-
 echo "   📝 Deploying contracts (this may take a few minutes)..."
 echo ""
 
