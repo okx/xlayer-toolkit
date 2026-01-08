@@ -64,6 +64,8 @@ NODE_RPC_PORT=""
 GETH_P2P_PORT=""
 NODE_P2P_PORT=""
 ENGINE_API_PORT=""
+FLASHBLOCKS_ENABLED=""
+FLASHBLOCKS_URL=""
 
 print_info() { echo -e "\033[0;34mℹ️  $1\033[0m"; }
 print_success() { echo -e "\033[0;32m✅ $1\033[0m"; }
@@ -405,6 +407,10 @@ validate_url() {
     [[ "$1" =~ ^https?:// ]] || { print_error "Please enter a valid HTTP/HTTPS URL"; return 1; }
 }
 
+validate_ws_url() {
+    [[ "$1" =~ ^wss?:// ]] || { print_error "Please enter a valid WebSocket URL"; return 1; }
+}
+
 # Validate if snapshot mode is supported for the given RPC type and network
 validate_snapshot_support() {
     local rpc_type=$1
@@ -561,6 +567,18 @@ get_user_input() {
     ENGINE_API_PORT=$(prompt_input "10. Engine API port [default: $DEFAULT_ENGINE_API_PORT]: " "$DEFAULT_ENGINE_API_PORT" "") || ENGINE_API_PORT="$DEFAULT_ENGINE_API_PORT"
     
     print_info "Using ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
+
+    FLASHBLOCKS_ENABLED=$(prompt_input "11. Flashblocks enabled [default: $DEFAULT_FLASHBLOCKS_ENABLED]: " "$DEFAULT_FLASHBLOCKS_ENABLED" "") || FLASHBLOCKS_ENABLED="$DEFAULT_FLASHBLOCKS_ENABLED"
+
+    while true && [ "$FLASHBLOCKS_ENABLED" = "true" ]; do
+        print_prompt "12. Flashblocks URL (Flashblocks WebSocket endpoint): "
+        if ! read -r FLASHBLOCKS_URL </dev/tty 2>/dev/null && ! read -r FLASHBLOCKS_URL; then
+            print_error "Failed to read input"
+            exit 1
+        fi
+        [ -n "$FLASHBLOCKS_URL" ] && validate_ws_url "$FLASHBLOCKS_URL" && break
+    done
+    
     
     print_success "Configuration input completed"
 }
@@ -1291,6 +1309,10 @@ services:
     command:
       - -c
       - |
+        FLASHBLOCKS_FLAG=""
+        if [ "${FLASHBLOCKS_ENABLED}" = "true" ] && [ -n "${FLASHBLOCKS_URL}" ]; then
+          FLASHBLOCKS_FLAG="--flashblocks-url=${FLASHBLOCKS_URL}"
+        fi
         exec op-reth node \
           --datadir=/datadir \
           --chain=${CHAIN_NAME:-xlayer-mainnet} \
@@ -1317,7 +1339,8 @@ services:
           --rpc.legacy-timeout=${LEGACY_RPC_TIMEOUT} \
           --log.stdout.filter=info \
           --log.file.directory=/logs/ \
-          --log.file.filter=info
+          --log.file.filter=info \
+          ${FLASHBLOCKS_FLAG}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "--data", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
