@@ -1,22 +1,22 @@
-From c882d5bbd861608b5ba3330183a17f5f4f9a5f7f Mon Sep 17 00:00:00 2001
+From 601fdf872ac4dded51c4326beea1d58de4fbfa97 Mon Sep 17 00:00:00 2001
 From: "xingqiang.yuan" <xingqiang.yuan@okg.com>
-Date: Thu, 8 Jan 2026 19:09:14 +0800
+Date: Thu, 8 Jan 2026 19:21:21 +0800
 Subject: [PATCH] add railgun demo
 
 ---
- run.sh               |  19 +++
+ run.sh               |  22 ++++
  scripts/demo.ts      | 308 +++++++++++++++++++++++++++++++++++++++++++
  tasks/deploy/test.ts |  17 ++-
- 3 files changed, 341 insertions(+), 3 deletions(-)
+ 3 files changed, 344 insertions(+), 3 deletions(-)
  create mode 100755 run.sh
  create mode 100644 scripts/demo.ts
 
 diff --git a/run.sh b/run.sh
 new file mode 100755
-index 0000000..1954809
+index 0000000..c1e3471
 --- /dev/null
 +++ b/run.sh
-@@ -0,0 +1,19 @@
+@@ -0,0 +1,22 @@
 +#!/bin/bash
 +
 +# stop the existing node
@@ -24,6 +24,9 @@ index 0000000..1954809
 +rm -f node.out
 +
 +# prepare environment
++export NVM_DIR="$HOME/.nvm"
++[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
++[ -s "$HOME/.nvm/nvm.sh" ] && \. "$HOME/.nvm/nvm.sh"
 +nvm install 18
 +yarn install
 +
