@@ -31,15 +31,7 @@ if [ ! -f "$RAILGUN_ENV_FILE" ]; then
   cp "$RAILGUN_DIR/example.env.railgun" "$RAILGUN_ENV_FILE"
 fi
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🎯 RAILGUN Complete Test Flow (Kohaku SDK)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📜 Step 1/3: Deploying RAILGUN Contracts (Docker)"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
 
 # Check if Docker image exists
 RAILGUN_CONTRACT_IMAGE_TAG="${RAILGUN_CONTRACT_IMAGE_TAG:-railgun-contract:latest}"
@@ -149,42 +141,20 @@ fi
 
 rm -f "$TEMP_DEPLOY_LOG" 2>/dev/null
 
-echo ""
 echo "✅ Contract deployment completed"
 
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🪙 Step 2/3: Deploying Test ERC20 Token"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
 
 ./scripts/deploy-test-token.sh || {
     echo "❌ Failed to deploy test token"
     exit 1
 }
 
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🧪 Step 3/3: Run Wallet Tests"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-echo "🚀 Calling wallet test script..."
-echo ""
 
 ./scripts/run-railgun-wallet.sh || {
-    echo ""
     echo "❌ Wallet test failed"
-    echo ""
-    echo "💡 Troubleshooting:"
-    echo "   • Check error messages above"
-    echo "   • Re-run tests only: ./scripts/run-railgun-wallet.sh"
-    echo "   • Full redeploy: ./7-run-railgain.sh"
-    echo ""
     exit 1
 }
 
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🎉 Complete Railgun Flow Finished Successfully!"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

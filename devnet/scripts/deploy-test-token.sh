@@ -95,15 +95,7 @@ if echo "$DEPLOY_TX" | grep -q "contractAddress"; then
     fi
     rm -f "$RAILGUN_ENV_FILE.bak"
     
-    echo "   ✅ Done!"
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "🎉 Test token deployed successfully!"
-    echo ""
-    echo "   Next steps:"
-    echo "   1. source .env"
-    echo "   2. ./9-test-wallet.sh"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 else
     echo "   ❌ Deployment failed!"
     echo "$DEPLOY_TX"
