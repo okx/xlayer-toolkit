@@ -15,21 +15,12 @@ function build_and_tag_image() {
   local image_tag=$2
   local build_dir=$3
   local dockerfile=$4
-  shift 4
-  local extra_args="$@"
 
   cd "$build_dir"
-  
-  # Use git tag if available, otherwise use 'latest'
-  if git rev-parse --short HEAD 2>/dev/null; then
-    GITTAG=$(git rev-parse --short HEAD)
-    docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" $extra_args .
-    docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
-    echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
-  else
-    docker build -t "${image_tag}" -f "$dockerfile" $extra_args .
-    echo "✅ Built image: ${image_tag}"
-  fi
+  GITTAG=$(git rev-parse --short HEAD)
+  docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
+  docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
+  echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
   
   cd -
 }
@@ -172,7 +163,12 @@ else
     exit 1
   fi
   echo "🔨 Building railgun SDK image"
-  build_and_tag_image "railgun-sdk" "${RAILGUN_SDK_IMAGE_TAG:-railgun-sdk:latest}" "$PWD_DIR/railgun" "Dockerfile.sdk" "--build-context" "kohaku=$RAILGUN_KOHAKU_LOCAL_DIRECTORY" "--progress=plain"
+  docker build -t "${RAILGUN_SDK_IMAGE_TAG:-railgun-sdk:latest}" \
+    -f "$PWD_DIR/railgun/Dockerfile.sdk" \
+    --build-context kohaku="$RAILGUN_KOHAKU_LOCAL_DIRECTORY" \
+    --progress=plain \
+    "$PWD_DIR/railgun"
+  echo "✅ Built: ${RAILGUN_SDK_IMAGE_TAG:-railgun-sdk:latest}"
 fi
 
 # Build RAILGUN Contract Deploy image
@@ -185,5 +181,10 @@ else
   fi
   
   echo "🔨 Building railgun contract image"
-  build_and_tag_image "railgun-contract" "${RAILGUN_CONTRACT_IMAGE_TAG:-railgun-contract:latest}" "$PWD_DIR/railgun" "Dockerfile.contract" "--build-context" "contract=$RAILGUN_CONTRACT_DIR" "--progress=plain"
+  docker build -t "${RAILGUN_CONTRACT_IMAGE_TAG:-railgun-contract:latest}" \
+    -f "$PWD_DIR/railgun/Dockerfile.contract" \
+    --build-context contract="$RAILGUN_CONTRACT_DIR" \
+    --progress=plain \
+    "$PWD_DIR/railgun"
+  echo "✅ Built: ${RAILGUN_CONTRACT_IMAGE_TAG:-railgun-contract:latest}"
 fi
