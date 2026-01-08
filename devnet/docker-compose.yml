@@ -676,7 +676,7 @@ services:
       - --p2p.priv.raw=cff9dac7588f5e6755a72d1e5b5001da3d0f8c06c4242b27d67eb5df4216bd93
       - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
       - --p2p.discovery.path=/data/p2p/opnode_discovery_db
-      - --p2p.static=/dns4/op-seq/tcp/9223/p2p/16Uiu2HAkzHdkbmS2VrCsccLibsu7MvGHpmFUMJnMTkKifrtS5m65,/dns4/op-seq3/tcp/9223/p2p/16Uiu2HAmRDGMm3UUrP8CfQ3YQo9aaXEXFXA7LeFNztdPMNK5moyD
+      - --p2p.static=/dns4/op-seq/tcp/9223/p2p/16Uiu2HAkzHdkbmS2VrCsccLibsu7MvGHpmFUMJnMTkKifrtS5m65,/dns4/op-seq3/tcp/9223/p2p/16Uiu2HAmRDGMm3UUrP8CfQ3YQo9aaXEXFXA7LeFNztdPMNK5moyD,/dns4/op-seq4/tcp/9223/p2p/16Uiu2HAmQpUx7HxS5hU5CSoawF7UuUd47RoPGMot2u5bV48Pz1dT
       - --p2p.no-discovery
       - --rpc.enable-admin
       - --p2p.sequencer.key=${SEQUENCER_P2P_KEY}
@@ -797,7 +797,7 @@ services:
       - --p2p.priv.raw=10785157e7c98628e5e47c3d9b8ebbd12525c45f1554b4a39652b5ce02bb29dc
       - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
       - --p2p.discovery.path=/data/p2p/opnode_discovery_db
-      - --p2p.static=/dns4/op-seq/tcp/9223/p2p/16Uiu2HAkzHdkbmS2VrCsccLibsu7MvGHpmFUMJnMTkKifrtS5m65,/dns4/op-seq2/tcp/9223/p2p/16Uiu2HAmDTjVuEF6V9DccV1JhrHg7DYc5SKm3bw2T75kAFPsGuSp
+      - --p2p.static=/dns4/op-seq/tcp/9223/p2p/16Uiu2HAkzHdkbmS2VrCsccLibsu7MvGHpmFUMJnMTkKifrtS5m65,/dns4/op-seq2/tcp/9223/p2p/16Uiu2HAmDTjVuEF6V9DccV1JhrHg7DYc5SKm3bw2T75kAFPsGuSp,/dns4/op-seq4/tcp/9223/p2p/16Uiu2HAmQpUx7HxS5hU5CSoawF7UuUd47RoPGMot2u5bV48Pz1dT
       - --p2p.no-discovery
       - --rpc.enable-admin
       - --p2p.sequencer.key=${SEQUENCER_P2P_KEY}
@@ -949,3 +949,153 @@ services:
       - kailua-cli 
       - validate
       - --data-dir=/data
+
+  op-reth-seq4:
+    image: "${OP_RETH_IMAGE_TAG}"
+    container_name: op-reth-seq4
+    entrypoint: /entrypoint/reth-seq.sh 4
+    env_file:
+      - ./.env
+    volumes:
+      - ./data/op-reth-seq4:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/genesis-reth.json:/genesis.json
+      - ./entrypoint:/entrypoint
+      - ./.env:/.env
+      - ./config-op/test.reth.seq.config.toml:/config.toml
+    ports:
+      - "8423:8545"
+      - "30307:30303"
+      - "30307:30303/udp"
+      - "11114:1111" # outbound flashblocks ws port
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+    networks:
+      default:
+        aliases:
+          - op-seq-el2
+
+  # Keep op-seq4 to run op-geth as default EL
+  op-seq4:
+    image: "${OP_STACK_IMAGE_TAG}"
+    container_name: op-seq4
+    volumes:
+      - ./config-op/rollup.json:/rollup.json
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./data/op-seq4:/data
+      - ./l1-geth/execution/genesis.json:/l1-genesis.json
+    ports:
+      - "9548:9545"
+      #      - "7070:7070"
+      - "9226:9223"
+      - "9226:9223/udp"
+    command:
+      - /app/op-node/bin/op-node
+      - --log.level=info
+      - --log.format=logfmtms
+      - --l2=http://op-reth-seq4:8552
+      - --l2.jwt-secret=/jwt.txt
+      - --sequencer.enabled
+      - --sequencer.stopped
+      - --sequencer.l1-confs=5
+      - --verifier.l1-confs=1
+      - --l1.epoch-poll-interval=10s
+      - --rollup.config=/rollup.json
+      - --rpc.addr=0.0.0.0
+      - --p2p.listen.tcp=9223
+      - --p2p.listen.udp=9223
+      - --p2p.priv.raw=f2a7c9bf423b5ad864d92df917f24a7536ff0a8b71534d725cf2b795c548e070
+      - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
+      - --p2p.discovery.path=/data/p2p/opnode_discovery_db
+      - --p2p.static=/dns4/op-seq/tcp/9223/p2p/16Uiu2HAkzHdkbmS2VrCsccLibsu7MvGHpmFUMJnMTkKifrtS5m65,/dns4/op-seq2/tcp/9223/p2p/16Uiu2HAmDTjVuEF6V9DccV1JhrHg7DYc5SKm3bw2T75kAFPsGuSp
+      - --p2p.no-discovery
+      - --rpc.enable-admin
+      - --p2p.sequencer.key=${SEQUENCER_P2P_KEY}
+      - --l1=${L1_RPC_URL_IN_DOCKER}
+      - --l1.beacon=${L1_BEACON_URL_IN_DOCKER}
+      - --l1.rpckind=standard
+      - --rollup.l1-chain-config=/l1-genesis.json
+      - --safedb.path=/data/safedb
+      - --conductor.enabled=${CONDUCTOR_ENABLED:-false}
+      - --conductor.rpc=http://op-conductor4:8547
+      - --l2.enginekind=geth
+    depends_on:
+      - op-${SEQ_TYPE}-seq4
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9545"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+  op-conductor4:
+    image: "${OP_STACK_IMAGE_TAG}"
+    container_name: op-conductor4
+    volumes:
+      - ./data/op-conductor4:/data
+      - ./config-op/rollup.json:/rollup.json
+    ports:
+      - "8550:8547"  # RPC port
+      - "50053:50050"  # Consensus port
+    command:
+      - /app/op-conductor/bin/op-conductor
+      - --log.level=debug
+      # already existed service
+      - --node.rpc=http://op-seq4:9545
+      - --execution.rpc=http://op-reth-seq4:8545
+      # Raft Config
+      - --raft.server.id=conductor-4
+      - --raft.storage.dir=/data/raft
+      - --raft.bootstrap=false
+      - --consensus.addr=0.0.0.0
+      - --consensus.port=50050
+      - --consensus.advertised=op-conductor4:50050
+      # RPC Config
+      - --rpc.addr=0.0.0.0
+      - --rpc.port=8547
+      - --rpc.enable-proxy=true
+      # Healthcheck Config
+      - --healthcheck.interval=1
+      - --healthcheck.unsafe-interval=3
+      - --healthcheck.min-peer-count=1
+      - --rollup.config=/rollup.json
+      - --rpc.http-body-limit-mb=64
+    depends_on:
+      op-seq4:
+        condition: service_healthy
+
+  op-geth-seq4:
+    image: "${OP_GETH_IMAGE_TAG}"
+    container_name: op-geth-seq4
+    entrypoint: geth
+    volumes:
+      - ./data/op-geth-seq4:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/test.geth.seq.config.toml:/config.toml
+    ports:
+      - "8424:8545"
+      - "30307:30303"
+      - "30307:30303/udp"
+    command:
+      - --networkid=${CHAIN_ID}
+      - --verbosity=3
+      - --datadir=/datadir
+      - --db.engine=${DB_ENGINE}
+      - --config=/config.toml
+      - --gcmode=archive
+      - --rollup.disabletxpoolgossip=false
+      - --nodekeyhex=8e66b1d59b3c76d4ccff93c17125c55f1a04faccb39a090646a96ab937a36718
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+    networks:
+      default:
+        aliases:
+          - op-seq-el2

@@ -68,12 +68,14 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
             --flashblocks.p2p_private_key_file=/datadir/fb-p2p-key"
 
         INDEX="${1:-}"
-        if [ -z "$INDEX" ]; then
+        if [ "$INDEX" eq "1"]; then
             # op-reth-seq connects to op-reth-seq2
-            CMD="$CMD --flashblocks.p2p_known_peers=/dns4/op-reth-seq2/tcp/9009/p2p/12D3KooWGnxtRXJWhNtwKmRjpqj5QFQPskjWJkC7AkGWhCXBM6ed"
-        else
+            CMD="$CMD --flashblocks.p2p_known_peers=/dns4/op-reth-seq2/tcp/9009/p2p/12D3KooWGnxtRXJWhNtwKmRjpqj5QFQPskjWJkC7AkGWhCXBM6ed,/dns4/op-reth-seq4/tcp/9009/p2p/12D3KooWFYSGzaQxHvjoLFAPwsSFeEA2Zz7skgJwex6TfkrhuFET"
+        elif [ "$INDEX" eq "2"]; then
             # op-reth-seq2 connects to op-reth-seq
-            CMD="$CMD --flashblocks.p2p_known_peers=/dns4/op-reth-seq/tcp/9009/p2p/12D3KooWC6qFQzcS6V6Tp53nRqw2pmU1snjSYq7H4Q6ckTWAskTt"
+            CMD="$CMD --flashblocks.p2p_known_peers=/dns4/op-reth-seq/tcp/9009/p2p/12D3KooWC6qFQzcS6V6Tp53nRqw2pmU1snjSYq7H4Q6ckTWAskTt,/dns4/op-reth-seq4/tcp/9009/p2p/12D3KooWFYSGzaQxHvjoLFAPwsSFeEA2Zz7skgJwex6TfkrhuFET"
+        else
+            CMD="$CMD --flashblocks.p2p_known_peers=/dns4/op-reth-seq2/tcp/9009/p2p/12D3KooWGnxtRXJWhNtwKmRjpqj5QFQPskjWJkC7AkGWhCXBM6ed,/dns4/op-reth-seq/tcp/9009/p2p/12D3KooWC6qFQzcS6V6Tp53nRqw2pmU1snjSYq7H4Q6ckTWAskTt"
         fi
     fi
 fi

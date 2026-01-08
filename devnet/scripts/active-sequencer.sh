@@ -5,7 +5,7 @@ detect_leader() {
     echo "Detecting leader conductor..."
     
     # Check all three conductors to find the leader
-    for i in 1 2 3; do
+    for i in 1 2 3 4; do
         CONDUCTOR_PORT=$((8546 + i))  # 8547, 8548, 8549
         SEQUENCER_PORT=$((9544 + i))  # 9545, 9546, 9547
         
@@ -78,11 +78,12 @@ echo "Sequencer successfully activated"
 
 # 5. try to add other two conductors to raft consensus cluster
 SERVER_COUNT=$(curl -sS -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_clusterMembership","params":[],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT  | jq '.result.servers | length')
-if (( $SERVER_COUNT < 3 )); then
+if (( $SERVER_COUNT < 4 )); then
     curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_addServerAsVoter","params":["conductor-2", "op-conductor2:50050", 0],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT
     curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_addServerAsVoter","params":["conductor-3", "op-conductor3:50050", 0],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT
+    curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_addServerAsVoter","params":["conductor-4", "op-conductor4:50050", 0],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT
     SERVER_COUNT=$(curl -sS -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_clusterMembership","params":[],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT  | jq '.result.servers | length')
-    if (( $SERVER_COUNT != 3 )); then
+    if (( $SERVER_COUNT != 4 )); then
         echo "unexpected server count, expected: 3, real: $SERVER_COUNT"
         exit 1
     fi
