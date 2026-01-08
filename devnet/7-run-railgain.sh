@@ -1,22 +1,18 @@
 #!/bin/bash
 set -e
 
-# ============================================================================
-# RAILGUN Complete Deploy and Test Script (Kohaku SDK)
-# ============================================================================
-# This script combines:
-#   - Contract deployment
-#   - ERC20 token deployment
-#   - Kohaku SDK wallet testing
-# Uses the simplified Kohaku SDK for faster development
-# ============================================================================
+PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RAILGUN_DIR="$PWD_DIR/railgun"
+RAILGUN_ENV_FILE="$RAILGUN_DIR/.env.railgun"
 
 # Load environment variables
 source .env
 
-# ============================================================================
-# Helper Functions
-# ============================================================================
+# Load RAILGUN internal configuration (if exists)
+if [ -f "$RAILGUN_ENV_FILE" ]; then
+  source "$RAILGUN_ENV_FILE"
+fi
+
 sed_inplace() {
   if [[ "$OSTYPE" == "darwin"* ]]; then
     sed -i '' "$@"
@@ -25,101 +21,28 @@ sed_inplace() {
   fi
 }
 
-# ============================================================================
-# Pre-flight Checks
-# ============================================================================
 if [ "$RAILGUN_ENABLE" != "true" ]; then
   echo "⏭️  Skipping RAILGUN (RAILGUN_ENABLE=$RAILGUN_ENABLE)"
   exit 0
 fi
 
-PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RAILGUN_DIR="$PWD_DIR/railgun"
+# Initialize RAILGUN internal config file (if not exists)
+if [ ! -f "$RAILGUN_ENV_FILE" ]; then
+  cp "$RAILGUN_DIR/example.env.railgun" "$RAILGUN_ENV_FILE"
+fi
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🎯 RAILGUN Complete Test Flow (Kohaku SDK)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "This script will:"
-echo "  1. Deploy fresh RAILGUN contracts"
-echo "  2. Deploy test ERC20 token"
-echo "  3. Setup Kohaku SDK"
-echo "  4. Run wallet tests"
-echo ""
-echo "Using Kohaku SDK for simplified integration."
-echo ""
 
-# ============================================================================
-# Step 0: Check Node.js Version
-# ============================================================================
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🔍 Checking Node.js version"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
-
-# Kohaku SDK is more flexible with Node.js versions
-# We recommend v16+ but v14+ should work
-if [ "$NODE_VERSION" -lt 14 ]; then
-    echo "   ⚠️  Node.js version v$NODE_VERSION detected"
-    echo "   ℹ️  Kohaku SDK requires Node.js v14+"
-    echo ""
-    echo "   Please upgrade Node.js:"
-    echo ""
-    
-    if command -v n &> /dev/null; then
-        echo "   Using 'n':"
-        echo "   $ n 18"
-    elif command -v nvm &> /dev/null || [ -f "$HOME/.nvm/nvm.sh" ]; then
-        echo "   Using 'nvm':"
-        echo "   $ nvm install 18"
-        echo "   $ nvm use 18"
-    else
-        echo "   Install Node.js 18+:"
-        echo "   $ npm install -g n"
-        echo "   $ n 18"
-    fi
-    echo ""
-    exit 1
-fi
-
-echo "   ✅ Node.js v$NODE_VERSION (compatible with Kohaku SDK)"
-
-# ============================================================================
-# Step 1: Deploy RAILGUN Contracts (Using Docker)
-# ============================================================================
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "📜 Step 1/3: Deploying RAILGUN Contracts (Docker)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Verify prerequisites
-echo "📝 Verifying prerequisites..."
-
 # Check if Docker image exists
 RAILGUN_CONTRACT_IMAGE_TAG="${RAILGUN_CONTRACT_IMAGE_TAG:-railgun-contract:latest}"
-
-if ! docker image inspect "$RAILGUN_CONTRACT_IMAGE_TAG" >/dev/null 2>&1; then
-    echo "   ❌ Docker image '$RAILGUN_CONTRACT_IMAGE_TAG' not found"
-    echo ""
-    echo "   Please build the image first:"
-    echo "     cd $PWD_DIR"
-    echo "     ./init.sh"
-    echo ""
-    echo "   Or set SKIP_RAILGUN_CONTRACT_BUILD=false in .env and run ./init.sh"
-    exit 1
-fi
-echo "   ✓ Docker image found: $RAILGUN_CONTRACT_IMAGE_TAG"
-
-# Check if L2 is running
-if ! curl -s -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' "$L2_RPC_URL" > /dev/null 2>&1; then
-    echo "   ❌ L2 RPC is not responding at: $L2_RPC_URL"
-    echo "   ℹ️  Please start L2 services first: ./4-op-start-service.sh"
-    exit 1
-fi
-echo "   ✓ L2 RPC is running: $L2_RPC_URL"
 
 # Deploy contracts using Docker
 echo ""
@@ -127,9 +50,6 @@ echo "📜 Deploying RAILGUN smart contracts using Docker..."
 echo "   ℹ️  Network: xlayer-devnet"
 echo "   ℹ️  RPC: $L2_RPC_URL"
 echo "   ℹ️  Chain ID: $CHAIN_ID"
-echo ""
-
-echo "   📝 Deploying contracts (this may take a few minutes)..."
 echo ""
 
 TEMP_DEPLOY_LOG="/tmp/railgun-deploy-$$.log"
@@ -169,19 +89,19 @@ POSEIDON_T4_ADDR=$(echo "$DEPLOY_OUTPUT" | grep -A 20 "DEPLOY CONFIG:" | grep "p
 if [ -n "$PROXY_ADDR" ] && [ "$PROXY_ADDR" != "null" ]; then
     echo "   ✅ Found RailgunSmartWallet (proxy): $PROXY_ADDR"
     export RAILGUN_SMART_WALLET_ADDRESS="$PROXY_ADDR"
-    sed_inplace "s|^RAILGUN_SMART_WALLET_ADDRESS=.*|RAILGUN_SMART_WALLET_ADDRESS=$RAILGUN_SMART_WALLET_ADDRESS|" .env
+    sed_inplace "s|^RAILGUN_SMART_WALLET_ADDRESS=.*|RAILGUN_SMART_WALLET_ADDRESS=$RAILGUN_SMART_WALLET_ADDRESS|" "$RAILGUN_ENV_FILE"
 fi
 
 if [ -n "$RELAY_ADAPT_ADDR" ] && [ "$RELAY_ADAPT_ADDR" != "null" ]; then
     echo "   ✅ Found RelayAdapt: $RELAY_ADAPT_ADDR"
     export RAILGUN_RELAY_ADAPT_ADDRESS="$RELAY_ADAPT_ADDR"
-    sed_inplace "s|^RAILGUN_RELAY_ADAPT_ADDRESS=.*|RAILGUN_RELAY_ADAPT_ADDRESS=$RELAY_ADAPT_ADDR|" .env
+    sed_inplace "s|^RAILGUN_RELAY_ADAPT_ADDRESS=.*|RAILGUN_RELAY_ADAPT_ADDRESS=$RELAY_ADAPT_ADDR|" "$RAILGUN_ENV_FILE"
 fi
 
 if [ -n "$POSEIDON_T4_ADDR" ] && [ "$POSEIDON_T4_ADDR" != "null" ]; then
     echo "   ✅ Found PoseidonT4: $POSEIDON_T4_ADDR"
     export RAILGUN_POSEIDONT4_ADDRESS="$POSEIDON_T4_ADDR"
-    sed_inplace "s|^RAILGUN_POSEIDONT4_ADDRESS=.*|RAILGUN_POSEIDONT4_ADDRESS=$POSEIDON_T4_ADDR|" .env
+    sed_inplace "s|^RAILGUN_POSEIDONT4_ADDRESS=.*|RAILGUN_POSEIDONT4_ADDRESS=$POSEIDON_T4_ADDR|" "$RAILGUN_ENV_FILE"
 fi
 
 # Verify contract
@@ -216,11 +136,11 @@ if [ -n "$DEPLOY_BLOCK_DEC" ]; then
     echo "   ✅ Deployment block: $DEPLOY_BLOCK_DEC"
     export RAILGUN_DEPLOY_BLOCK="$DEPLOY_BLOCK_DEC"
     
-    # Save to .env
-    if grep -q "^RAILGUN_DEPLOY_BLOCK=" .env; then
-        sed_inplace "s|^RAILGUN_DEPLOY_BLOCK=.*|RAILGUN_DEPLOY_BLOCK=$RAILGUN_DEPLOY_BLOCK|" .env
+    # Save to railgun/.env.railgun
+    if grep -q "^RAILGUN_DEPLOY_BLOCK=" "$RAILGUN_ENV_FILE"; then
+        sed_inplace "s|^RAILGUN_DEPLOY_BLOCK=.*|RAILGUN_DEPLOY_BLOCK=$RAILGUN_DEPLOY_BLOCK|" "$RAILGUN_ENV_FILE"
     else
-        echo "RAILGUN_DEPLOY_BLOCK=$RAILGUN_DEPLOY_BLOCK" >> .env
+        echo "RAILGUN_DEPLOY_BLOCK=$RAILGUN_DEPLOY_BLOCK" >> "$RAILGUN_ENV_FILE"
     fi
 else
     echo "   ⚠️  Could not determine deployment block, using 0"
@@ -232,9 +152,6 @@ rm -f "$TEMP_DEPLOY_LOG" 2>/dev/null
 echo ""
 echo "✅ Contract deployment completed"
 
-# ============================================================================
-# Step 2: Deploy Test ERC20 Token
-# ============================================================================
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🪙 Step 2/3: Deploying Test ERC20 Token"
@@ -246,9 +163,6 @@ echo ""
     exit 1
 }
 
-# ============================================================================
-# Step 3: Run Wallet Tests
-# ============================================================================
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🧪 Step 3/3: Run Wallet Tests"
@@ -270,9 +184,6 @@ echo ""
     exit 1
 }
 
-# ============================================================================
-# Complete
-# ============================================================================
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🎉 Complete Test Flow Finished Successfully!"

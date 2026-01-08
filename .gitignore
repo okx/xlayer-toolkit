@@ -37,7 +37,6 @@ devnet/data
 devnet/saved-cannon-data
 devnet/init.log
 devnet/l1-geth/
-devnet/railgun-test/kohaku
-devnet/railgun-test/node_modules
 profiling/
 tools/adventure/txhashes.log
+devnet/railgun/.env.railgun

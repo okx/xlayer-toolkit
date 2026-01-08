@@ -184,11 +184,6 @@ else
     exit 1
   fi
   
-  if [ ! -d "$RAILGUN_CONTRACT_DIR" ]; then
-    echo "❌ Contract directory not found: $RAILGUN_CONTRACT_DIR"
-    exit 1
-  fi
-  
   echo "🔨 Building railgun contract image"
   build_and_tag_image "railgun-contract" "${RAILGUN_CONTRACT_IMAGE_TAG:-railgun-contract:latest}" "$PWD_DIR/railgun" "Dockerfile.contract" "--build-context" "contract=$RAILGUN_CONTRACT_DIR" "--progress=plain"
 fi

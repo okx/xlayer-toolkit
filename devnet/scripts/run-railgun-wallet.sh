@@ -2,6 +2,7 @@
 set -e
 
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd .. && pwd)"
+RAILGUN_ENV_FILE="$PWD_DIR/railgun/.env.railgun"
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🧪 RAILGUN Wallet Test (Docker)"
@@ -11,10 +12,20 @@ echo ""
 if [ -f "$PWD_DIR/.env" ]; then
     echo "📝 Loading environment from .env..."
     source "$PWD_DIR/.env"
-    echo "   ✓ Environment loaded"
+    echo "   ✓ Global environment loaded"
 else
     echo "❌ .env file not found"
     echo "   Please run ./init.sh first"
+    exit 1
+fi
+
+# Load RAILGUN internal configuration
+if [ -f "$RAILGUN_ENV_FILE" ]; then
+    source "$RAILGUN_ENV_FILE"
+    echo "   ✓ RAILGUN configuration loaded"
+else
+    echo "❌ railgun/.env.railgun not found"
+    echo "   Please run ./7-run-railgain.sh first to deploy contracts"
     exit 1
 fi
 

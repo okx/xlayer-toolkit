@@ -8,7 +8,3 @@ set -e
 ./5-run-op-succinct.sh
 ./6-run-kailua.sh
 ./7-run-railgain.sh
-
-echo ""
-echo "🎉 Complete DevNet deployment finished!"
-echo ""
