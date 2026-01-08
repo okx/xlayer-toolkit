@@ -56,9 +56,7 @@ let aliceAccount: Awaited<ReturnType<typeof createRailgunAccount>>;
 let bobAccount: Awaited<ReturnType<typeof createRailgunAccount>>;
 
 async function setupEnvironment() {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📋 Step 1: Environment Setup');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   provider = new ethers.JsonRpcProvider(CONFIG.rpcUrl);
   signerA = new ethers.Wallet(CONFIG.accountA.privateKey, provider);
@@ -106,9 +104,7 @@ async function setupEnvironment() {
 }
 
 async function setupKohakuRailgun() {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔧 Step 2: Setup Kohaku RAILGUN SDK');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   // 1. Create custom devnet network configuration
   console.log('   📝 Creating devnet network configuration...');
@@ -203,15 +199,11 @@ async function setupKohakuRailgun() {
   const bobRailgunAddress = await bobAccount.getRailgunAddress();
   console.log(`   ✓ Bob RAILGUN address: ${bobRailgunAddress}\n`);
 
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🎉 Kohaku RAILGUN SDK Initialized');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }
 
 async function handleShield() {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔒 Step 3: Shield - Alice deposits tokens into privacy pool');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   const symbol = await tokenContract.symbol();
   const balanceABefore = await tokenContract.balanceOf(signerA.address);
@@ -299,9 +291,7 @@ async function handleShield() {
 }
 
 async function handleTransfer() {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔄 Step 4: Transfer - Alice sends tokens to Bob privately');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   // Sync indexer before transfer to ensure latest state
   console.log('   🔄 Pre-Transfer: Syncing indexer to latest block...');
@@ -375,9 +365,7 @@ async function handleTransfer() {
 // ============================================================================
 
 async function handleUnshield() {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔓 Step 5: Unshield - Bob withdraws to public address');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   const symbol = await tokenContract.symbol();
   
@@ -430,15 +418,11 @@ async function summary() {
   console.log('   ✗ Alice still has 400 tokens in privacy pool');
   console.log('   ✗ Relationship between Alice and Bob\n');
   
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('✅ RAILGUN Privacy Demo Complete (Kohaku SDK)!');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 }
 
 async function main() {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🚀 RAILGUN Privacy Transaction Test (Kohaku SDK)');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
   try {
     // Step 1: Setup environment (deploy ERC20, send gas fees)
@@ -462,9 +446,7 @@ async function main() {
     // Clean exit
     process.exit(0);
   } catch (error: any) {
-    console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.error('❌ Test Failed');
-    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.error(`Error: ${error.message}`);
     console.error(`Stack: ${error.stack}`);
     process.exit(1);
