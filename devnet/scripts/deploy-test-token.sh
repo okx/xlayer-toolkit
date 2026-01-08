@@ -80,12 +80,8 @@ DEPLOY_TX=$(cast send --rpc-url "$RPC_URL" \
 
 if echo "$DEPLOY_TX" | grep -q "contractAddress"; then
     TOKEN_ADDRESS=$(echo "$DEPLOY_TX" | jq -r '.contractAddress')
-    echo "   ✅ Token deployed!"
-    echo ""
-    echo "   📋 Token Address: $TOKEN_ADDRESS"
-    echo ""
-    echo "   💾 Saving to railgun/.env.railgun..."
-    
+    echo "   ✅ Token deployed! Token Address: $TOKEN_ADDRESS"
+
     if grep -q "^RAILGUN_TEST_TOKEN_ADDRESS=" "$RAILGUN_ENV_FILE"; then
         sed -i.bak "s|^RAILGUN_TEST_TOKEN_ADDRESS=.*|RAILGUN_TEST_TOKEN_ADDRESS=$TOKEN_ADDRESS|" "$RAILGUN_ENV_FILE"
     else
