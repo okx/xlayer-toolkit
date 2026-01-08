@@ -1,0 +1,24 @@
+{
+  "name": "railgun-devnet-test",
+  "version": "1.0.0",
+  "description": "RAILGUN DevNet Integration Test (Kohaku SDK)",
+  "main": "test-kohaku.ts",
+  "scripts": {
+    "test": "tsx test-kohaku.ts",
+    "test:kohaku": "tsx test-kohaku.ts"
+  },
+  "dependencies": {
+    "@kohaku-eth/railgun": "file:./kohaku-railgun.tgz",
+    "ethers": "^6.10.0",
+    "snarkjs": "^0.7.5",
+    "@railgun-community/circuit-artifacts": "https://ipfs-lb.com/ipfs/QmPvs6Lws1MS4CTMAQ6P3WfyFpWFKGu7o6cSbWCu3vgXLW/railgun-circuit-test-artifacts-0.0.1.tgz"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
