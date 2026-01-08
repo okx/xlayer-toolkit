@@ -54,14 +54,12 @@ echo "🚀 Running tests in Docker container..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-DOCKER_RPC_URL="${L2_RPC_URL/localhost/host.docker.internal}"
-
 docker run --rm \
   -e CHAIN_ID="$CHAIN_ID" \
-  -e RPC_URL="$DOCKER_RPC_URL" \
+  -e RPC_URL="${L2_RPC_URL/localhost/host.docker.internal}" \
   -e RAILGUN_ADDRESS="$RAILGUN_SMART_WALLET_ADDRESS" \
   -e RAILGUN_RELAY_ADAPT_ADDRESS="${RAILGUN_RELAY_ADAPT_ADDRESS}" \
   -e TOKEN_ADDRESS="$RAILGUN_TEST_TOKEN_ADDRESS" \
   -e RAILGUN_DEPLOY_BLOCK="${RAILGUN_DEPLOY_BLOCK:-0}" \
-  --network host \
+  --add-host=host.docker.internal:host-gateway \
   "$RAILGUN_SDK_IMAGE_TAG"

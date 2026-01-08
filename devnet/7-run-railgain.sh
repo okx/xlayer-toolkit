@@ -42,14 +42,11 @@ echo "   ℹ️  Chain ID: $CHAIN_ID"
 
 TEMP_DEPLOY_LOG="/tmp/railgun-deploy-$$.log"
 
-# Convert localhost to host.docker.internal for Docker container
-DOCKER_RPC_URL="${L2_RPC_URL/localhost/host.docker.internal}"
-
 docker run --rm \
-  -e RPC_URL="$DOCKER_RPC_URL" \
+  -e RPC_URL="${L2_RPC_URL/localhost/host.docker.internal}" \
   -e CHAIN_ID="$CHAIN_ID" \
   -e DEPLOYER_PRIVATE_KEY="$OP_PROPOSER_PRIVATE_KEY" \
-  --network host \
+  --add-host=host.docker.internal:host-gateway \
   "$RAILGUN_CONTRACT_IMAGE_TAG" \
   deploy:test --network xlayer-devnet 2>&1 | tee "$TEMP_DEPLOY_LOG"
 
