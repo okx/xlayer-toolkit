@@ -309,7 +309,7 @@ async function handleTransfer() {
   console.log(`      To: ${bobRailgunAddress}\n`);
 
   // Generate transfer transaction (includes ZK proof generation)
-  console.log('   ⏳ Generating ZK proof (this may take 30-60 seconds)...\n');
+  console.log('   ⏳ Generating ZK proof ...\n');
   const transferTxData = await aliceAccount.transfer(
     tokenAddress as `0x${string}`,
     CONFIG.transferAmount,
@@ -374,7 +374,7 @@ async function handleUnshield() {
   console.log(`      To: ${signerB.address}\n`);
 
   // Generate unshield transaction (includes ZK proof generation)
-  console.log('   ⏳ Generating ZK proof (this may take 30-60 seconds)...\n');
+  console.log('   ⏳ Generating ZK proof ..\n');
   const unshieldTxData = await bobAccount.unshield(
     tokenAddress as `0x${string}`,
     CONFIG.transferAmount,
