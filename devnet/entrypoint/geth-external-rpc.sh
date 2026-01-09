@@ -8,5 +8,5 @@ exec geth \
       --db.engine=${DB_ENGINE:-pebble} \
       --config=/config.toml \
       --gcmode=archive \
-      --rollup.txpool.trusted-peers-only \
-      --rollup.enabletxpooladmission
+      --rollup.enabletxpooladmission \
+      --rollup.sequencerhttp=http://op-geth-rpc:8545

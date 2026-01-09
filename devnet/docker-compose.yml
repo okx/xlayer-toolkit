@@ -362,6 +362,7 @@ services:
       - ./l1-geth/execution/genesis.json:/l1-genesis.json
     ports:
       - "9555:9545"
+      - "9233:9223"
     command:
       - /app/op-node/bin/op-node
       - --log.level=debug
@@ -426,9 +427,38 @@ services:
       - --l1.rpckind=standard
       - --rollup.l1-chain-config=/l1-genesis.json
       - --safedb.path=/data/safedb
-      - --l2.enginekind=reth
+      - --l2.enginekind=${RPC_TYPE}
+      - --syncmode=execution-layer
     depends_on:
-      - op-reth-rpc2
+      - op-${RPC_TYPE}-rpc2
+
+  op-geth-rpc2-init:
+    image: "${OP_GETH_IMAGE_TAG}"
+    container_name: op-geth-rpc2-init
+    entrypoint: >
+      sh -c "
+      rm -rf /datadir/* && 
+      geth init --datadir=/datadir /genesis.json
+      "
+    volumes:
+      - ./data/op-geth-rpc2:/datadir
+      - ./config-op/genesis.json:/genesis.json
+
+  op-geth-rpc2:
+    image: "${OP_GETH_IMAGE_TAG}"
+    container_name: op-geth-rpc2
+    entrypoint: /entrypoint/geth-rpc.sh
+    env_file:
+      - .env
+    volumes:
+      - ./data/op-geth-rpc2:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/test.geth.rpc.config.toml:/config.toml
+      - ./entrypoint:/entrypoint
+    ports:
+      - "8128:8545"
+      - "30309:30303"
+      - "30309:30303/udp"
 
   op-reth-rpc2:
     image: "${OP_RETH_IMAGE_TAG}"
