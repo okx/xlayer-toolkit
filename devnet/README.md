@@ -366,8 +366,6 @@ SEQ_TYPE=reth
 RPC_TYPE=reth
 FLASHBLOCK_ENABLED=true
 FLASHBLOCK_P2P_ENABLED=true
-ENABLE_INNERTX_SEQ=true
-ENABLE_INNERTX_RPC=true
 ```
 
 After devnet is started, run the reth e2e test without benchmark and comparison tests (non-flashblock node not started):

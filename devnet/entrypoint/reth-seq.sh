@@ -11,13 +11,6 @@ if [ "${JEMALLOC_PROFILING:-false}" = "true" ]; then
     echo "Jemalloc profiling enabled: _RJEM_MALLOC_CONF=$_RJEM_MALLOC_CONF"
 fi
 
-# Build the optional innertx flag
-INNERTX_FLAG=""
-if [ "${ENABLE_INNERTX_SEQ:-false}" = "true" ]; then
-    INNERTX_FLAG="--xlayer.enable-innertx"
-    echo "Inner transaction tracking enabled for sequencer"
-fi
-
 CMD="op-reth node \
       --datadir=/datadir \
       --chain=/genesis.json \
@@ -48,8 +41,7 @@ CMD="op-reth node \
       --txpool.max-new-txns=100000 \
       --rpc.eth-proof-window=10000 \
       --txpool.pending-max-size=2000 \
-      --txpool.basefee-max-size=2000 \
-      $INNERTX_FLAG"
+      --txpool.basefee-max-size=2000"
 
 # For flashblocks architecture
 if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
