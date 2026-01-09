@@ -11,13 +11,6 @@ if [ "${JEMALLOC_PROFILING:-false}" = "true" ]; then
     echo "Jemalloc profiling enabled: _RJEM_MALLOC_CONF=$_RJEM_MALLOC_CONF"
 fi
 
-# Build the optional innertx flag
-INNERTX_FLAG=""
-if [ "${ENABLE_INNERTX_RPC:-false}" = "true" ]; then
-    INNERTX_FLAG="--xlayer.enable-innertx"
-    echo "Inner transaction tracking enabled for RPC"
-fi
-
 # Read the first argument (1 or 0), default to 0 if not provided
 FLASHBLOCKS_RPC=${FLASHBLOCKS_RPC:-"true"}
 
@@ -50,8 +43,7 @@ CMD="op-reth node \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
-      --rpc.eth-proof-window=10000
-      $INNERTX_FLAG"
+      --rpc.eth-proof-window=10000"
 
 # For flashblocks architecture. Enable flashblocks RPC
 if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
