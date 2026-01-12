@@ -33,8 +33,8 @@ sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"
 
 # echo "🔧 Merging genesis files..."
 # /usr/local/bin/merge_genesis ~/dev/okx/xlayer-toolkit/devnet/config-op/genesis.json ~/data/xlayer/genesis_2m.json ~/dev/okx/xlayer-toolkit/devnet/config-op/merged.genesis.json
-
 # cp ./config-op/merged.genesis.json ./config-op/genesis-reth.json
+cp ./config-op/genesis.json ./config-op/genesis-reth.json
 sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
 
 # Extract contract addresses from state.json and update .env file

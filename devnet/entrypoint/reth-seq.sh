@@ -28,6 +28,7 @@ CMD="op-reth node \
       --disable-discovery \
       --max-outbound-peers=10 \
       --max-inbound-peers=10 \
+      --rpc.eth-proof-window=10000 \
       --authrpc.addr=0.0.0.0 \
       --authrpc.port=8552 \
       --authrpc.jwtsecret=/jwt.txt \
@@ -39,14 +40,13 @@ CMD="op-reth node \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
-      --rpc.eth-proof-window=10000 \
       --txpool.pending-max-size=2000 \
       --txpool.basefee-max-size=2000 \
-      --txpool.basefee-max-size=2000" \
+      --engine.persistence-threshold=${ENGINE_PERSISTENCE_THRESHOLD:-2} \
       --log.file.directory=/logs/reth \
       --log.file.filter=info \
-      --metrics=0.0.0.0:9001 \
-      --engine.persistence-threshold=${ENGINE_PERSISTENCE_THRESHOLD:-2}
+      --metrics=0.0.0.0:9001"
+
 
 # For flashblocks architecture
 if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
