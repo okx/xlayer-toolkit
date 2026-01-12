@@ -1,0 +1,91 @@
+networks:
+  default:
+    name: ${DOCKER_NETWORK:-dev-op}
+
+services:
+  op-external-rpc3:
+    image: "${OP_STACK_IMAGE_TAG}"
+    container_name: op-external-rpc3
+    volumes:
+      - ./data/op-rpc3:/data
+      - ./config-op/rollup.json:/rollup.json
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./l1-geth/execution/genesis.json:/l1-genesis.json
+    ports:
+      - "9575:9545"
+    command:
+      - /app/op-node/bin/op-node
+      - --log.level=debug
+      - --log.format=logfmtms
+      - --l2=http://op-${RPC_TYPE}-external-rpc3:8552
+      - --l2.jwt-secret=/jwt.txt
+      - --sequencer.enabled=false
+      - --verifier.l1-confs=1
+      - --rollup.config=/rollup.json
+      - --rpc.addr=0.0.0.0
+      - --rpc.port=9545
+      - --p2p.listen.tcp=9223
+      - --p2p.listen.udp=9223
+      - --p2p.priv.raw=a3bd7816d9200410c83d1508f2bf50a9e93c93a22d419099db9c4fc21b6784e6
+      - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
+      - --p2p.discovery.path=/data/p2p/opnode_discovery_db
+      - --p2p.static=/dns4/op-rpc/tcp/9223/p2p/16Uiu2HAmGqzcVkirbqi23RQ8Vd2sMX6621h2cR7W3i8VgbDWqjtb
+      - --p2p.no-discovery
+      - --rpc.enable-admin=true
+      - --l1=${L1_RPC_URL_IN_DOCKER}
+      - --l1.beacon=${L1_BEACON_URL_IN_DOCKER}
+      - --l1.rpckind=standard
+      - --rollup.l1-chain-config=/l1-genesis.json
+      - --safedb.path=/data/safedb
+      - --l2.enginekind=${RPC_TYPE}
+      - --syncmode=execution-layer
+    depends_on:
+      - op-${RPC_TYPE}-external-rpc3
+
+  op-geth-external-rpc3-init:
+    image: "${OP_GETH_IMAGE_TAG}"
+    container_name: op-geth-rpc3-init
+    entrypoint: >
+      sh -c "
+      rm -rf /datadir/* && 
+      geth init --datadir=/datadir /genesis.json
+      "
+    volumes:
+      - ./data/op-geth-rpc3:/datadir
+      - ./config-op/genesis.json:/genesis.json
+
+  op-geth-external-rpc3:
+    image: "${OP_GETH_IMAGE_TAG}"
+    container_name: op-geth-external-rpc3
+    entrypoint: /entrypoint/geth-external-rpc.sh
+    env_file:
+      - .env
+    volumes:
+      - ./data/op-geth-rpc3:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/test.geth.external.rpc.config.toml:/config.toml
+      - ./entrypoint:/entrypoint
+    ports:
+      - "8129:8545"
+      - "30310:30303"
+      - "30310:30303/udp"
+
+  op-reth-external-rpc3:
+    image: "${OP_RETH_IMAGE_TAG}"
+    container_name: op-reth-external-rpc3
+    environment:
+      - FLASHBLOCKS_RPC=false
+    entrypoint: "/entrypoint/reth-external-rpc.sh"
+    env_file:
+      - .env
+    volumes:
+      - ./data/op-reth-rpc3:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/genesis-reth.json:/genesis.json
+      #- ./config-op/test.reth.rpc.config.toml:/config.toml
+      - ./entrypoint:/entrypoint
+      - ./.env:/.env
+    ports:
+      - "8129:8545"
+      - "30310:30303"
+      - "30310:30303/udp"

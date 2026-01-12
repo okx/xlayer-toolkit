@@ -80,12 +80,12 @@ services:
     container_name: l1-geth
     command:
       - --http
-      - --http.api=eth,net,web3,debug,admin
+      - --http.api=eth,net,web3,debug,admin,txpool
       - --http.addr=0.0.0.0
       - --http.corsdomain=*
       - --http.vhosts=*
       - --ws
-      - --ws.api=eth,net,web3,debug
+      - --ws.api=eth,net,web3,debug,txpool
       - --ws.addr=0.0.0.0
       - --ws.origins=*
       - --authrpc.vhosts=*
@@ -98,6 +98,14 @@ services:
       - --ipcdisable
       - --rpc.allow-unprotected-txs
       - --verbosity=3
+      - --miner.gasprice=1
+      - --txpool.pricelimit=0
+      - --txpool.pricebump=10
+      - --txpool.accountslots=100000
+      - --txpool.globalslots=100000
+      - --txpool.accountqueue=100000
+      - --txpool.globalqueue=100000
+      - --miner.gaslimit=100000000
     ports:
       - 8551:8551
       - 8545:8545
@@ -133,6 +141,7 @@ services:
       - --jwt-secret=/execution/jwtsecret
       - --suggested-fee-recipient=0x123463a4b065722e99115d6c222f267d9cabb524
       - --minimum-peers-per-subnet=0
+      - --blob-retention-epochs=75600
       - --verbosity=info
     depends_on:
       l1-create-beacon-chain-genesis:
@@ -287,6 +296,7 @@ services:
       - /sys/kernel/tracing:/sys/kernel/tracing:ro
     ports:
       - "8124:8545"
+      - "7547:7546"
       - "30304:30303"
       - "30304:30303/udp"
 
@@ -354,6 +364,7 @@ services:
       - ./l1-geth/execution/genesis.json:/l1-genesis.json
     ports:
       - "9555:9545"
+      - "9233:9223"
     command:
       - /app/op-node/bin/op-node
       - --log.level=debug
@@ -418,9 +429,38 @@ services:
       - --l1.rpckind=standard
       - --rollup.l1-chain-config=/l1-genesis.json
       - --safedb.path=/data/safedb
-      - --l2.enginekind=reth
+      - --l2.enginekind=${RPC_TYPE}
+      - --syncmode=execution-layer
     depends_on:
-      - op-reth-rpc2
+      - op-${RPC_TYPE}-rpc2
+
+  op-geth-rpc2-init:
+    image: "${OP_GETH_IMAGE_TAG}"
+    container_name: op-geth-rpc2-init
+    entrypoint: >
+      sh -c "
+      rm -rf /datadir/* && 
+      geth init --datadir=/datadir /genesis.json
+      "
+    volumes:
+      - ./data/op-geth-rpc2:/datadir
+      - ./config-op/genesis.json:/genesis.json
+
+  op-geth-rpc2:
+    image: "${OP_GETH_IMAGE_TAG}"
+    container_name: op-geth-rpc2
+    entrypoint: /entrypoint/geth-rpc.sh
+    env_file:
+      - .env
+    volumes:
+      - ./data/op-geth-rpc2:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/test.geth.rpc.config.toml:/config.toml
+      - ./entrypoint:/entrypoint
+    ports:
+      - "8128:8545"
+      - "30309:30303"
+      - "30309:30303/udp"
 
   op-reth-rpc2:
     image: "${OP_RETH_IMAGE_TAG}"
@@ -517,18 +557,16 @@ services:
       - --log.level=debug
       - --poll-interval=5s
       - --wait-node-sync=true
-      - --allow-non-finalized=false
       - --num-confirmations=1
       - --safe-abort-nonce-too-low-count=3
       - --resubmission-timeout=30s
       - --rpc.port=8560
       - --rollup-rpc=http://op-seq:9545
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
-      - --proposal-interval=10s
+      - --proposal-interval=300s
       - --private-key=${OP_PROPOSER_PRIVATE_KEY}
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --game-type=${GAME_TYPE:-0}
-      - --allow-non-finalized
       - --genesis-height=${FORK_BLOCK}
     depends_on:
       - op-batcher
@@ -622,6 +660,7 @@ services:
       - ./config-op/genesis-reth.json:/genesis.json
       - ./entrypoint:/entrypoint
       - ./.env:/.env
+      - ./config-op/test.reth.seq.config.toml:/config.toml
     ports:
       - "8223:8545"
       - "30305:30303"
