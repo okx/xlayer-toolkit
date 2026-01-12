@@ -49,7 +49,9 @@ CMD="op-reth node \
       --txpool.pending-max-size=2000 \
       --txpool.basefee-max-size=2000 \
       --log.file.directory=/logs/reth \
-      --log.file.filter=debug,rpc=trace,engine=trace,engine_api=trace \
+      --log.file.filter=info \
+      --metrics=0.0.0.0:9001 \
+      --engine.persistence-threshold=${ENGINE_PERSISTENCE_THRESHOLD:-2} \
       $INNERTX_FLAG"
 
 # For flashblocks architecture
