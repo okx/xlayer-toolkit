@@ -67,6 +67,11 @@ fi
 
 sleep 5
 
+# Start monitoring stack (Prometheus + Grafana) after op-reth is up
+echo "🚀 Starting monitoring stack (Prometheus + Grafana)..."
+docker compose up -d prometheus grafana
+echo "✅ Grafana available at http://localhost:3000 (admin/admin)"
+
 #$SCRIPTS_DIR/add-peers.sh
 
 if [ "$LAUNCH_RPC_NODE" = "true" ]; then

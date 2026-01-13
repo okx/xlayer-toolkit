@@ -230,6 +230,7 @@ services:
       - ./config-op/genesis-reth.json:/genesis.json
       - ./entrypoint:/entrypoint
       - ./.env:/.env
+      - ./logs/op-reth-seq:/logs/reth
       # Profiling data directory
       - ./profiling/op-reth-seq:/profiling
       # Kernel tracing filesystem for perf profiling
@@ -241,6 +242,7 @@ services:
       - "30303:30303"
       - "30303:30303/udp"
       - "11111:1111" # outbound flashblocks ws port
+      - "9001:9001"  # metrics port
     healthcheck:
       test: ["CMD", "curl", "-f", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
       interval: 3s
@@ -977,6 +979,34 @@ services:
     volumes:
       - ./data/kailua-validator:/data
     command:
-      - kailua-cli 
+      - kailua-cli
       - validate
       - --data-dir=/data
+
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./data/prometheus:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:10.1.0
+    container_name: grafana
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
