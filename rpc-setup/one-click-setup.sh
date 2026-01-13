@@ -737,6 +737,10 @@ SEQUENCER_HTTP_URL=$SEQUENCER_HTTP
 # Legacy RPC Configuration
 LEGACY_RPC_URL=$LEGACY_RPC_URL
 LEGACY_RPC_TIMEOUT=$LEGACY_RPC_TIMEOUT
+
+# Flashblocks Configuration
+FLASHBLOCKS_ENABLED=$FLASHBLOCKS_ENABLED
+FLASHBLOCKS_URL=$FLASHBLOCKS_URL
 EOF
     
     print_success ".env file generated"
@@ -1306,12 +1310,15 @@ services:
       - ./${TARGET_DIR}/config/jwt.txt:/jwt.txt
       - ./${TARGET_DIR}/config/op-reth-config-${NETWORK_TYPE}.toml:/config.toml
       - ./${TARGET_DIR}/logs:/logs
+    environment:
+      - FLASHBLOCKS_ENABLED=${FLASHBLOCKS_ENABLED}
+      - FLASHBLOCKS_URL=${FLASHBLOCKS_URL}
     command:
       - -c
       - |
         FLASHBLOCKS_FLAG=""
-        if [ "${FLASHBLOCKS_ENABLED}" = "true" ] && [ -n "${FLASHBLOCKS_URL}" ]; then
-          FLASHBLOCKS_FLAG="--flashblocks-url=${FLASHBLOCKS_URL}"
+        if [ "$${FLASHBLOCKS_ENABLED}" = "true" ] && [ -n "$${FLASHBLOCKS_URL}" ]; then
+          FLASHBLOCKS_FLAG="--flashblocks-url=$${FLASHBLOCKS_URL}"
         fi
         exec op-reth node \
           --datadir=/datadir \
