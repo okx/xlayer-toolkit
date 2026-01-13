@@ -295,6 +295,7 @@ services:
     ports:
       - "8124:8545"
       - "7547:7546"
+      - "11113:1111" # outbound flashblocks ws port
       - "30304:30303"
       - "30304:30303/udp"
 
