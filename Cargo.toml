@@ -123,5 +123,5 @@ debug = "line-tables-only"
 split-debuginfo = "unpacked"
 
 [workspace.dependencies]
-alloy-primitives = { version = "1.5.0", default-features = false, features = ["map-foldhash"] }
+hex = "0.4"
 tracing = "0.1.37"
