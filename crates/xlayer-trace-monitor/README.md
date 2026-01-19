@@ -1,136 +1,56 @@
 # xlayer-trace-monitor
 
-Transaction and block tracing monitor crate for X Layer.
+Transaction and block lifecycle tracing crate for X Layer.
 
 ## Overview
 
-`xlayer-trace-monitor` is a standalone crate that provides **only** transaction and block lifecycle logging functionality. It implements a singleton pattern for global tracer management and supports logging to CSV files.
-
-**This crate does NOT:**
-- Parse command line arguments (you handle CLI parsing in your application)
-- Handle business logic (only logs events to CSV file)
-
-**This crate DOES:**
-- Log transaction and block events to CSV files
-- Provide efficient buffered writing with automatic flush
-- Support global singleton pattern for easy access
-- Provide configuration struct for easy initialization
+A lightweight crate for logging transaction and block lifecycle events to CSV files. Uses buffered writes for performance and supports global singleton pattern.
 
 ## Features
 
-- **Singleton Initialization**: Global tracer instance managed via `OnceLock`
-- **8 Monitoring Points**: Complete coverage of transaction and block lifecycle
-- **CSV Output**: Structured logging with 23 fields
-- **Automatic Flushing**: Periodic flush to ensure data persistence
-- **Zero Overhead**: No performance impact when disabled
-- **Default Path**: Automatically uses `/data/logs/trace.log` if no path specified
+- 8 monitoring points covering transaction/block lifecycle
+- CSV output with 23 fields
+- Buffered writes with auto-flush (100 writes or 1s)
+- Zero overhead when disabled
+- Default path: `/data/logs/trace.log`
 
 ## Usage
 
-### 1. Add Dependency
-
-In your `Cargo.toml`:
+### Add Dependency
 
 ```toml
 [dependencies]
 xlayer-trace-monitor = { git = "https://github.com/okx/xlayer-toolkit", path = "crates/xlayer-trace-monitor" }
 ```
 
-### 2. Initialize Global Tracer
-
-#### Basic Usage
+### Initialize
 
 ```rust
 use xlayer_trace_monitor::init_global_tracer;
 use std::path::PathBuf;
 
-// Initialize at application startup
+// Initialize at startup
 init_global_tracer(
     true,  // enabled
-    Some(PathBuf::from("/path/to/trace.log")),  // output path (optional, defaults to /data/logs/trace.log)
+    Some(PathBuf::from("/path/to/trace.log")),  // optional, defaults to /data/logs/trace.log
 );
-
-// Or use default path:
-init_global_tracer(
-    true,
-    None,  // Will use /data/logs/trace.log
-);
-
-// Or disable tracing:
-init_global_tracer(false, None);
 ```
 
-#### With Command Line Arguments (using clap)
+### Use in Code
 
 ```rust
-use clap::Parser;
-use xlayer_trace_monitor::init_global_tracer;
-use std::path::PathBuf;
-
-#[derive(Parser)]
-struct Args {
-    #[arg(long = "tx-trace.enable")]
-    tx_trace_enable: bool,
-    
-    #[arg(long = "tx-trace.output-path")]
-    tx_trace_output_path: Option<PathBuf>,
-}
-
-fn main() {
-    let args = Args::parse();
-    
-    // Directly pass parsed arguments
-    init_global_tracer(
-        args.tx_trace_enable,
-        args.tx_trace_output_path,
-    );
-    
-    // ... rest of your application
-}
-```
-
-Then run with:
-```bash
-your-app --tx-trace.enable --tx-trace.output-path=/data/logs/trace.log
-```
-
-### 3. Use in Code
-
-```rust
-use xlayer_trace_monitor::{get_global_tracer, TransactionProcessId};
-use alloy_primitives::B256;
+use xlayer_trace_monitor::{get_global_tracer, TransactionProcessId, Hash32};
 
 // Log transaction event
 if let Some(tracer) = get_global_tracer() {
-    tracer.log_transaction(
-        tx_hash,  // B256
-        TransactionProcessId::SeqTxExecutionEnd,
-        Some(block_number),
-    );
+    let tx_hash: Hash32 = [0x12; 32];  // or convert from B256: *b256_hash.as_ref()
+    tracer.log_transaction(tx_hash, TransactionProcessId::SeqReceiveTxEnd, Some(12345));
 }
 
 // Log block event
 if let Some(tracer) = get_global_tracer() {
-    tracer.log_block(
-        block_hash,  // B256
-        block_number,
-        TransactionProcessId::SeqBlockBuildEnd,
-    );
-}
-
-// Log block event with saved timestamp
-let build_start_timestamp = std::time::SystemTime::now()
-    .duration_since(std::time::UNIX_EPOCH)
-    .unwrap_or_default()
-    .as_millis();
-// ... later, when block hash is available ...
-if let Some(tracer) = get_global_tracer() {
-    tracer.log_block_with_timestamp(
-        block_hash,
-        block_number,
-        TransactionProcessId::SeqBlockBuildStart,
-        build_start_timestamp,
-    );
+    let block_hash: Hash32 = [0x34; 32];
+    tracer.log_block(block_hash, 12345, TransactionProcessId::SeqBlockBuildEnd);
 }
 ```
 
@@ -147,73 +67,36 @@ if let Some(tracer) = get_global_tracer() {
 | 15060 | `RpcBlockReceiveEnd` | RPC node received block |
 | 15062 | `RpcBlockInsertEnd` | RPC node completed block insertion |
 
-## API Reference
+## API
 
 ### Functions
 
 - `init_global_tracer(enabled, output_path)` - Initialize singleton tracer
-- `get_global_tracer()` - Get global tracer instance (returns `None` if not initialized)
-- `flush_global_tracer()` - Force flush trace file
-- `sync_global_tracer()` - Force sync trace file to disk
+- `get_global_tracer()` - Get tracer instance
+- `flush_global_tracer()` - Force flush
+- `sync_global_tracer()` - Force sync to disk
 
 ### Types
 
+- `Hash32` - Type alias for `[u8; 32]` (32-byte hash)
 - `TransactionTracer` - Main tracer struct
 - `TransactionProcessId` - Enum for monitoring point IDs
 
 ### Methods
 
-- `tracer.log_transaction(tx_hash, process_id, block_number)` - Log transaction event
-- `tracer.log_block(block_hash, block_number, process_id)` - Log block event
-- `tracer.log_block_with_timestamp(...)` - Log block with specific timestamp
-- `tracer.flush()` - Force flush trace file
-- `tracer.is_enabled()` - Check if tracing is enabled
-
-## CSV Format
-
-The output CSV contains 23 fields:
-1. Chain name
-2. Trace hash
-3. Status
-4. Service name
-5. Business name
-6. Client
-7. Chain ID
-8. Process ID (numeric)
-9. Process name
-10. Index
-11. Inner index
-12. Current time (milliseconds)
-13. Refer ID
-14. Contract address
-15. Block height
-16. Block hash
-17. Block time
-18. Deposit confirm height
-19. Token ID
-20. MEV supplier
-21. Business hash
-22. Transaction type
-23. Extension JSON
-
-## Default Behavior
-
-- **Default Output Path**: If `output_path` is `None`, the tracer will use `/data/logs/trace.log`
-- **File Creation**: Parent directories are automatically created if they don't exist
-- **Append Mode**: Files are opened in append mode, existing content is preserved
-- **Auto Flush**: Automatic flush occurs every 100 writes or 1 second
-- **Zero Overhead**: When disabled, all logging methods return early (no performance impact)
+- `tracer.log_transaction(hash, process_id, block_number)` - Log transaction
+- `tracer.log_block(hash, block_number, process_id)` - Log block
+- `tracer.log_block_with_timestamp(hash, block_number, process_id, timestamp_ms)` - Log with timestamp
+- `tracer.flush()` - Flush buffer
+- `tracer.sync_all()` - Sync to disk
 
 ## Notes
 
-- The tracer must be initialized before use
-- If not initialized, `get_global_tracer()` returns `None` and logging is skipped
-- When disabled, all logging methods return early (zero overhead)
-- File is opened in append mode, existing content is preserved
-- Automatic flush occurs every 100 writes or 1 second
-- All logs are written to file only, never to console
+- Tracer must be initialized before use
+- Auto-flush: every 100 writes or 1 second
+- Files opened in append mode
+- Zero overhead when disabled
 
 ## License
 
 MIT OR Apache-2.0
-
