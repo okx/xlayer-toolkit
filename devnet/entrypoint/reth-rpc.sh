@@ -12,7 +12,7 @@ if [ "${JEMALLOC_PROFILING:-false}" = "true" ]; then
 fi
 
 # Read the first argument (1 or 0), default to 0 if not provided
-FLASHBLOCKS_RPC=${FLASHBLOCKS_RPC:-"true"}
+DISABLE_FLASHBLOCKS=${DISABLE_FLASHBLOCKS:-"false"}
 
 # Build the command with common arguments
 CMD="op-reth node \
@@ -46,12 +46,9 @@ CMD="op-reth node \
       --rpc.eth-proof-window=10000"
 
 # For flashblocks architecture. Enable flashblocks RPC
-if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
-    CMD="$CMD \
-        --flashblocks.addr=0.0.0.0 \
-        --flashblocks.port=1111 \
-        --flashblocks-url=ws://op-reth-seq:1111 \
-        --xlayer.flashblocks-subscription"
+if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$DISABLE_FLASHBLOCKS" = "false" ]; then
+    CMD="$CMD --flashblocks-url=ws://rollup-boost:1111"
+    echo "Flashblocks RPC enabled"
 fi
 
 exec $CMD
