@@ -43,6 +43,5 @@ tools/adventure/txhashes.log
 
 # Rust build artifacts
 **/target/
-Cargo.lock
 
 local
