@@ -3,7 +3,6 @@
 //! This module provides functionality to trace and log transaction lifecycle events
 //! for monitoring and debugging purposes.
 
-use alloy_primitives::B256;
 use std::{
     borrow::Cow,
     fs::{self, File, OpenOptions},
@@ -15,6 +14,38 @@ use std::{
     },
     time::Instant,
 };
+
+/// 32-byte hash (equivalent to B256)
+pub type Hash32 = [u8; 32];
+
+/// Format a 32-byte hash as hexadecimal string with 0x prefix
+fn format_hash_hex(hash: &Hash32) -> String {
+    format!("0x{}", hex::encode(hash))
+}
+
+/// Convert from B256 (alloy-primitives) or any 32-byte array to Hash32
+///
+/// This is a convenience function for converting from `alloy_primitives::B256` to `Hash32`.
+/// Since B256 implements `AsRef<[u8; 32]>`, this conversion is zero-cost (just a reference copy).
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use xlayer_trace_monitor::{Hash32, from_b256};
+/// use alloy_primitives::B256;
+///
+/// let b256_hash: B256 = /* ... */;
+/// let hash32: Hash32 = from_b256(b256_hash);
+/// tracer.log_transaction(hash32, ...);
+/// ```
+///
+/// Or you can convert directly:
+/// ```rust,no_run
+/// let hash32: Hash32 = *b256_hash.as_ref();
+/// ```
+pub fn from_b256(b256: impl AsRef<[u8; 32]>) -> Hash32 {
+    *b256.as_ref()
+}
 
 /// Number of log entries to write before forcing a flush.
 /// This reduces system calls by batching writes through `BufWriter`.
@@ -146,15 +177,15 @@ impl TransactionTracer {
             };
 
             // Create parent directories if they don't exist
-            if let Some(parent) = file_path.parent() {
-                if let Err(e) = fs::create_dir_all(parent) {
-                    tracing::warn!(
-                        target: "tx_trace",
-                        ?parent,
-                        error = %e,
-                        "Failed to create transaction trace output directory"
-                    );
-                }
+            if let Some(parent) = file_path.parent()
+                && let Err(e) = fs::create_dir_all(parent)
+            {
+                tracing::warn!(
+                    target: "tx_trace",
+                    ?parent,
+                    error = %e,
+                    "Failed to create transaction trace output directory"
+                );
             }
 
             match OpenOptions::new()
@@ -316,12 +347,12 @@ impl TransactionTracer {
         trace: &str,
         process_id: TransactionProcessId,
         current_time: u128,
-        block_hash: Option<B256>,
+        block_hash: Option<Hash32>,
         block_number: Option<u64>,
     ) -> String {
         fn escape_csv(s: &str) -> Cow<'_, str> {
             if s.is_empty() {
-                return String::new();
+                return Cow::Borrowed("");
             }
 
             if s.contains(',') || s.contains('"') || s.contains('\n') {
@@ -335,7 +366,7 @@ impl TransactionTracer {
         let process_str = process_id.as_u64().to_string();
         let current_time_str = current_time.to_string();
         let block_height = block_number.map(|n| n.to_string()).unwrap_or_default();
-        let block_hash_str = block_hash.map(|h| format!("{h:#x}")).unwrap_or_default();
+        let block_hash_str = block_hash.map(|h| format_hash_hex(&h)).unwrap_or_default();
 
         // Build CSV line efficiently
         format!(
@@ -377,7 +408,7 @@ impl TransactionTracer {
     /// Log transaction event at current time point
     pub fn log_transaction(
         &self,
-        tx_hash: B256,
+        tx_hash: Hash32,
         process_id: TransactionProcessId,
         block_number: Option<u64>,
     ) {
@@ -386,7 +417,7 @@ impl TransactionTracer {
         }
 
         let timestamp_ms = Self::current_timestamp_ms();
-        let trace_hash = format!("{tx_hash:#x}");
+        let trace_hash = format_hash_hex(&tx_hash);
 
         let csv_line =
             Self::format_csv_line(&trace_hash, process_id, timestamp_ms, None, block_number);
@@ -395,13 +426,18 @@ impl TransactionTracer {
     }
 
     /// Log block event at current time point
-    pub fn log_block(&self, block_hash: B256, block_number: u64, process_id: TransactionProcessId) {
+    pub fn log_block(
+        &self,
+        block_hash: Hash32,
+        block_number: u64,
+        process_id: TransactionProcessId,
+    ) {
         if !self.inner.enabled {
             return;
         }
 
         let timestamp_ms = Self::current_timestamp_ms();
-        let trace_hash = format!("{block_hash:#x}");
+        let trace_hash = format_hash_hex(&block_hash);
 
         let csv_line = Self::format_csv_line(
             &trace_hash,
@@ -421,7 +457,7 @@ impl TransactionTracer {
     /// was not yet available).
     pub fn log_block_with_timestamp(
         &self,
-        block_hash: B256,
+        block_hash: Hash32,
         block_number: u64,
         process_id: TransactionProcessId,
         timestamp_ms: u128,
@@ -430,7 +466,7 @@ impl TransactionTracer {
             return;
         }
 
-        let trace_hash = format!("{block_hash:#x}");
+        let trace_hash = format_hash_hex(&block_hash);
 
         let csv_line = Self::format_csv_line(
             &trace_hash,
@@ -498,20 +534,17 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    fn setup_test_tracer() -> (TempDir, PathBuf) {
+    fn setup_test_tracer(enabled: bool) -> (TransactionTracer, TempDir, PathBuf) {
         let temp_dir = TempDir::new().unwrap();
         let log_path = temp_dir.path().join("test_trace.log");
-        // Note: init_global_tracer can only succeed once, so first test will initialize
-        // Subsequent tests will use the already-initialized tracer
-        init_global_tracer(true, Some(log_path.clone()));
-        (temp_dir, log_path)
+        let tracer = TransactionTracer::new(enabled, Some(log_path.clone()));
+        (tracer, temp_dir, log_path)
     }
 
     #[test]
     fn test_tracer_initialization() {
-        let (temp_dir, log_path) = setup_test_tracer();
+        let (tracer, temp_dir, log_path) = setup_test_tracer(true);
 
-        let tracer = get_global_tracer().expect("Tracer should be initialized");
         assert!(tracer.is_enabled());
         assert!(log_path.exists() || log_path.parent().unwrap().exists());
 
@@ -521,22 +554,19 @@ mod tests {
 
     #[test]
     fn test_tracer_disabled() {
-        let temp_dir = TempDir::new().unwrap();
-        let log_path = temp_dir.path().join("test_trace.log");
-        init_global_tracer(false, Some(log_path.clone()));
+        let (tracer, temp_dir, _log_path) = setup_test_tracer(false);
 
-        let tracer = get_global_tracer().expect("Tracer should be initialized");
         assert!(!tracer.is_enabled());
 
         // temp_dir will be automatically cleaned up when it goes out of scope
+        drop(temp_dir);
     }
 
     #[test]
     fn test_log_transaction() {
-        let (temp_dir, log_path) = setup_test_tracer();
+        let (tracer, temp_dir, log_path) = setup_test_tracer(true);
 
-        let tracer = get_global_tracer().unwrap();
-        let tx_hash = B256::from([0x12; 32]);
+        let tx_hash = [0x12; 32];
 
         tracer.log_transaction(tx_hash, TransactionProcessId::SeqReceiveTxEnd, Some(12345));
         tracer.flush().unwrap();
@@ -553,10 +583,9 @@ mod tests {
 
     #[test]
     fn test_log_block() {
-        let (temp_dir, log_path) = setup_test_tracer();
+        let (tracer, temp_dir, log_path) = setup_test_tracer(true);
 
-        let tracer = get_global_tracer().unwrap();
-        let block_hash = B256::from([0x34; 32]);
+        let block_hash = [0x34; 32];
 
         tracer.log_block(block_hash, 12345, TransactionProcessId::SeqBlockBuildEnd);
         tracer.flush().unwrap();
@@ -571,10 +600,9 @@ mod tests {
 
     #[test]
     fn test_log_block_with_timestamp() {
-        let (temp_dir, _log_path) = setup_test_tracer();
+        let (tracer, temp_dir, _log_path) = setup_test_tracer(true);
 
-        let tracer = get_global_tracer().unwrap();
-        let block_hash = B256::from([0x56; 32]);
+        let block_hash = [0x56; 32];
         let timestamp = 1234567890123u128;
 
         tracer.log_block_with_timestamp(
@@ -591,10 +619,9 @@ mod tests {
 
     #[test]
     fn test_multiple_process_ids() {
-        let (temp_dir, log_path) = setup_test_tracer();
+        let (tracer, temp_dir, log_path) = setup_test_tracer(true);
 
-        let tracer = get_global_tracer().unwrap();
-        let tx_hash = B256::from([0x78; 32]);
+        let tx_hash = [0x78; 32];
 
         // Test different process IDs
         tracer.log_transaction(tx_hash, TransactionProcessId::RpcReceiveTxEnd, None);
@@ -636,10 +663,9 @@ mod tests {
 
     #[test]
     fn test_flush_and_sync() {
-        let (temp_dir, _log_path) = setup_test_tracer();
+        let (tracer, temp_dir, _log_path) = setup_test_tracer(true);
 
-        let tracer = get_global_tracer().unwrap();
-        let tx_hash = B256::from([0x9a; 32]);
+        let tx_hash = [0x9a; 32];
 
         tracer.log_transaction(tx_hash, TransactionProcessId::SeqReceiveTxEnd, None);
         assert!(tracer.flush().is_ok());
@@ -651,12 +677,9 @@ mod tests {
 
     #[test]
     fn test_disabled_tracer_no_logging() {
-        let temp_dir = TempDir::new().unwrap();
-        let log_path = temp_dir.path().join("test_trace.log");
-        init_global_tracer(false, Some(log_path.clone()));
+        let (tracer, temp_dir, log_path) = setup_test_tracer(false);
 
-        let tracer = get_global_tracer().unwrap();
-        let tx_hash = B256::from([0xbc; 32]);
+        let tx_hash = [0xbc; 32];
 
         // Should not log when disabled
         tracer.log_transaction(tx_hash, TransactionProcessId::SeqReceiveTxEnd, None);
@@ -669,18 +692,19 @@ mod tests {
         }
 
         // temp_dir will be automatically cleaned up when it goes out of scope
+        drop(temp_dir);
     }
 
     #[test]
     fn test_default_path() {
-        // Test that default path logic works (though we can't easily test /data/logs in tests)
+        // Test that custom path logic works
         let temp_dir = TempDir::new().unwrap();
         let custom_path = temp_dir.path().join("custom.log");
-        init_global_tracer(true, Some(custom_path.clone()));
+        let tracer = TransactionTracer::new(true, Some(custom_path.clone()));
 
-        let tracer = get_global_tracer().unwrap();
         assert!(tracer.is_enabled());
 
         // temp_dir will be automatically cleaned up when it goes out of scope
+        drop(temp_dir);
     }
 }
