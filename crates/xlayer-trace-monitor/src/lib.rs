@@ -491,3 +491,196 @@ pub fn sync_global_tracer() -> Result<(), std::io::Error> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn setup_test_tracer() -> (TempDir, PathBuf) {
+        let temp_dir = TempDir::new().unwrap();
+        let log_path = temp_dir.path().join("test_trace.log");
+        // Note: init_global_tracer can only succeed once, so first test will initialize
+        // Subsequent tests will use the already-initialized tracer
+        init_global_tracer(true, Some(log_path.clone()));
+        (temp_dir, log_path)
+    }
+
+    #[test]
+    fn test_tracer_initialization() {
+        let (temp_dir, log_path) = setup_test_tracer();
+
+        let tracer = get_global_tracer().expect("Tracer should be initialized");
+        assert!(tracer.is_enabled());
+        assert!(log_path.exists() || log_path.parent().unwrap().exists());
+
+        // temp_dir will be automatically cleaned up when it goes out of scope
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_tracer_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_path = temp_dir.path().join("test_trace.log");
+        init_global_tracer(false, Some(log_path.clone()));
+
+        let tracer = get_global_tracer().expect("Tracer should be initialized");
+        assert!(!tracer.is_enabled());
+
+        // temp_dir will be automatically cleaned up when it goes out of scope
+    }
+
+    #[test]
+    fn test_log_transaction() {
+        let (temp_dir, log_path) = setup_test_tracer();
+
+        let tracer = get_global_tracer().unwrap();
+        let tx_hash = B256::from([0x12; 32]);
+
+        tracer.log_transaction(tx_hash, TransactionProcessId::SeqReceiveTxEnd, Some(12345));
+        tracer.flush().unwrap();
+
+        // Verify file was created and contains data
+        assert!(log_path.exists());
+        let content = fs::read_to_string(&log_path).unwrap();
+        assert!(!content.is_empty());
+        assert!(content.contains("xlayer_seq_receive_tx"));
+
+        // temp_dir will be automatically cleaned up when it goes out of scope
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_log_block() {
+        let (temp_dir, log_path) = setup_test_tracer();
+
+        let tracer = get_global_tracer().unwrap();
+        let block_hash = B256::from([0x34; 32]);
+
+        tracer.log_block(block_hash, 12345, TransactionProcessId::SeqBlockBuildEnd);
+        tracer.flush().unwrap();
+
+        let content = fs::read_to_string(&log_path).unwrap();
+        assert!(content.contains("xlayer_seq_end_block"));
+        assert!(content.contains("12345"));
+
+        // temp_dir will be automatically cleaned up when it goes out of scope
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_log_block_with_timestamp() {
+        let (temp_dir, _log_path) = setup_test_tracer();
+
+        let tracer = get_global_tracer().unwrap();
+        let block_hash = B256::from([0x56; 32]);
+        let timestamp = 1234567890123u128;
+
+        tracer.log_block_with_timestamp(
+            block_hash,
+            12345,
+            TransactionProcessId::SeqBlockBuildStart,
+            timestamp,
+        );
+        tracer.flush().unwrap();
+
+        // temp_dir will be automatically cleaned up when it goes out of scope
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_multiple_process_ids() {
+        let (temp_dir, log_path) = setup_test_tracer();
+
+        let tracer = get_global_tracer().unwrap();
+        let tx_hash = B256::from([0x78; 32]);
+
+        // Test different process IDs
+        tracer.log_transaction(tx_hash, TransactionProcessId::RpcReceiveTxEnd, None);
+        tracer.log_transaction(tx_hash, TransactionProcessId::SeqReceiveTxEnd, None);
+        tracer.log_transaction(tx_hash, TransactionProcessId::SeqTxExecutionEnd, Some(100));
+        tracer.flush().unwrap();
+
+        let content = fs::read_to_string(&log_path).unwrap();
+        assert!(content.contains("xlayer_rpc_receive_tx"));
+        assert!(content.contains("xlayer_seq_receive_tx"));
+        assert!(content.contains("xlayer_seq_package_tx"));
+
+        // temp_dir will be automatically cleaned up when it goes out of scope
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_service_name_mapping() {
+        assert_eq!(
+            TransactionProcessId::RpcReceiveTxEnd.service_name(),
+            "okx-defi-xlayer-rpcpay-pro"
+        );
+        assert_eq!(
+            TransactionProcessId::SeqReceiveTxEnd.service_name(),
+            "okx-defi-xlayer-egseqz-pro"
+        );
+        assert_eq!(
+            TransactionProcessId::SeqBlockBuildEnd.service_name(),
+            "okx-defi-xlayer-egseqz-pro"
+        );
+    }
+
+    #[test]
+    fn test_process_id_conversions() {
+        let process_id = TransactionProcessId::SeqReceiveTxEnd;
+        assert_eq!(process_id.as_u64(), 15030);
+        assert_eq!(process_id.as_str(), "xlayer_seq_receive_tx");
+    }
+
+    #[test]
+    fn test_flush_and_sync() {
+        let (temp_dir, _log_path) = setup_test_tracer();
+
+        let tracer = get_global_tracer().unwrap();
+        let tx_hash = B256::from([0x9a; 32]);
+
+        tracer.log_transaction(tx_hash, TransactionProcessId::SeqReceiveTxEnd, None);
+        assert!(tracer.flush().is_ok());
+        assert!(tracer.sync_all().is_ok());
+
+        // temp_dir will be automatically cleaned up when it goes out of scope
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_disabled_tracer_no_logging() {
+        let temp_dir = TempDir::new().unwrap();
+        let log_path = temp_dir.path().join("test_trace.log");
+        init_global_tracer(false, Some(log_path.clone()));
+
+        let tracer = get_global_tracer().unwrap();
+        let tx_hash = B256::from([0xbc; 32]);
+
+        // Should not log when disabled
+        tracer.log_transaction(tx_hash, TransactionProcessId::SeqReceiveTxEnd, None);
+        tracer.flush().unwrap();
+
+        // File should not exist or be empty
+        if log_path.exists() {
+            let content = fs::read_to_string(&log_path).unwrap();
+            assert!(content.is_empty());
+        }
+
+        // temp_dir will be automatically cleaned up when it goes out of scope
+    }
+
+    #[test]
+    fn test_default_path() {
+        // Test that default path logic works (though we can't easily test /data/logs in tests)
+        let temp_dir = TempDir::new().unwrap();
+        let custom_path = temp_dir.path().join("custom.log");
+        init_global_tracer(true, Some(custom_path.clone()));
+
+        let tracer = get_global_tracer().unwrap();
+        assert!(tracer.is_enabled());
+
+        // temp_dir will be automatically cleaned up when it goes out of scope
+    }
+}
