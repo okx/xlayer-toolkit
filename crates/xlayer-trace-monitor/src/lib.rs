@@ -38,28 +38,6 @@ const RPC_SERVICE_NAME: &str = "okx-defi-xlayer-rpcpay-pro";
 /// Sequencer service name
 const SEQ_SERVICE_NAME: &str = "okx-defi-xlayer-egseqz-pro";
 
-/// Node type for identifying sequencer vs RPC node
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NodeType {
-    /// Sequencer node (builds blocks)
-    Sequencer,
-    /// RPC node (forwards transactions to sequencer)
-    Rpc,
-    /// Unknown node type (default)
-    Unknown,
-}
-
-impl NodeType {
-    /// Returns the string representation of the node type
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Sequencer => "sequencer",
-            Self::Rpc => "rpc",
-            Self::Unknown => "unknown",
-        }
-    }
-}
-
 /// Transaction process ID for tracking different stages in the transaction lifecycle
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TransactionProcessId {
@@ -151,8 +129,7 @@ impl TransactionTracer {
     /// # Arguments
     /// * `enabled` - Whether tracing is enabled
     /// * `output_path` - Optional path to output file (defaults to `/data/logs/trace.log` if None)
-    /// * `_node_type` - Node type (currently unused, reserved for future use)
-    pub fn new(enabled: bool, output_path: Option<PathBuf>, _node_type: NodeType) -> Self {
+    pub fn new(enabled: bool, output_path: Option<PathBuf>) -> Self {
         // Default path if not specified: /data/logs/trace.log
         let default_path = PathBuf::from("/data/logs/trace.log");
         let final_path = output_path.unwrap_or(default_path);
@@ -467,8 +444,12 @@ static GLOBAL_TRACER: OnceLock<Arc<TransactionTracer>> = OnceLock::new();
 ///
 /// This function should be called once at application startup to initialize
 /// the singleton tracer instance. Subsequent calls will be ignored.
-pub fn init_global_tracer(enabled: bool, output_path: Option<PathBuf>, node_type: NodeType) {
-    let tracer = TransactionTracer::new(enabled, output_path, node_type);
+///
+/// # Arguments
+/// * `enabled` - Whether tracing is enabled (from `--tx-trace.enable` flag)
+/// * `output_path` - Output file path (from `--tx-trace.output-path` flag, defaults to `/data/logs/trace.log` if None)
+pub fn init_global_tracer(enabled: bool, output_path: Option<PathBuf>) {
+    let tracer = TransactionTracer::new(enabled, output_path);
     GLOBAL_TRACER.set(Arc::new(tracer)).ok();
 }
 

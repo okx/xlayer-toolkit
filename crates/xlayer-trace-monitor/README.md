@@ -4,7 +4,17 @@ Transaction and block tracing monitor crate for X Layer.
 
 ## Overview
 
-`xlayer-trace-monitor` is a standalone crate that provides transaction and block lifecycle monitoring functionality. It implements a singleton pattern for global tracer management and supports logging to CSV files.
+`xlayer-trace-monitor` is a standalone crate that provides **only** transaction and block lifecycle logging functionality. It implements a singleton pattern for global tracer management and supports logging to CSV files.
+
+**This crate does NOT:**
+- Parse command line arguments (you handle CLI parsing in your application)
+- Handle business logic (only logs events to CSV file)
+
+**This crate DOES:**
+- Log transaction and block events to CSV files
+- Provide efficient buffered writing with automatic flush
+- Support global singleton pattern for easy access
+- Provide configuration struct for easy initialization
 
 ## Features
 
@@ -23,30 +33,65 @@ In your `Cargo.toml`:
 
 ```toml
 [dependencies]
-xlayer-trace-monitor = { path = "../xlayer-toolkit/crates/xlayer-trace-monitor" }
-# Or from git:
-# xlayer-trace-monitor = { git = "https://github.com/okx/xlayer-toolkit", path = "crates/xlayer-trace-monitor" }
+xlayer-trace-monitor = { git = "https://github.com/okx/xlayer-toolkit", path = "crates/xlayer-trace-monitor" }
 ```
 
 ### 2. Initialize Global Tracer
 
+#### Basic Usage
+
 ```rust
-use xlayer_trace_monitor::{init_global_tracer, NodeType};
+use xlayer_trace_monitor::init_global_tracer;
 use std::path::PathBuf;
 
 // Initialize at application startup
 init_global_tracer(
     true,  // enabled
     Some(PathBuf::from("/path/to/trace.log")),  // output path (optional, defaults to /data/logs/trace.log)
-    NodeType::Sequencer,  // or NodeType::Rpc, NodeType::Unknown
 );
 
 // Or use default path:
 init_global_tracer(
     true,
     None,  // Will use /data/logs/trace.log
-    NodeType::Sequencer,
 );
+
+// Or disable tracing:
+init_global_tracer(false, None);
+```
+
+#### With Command Line Arguments (using clap)
+
+```rust
+use clap::Parser;
+use xlayer_trace_monitor::init_global_tracer;
+use std::path::PathBuf;
+
+#[derive(Parser)]
+struct Args {
+    #[arg(long = "tx-trace.enable")]
+    tx_trace_enable: bool,
+    
+    #[arg(long = "tx-trace.output-path")]
+    tx_trace_output_path: Option<PathBuf>,
+}
+
+fn main() {
+    let args = Args::parse();
+    
+    // Directly pass parsed arguments
+    init_global_tracer(
+        args.tx_trace_enable,
+        args.tx_trace_output_path,
+    );
+    
+    // ... rest of your application
+}
+```
+
+Then run with:
+```bash
+your-app --tx-trace.enable --tx-trace.output-path=/data/logs/trace.log
 ```
 
 ### 3. Use in Code
@@ -106,15 +151,15 @@ if let Some(tracer) = get_global_tracer() {
 
 ### Functions
 
-- `init_global_tracer(enabled, output_path, node_type)` - Initialize singleton tracer
+- `init_global_tracer(enabled, output_path)` - Initialize singleton tracer
 - `get_global_tracer()` - Get global tracer instance (returns `None` if not initialized)
 - `flush_global_tracer()` - Force flush trace file
+- `sync_global_tracer()` - Force sync trace file to disk
 
 ### Types
 
 - `TransactionTracer` - Main tracer struct
 - `TransactionProcessId` - Enum for monitoring point IDs
-- `NodeType` - Enum for node type (Sequencer, Rpc, Unknown)
 
 ### Methods
 
