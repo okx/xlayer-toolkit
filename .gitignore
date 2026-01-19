@@ -41,4 +41,8 @@ devnet/l1-geth/
 profiling/
 tools/adventure/txhashes.log
 
+# Rust build artifacts
+**/target/
+Cargo.lock
+
 local
