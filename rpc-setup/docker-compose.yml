@@ -99,9 +99,16 @@ services:
       - ./${TARGET_DIR}/config/jwt.txt:/jwt.txt
       - ./${TARGET_DIR}/config/op-reth-config-${NETWORK_TYPE}.toml:/config.toml
       - ./${TARGET_DIR}/logs:/logs
+    environment:
+      - FLASHBLOCKS_ENABLED=${FLASHBLOCKS_ENABLED}
+      - FLASHBLOCKS_URL=${FLASHBLOCKS_URL}
     command:
       - -c
       - |
+        FLASHBLOCKS_FLAG="
+        if [ "$${FLASHBLOCKS_ENABLED}" = "true" ] && [ -n "$${FLASHBLOCKS_URL}" ]; then
+          FLASHBLOCKS_FLAG="--flashblocks-url=$${FLASHBLOCKS_URL}"
+        fi
         exec op-reth node \
           --datadir=/datadir \
           --chain=${CHAIN_NAME:-xlayer-mainnet} \

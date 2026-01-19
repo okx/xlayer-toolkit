@@ -1347,7 +1347,7 @@ services:
           --log.stdout.filter=info \
           --log.file.directory=/logs/ \
           --log.file.filter=info \
-          ${FLASHBLOCKS_FLAG}
+          $${FLASHBLOCKS_FLAG}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "--data", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
