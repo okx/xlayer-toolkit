@@ -105,7 +105,7 @@ services:
     command:
       - -c
       - |
-        FLASHBLOCKS_FLAG="
+        FLASHBLOCKS_FLAG=""
         if [ "$${FLASHBLOCKS_ENABLED}" = "true" ] && [ -n "$${FLASHBLOCKS_URL}" ]; then
           FLASHBLOCKS_FLAG="--flashblocks-url=$${FLASHBLOCKS_URL}"
         fi
@@ -135,7 +135,8 @@ services:
           --rpc.legacy-timeout=${LEGACY_RPC_TIMEOUT} \
           --log.stdout.filter=info \
           --log.file.directory=/logs/ \
-          --log.file.filter=info
+          --log.file.filter=info \
+          $${FLASHBLOCKS_FLAG}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "--data", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
