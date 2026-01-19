@@ -570,15 +570,9 @@ get_user_input() {
 
     FLASHBLOCKS_ENABLED=$(prompt_input "11. Flashblocks enabled [default: $DEFAULT_FLASHBLOCKS_ENABLED]: " "$DEFAULT_FLASHBLOCKS_ENABLED" "") || FLASHBLOCKS_ENABLED="$DEFAULT_FLASHBLOCKS_ENABLED"
 
-    while true && [ "$FLASHBLOCKS_ENABLED" = "true" ]; do
-        print_prompt "12. Flashblocks URL (Flashblocks WebSocket endpoint): "
-        if ! read -r FLASHBLOCKS_URL </dev/tty 2>/dev/null && ! read -r FLASHBLOCKS_URL; then
-            print_error "Failed to read input"
-            exit 1
-        fi
-        [ -n "$FLASHBLOCKS_URL" ] && validate_ws_url "$FLASHBLOCKS_URL" && break
-    done
-    
+    if [ "$FLASHBLOCKS_ENABLED" = "true" ]; then
+        FLASHBLOCKS_URL=$(prompt_input "12. Flashblocks URL [default: $DEFAULT_FLASHBLOCKS_URL]: " "$DEFAULT_FLASHBLOCKS_URL" "validate_ws_url") || FLASHBLOCKS_URL="$DEFAULT_FLASHBLOCKS_URL"
+    fi
     
     print_success "Configuration input completed"
 }
@@ -739,8 +733,8 @@ LEGACY_RPC_URL=$LEGACY_RPC_URL
 LEGACY_RPC_TIMEOUT=$LEGACY_RPC_TIMEOUT
 
 # Flashblocks Configuration
-FLASHBLOCKS_ENABLED=$FLASHBLOCKS_ENABLED
-FLASHBLOCKS_URL=$FLASHBLOCKS_URL
+FLASHBLOCKS_ENABLED=${FLASHBLOCKS_ENABLED:-${DEFAULT_FLASHBLOCKS_ENABLED:-true}}
+FLASHBLOCKS_URL=${FLASHBLOCKS_URL:-${DEFAULT_FLASHBLOCKS_URL:-}}
 EOF
     
     print_success ".env file generated"
