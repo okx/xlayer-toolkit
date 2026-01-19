@@ -30,18 +30,19 @@ fn format_hash_hex(hash: &Hash32) -> String {
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust
 /// use xlayer_trace_monitor::{Hash32, from_b256};
-/// use alloy_primitives::B256;
 ///
-/// let b256_hash: B256 = /* ... */;
-/// let hash32: Hash32 = from_b256(b256_hash);
-/// tracer.log_transaction(hash32, ...);
-/// ```
+/// // For [u8; 32], you can use it directly
+/// let hash_array: Hash32 = [0x12; 32];
 ///
-/// Or you can convert directly:
-/// ```rust,no_run
-/// let hash32: Hash32 = *b256_hash.as_ref();
+/// // If you use alloy_primitives::B256, convert like this:
+/// # #[cfg(feature = "alloy")]
+/// # {
+/// # use alloy_primitives::B256;
+/// # let b256_hash: B256 = B256::ZERO;
+/// let hash32: Hash32 = from_b256(&b256_hash);
+/// # }
 /// ```
 pub fn from_b256(b256: impl AsRef<[u8; 32]>) -> Hash32 {
     *b256.as_ref()
