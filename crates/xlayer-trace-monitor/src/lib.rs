@@ -233,8 +233,7 @@ impl TransactionTracer {
                             }
                         };
 
-                        if should_flush {
-                            if let Err(e) = writer.flush() {
+                        if should_flush && if let Err(e) = writer.flush() {
                                 tracing::warn!(
                                     target: "tx_trace",
                                     error = %e,
