@@ -43,5 +43,6 @@ tools/adventure/txhashes.log
 
 # Rust build artifacts
 **/target/
+**/build/
 
 local
