@@ -6,7 +6,7 @@
 use alloy_primitives::B256;
 use std::{
     fs::{self, File, OpenOptions},
-    io::Write,
+    io::{BufWriter, Write},
     path::PathBuf,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -16,9 +16,11 @@ use std::{
 };
 
 /// Number of log entries to write before forcing a flush
+/// This reduces system calls by batching writes through BufWriter
 const FLUSH_INTERVAL_WRITES: u64 = 100;
 
 /// Time interval between flushes (in seconds)
+/// Ensures data is periodically persisted even if write count is low
 const FLUSH_INTERVAL_SECONDS: u64 = 1;
 
 /// Fixed chain name
@@ -129,14 +131,8 @@ impl TransactionProcessId {
 struct TransactionTracerInner {
     /// Whether tracing is enabled
     enabled: bool,
-    /// Output file path (if None, logs to console only)
-    #[allow(dead_code)]
-    output_path: Option<PathBuf>,
-    /// File handle for writing logs
-    output_file: Mutex<Option<File>>,
-    /// Node type (Sequencer, Rpc, or Unknown)
-    #[allow(dead_code)]
-    node_type: NodeType,
+    /// Buffered file writer for efficient batch writes
+    output_file: Mutex<Option<BufWriter<File>>>,
     /// Counter for number of writes since last flush
     write_count: AtomicU64,
     /// Last flush time
@@ -151,7 +147,12 @@ pub struct TransactionTracer {
 
 impl TransactionTracer {
     /// Create a new transaction tracer
-    pub fn new(enabled: bool, output_path: Option<PathBuf>, node_type: NodeType) -> Self {
+    ///
+    /// # Arguments
+    /// * `enabled` - Whether tracing is enabled
+    /// * `output_path` - Optional path to output file (defaults to `/data/logs/trace.log` if None)
+    /// * `_node_type` - Node type (currently unused, reserved for future use)
+    pub fn new(enabled: bool, output_path: Option<PathBuf>, _node_type: NodeType) -> Self {
         // Default path if not specified: /data/logs/trace.log
         let default_path = PathBuf::from("/data/logs/trace.log");
         let final_path = output_path.unwrap_or(default_path);
@@ -185,7 +186,9 @@ impl TransactionTracer {
                         ?file_path,
                         "Transaction trace file opened for appending"
                     );
-                    Some(file)
+                    // Use BufWriter for efficient batch writes
+                    // Default buffer size is 8KB, which is good for our use case
+                    Some(BufWriter::new(file))
                 }
                 Err(e) => {
                     tracing::warn!(
@@ -202,9 +205,7 @@ impl TransactionTracer {
         Self {
             inner: Arc::new(TransactionTracerInner {
                 enabled,
-                output_path: Some(final_path),
                 output_file: Mutex::new(output_file),
-                node_type,
                 write_count: AtomicU64::new(0),
                 last_flush_time: Mutex::new(Instant::now()),
             }),
@@ -217,11 +218,14 @@ impl TransactionTracer {
     }
 
     /// Write CSV line to trace file with periodic flush
+    ///
+    /// Uses BufWriter to batch writes, reducing system calls for better performance.
+    /// Automatically flushes every FLUSH_INTERVAL_WRITES writes or FLUSH_INTERVAL_SECONDS.
     fn write_to_file(&self, csv_line: &str) {
         match self.inner.output_file.lock() {
             Ok(mut file_guard) => {
-                if let Some(ref mut file) = *file_guard {
-                    if let Err(e) = writeln!(file, "{csv_line}") {
+                if let Some(ref mut writer) = *file_guard {
+                    if let Err(e) = writeln!(writer, "{csv_line}") {
                         tracing::warn!(
                             target: "tx_trace",
                             error = %e,
@@ -231,22 +235,29 @@ impl TransactionTracer {
                         let count = self.inner.write_count.fetch_add(1, Ordering::Relaxed) + 1;
 
                         let should_flush = {
-                            let mut last_flush = self.inner.last_flush_time.lock().unwrap();
-                            let now = Instant::now();
-                            let time_since_flush = now.duration_since(*last_flush);
+                            match self.inner.last_flush_time.lock() {
+                                Ok(mut last_flush) => {
+                                    let now = Instant::now();
+                                    let time_since_flush = now.duration_since(*last_flush);
 
-                            if count.is_multiple_of(FLUSH_INTERVAL_WRITES) ||
-                                time_since_flush.as_secs() >= FLUSH_INTERVAL_SECONDS
-                            {
-                                *last_flush = now;
-                                true
-                            } else {
-                                false
+                                    if count.is_multiple_of(FLUSH_INTERVAL_WRITES) ||
+                                        time_since_flush.as_secs() >= FLUSH_INTERVAL_SECONDS
+                                    {
+                                        *last_flush = now;
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                Err(_) => {
+                                    // If lock is poisoned, still flush to ensure data safety
+                                    true
+                                }
                             }
                         };
 
                         if should_flush {
-                            if let Err(e) = file.flush() {
+                            if let Err(e) = writer.flush() {
                                 tracing::warn!(
                                     target: "tx_trace",
                                     error = %e,
@@ -268,26 +279,47 @@ impl TransactionTracer {
     }
 
     /// Force flush the trace file
-    pub fn flush(&self) {
+    ///
+    /// Flushes the BufWriter buffer to the underlying file.
+    /// This ensures all buffered data is written to the OS (but not necessarily to disk).
+    /// Use sync_all() if you need actual disk persistence.
+    pub fn flush(&self) -> Result<(), std::io::Error> {
         match self.inner.output_file.lock() {
             Ok(mut file_guard) => {
-                if let Some(ref mut file) = *file_guard {
-                    if let Err(e) = file.flush() {
-                        tracing::warn!(
-                            target: "tx_trace",
-                            error = %e,
-                            "Failed to flush transaction trace file on shutdown"
-                        );
-                    }
+                if let Some(ref mut writer) = *file_guard {
+                    writer.flush()
+                } else {
+                    Ok(())
                 }
             }
-            Err(e) => {
-                tracing::warn!(
-                    target: "tx_trace",
-                    error = %e,
-                    "Failed to acquire lock for flushing transaction trace file"
-                );
+            Err(_) => Err(std::io::Error::other(
+                "Failed to acquire lock for flushing transaction trace file",
+            )),
+        }
+    }
+
+    /// Force sync the trace file to disk
+    ///
+    /// First flushes the BufWriter buffer, then syncs to disk.
+    /// This ensures all written data is persisted to disk, not just in OS page cache.
+    /// Use this when you need strong durability guarantees (e.g., before shutdown).
+    ///
+    /// Note: This is more expensive than flush() but provides actual durability.
+    pub fn sync_all(&self) -> Result<(), std::io::Error> {
+        match self.inner.output_file.lock() {
+            Ok(mut file_guard) => {
+                if let Some(ref mut writer) = *file_guard {
+                    // First flush the buffer
+                    writer.flush()?;
+                    // Then get the underlying file and sync
+                    writer.get_ref().sync_all()
+                } else {
+                    Ok(())
+                }
             }
+            Err(_) => Err(std::io::Error::other(
+                "Failed to acquire lock for syncing transaction trace file",
+            )),
         }
     }
 
@@ -300,7 +332,11 @@ impl TransactionTracer {
         block_hash: Option<B256>,
         block_number: Option<u64>,
     ) -> String {
+        // Optimized CSV escaping: only escape if necessary
         let escape_csv = |s: &str| -> String {
+            if s.is_empty() {
+                return String::new();
+            }
             if s.contains(',') || s.contains('"') || s.contains('\n') {
                 format!("\"{}\"", s.replace('"', "\"\""))
             } else {
@@ -308,57 +344,50 @@ impl TransactionTracer {
             }
         };
 
-        let chain = CHAIN_NAME;
+        // Pre-compute values that need conversion
         let trace_hash = trace.to_lowercase();
-        let status_str = "";
-        let service_name = process_id.service_name();
-        let business = BUSINESS_NAME;
-        let client = "";
-        let chainld = CHAIN_ID;
-        let process_str = (process_id as u32).to_string();
-        let process_word_str = process_id.as_str();
-        let index = "";
-        let inner_index = "";
+        let process_str = process_id.as_u64().to_string();
         let current_time_str = current_time.to_string();
-        let referld = "";
-        let contract_address = "";
         let block_height = block_number.map(|n| n.to_string()).unwrap_or_default();
-        let block_hash_str =
-            block_hash.map(|h| format!("{h:#x}").to_lowercase()).unwrap_or_default();
-        let block_time = "";
-        let deposit_confirm_height = "";
-        let token_id = "";
-        let mev_supplier = "";
-        let business_hash = "";
-        let transaction_type = "";
-        let ext_json = "";
+        let block_hash_str = block_hash
+            .map(|h| format!("{h:#x}").to_lowercase())
+            .unwrap_or_default();
 
+        // Build CSV line efficiently
         format!(
             "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-            escape_csv(chain),
+            escape_csv(CHAIN_NAME),
             escape_csv(&trace_hash),
-            escape_csv(status_str),
-            escape_csv(service_name),
-            escape_csv(business),
-            escape_csv(client),
-            escape_csv(chainld),
+            "", // status_str (empty, no need to escape)
+            escape_csv(process_id.service_name()),
+            escape_csv(BUSINESS_NAME),
+            "", // client (empty)
+            escape_csv(CHAIN_ID),
             escape_csv(&process_str),
-            escape_csv(process_word_str),
-            escape_csv(index),
-            escape_csv(inner_index),
+            escape_csv(process_id.as_str()),
+            "", // index (empty)
+            "", // inner_index (empty)
             escape_csv(&current_time_str),
-            escape_csv(referld),
-            escape_csv(contract_address),
+            "", // referld (empty)
+            "", // contract_address (empty)
             escape_csv(&block_height),
             escape_csv(&block_hash_str),
-            escape_csv(block_time),
-            escape_csv(deposit_confirm_height),
-            escape_csv(token_id),
-            escape_csv(mev_supplier),
-            escape_csv(business_hash),
-            escape_csv(transaction_type),
-            escape_csv(ext_json)
+            "", // block_time (empty)
+            "", // deposit_confirm_height (empty)
+            "", // token_id (empty)
+            "", // mev_supplier (empty)
+            "", // business_hash (empty)
+            "", // transaction_type (empty)
+            ""  // ext_json (empty)
         )
+    }
+
+    /// Get current timestamp in milliseconds since UNIX epoch
+    fn current_timestamp_ms() -> u128 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
     }
 
     /// Log transaction event at current time point
@@ -372,9 +401,7 @@ impl TransactionTracer {
             return;
         }
 
-        let timestamp_duration =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
-        let timestamp_ms = timestamp_duration.as_millis();
+        let timestamp_ms = Self::current_timestamp_ms();
         let trace_hash = format!("{tx_hash:#x}");
 
         let csv_line =
@@ -389,9 +416,7 @@ impl TransactionTracer {
             return;
         }
 
-        let timestamp_duration =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
-        let timestamp_ms = timestamp_duration.as_millis();
+        let timestamp_ms = Self::current_timestamp_ms();
         let trace_hash = format!("{block_hash:#x}");
 
         let csv_line = self.format_csv_line(
@@ -456,10 +481,26 @@ pub fn get_global_tracer() -> Option<Arc<TransactionTracer>> {
 
 /// Flush the global transaction tracer
 ///
-/// Forces a flush of the trace file to ensure all buffered data is written.
-pub fn flush_global_tracer() {
+/// Flushes the BufWriter buffer to ensure all buffered data is written to the OS.
+/// This is called automatically during normal operation, but you can call it manually
+/// if you need to ensure data is written immediately.
+pub fn flush_global_tracer() -> Result<(), std::io::Error> {
     if let Some(tracer) = get_global_tracer() {
-        tracer.flush();
+        tracer.flush()
+    } else {
+        Ok(())
+    }
+}
+
+/// Sync the global transaction tracer to disk
+///
+/// Forces a sync of the trace file to ensure all data is persisted to disk.
+/// Use this when you need strong durability guarantees (e.g., before shutdown).
+pub fn sync_global_tracer() -> Result<(), std::io::Error> {
+    if let Some(tracer) = get_global_tracer() {
+        tracer.sync_all()
+    } else {
+        Ok(())
     }
 }
 
