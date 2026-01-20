@@ -1,0 +1,33 @@
+From c9aace5982f4f64858bf8d547c44771c7ae45f8d Mon Sep 17 00:00:00 2001
+From: "xingqiang.yuan" <xingqiang.yuan@okg.com>
+Date: Tue, 20 Jan 2026 16:37:04 +0800
+Subject: [PATCH] local testing
+
+---
+ .../execute/src/onchain_config/epoch.rs                     | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/epoch.rs b/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/epoch.rs
+index f73d6eaf2..c0dbf0932 100644
+--- a/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/epoch.rs
++++ b/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/epoch.rs
+@@ -38,13 +38,13 @@ where
+     EthApi::NetworkTypes: RpcTypes<TransactionRequest = TransactionRequest>,
+ {
+     fn fetch(&self, block_number: u64) -> Bytes {
+-        #[cfg(feature = "pipe_test")]
++        #[cfg(not(feature = "pipe_test"))]
+         {
+             // For testing, return epoch 0
+-            Bytes::from(0u64.to_le_bytes().to_vec())
++            Bytes::from(1u64.to_le_bytes().to_vec())
+         }
+ 
+-        #[cfg(not(feature = "pipe_test"))]
++        #[cfg(feature = "pipe_test")]
+         {
+             let call = EpochManager::getCurrentEpochInfoCall {};
+             let input: Bytes = call.abi_encode().into();
+-- 
+2.50.1 (Apple Git-155)
+
