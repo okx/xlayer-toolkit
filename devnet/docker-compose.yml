@@ -241,7 +241,7 @@ services:
       - "8552:8552"
       - "30303:30303"
       - "30303:30303/udp"
-      - "11111:1111" # outbound flashblocks ws port
+     # - "11111:1111" # outbound flashblocks ws port
       - "9001:9001"  # metrics port
     healthcheck:
       test: ["CMD", "curl", "-f", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
@@ -297,7 +297,7 @@ services:
     ports:
       - "8124:8545"
       - "7547:7546"
-      - "11113:1111" # outbound flashblocks ws port
+      #- "11113:1111" # outbound flashblocks ws port
       - "30304:30303"
       - "30304:30303/udp"
 
@@ -1013,7 +1013,7 @@ services:
       - prometheus
 
   rollup-boost:
-    image: xlayerdev/rollup-boost:v0.1.3
+    image: xlayerdev/rollup-boost:v0.2.0
     container_name: rollup-boost
     entrypoint: /entrypoint/rollup-boost.sh
     env_file:
@@ -1030,9 +1030,9 @@ services:
       - op-${SEQ_TYPE}-seq
 
   op-rbuilder:
-    image: xlayerdev/op-rbuilder:v0.1.3
+    image: op-rbuilder:latest
     container_name: op-rbuilder
-    entrypoint: /entrypoint/op-rbuilder.sh
+    entrypoint: ["/usr/local/bin/op-rbuilder"]
     env_file:
       - .env
     # Enable privileged mode for perf profiling
@@ -1046,13 +1046,42 @@ services:
       - ./data/op-rbuilder:/datadir
       - ./config-op/jwt.txt:/jwt.txt
       - ./config-op/genesis-reth.json:/genesis.json
-      - ./entrypoint:/entrypoint
       - ./.env:/.env
     ports:
       - "8125:8545"
       - "18552:8552"
       - "30307:30303"
       - "30307:30303/udp"
+    command:
+      - node
+      - --datadir=/datadir
+      - --chain=/genesis.json
+      - --http
+      - --http.corsdomain=*
+      - --http.port=8545
+      - --http.addr=0.0.0.0
+      - --http.api=web3,debug,eth,txpool,net,miner
+      - --disable-discovery
+      - --max-outbound-peers=10
+      - --max-inbound-peers=10
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8552
+      - --authrpc.jwtsecret=/jwt.txt
+      - --trusted-peers=${TRUSTED_PEERS}
+      - --tx-propagation-policy=trusted
+      - --txpool.max-account-slots=100000
+      - --txpool.pending-max-count=100000
+      - --txpool.queued-max-count=100000
+      - --txpool.basefee-max-count=100000
+      - --txpool.max-pending-txns=100000
+      - --txpool.max-new-txns=100000
+      - --txpool.pending-max-size=2000
+      - --txpool.basefee-max-size=2000
+      - --flashblocks.enabled
+      - --flashblocks.disable-state-root
+      - --flashblocks.addr=0.0.0.0
+      - --flashblocks.port=1111
+      - --flashblocks.block-time=200
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
       interval: 3s
@@ -1061,7 +1090,7 @@ services:
       start_period: 3s
 
   rollup-boost2:
-    image: xlayerdev/rollup-boost:v0.1.3
+    image: xlayerdev/rollup-boost:v0.2.3
     container_name: rollup-boost2
     entrypoint: /entrypoint/rollup-boost.sh 2
     env_file:
@@ -1080,7 +1109,7 @@ services:
   op-rbuilder2:
     image: xlayerdev/op-rbuilder:v0.1.3
     container_name: op-rbuilder2
-    entrypoint: /entrypoint/op-rbuilder.sh
+    #entrypoint: ["/usr/local/bin/op-rbuilder"]
     env_file:
       - .env
     # Enable privileged mode for perf profiling
@@ -1101,6 +1130,36 @@ services:
       - "19552:8552"
       - "30308:30303"
       - "30308:30303/udp"
+    command:
+      - node
+      - --datadir=/datadir
+      - --chain=/genesis.json
+      - --http
+      - --http.corsdomain=*
+      - --http.port=8545
+      - --http.addr=0.0.0.0
+      - --http.api=web3,debug,eth,txpool,net,miner
+      - --disable-discovery
+      - --max-outbound-peers=10
+      - --max-inbound-peers=10
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8552
+      - --authrpc.jwtsecret=/jwt.txt
+      - --trusted-peers=${TRUSTED_PEERS}
+      - --tx-propagation-policy=all
+      - --txpool.max-account-slots=100000
+      - --txpool.pending-max-count=100000
+      - --txpool.queued-max-count=100000
+      - --txpool.basefee-max-count=100000
+      - --txpool.max-pending-txns=100000
+      - --txpool.max-new-txns=100000
+      - --txpool.pending-max-size=2000
+      - --txpool.basefee-max-size=2000
+      - --flashblocks.enabled
+      - --flashblocks.disable-state-root
+      - --flashblocks.addr=0.0.0.0
+      - --flashblocks.port=1111
+      - --flashblocks.block-time=200
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
       interval: 3s
