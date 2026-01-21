@@ -30,7 +30,7 @@
     "env_vars": {
         "MOCK_CONSENSUS": "true",
         "MOCK_SET_ORDERED_INTERVAL_MS": "200",
-        "MOCK_MAX_BLOCK_SIZE": "7000",
+        "MOCK_MAX_BLOCK_SIZE": "10000",
         "BATCH_INSERT_TIME": 20
     }
 }

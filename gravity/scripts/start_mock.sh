@@ -45,8 +45,14 @@ echo "MOCK_SET_ORDERED_INTERVAL_MS=$MOCK_SET_ORDERED_INTERVAL_MS"
 echo "MOCK_MAX_BLOCK_SIZE=$MOCK_MAX_BLOCK_SIZE"
 echo ""
 
-# Start node in background
+# Ensure environment variables are exported (for nohup)
+export MOCK_CONSENSUS
+export MOCK_SET_ORDERED_INTERVAL_MS
+export MOCK_MAX_BLOCK_SIZE
+export BATCH_INSERT_TIME
 export RUST_BACKTRACE=1
+
+# Start node in background
 nohup ./gravity-sdk/target/release/gravity_node node "${reth_args[@]}" > gravity_node.out 2>&1 &
 echo "gravity_node started in background (PID: $!)"
 echo "Logs are written to: gravity_node.out"

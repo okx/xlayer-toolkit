@@ -1,11 +1,12 @@
-From c9aace5982f4f64858bf8d547c44771c7ae45f8d Mon Sep 17 00:00:00 2001
+From d79ac4232cc35ffe7d5cc59ed312f8867afe0243 Mon Sep 17 00:00:00 2001
 From: "xingqiang.yuan" <xingqiang.yuan@okg.com>
-Date: Tue, 20 Jan 2026 16:37:04 +0800
+Date: Wed, 21 Jan 2026 12:30:02 +0800
 Subject: [PATCH] local testing
 
 ---
- .../execute/src/onchain_config/epoch.rs                     | 6 +++---
- 1 file changed, 3 insertions(+), 3 deletions(-)
+ .../execute/src/onchain_config/epoch.rs                |  6 +++---
+ .../execute/src/onchain_config/metadata_txn.rs         | 10 +++++-----
+ 2 files changed, 8 insertions(+), 8 deletions(-)
 
 diff --git a/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/epoch.rs b/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/epoch.rs
 index f73d6eaf2..c0dbf0932 100644
@@ -28,6 +29,49 @@ index f73d6eaf2..c0dbf0932 100644
          {
              let call = EpochManager::getCurrentEpochInfoCall {};
              let input: Bytes = call.abi_encode().into();
+diff --git a/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/metadata_txn.rs b/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/metadata_txn.rs
+index a6ae59ba4..bd6c8dc0e 100644
+--- a/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/metadata_txn.rs
++++ b/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/metadata_txn.rs
+@@ -156,7 +156,7 @@ fn new_system_call_txn(
+             chain_id: None,
+             nonce,
+             gas_price,
+-            gas_limit: 30_000_000,
++            gas_limit: 15_000_000,
+             to: TxKind::Call(contract),
+             value: U256::ZERO,
+             input,
+@@ -166,10 +166,10 @@ fn new_system_call_txn(
+ }
+ 
+ /// Execute a metadata contract call (blockPrologue or blockPrologueExt)
+-/// 
++///
+ /// If `enable_randomness` is true, calls blockPrologueExt.
+ /// Otherwise, calls the legacy blockPrologue function.
+-/// 
++///
+ /// Note: blockPrologueExt retrieves randomness from block.difficulty (set before this call),
+ /// so it doesn't need to be passed as a parameter.
+ pub fn transact_metadata_contract_call(
+@@ -206,7 +206,7 @@ pub fn transact_metadata_contract_call(
+     );
+     let tx_env = Recovered::new_unchecked(txn.clone(), SYSTEM_CALLER).into_tx_env();
+     let result = evm.transact_raw(tx_env).unwrap();
+-    
++
+     let function_name = if enable_randomness { "blockPrologueExt" } else { "blockPrologue" };
+     assert!(
+         result.result.is_success(),
+@@ -214,6 +214,6 @@ pub fn transact_metadata_contract_call(
+         function_name,
+         result.result
+     );
+-    
++
+     (MetadataTxnResult { result: result.result, txn }, result.state)
+ }
 -- 
 2.50.1 (Apple Git-155)
 
