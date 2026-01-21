@@ -1,9 +1,7 @@
 #!/bin/bash
 set -e
-
 export USE_LOCAL_CIRCUITS=true
 
-# Build local circuits if enabled
 if [ "$USE_LOCAL_CIRCUITS" = "true" ]; then
     if [ ! -d "circuits-v2" ]; then
         git clone https://github.com/Railgun-Privacy/circuits-v2.git
@@ -28,7 +26,6 @@ if [ "$USE_LOCAL_CIRCUITS" = "true" ]; then
     cd ..
 fi
 
-# Clone and patch contract
 if [ ! -d "contract" ]; then
     git clone https://github.com/Railgun-Privacy/contract.git
     cd contract
