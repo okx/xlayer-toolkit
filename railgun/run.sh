@@ -11,9 +11,7 @@ if [ "$USE_LOCAL_CIRCUITS" = "true" ]; then
         cd circuits-v2
     fi
     [ ! -d "node_modules" ] && npm install
-    npm run prepare
-    ./scripts/generate_circuits
-    ./scripts/compile_circuits
+    npm run build
     mkdir -p zkeys bin
     POT_FILE="bin/pot.ptau"
     [ ! -f "$POT_FILE" ] && curl -L "https://storage.googleapis.com/zkevm/ptau/powersOfTau28_hez_final_20.ptau" -o "$POT_FILE"
