@@ -3,13 +3,25 @@ set -e
 
 echo " 🧹 Cleaning up Optimism test environment..."
 
+# Create missing env files from examples
+ENV_FILES=(
+    ".env:example.env"
+    "kailua/.env.deploy:kailua/example.env.deploy"
+    "kailua/.env.proposer:kailua/example.env.proposer"
+    "kailua/.env.validator:kailua/example.env.validator"
+)
+
+for env_pair in "${ENV_FILES[@]}"; do
+    target="${env_pair%%:*}"
+    source="${env_pair##*:}"
+    if [ ! -f "$target" ] && [ -f "$source" ]; then
+        echo " 🔄 Creating $target from $source..."
+        cp "$source" "$target" && echo "   ✅ $target created"
+    fi
+done
+
 echo " 📦 Stopping Docker containers..."
 [ -f .env ] && docker compose down
-
-if [ ! -f .env ] && [ -f example.env ]; then
-    echo " 🔄 Creating .env from example.env..."
-    cp example.env .env && echo "   ✅ .env created from example.env"
-fi
 
 echo " 🗑️  Removing generated files..."
 rm -rf data
