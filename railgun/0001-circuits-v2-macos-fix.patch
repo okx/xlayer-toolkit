@@ -1,0 +1,46 @@
+diff --git a/scripts/compile_circuits b/scripts/compile_circuits
+index 1d32ccf..133eb51 100755
+--- a/scripts/compile_circuits
++++ b/scripts/compile_circuits
+@@ -3,6 +3,7 @@ const os = require("node:os");
+ const fs = require("node:fs/promises");
+ const process = require("node:process");
+ const path = require("path");
++const { execSync } = require("node:child_process");
+ const circuitConfigs = require("../lib/circuitConfigs");
+ const {
+   circuitConfigToName,
+@@ -13,14 +14,30 @@ const {
+ } = require("../lib/shared");
+ 
+ // Constants
+-const INSTALL_DIR = "./bin";
++const INSTALL_DIR = path.join(__dirname, "../bin");
+ const PLATFORM = os.platform();
+ const CIRCOM_BIN = (() => {
++  // macOS: ensure circom is in /usr/local/bin/
++  if (PLATFORM === "darwin") {
++    const systemPath = "/usr/local/bin/circom";
++    const localPath = path.join(INSTALL_DIR, "circom");
++    try {
++      execSync("which circom", { encoding: "utf8" });
++    } catch (e) {
++      // Not found, copy local to system
++      try {
++        execSync(`sudo cp "${localPath}" "${systemPath}" && chmod +x "${systemPath}"`);
++        console.log(`Installed circom to ${systemPath}`);
++      } catch (err) {
++        console.error(`Run: sudo cp "${localPath}" "${systemPath}" && sudo chmod +x "${systemPath}"`);
++        process.exit(1);
++      }
++    }
++    return systemPath;
++  }
+   switch (PLATFORM) {
+     case "linux":
+       return path.join(INSTALL_DIR, "circom");
+-    case "darwin":
+-      return path.join(INSTALL_DIR, "circom");
+     case "win32":
+       return path.join(INSTALL_DIR, "circom.exe");
+     default:
