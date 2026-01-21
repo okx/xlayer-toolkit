@@ -11,6 +11,17 @@ if [ "$USE_LOCAL_CIRCUITS" = "true" ]; then
         cd circuits-v2
     fi
     [ ! -d "node_modules" ] && npm install
+    # Check if generate_circuits changed, if so clean all build artifacts to force rebuild
+    if [ -d "build" ]; then
+        for compiled_marker in build/*.circom.compiled; do
+            [ -f "$compiled_marker" ] || continue
+            if [ "scripts/generate_circuits" -nt "$compiled_marker" ]; then
+                echo "Circuit generator changed, cleaning build artifacts..."
+                rm -f build/*.circom.compiled zkeys/*.zkey zkeys/*.vkey.json
+                break
+            fi
+        done
+    fi
     npm run build
     mkdir -p zkeys bin
     POT_FILE="bin/pot.ptau"
