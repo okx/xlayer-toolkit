@@ -1057,6 +1057,7 @@ services:
       - --datadir=/datadir
       - --chain=/genesis.json
       - --http
+      - --config=/config.toml
       - --http.corsdomain=*
       - --http.port=8545
       - --http.addr=0.0.0.0
