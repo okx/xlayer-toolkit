@@ -1,16 +1,25 @@
-From 4119ed28dadf4da80ebaf64e017bcd14baf29f23 Mon Sep 17 00:00:00 2001
+From 0356f774f75855d26a2d151bb3d61c2630b88d83 Mon Sep 17 00:00:00 2001
 From: "xingqiang.yuan" <xingqiang.yuan@okg.com>
-Date: Wed, 21 Jan 2026 17:43:55 +0800
+Date: Thu, 22 Jan 2026 10:15:23 +0800
 Subject: [PATCH] local testing sdk
 
 ---
- bin/gravity_node/src/consensus/mock_consensus/mock.rs | 1 +
- 1 file changed, 1 insertion(+)
+ bin/gravity_node/src/consensus/mock_consensus/mock.rs | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
 
 diff --git a/bin/gravity_node/src/consensus/mock_consensus/mock.rs b/bin/gravity_node/src/consensus/mock_consensus/mock.rs
-index e254d7a..e365fa7 100644
+index e254d7a..37d94a3 100644
 --- a/bin/gravity_node/src/consensus/mock_consensus/mock.rs
 +++ b/bin/gravity_node/src/consensus/mock_consensus/mock.rs
+@@ -125,7 +125,7 @@ impl MockConsensus {
+                 }
+             }
+ 
+-            if txns.len() > max_txn_num {
++            if txns.len() >= max_txn_num {
+                 return Self::construct_block(block_number, txns, attr, epoch);
+             }
+         }
 @@ -241,6 +241,7 @@ impl MockConsensus {
                  .as_ref()
                  .unwrap()

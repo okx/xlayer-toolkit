@@ -24,12 +24,12 @@ start: ## Start gravity_node
 	@bash scripts/start_mock.sh
 
 stop: ## Stop gravity_node
-	@lsof -ti :8545 | xargs kill -9 2>/dev/null || true
+	@lsof -ti :8545 | xargs kill 2>/dev/null || true
 
 logs: ## View logs
 	@tail -f $(LOG_FILE) 2>/dev/null || echo "Log file not found"
 
 clean: stop ## Clean logs
 	@rm -f $(LOG_FILE) gravity_node.pid
-	@rm -rf gravity_node
+	@sleep 1 && rm -rf gravity_node
 

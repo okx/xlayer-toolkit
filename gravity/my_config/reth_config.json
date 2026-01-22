@@ -25,12 +25,15 @@
         "txpool.basefee-max-size": 17592186044415,
         "txpool.queued-max-count": 17592186044415,
         "txpool.queued-max-size": 17592186044415,
+        "gravity.pipe-block-gas-limit": 100000000000,
+        "gravity.disable-grevm": true,
+        "gravity.disable-pipe-execution": false,
         "http.disable-compression": ""
     },
     "env_vars": {
         "MOCK_CONSENSUS": "true",
         "MOCK_SET_ORDERED_INTERVAL_MS": "200",
-        "MOCK_MAX_BLOCK_SIZE": "10000",
+        "MOCK_MAX_BLOCK_SIZE": "1000",
         "BATCH_INSERT_TIME": 20
     }
 }

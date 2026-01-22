@@ -32,20 +32,32 @@ The node reads configuration from `my_config/reth_config.json`. This file should
 - `env_vars`: Environment variables to export
 - `reth_args`: Command-line arguments for gravity_node
 
-Example configuration structure:
+### Configuration Options
+
+**Environment Variables:**
+- `MOCK_CONSENSUS`: Enable mock consensus mode
+- `MOCK_SET_ORDERED_INTERVAL_MS`: Block interval in ms (e.g., `200`)
+- `MOCK_MAX_BLOCK_SIZE`: Max transactions per block
+  - **Native transfer (Pay) testing**: Set to `1000`
+  - **ERC20 token testing**: Set to `10000`
+
+**Performance Optimization (in reth_args):**
+- `gravity.disable-grevm`: `true` to disable / `false` to enable parallel EVM
+- `gravity.disable-pipe-execution`: `true` to disable / `false` to enable pipeline
+
+Examples:
 ```json
-{
-  "env_vars": {
-    "MOCK_CONSENSUS": "true",
-    "MOCK_SET_ORDERED_INTERVAL_MS": "1000",
-    "MOCK_MAX_BLOCK_SIZE": "1000000"
-  },
-  "reth_args": {
-    "datadir": "./data",
-    "http": "",
-    "http.port": "8545"
-  }
-}
+// Fastest mode (both enabled)
+"gravity.disable-grevm": false,
+"gravity.disable-pipe-execution": false
+
+// Debug mode (both disabled)
+"gravity.disable-grevm": true,
+"gravity.disable-pipe-execution": true
+
+// Grevm disabled, Pipeline enabled
+"gravity.disable-grevm": true,
+"gravity.disable-pipe-execution": false
 ```
 
 ## Available Commands

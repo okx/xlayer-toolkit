@@ -31,7 +31,13 @@ done < <(jq -r '.env_vars | to_entries[] | .key, .value' "$reth_config")
 # Parse reth_args
 reth_args=()
 while IFS= read -r key && IFS= read -r value; do
-    if [ -z "$value" ] || [ "$value" == "null" ]; then
+    # Special handling for gravity disable flags
+    if [[ "$key" == "gravity.disable-grevm" ]] || [[ "$key" == "gravity.disable-pipe-execution" ]]; then
+        if [ "$value" == "true" ]; then
+            reth_args+=( "--${key}" )  # Add flag to disable
+        fi
+        # If false or null, skip (don't add flag = enabled)
+    elif [ -z "$value" ] || [ "$value" == "null" ]; then
         reth_args+=( "--${key}" )
     else
         reth_args+=( "--${key}=${value}" )
@@ -43,13 +49,14 @@ echo "Starting gravity_node in MOCK mode..."
 echo "MOCK_CONSENSUS=$MOCK_CONSENSUS"
 echo "MOCK_SET_ORDERED_INTERVAL_MS=$MOCK_SET_ORDERED_INTERVAL_MS"
 echo "MOCK_MAX_BLOCK_SIZE=$MOCK_MAX_BLOCK_SIZE"
+
+# Display optimization status
+disable_grevm=$(jq -r '.reth_args."gravity.disable-grevm" // false' "$reth_config")
+disable_pipe=$(jq -r '.reth_args."gravity.disable-pipe-execution" // false' "$reth_config")
+echo "Grevm: $([ "$disable_grevm" == "true" ] && echo "DISABLED" || echo "ENABLED")"
+echo "Pipeline: $([ "$disable_pipe" == "true" ] && echo "DISABLED" || echo "ENABLED")"
 echo ""
 
-# Ensure environment variables are exported (for nohup)
-export MOCK_CONSENSUS
-export MOCK_SET_ORDERED_INTERVAL_MS
-export MOCK_MAX_BLOCK_SIZE
-export BATCH_INSERT_TIME
 export RUST_BACKTRACE=1
 
 # Start node in background
