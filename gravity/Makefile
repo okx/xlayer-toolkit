@@ -10,7 +10,7 @@ help: ## Show help
 
 prepare: ## Clone repos and apply patches
 	@[ -d "gravity-reth" ] || (git clone -b gravity-v0.4.1 https://github.com/Galxe/gravity-reth.git && cd gravity-reth && git apply ../0001-local-testing.patch)
-	@[ -d "gravity-sdk" ] || git clone -b v0.4.1 https://github.com/Galxe/gravity-sdk.git && && cd gravity-sdk && git apply ../0001-local-testing-sdk.patch
+	@[ -d "gravity-sdk" ] || git clone -b v0.4.1 https://github.com/Galxe/gravity-sdk.git && cd gravity-sdk && git apply ../0001-local-testing-sdk.patch
 
 build: ## Build gravity_node
 	@cd gravity-sdk && \
