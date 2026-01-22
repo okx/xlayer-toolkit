@@ -1,19 +1,32 @@
-From 476ce8bee51167f4a8382469c34cbbe1f294831d Mon Sep 17 00:00:00 2001
+From 09fb76e151165ce3ebc1a2db820d0e9ed5237e9f Mon Sep 17 00:00:00 2001
 From: "xingqiang.yuan" <xingqiang.yuan@okg.com>
-Date: Thu, 22 Jan 2026 10:14:46 +0800
+Date: Thu, 22 Jan 2026 17:29:02 +0800
 Subject: [PATCH] local testing
 
 ---
- .../pipe-exec-layer-ext-v2/execute/src/lib.rs | 52 ++++++++++++-------
+ .../pipe-exec-layer-ext-v2/execute/src/lib.rs | 54 ++++++++++++-------
  .../execute/src/onchain_config/epoch.rs       |  6 +--
  .../src/onchain_config/metadata_txn.rs        | 10 ++--
- 3 files changed, 40 insertions(+), 28 deletions(-)
+ 3 files changed, 42 insertions(+), 28 deletions(-)
 
 diff --git a/crates/pipe-exec-layer-ext-v2/execute/src/lib.rs b/crates/pipe-exec-layer-ext-v2/execute/src/lib.rs
-index 747b4192a..ea65f3ed9 100644
+index 747b4192a..17b6a8f36 100644
 --- a/crates/pipe-exec-layer-ext-v2/execute/src/lib.rs
 +++ b/crates/pipe-exec-layer-ext-v2/execute/src/lib.rs
-@@ -558,7 +558,7 @@ impl<Storage: GravityStorage> Core<Storage> {
+@@ -361,10 +361,12 @@ impl<Storage: GravityStorage> Core<Storage> {
+             HashedPostState::from_bundle_state::<KeccakKeyHasher>(&execution_output.state.state);
+         self.metrics.cache_account_state.record(write_start.elapsed());
+         let elapsed = start_time.elapsed();
++        let tx_count = block.body.transactions.len();
+         info!(target: "PipeExecService.process",
+             block_number=?block_number,
+             block_id=?block_id,
+             gas_used=execution_output.gas_used,
++            tx_count=tx_count,
+             elapsed=?elapsed,
+             epoch=?epoch,
+             "block executed"
+@@ -558,7 +560,7 @@ impl<Storage: GravityStorage> Core<Storage> {
      ) -> (Vec<GravityEvent>, Option<(u64, Bytes)>) {
          let mut gravity_events = vec![];
          let mut epoch_change_result = None;
@@ -22,7 +35,7 @@ index 747b4192a..ea65f3ed9 100644
          for receipt in receipts {
              debug!(target: "execute_ordered_block",
                  number=?block_number,
-@@ -577,7 +577,7 @@ impl<Storage: GravityStorage> Core<Storage> {
+@@ -577,7 +579,7 @@ impl<Storage: GravityStorage> Core<Storage> {
                      let validator_bytes = crate::onchain_config::types::convert_validator_set_to_bcs(solidity_validator_set);
                      epoch_change_result = Some((event.newEpoch.to::<u64>(), validator_bytes));
                  }
@@ -31,7 +44,7 @@ index 747b4192a..ea65f3ed9 100644
                  if let Ok(event) = ObservedJWKsUpdated::decode_log(&log) {
                      info!(target: "execute_ordered_block",
                          number=?block_number,
-@@ -738,7 +738,7 @@ impl<Storage: GravityStorage> Core<Storage> {
+@@ -738,7 +740,7 @@ impl<Storage: GravityStorage> Core<Storage> {
              &result.execution_output.receipts,
              result.block.number,
          );
@@ -40,7 +53,7 @@ index 747b4192a..ea65f3ed9 100644
          // Check if any transaction (including JWK transactions) triggered a new epoch
          // TODO(gravity_lightman): We need further more tests to test this branch
          if let Some((new_epoch, validators)) = epoch_change_result {
-@@ -755,7 +755,7 @@ impl<Storage: GravityStorage> Core<Storage> {
+@@ -755,7 +757,7 @@ impl<Storage: GravityStorage> Core<Storage> {
              gravity_events.push(GravityEvent::NewEpoch(new_epoch, validators.into()));
              result.epoch = new_epoch;
          }
@@ -49,7 +62,7 @@ index 747b4192a..ea65f3ed9 100644
          result.gravity_events.extend(gravity_events);
          result
      }
-@@ -858,8 +858,29 @@ impl<Storage: GravityStorage> Core<Storage> {
+@@ -858,8 +860,29 @@ impl<Storage: GravityStorage> Core<Storage> {
          base_fee_per_gas: u64,
          gas_limit: u64,
      ) -> (Vec<TransactionSigned>, Vec<Address>, Vec<TxInfo>) {
@@ -81,7 +94,7 @@ index 747b4192a..ea65f3ed9 100644
              let mut txs_info = Vec::with_capacity(txs.len());
              for (tx, sender) in txs.iter().zip(senders.iter()) {
                  txs_info.push(TxInfo {
-@@ -871,30 +892,21 @@ impl<Storage: GravityStorage> Core<Storage> {
+@@ -871,30 +894,21 @@ impl<Storage: GravityStorage> Core<Storage> {
              }
              (txs, senders, txs_info)
          } else {
