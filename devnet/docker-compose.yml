@@ -190,7 +190,7 @@ services:
       - "8552:8552"
       - "30303:30303"
       - "30303:30303/udp"
-      - "9090:9090"  # pprof port
+      - "29090:9090"  # pprof port
     command:
       - --networkid=${CHAIN_ID}
       - --verbosity=3
