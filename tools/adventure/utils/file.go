@@ -33,11 +33,19 @@ func ReadDataFromFile(filepath string) []string {
 	rd := bufio.NewReader(f)
 	for {
 		line, err := rd.ReadString('\n')
+		line = strings.TrimSpace(line)
 		if err != nil || io.EOF == err {
+			if line != "" {
+				lines = append(lines, line)
+				count++
+			}
 			break
 		}
+		if line == "" {
+			continue
+		}
 
-		lines = append(lines, strings.TrimSpace(line))
+		lines = append(lines, line)
 		count++
 	}
 
