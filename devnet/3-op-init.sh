@@ -128,6 +128,11 @@ else
     echo " ❌ state.json not found at $STATE_JSON"
 fi
 
+# Setup System Config Parameters after extracting addresses and updating .env
+echo ""
+echo "🔧 Setting up System Config Parameters..."
+"$PWD_DIR/scripts/setup-system-config-params.sh"
+
 # init geth sequencer
 echo " 🔧 Initializing geth sequencer..."
 OP_GETH_DATADIR="$(pwd)/data/op-geth-seq"
