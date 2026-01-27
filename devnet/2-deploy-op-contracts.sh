@@ -232,6 +232,7 @@ echo ""
 echo "🔧 Setting up Custom Gas Token (CGT)..."
 docker run --rm \
   --network "$DOCKER_NETWORK" \
+  -v "$PWD_DIR/.svm-cache:/root/.svm" \
   -v "$PWD_DIR/scripts:/scripts" \
   -v "$PWD_DIR/.env:/app/.env" \
   -v "$PWD_DIR/config-op:/config-op" \
