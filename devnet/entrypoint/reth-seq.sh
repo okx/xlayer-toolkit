@@ -47,6 +47,11 @@ CMD="op-reth node \
       --log.file.filter=info \
       --metrics=0.0.0.0:9001"
 
+# Enable RocksDB if requested
+if [ "${RETH_SEQ_ROCKSDB_ENABLED:-false}" = "true" ]; then
+    CMD="$CMD --datadir.rocksdb=/datadir/rocksdb"
+    echo "RocksDB enabled via --datadir.rocksdb=/datadir/rocksdb flag"
+fi
 
 # For flashblocks architecture
 if [ "$FLASHBLOCK_ENABLED" = "true" ]; then

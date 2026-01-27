@@ -45,6 +45,12 @@ CMD="op-reth node \
       --txpool.max-new-txns=100000 \
       --rpc.eth-proof-window=10000"
 
+# Enable RocksDB if requested
+if [ "${RETH_RPC_ROCKSDB_ENABLED:-false}" = "true" ]; then
+    CMD="$CMD --datadir.rocksdb=/datadir/rocksdb"
+    echo "RocksDB enabled via --datadir.rocksdb=/datadir/rocksdb flag"
+fi
+
 # For flashblocks architecture. Enable flashblocks RPC
 if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
     CMD="$CMD \
