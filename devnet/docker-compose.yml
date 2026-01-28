@@ -190,7 +190,7 @@ services:
       - "8552:8552"
       - "30303:30303"
       - "30303:30303/udp"
-      - "29090:9090"  # pprof port
+      - "9092:9092"  # pprof port
     command:
       - --networkid=${CHAIN_ID}
       - --verbosity=3
@@ -200,6 +200,9 @@ services:
       - --gcmode=archive
       - --rollup.disabletxpoolgossip=false
       - --nodekeyhex=1aba031aeb5aa8aedadaf04159d20e7d58eeefb3280176c7d59040476c2ab21b
+      - --pprof=true
+      - --pprof.addr=0.0.0.0
+      - --pprof.port=9092
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
       interval: 3s
