@@ -190,7 +190,7 @@ services:
       - "8552:8552"
       - "30303:30303"
       - "30303:30303/udp"
-      - "9090:9090"  # pprof port
+      - "29090:9090"  # pprof port
     command:
       - --networkid=${CHAIN_ID}
       - --verbosity=3
@@ -440,7 +440,7 @@ services:
     container_name: op-geth-rpc2-init
     entrypoint: >
       sh -c "
-      rm -rf /datadir/* && 
+      rm -rf /datadir/* &&
       geth init --datadir=/datadir /genesis.json
       "
     volumes:
@@ -941,7 +941,7 @@ services:
     ports:
       - "9001:9001"
     command:
-      - challenger 
+      - challenger
       - --env-file=/app/.env
 
   kailua-contracts:
@@ -952,7 +952,7 @@ services:
     env_file:
       - ./kailua/.env.deploy
     command:
-      - kailua-cli 
+      - kailua-cli
       - fast-track
 
   kailua-proposer:
@@ -965,7 +965,7 @@ services:
     volumes:
       - ./data/kailua-proposer:/data
     command:
-      - kailua-cli 
+      - kailua-cli
       - propose
       - --data-dir=/data
 
