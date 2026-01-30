@@ -344,10 +344,20 @@ func (r *Benchmark) addBlock(ctx context.Context, currentBlock strategies.BlockC
 	// Record TPS for FCU with transactions
 	r.tpsTracker.RecordFCU(len(txns))
 
-	envelope, err := r.clients.EngineApi.GetPayload(ctx, eth.PayloadInfo{
-		ID:        *result.PayloadID,
-		Timestamp: uint64(currentBlock.Time),
-	})
+	var envelope *eth.ExecutionPayloadEnvelope
+	for i := 0; i < 5; i++ {
+		envelope, err = r.clients.EngineApi.GetPayload(ctx, eth.PayloadInfo{
+			ID:        *result.PayloadID,
+			Timestamp: uint64(currentBlock.Time),
+		})
+		if err != nil {
+			l.Warn("get payload failed", "err", err, "payloadId", *result.PayloadID)
+			time.Sleep(5 * time.Second)
+		} else {
+			break
+		}
+	}
+
 	if err != nil {
 		l.Crit("get payload failed", "err", err, "payloadId", *result.PayloadID)
 	}
@@ -582,3 +592,4 @@ func NewBenchmark(
 
 	return r
 }
+
