@@ -1,0 +1,50 @@
+# Rust build artifacts
+/target
+**/target
+**/*.rs.bk
+*.pdb
+
+# Cargo lock file (optional: ignore for library projects, keep for binary projects)
+# Cargo.lock
+
+# FPVM state files and outputs
+*.bin.gz
+state-*.bin.gz
+meta.json
+out.json
+out-*.json
+cannon-*.bin.gz
+*.elf
+
+# Debug and log files
+*.log
+*.out
+
+# IDE configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cursor/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# Temporary files
+*.tmp
+*.temp
+*.bak

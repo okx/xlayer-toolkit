@@ -1,0 +1,92 @@
+FAULT_PROOF_ROOT := justfile_directory()
+BIN_ROOT := FAULT_PROOF_ROOT + "/bin"
+
+# Show help by default
+default:
+  @just --list
+
+# ============================================================================
+# Build Commands
+# ============================================================================
+
+# Build native version
+build:
+  cargo build --release -p fibonacci-fpvm
+
+# Build Cannon (MIPS64) version
+build-cannon:
+  docker run --rm \
+    -v {{FAULT_PROOF_ROOT}}:/workdir \
+    -w="/workdir" \
+    ghcr.io/op-rs/kona/cannon-builder:0.3.0 \
+    cargo build -Zbuild-std=core,alloc \
+    -p fibonacci-fpvm --bin fibonacci \
+    --profile release-client-lto
+
+# Build Asterisc (RISC-V64) version
+build-asterisc:
+  docker run --rm \
+    -v {{FAULT_PROOF_ROOT}}:/workdir \
+    -w="/workdir" \
+    ghcr.io/op-rs/kona/asterisc-builder:0.3.0 \
+    cargo build -Zbuild-std=core,alloc \
+    -p fibonacci-fpvm --bin fibonacci \
+    --profile release-client-lto
+
+# Build all versions
+build-all: build build-cannon build-asterisc
+  @echo "✅ All builds completed!"
+
+# ============================================================================
+# Run Commands
+# ============================================================================
+
+# Run native version
+run: build
+  {{FAULT_PROOF_ROOT}}/target/release/fibonacci
+
+# Run Cannon version
+run-cannon: build-cannon
+  #!/usr/bin/env bash
+  # Load ELF
+  cannon load-elf \
+    --type multithreaded64-5 \
+    --path={{FAULT_PROOF_ROOT}}/target/mips64-unknown-none/release-client-lto/fibonacci \
+    --out={{BIN_ROOT}}/state-cannon.bin.gz
+
+  # Run until completion
+  cannon run \
+    --input {{BIN_ROOT}}/state-cannon.bin.gz \
+    --info-at '%100000'
+
+# Run Asterisc version
+run-asterisc: build-asterisc
+  #!/usr/bin/env bash
+  # Load ELF
+  rvgo load-elf \
+    --path={{FAULT_PROOF_ROOT}}/target/riscv64imac-unknown-none-elf/release-client-lto/fibonacci \
+    --out={{BIN_ROOT}}/state-asterisc.bin.gz
+
+  # Run until completion
+  rvgo run \
+    --input {{BIN_ROOT}}/state-asterisc.bin.gz \
+    --info-at '%100000'
+
+# Run all versions
+run-all: run run-cannon run-asterisc
+  @echo "✅ All platforms tested!"
+
+# ============================================================================
+# Clean Commands
+# ============================================================================
+
+# Clean generated state files
+clean:
+  rm -f {{BIN_ROOT}}/state-*.bin.gz
+  rm -f {{BIN_ROOT}}/meta.json
+  @echo "✅ Cleaned state files"
+
+# Clean all build artifacts
+clean-all: clean
+  cargo clean -p fibonacci-fpvm
+  @echo "✅ Cleaned all build artifacts"
