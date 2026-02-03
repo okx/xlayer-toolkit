@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  cannon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../bin:/app/bin:ro
+      - ./work:/work
+    working_dir: /work
+    entrypoint: ["cannon"]
+    
+  # Load ELF and create initial state
+  cannon-load:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../bin:/app/bin:ro
+      - ./work:/work
+    working_dir: /work
+    command: ["load-elf", "--path", "/app/bin/program.elf", "--out", "/work/state.bin.gz", "--meta", "/work/meta.json"]
+
+  # Run cannon
+  cannon-run:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../bin:/app/bin:ro
+      - ./work:/work
+    working_dir: /work
+    command: ["run", "--input", "/work/state.bin.gz", "--output", "/work/output.bin.gz", "--info-at", "%10000"]
+
+  # Generate proof at step
+  cannon-proof:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../bin:/app/bin:ro
+      - ./work:/work
+    working_dir: /work
+    environment:
+      - STEP=${STEP:-0}
+    command: ["run", "--input", "/work/state.bin.gz", "--output", "/work/step.bin.gz", "--proof-at", "=${STEP}", "--stop-at", "=${STEP}", "--proof-fmt", "/work/proof-%d.json"]
+
+  # Get witness (state hash)
+  cannon-witness:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./work:/work
+    working_dir: /work
+    command: ["witness", "--input", "/work/state.bin.gz"]

@@ -1,0 +1,173 @@
+# demo DEX - Docker Compose
+# Separate services for better observability
+
+services:
+  # ============================================================================
+  # Anvil - Local Ethereum L1
+  # ============================================================================
+  anvil:
+    image: ghcr.io/foundry-rs/foundry:latest
+    entrypoint: ["anvil"]
+    command:
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8545"
+      - --chain-id
+      - "31337"
+      - --accounts
+      - "10"
+      - --balance
+      - "10000"
+      - --block-time
+      - "1"
+    ports:
+      - "8545:8545"
+    healthcheck:
+      test: ["CMD", "cast", "block-number", "--rpc-url", "http://localhost:8545"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    networks:
+      - demo-network
+
+  # ============================================================================
+  # Node - Sequencer + RPC Only
+  # ============================================================================
+  node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: node
+    environment:
+      - BLOCK_TIME=2s
+      - BATCH_SIZE=10
+      - RPC_ADDR=:8546
+    ports:
+      - "8546:8546"
+    depends_on:
+      anvil:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -q -O- --post-data='{\"jsonrpc\":\"2.0\",\"method\":\"x2_blockNumber\",\"params\":[],\"id\":1}' --header='Content-Type: application/json' http://localhost:8546 | grep -q result"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 10s
+    networks:
+      - demo-network
+
+  # ============================================================================
+  # Batcher - Submit batch data to L1 (Standalone)
+  # ============================================================================
+  batcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: batcher
+    env_file:
+      - .env.contracts
+    environment:
+      - L1_RPC=http://anvil:8545
+      - DEMO_RPC=http://node:8546
+      - SUBMIT_INTERVAL=10s
+    depends_on:
+      node:
+        condition: service_healthy
+    networks:
+      - demo-network
+
+  # ============================================================================
+  # Proposer - Submit state commitments to L1 (Standalone)
+  # ============================================================================
+  proposer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: proposer
+    env_file:
+      - .env.contracts
+    environment:
+      - L1_RPC=http://anvil:8545
+      - DEMO_RPC=http://node:8546
+      - SUBMIT_INTERVAL=10s
+    depends_on:
+      node:
+        condition: service_healthy
+    networks:
+      - demo-network
+
+  # ============================================================================
+  # Challenger - Monitor and challenge invalid states (Standalone)
+  # Auto-challenges every CHALLENGE_EVERY_N_OUTPUTS outputs (batches)
+  # With real Cannon VM support
+  # ============================================================================
+  challenger:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: challenger
+    env_file:
+      - .env.contracts
+    environment:
+      - L1_RPC=http://anvil:8545
+      - DEMO_RPC=http://node:8546
+      - POLL_INTERVAL=5s
+      - CHALLENGE_EVERY_N_OUTPUTS=10
+      - AUTO_CHALLENGE=true
+      # Cannon configuration
+      - CANNON_MODE=local
+      - CANNON_PATH=/usr/local/bin/cannon
+      - PROGRAM_PATH=/app/bin/program.elf
+      - CANNON_WORK_DIR=/cannon-work
+    volumes:
+      # Mount program.elf for cannon
+      - ./bin/program.elf:/app/bin/program.elf:ro
+      # Persist cannon work directory
+      - challenger-cannon-work:/cannon-work
+    depends_on:
+      node:
+        condition: service_healthy
+    networks:
+      - demo-network
+
+  # ============================================================================
+  # Program - For preimage and fault proof testing
+  # ============================================================================
+  program:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: program
+    profiles:
+      - tools
+    networks:
+      - demo-network
+
+  # ============================================================================
+  # Test Runner - Run automated tests
+  # ============================================================================
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: test-runner
+    environment:
+      - L1_RPC=http://anvil:8545
+      - DEMO_RPC=http://node:8546
+    depends_on:
+      - node
+      - batcher
+      - proposer
+      - challenger
+    profiles:
+      - test
+    networks:
+      - demo-network
+
+volumes:
+  challenger-cannon-work:
+
+networks:
+  demo-network:
+    driver: bridge

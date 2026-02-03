@@ -53,3 +53,5 @@ demo/contracts/cache/
 demo/contracts/deployments.json
 demo/contracts/deployments/
 demo/contracts/deployments.json
+demo/bin/
+demo/cannon-docker/work
