@@ -1,183 +1,117 @@
 # Fault Proof FPVM Examples
 
-An independent Fault Proof VM (FPVM) example project demonstrating how to write programs that run in the Optimism Fault Proof system.
+Example project demonstrating how to write programs that run in the Optimism Fault Proof VM system.
 
 ## 📁 Project Structure
 
 ```
 fault-proof/
 ├── Cargo.toml          # Workspace configuration
-├── Cargo.lock          # Dependency lock file
 ├── justfile            # Build and run scripts
-├── README.md           # This file
-└── bin/                # Example program directory
-    ├── Cargo.toml      # Fibonacci program configuration
-    └── src/
-        └── main.rs     # Fibonacci source code
+└── bin/                # Example program
+    ├── Cargo.toml
+    └── src/main.rs     # Fibonacci calculator
 ```
 
-## 🎯 Supported Target Platforms
+## 🎯 Supported Platforms
 
-This project can compile and run on three different platforms:
-
-1. **Native** - Standard x86_64/ARM64 binary for local development and testing
-2. **Cannon (MIPS64)** - Runs in Cannon FPVM for fault proof verification
-3. **Asterisc (RISC-V64)** - Runs in Asterisc FPVM for fault proof verification
+1. **Native** - x86_64/ARM64 for local testing
+2. **Cannon (MIPS64)** - Fault proof verification
+3. **Asterisc (RISC-V64)** - Fault proof verification
 
 ## 📋 Prerequisites
 
-### Required
+**Required:**
+- Rust 1.88+
+- Just: `cargo install just`
 
-- **Rust**: Version 1.88 or higher
-- **Just**: Command-line tool
+**Optional (for FPVM):**
+- Docker (for cross-compilation)
+- `cannon` (for MIPS64):
   ```bash
-  cargo install just
+  git clone --depth 1 https://github.com/ethereum-optimism/optimism.git
+  cd optimism/cannon && go install .
+  ```
+- `rvgo` (for RISC-V64):
+  ```bash
+  git clone --depth 1 https://github.com/ethereum-optimism/asterisc.git
+  cd asterisc && git checkout v1.3.0
+  make build-rvgo && cd rvgo && go install .
   ```
 
-### Optional (for FPVM targets)
+## 🚀 Usage
 
-- **Docker**: For cross-compiling to MIPS64 and RISC-V64
-- **cannon**: Cannon FPVM emulator (for running MIPS64 version)
-- **rvgo**: Asterisc FPVM emulator (for running RISC-V64 version)
-
-#### Installing Asterisc
+### Native
 
 ```bash
-git clone --depth 1 https://github.com/ethereum-optimism/asterisc.git
-cd asterisc && git checkout v1.3.0
-make build-rvgo && cd rvgo && go install .
-```
+# Build and run
+just run
 
-#### Installing Cannon
-
-```bash
-git clone --depth 1 https://github.com/ethereum-optimism/optimism.git
-cd optimism/cannon && go install .
-```
-
-## 🚀 Quick Start
-
-### View All Available Commands
-
-```bash
-just --list
-```
-
-## 🔨 Build Commands
-
-### Build Native Binary
-
-```bash
+# Or build only
 just build
 ```
 
-Compiles the program for your local machine (x86_64 or ARM64).
-
-### Build Cannon (MIPS64) Binary
+### Cannon (MIPS64)
 
 ```bash
-just build-cannon
-```
-
-Cross-compiles to MIPS64 architecture using Docker. The binary will be located at:
-```
-target/mips64-unknown-none/release-client-lto/fibonacci
-```
-
-### Build Asterisc (RISC-V64) Binary
-
-```bash
-just build-asterisc
-```
-
-Cross-compiles to RISC-V64 architecture using Docker. The binary will be located at:
-```
-target/riscv64imac-unknown-none-elf/release-client-lto/fibonacci
-```
-
-### Build All Versions
-
-```bash
-just build-all
-```
-
-Builds native, Cannon, and Asterisc versions in sequence.
-
-## ▶️ Run Commands
-
-### Run Native Version
-
-```bash
-just run
-```
-
-Builds and executes the native binary directly on your machine.
-
-### Run Cannon (MIPS64) Version
-
-```bash
+# Build and run in Cannon FPVM
 just run-cannon
+
+# Or build only
+just build-cannon
+# Output: target/mips64-unknown-none/release-client-lto/fibonacci
 ```
 
-Builds the MIPS64 binary, loads it into Cannon FPVM, and executes it. Requires `cannon` to be installed.
-
-### Run Asterisc (RISC-V64) Version
+### Asterisc (RISC-V64)
 
 ```bash
+# Build and run in Asterisc FPVM
 just run-asterisc
+
+# Or build only
+just build-asterisc
+# Output: target/riscv64imac-unknown-none-elf/release-client-lto/fibonacci
 ```
 
-Builds the RISC-V64 binary, loads it into Asterisc FPVM, and executes it. Requires `rvgo` to be installed.
-
-### Run All Versions
+### All Platforms
 
 ```bash
+# Build all
+just build-all
+
+# Run all
 just run-all
 ```
 
-Runs native, Cannon, and Asterisc versions in sequence.
-
-## 🧹 Clean Commands
-
-### Clean Generated State Files
+### Clean
 
 ```bash
+# Clean state files
 just clean
-```
 
-Removes generated FPVM state files (`state-*.bin.gz`, `meta.json`).
-
-### Clean All Build Artifacts
-
-```bash
+# Clean all artifacts
 just clean-all
 ```
 
-Removes all build artifacts and state files.
+## 📚 Example: Fibonacci Calculator
 
-## 📚 Example Program
-
-### Fibonacci Calculator
-
-A simple Fibonacci sequence calculator that demonstrates:
-- How to use `kona-std-fpvm` for I/O operations
-- How to use the `#[client_entry]` macro to simplify program entry
-- How to write Rust programs in a `no_std` environment
-- How to run the same code on multiple FPVM platforms
+Simple program demonstrating:
+- `kona-std-fpvm` for I/O operations
+- `#[client_entry]` macro for program entry
+- `no_std` Rust programming
+- Cross-platform FPVM execution
 
 ## 🔧 Dependencies
 
-This project depends on the following libraries (automatically fetched from GitHub):
+Dependencies are automatically fetched from [ethereum-optimism/optimism](https://github.com/ethereum-optimism/optimism/tree/develop/kona):
 
-- **kona-std-fpvm**: FPVM standard library providing I/O, memory management, and other features
-- **kona-std-fpvm-proc**: Provides the `#[client_entry]` macro
-- **kona-preimage**: PreimageOracle bindings (indirect dependency)
+- `kona-std-fpvm` - FPVM standard library
+- `kona-std-fpvm-proc` - Entry point macro
+- `kona-preimage` - PreimageOracle bindings
 
-These dependencies come from the [ethereum-optimism/optimism](https://github.com/ethereum-optimism/optimism/tree/develop/kona) repository.
+## 📖 Resources
 
-## 📖 Related Resources
-
-- [Optimism Fault Proof Specification](https://specs.optimism.io/experimental/fault-proof/index.html)
+- [Optimism Fault Proof Spec](https://specs.optimism.io/experimental/fault-proof/index.html)
 - [Kona Project](https://github.com/ethereum-optimism/optimism/tree/develop/kona)
 - [Cannon FPVM](https://github.com/ethereum-optimism/optimism/tree/develop/cannon)
 - [Asterisc FPVM](https://github.com/ethereum-optimism/asterisc)
