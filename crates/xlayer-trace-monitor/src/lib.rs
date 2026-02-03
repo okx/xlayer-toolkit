@@ -7,7 +7,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{BufWriter, Write},
     path::PathBuf,
-    sync::{mpsc, Arc, OnceLock, atomic::{AtomicU64, Ordering}},
+    sync::{mpsc, Arc, OnceLock},
     thread,
     time::Instant,
 };
@@ -144,12 +144,10 @@ enum WriterMessage {
     SyncAll(Option<mpsc::Sender<Result<(), std::io::Error>>>),
 }
 
-/// Internal state for the transaction tracer
 #[derive(Debug)]
 struct TransactionTracerInner {
     enabled: bool,
     tx: Sender<WriterMessage>,
-    dropped_count: AtomicU64,
 }
 
 fn run_writer_thread(rx: crossbeam_channel::Receiver<WriterMessage>, file_path: PathBuf) {
@@ -268,11 +266,7 @@ impl TransactionTracer {
         run_writer_thread(rx, file_path);
 
         Self {
-            inner: Arc::new(TransactionTracerInner {
-                enabled,
-                tx,
-                dropped_count: AtomicU64::new(0),
-            }),
+            inner: Arc::new(TransactionTracerInner { enabled, tx }),
         }
     }
 
@@ -281,19 +275,8 @@ impl TransactionTracer {
         self.inner.enabled
     }
 
-    /// Number of log lines dropped when the channel was full.
-    pub fn dropped_count(&self) -> u64 {
-        self.inner.dropped_count.load(Ordering::Relaxed)
-    }
-
     fn send_line(&self, csv_line: String) {
-        match self.inner.tx.try_send(WriterMessage::Line(csv_line)) {
-            Ok(()) => {}
-            Err(crossbeam_channel::TrySendError::Full(_)) => {
-                self.inner.dropped_count.fetch_add(1, Ordering::Relaxed);
-            }
-            Err(crossbeam_channel::TrySendError::Disconnected(_)) => {}
-        }
+        let _ = self.inner.tx.try_send(WriterMessage::Line(csv_line));
     }
 
     /// Flush buffer to the OS. Use `sync_all()` for disk persistence.
