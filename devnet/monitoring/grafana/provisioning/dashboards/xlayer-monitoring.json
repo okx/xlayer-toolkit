@@ -2295,8 +2295,8 @@
       ]
     },
     "timezone": "",
-    "title": "XLayer Monitoring -2",
-    "uid": "xlayer-monitoring-v4",
+    "title": "XLayer Monitoring",
+    "uid": "xlayer-monitoring",
     "version": 1,
     "weekStart": ""
   }
