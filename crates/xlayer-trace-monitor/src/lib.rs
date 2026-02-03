@@ -1,10 +1,5 @@
-//! Transaction tracing module for monitoring transaction lifecycle
-//!
-//! This module provides functionality to trace and log transaction lifecycle events
-//! for monitoring and debugging purposes.
-//!
-//! Logging is non-blocking: log lines are sent to a dedicated writer thread via a bounded
-//! channel, so callers (including async request handlers) never block on file I/O.
+//! Transaction tracing: log transaction/block lifecycle to a file.
+//! Logging is non-blocking (bounded channel + writer thread).
 
 use crossbeam_channel::{bounded, Sender};
 use std::{
@@ -12,11 +7,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{BufWriter, Write},
     path::PathBuf,
-    sync::{
-        mpsc,
-        Arc, OnceLock,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::{mpsc, Arc, OnceLock, atomic::{AtomicU64, Ordering}},
     thread,
     time::Instant,
 };
@@ -147,29 +138,20 @@ impl TransactionProcessId {
     }
 }
 
-/// Message sent from callers to the dedicated writer thread.
 enum WriterMessage {
-    /// A CSV line to append to the trace file.
     Line(String),
-    /// Request flush; writer sends result on the given sender.
     Flush(Option<mpsc::Sender<Result<(), std::io::Error>>>),
-    /// Request sync to disk; writer sends result on the given sender.
     SyncAll(Option<mpsc::Sender<Result<(), std::io::Error>>>),
 }
 
 /// Internal state for the transaction tracer
 #[derive(Debug)]
 struct TransactionTracerInner {
-    /// Whether tracing is enabled
     enabled: bool,
-    /// Channel to send log lines and control messages to the writer thread
     tx: Sender<WriterMessage>,
-    /// Count of log lines dropped when the channel was full (for observability)
     dropped_count: AtomicU64,
 }
 
-/// Runs the dedicated writer thread: receives lines and control messages,
-/// writes to file with BufWriter batching, and responds to flush/sync requests.
 fn run_writer_thread(rx: crossbeam_channel::Receiver<WriterMessage>, file_path: PathBuf) {
     thread::spawn(move || {
         // Create parent directories if they don't exist
@@ -261,21 +243,14 @@ fn run_writer_thread(rx: crossbeam_channel::Receiver<WriterMessage>, file_path: 
     });
 }
 
-/// Transaction tracer for logging transaction and block events
 #[derive(Debug, Clone)]
 pub struct TransactionTracer {
     inner: Arc<TransactionTracerInner>,
 }
 
 impl TransactionTracer {
-    /// Create a new transaction tracer
-    ///
-    /// Log lines are sent to a dedicated writer thread via a bounded channel;
-    /// callers never block on file I/O. When the channel is full, new lines are dropped.
-    ///
-    /// # Arguments
-    /// * `enabled` - Whether tracing is enabled
-    /// * `output_path` - Optional path to output file (defaults to `/data/logs/trace.log` if None)
+    /// Create a new tracer. Logs are sent to a writer thread via a bounded channel; callers never block.
+    /// Default path: `/data/logs/trace.log`.
     pub fn new(enabled: bool, output_path: Option<PathBuf>) -> Self {
         let default_path = PathBuf::from("/data/logs/trace.log");
         let final_path = output_path.unwrap_or(default_path);
@@ -306,40 +281,22 @@ impl TransactionTracer {
         self.inner.enabled
     }
 
-    /// Number of log lines dropped because the writer channel was full.
-    /// Useful for observability when tuning `CHANNEL_CAPACITY` or load.
+    /// Number of log lines dropped when the channel was full.
     pub fn dropped_count(&self) -> u64 {
         self.inner.dropped_count.load(Ordering::Relaxed)
     }
 
-    /// Enqueue a CSV line for the writer thread. Non-blocking; if the channel is full, the line is dropped.
     fn send_line(&self, csv_line: String) {
         match self.inner.tx.try_send(WriterMessage::Line(csv_line)) {
             Ok(()) => {}
-            Err(crossbeam_channel::TrySendError::Full(line)) => {
+            Err(crossbeam_channel::TrySendError::Full(_)) => {
                 self.inner.dropped_count.fetch_add(1, Ordering::Relaxed);
-                tracing::debug!(
-                    target: "tx_trace",
-                    dropped = self.inner.dropped_count.load(Ordering::Relaxed),
-                    "Trace channel full, dropping log line"
-                );
-                drop(line);
             }
-            Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
-                tracing::debug!(target: "tx_trace", "Writer thread disconnected");
-            }
+            Err(crossbeam_channel::TrySendError::Disconnected(_)) => {}
         }
     }
 
-    /// Force flush the trace file.
-    ///
-    /// Sends a flush request to the writer thread and waits for completion.
-    /// This ensures all buffered data is written to the OS (but not necessarily to disk).
-    /// Use `sync_all()` if you need actual disk persistence.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the writer is disconnected or if flushing fails.
+    /// Flush buffer to the OS. Use `sync_all()` for disk persistence.
     pub fn flush(&self) -> Result<(), std::io::Error> {
         let (ack_tx, ack_rx) = mpsc::channel();
         if self.inner.tx.send(WriterMessage::Flush(Some(ack_tx))).is_err() {
@@ -354,17 +311,7 @@ impl TransactionTracer {
             })?
     }
 
-    /// Force sync the trace file to disk.
-    ///
-    /// Sends a sync request to the writer thread and waits for completion.
-    /// This ensures all written data is persisted to disk, not just in OS page cache.
-    /// Use this when you need strong durability guarantees (e.g., before shutdown).
-    ///
-    /// Note: This is more expensive than `flush()` but provides actual durability.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the writer is disconnected or if flushing/syncing fails.
+    /// Sync to disk. Call before shutdown to persist buffered data.
     pub fn sync_all(&self) -> Result<(), std::io::Error> {
         let (ack_tx, ack_rx) = mpsc::channel();
         if self
@@ -492,11 +439,7 @@ impl TransactionTracer {
         self.send_line(csv_line);
     }
 
-    /// Log block event with a specific timestamp.
-    ///
-    /// This method is used when we need to log a block event with a timestamp
-    /// that was saved earlier (e.g., when block building started but block hash
-    /// was not yet available).
+    /// Log block event with a given timestamp (e.g. when block building started but hash was not yet available).
     pub fn log_block_with_timestamp(
         &self,
         block_hash: Hash32,
@@ -522,34 +465,20 @@ impl TransactionTracer {
     }
 }
 
-/// Global transaction tracer instance (singleton).
 static GLOBAL_TRACER: OnceLock<Arc<TransactionTracer>> = OnceLock::new();
 
-/// Initialize the global transaction tracer
-///
-/// This function should be called once at application startup to initialize
-/// the singleton tracer instance. Subsequent calls will be ignored.
-///
-/// # Arguments
-/// * `enabled` - Whether tracing is enabled (from `--tx-trace.enable` flag)
-/// * `output_path` - Output file path (from `--tx-trace.output-path` flag, defaults to `/data/logs/trace.log` if None)
+/// Initialize the global tracer. Call once at startup. First call wins; later calls ignored.
 pub fn init_global_tracer(enabled: bool, output_path: Option<PathBuf>) {
     let tracer = TransactionTracer::new(enabled, output_path);
     GLOBAL_TRACER.set(Arc::new(tracer)).ok();
 }
 
-/// Get the global transaction tracer
-///
-/// Returns `None` if the tracer has not been initialized yet.
+/// Get the global tracer, or `None` if not initialized.
 pub fn get_global_tracer() -> Option<Arc<TransactionTracer>> {
     GLOBAL_TRACER.get().cloned()
 }
 
-/// Flush the global transaction tracer.
-///
-/// Flushes the `BufWriter` buffer to ensure all buffered data is written to the OS.
-/// This is called automatically during normal operation, but you can call it manually
-/// if you need to ensure data is written immediately.
+/// Flush the global tracer buffer to the OS.
 pub fn flush_global_tracer() -> Result<(), std::io::Error> {
     if let Some(tracer) = get_global_tracer() {
         tracer.flush()
@@ -558,10 +487,7 @@ pub fn flush_global_tracer() -> Result<(), std::io::Error> {
     }
 }
 
-/// Sync the global transaction tracer to disk.
-///
-/// Forces a sync of the trace file to ensure all data is persisted to disk.
-/// Use this when you need strong durability guarantees (e.g., before shutdown).
+/// Sync the global tracer to disk. Call before process exit to avoid losing buffered data.
 pub fn sync_global_tracer() -> Result<(), std::io::Error> {
     if let Some(tracer) = get_global_tracer() {
         tracer.sync_all()
