@@ -3,23 +3,8 @@
 
 extern crate alloc;
 
-use alloc::string::String;
+use alloc::{format, string::String, vec::Vec};
 use kona_std_fpvm_proc::client_entry;
-
-/// Convert u64 to string
-fn u64_to_string(mut n: u64) -> String {
-    if n == 0 {
-        return String::from("0");
-    }
-
-    let mut digits = alloc::vec::Vec::new();
-    while n > 0 {
-        digits.push((b'0' + (n % 10) as u8) as char);
-        n /= 10;
-    }
-    digits.reverse();
-    digits.into_iter().collect()
-}
 
 /// Calculate the nth Fibonacci number
 fn fibonacci(n: u64) -> u64 {
@@ -39,44 +24,35 @@ fn fibonacci(n: u64) -> u64 {
     b
 }
 
-/// Print a single Fibonacci result
-fn print_fib(n: u64, value: u64) {
-    kona_std_fpvm::io::print("fib(");
-    kona_std_fpvm::io::print(&u64_to_string(n));
-    kona_std_fpvm::io::print(") = ");
-    kona_std_fpvm::io::print(&u64_to_string(value));
-    kona_std_fpvm::io::print("\n");
-}
-
-/// Calculate and print Fibonacci sequence
-fn calculate_fibonacci_sequence(count: u64) {
-    kona_std_fpvm::io::print("=== Fibonacci Sequence Calculator ===\n");
-    kona_std_fpvm::io::print("Calculating first ");
-    kona_std_fpvm::io::print(&u64_to_string(count));
-    kona_std_fpvm::io::print(" Fibonacci numbers:\n\n");
-
-    for i in 0..count {
-        let fib = fibonacci(i);
-        print_fib(i, fib);
+/// Print an array of u64 values
+fn print_array(arr: &[u64]) {
+    kona_std_fpvm::io::print("[");
+    for (i, &value) in arr.iter().enumerate() {
+        if i > 0 {
+            kona_std_fpvm::io::print(", ");
+        }
+        kona_std_fpvm::io::print(&format!("{}", value));
     }
-
-    kona_std_fpvm::io::print("\n=== Calculation Complete ===\n");
+    kona_std_fpvm::io::print("]\n");
 }
 
 #[client_entry]
 fn main() -> Result<(), String> {
-    // Calculate first 20 Fibonacci numbers
-    calculate_fibonacci_sequence(20);
+    // Input array
+    let input = [0, 1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90];
+    kona_std_fpvm::io::print("Input: ");
+    print_array(&input);
+    kona_std_fpvm::io::print("\n");
 
-    // Test some large numbers
-    kona_std_fpvm::io::print("\n=== Testing Large Numbers ===\n");
-    let test_values = [30, 40, 50, 60, 70, 80, 90];
-
-    for &n in &test_values {
-        let fib = fibonacci(n);
-        print_fib(n, fib);
+    // Calculate Fibonacci for each input
+    let mut output = Vec::new();
+    for &n in &input {
+        output.push(fibonacci(n));
     }
 
-    kona_std_fpvm::io::print("\n=== All Tests Passed ===\n");
+    // Print output array
+    kona_std_fpvm::io::print("Output: ");
+    print_array(&output);
+
     Ok::<(), String>(())
 }
