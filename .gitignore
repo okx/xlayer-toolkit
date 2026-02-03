@@ -46,3 +46,10 @@ tools/adventure/txhashes.log
 **/build/
 
 local
+demo/contracts/broadcast/
+demo/contracts/out/
+demo/contracts/lib/
+demo/contracts/cache/
+demo/contracts/deployments.json
+demo/contracts/deployments/
+demo/contracts/deployments.json
