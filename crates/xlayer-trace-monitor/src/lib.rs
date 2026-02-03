@@ -2,16 +2,22 @@
 //!
 //! This module provides functionality to trace and log transaction lifecycle events
 //! for monitoring and debugging purposes.
+//!
+//! Logging is non-blocking: log lines are sent to a dedicated writer thread via a bounded
+//! channel, so callers (including async request handlers) never block on file I/O.
 
+use crossbeam_channel::{bounded, Sender};
 use std::{
     borrow::Cow,
     fs::{self, File, OpenOptions},
     io::{BufWriter, Write},
     path::PathBuf,
     sync::{
-        Arc, Mutex, OnceLock,
+        mpsc,
+        Arc, OnceLock,
         atomic::{AtomicU64, Ordering},
     },
+    thread,
     time::Instant,
 };
 
@@ -47,6 +53,10 @@ fn format_hash_hex(hash: &Hash32) -> String {
 pub fn from_b256(b256: impl AsRef<[u8; 32]>) -> Hash32 {
     *b256.as_ref()
 }
+
+/// Capacity of the channel between log callers and the writer thread.
+/// When full, new log lines are dropped to avoid blocking the caller.
+const CHANNEL_CAPACITY: usize = 65_536;
 
 /// Number of log entries to write before forcing a flush.
 /// This reduces system calls by batching writes through `BufWriter`.
@@ -137,17 +147,118 @@ impl TransactionProcessId {
     }
 }
 
+/// Message sent from callers to the dedicated writer thread.
+enum WriterMessage {
+    /// A CSV line to append to the trace file.
+    Line(String),
+    /// Request flush; writer sends result on the given sender.
+    Flush(Option<mpsc::Sender<Result<(), std::io::Error>>>),
+    /// Request sync to disk; writer sends result on the given sender.
+    SyncAll(Option<mpsc::Sender<Result<(), std::io::Error>>>),
+}
+
 /// Internal state for the transaction tracer
 #[derive(Debug)]
 struct TransactionTracerInner {
     /// Whether tracing is enabled
     enabled: bool,
-    /// Buffered file writer for efficient batch writes
-    output_file: Mutex<Option<BufWriter<File>>>,
-    /// Counter for number of writes since last flush
-    write_count: AtomicU64,
-    /// Last flush time
-    last_flush_time: Mutex<Instant>,
+    /// Channel to send log lines and control messages to the writer thread
+    tx: Sender<WriterMessage>,
+    /// Count of log lines dropped when the channel was full (for observability)
+    dropped_count: AtomicU64,
+}
+
+/// Runs the dedicated writer thread: receives lines and control messages,
+/// writes to file with BufWriter batching, and responds to flush/sync requests.
+fn run_writer_thread(rx: crossbeam_channel::Receiver<WriterMessage>, file_path: PathBuf) {
+    thread::spawn(move || {
+        // Create parent directories if they don't exist
+        if let Some(parent) = file_path.parent()
+            && let Err(e) = fs::create_dir_all(parent)
+        {
+            tracing::warn!(
+                target: "tx_trace",
+                ?parent,
+                error = %e,
+                "Failed to create transaction trace output directory"
+            );
+        }
+
+        let mut writer_opt: Option<BufWriter<File>> = match OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&file_path)
+        {
+            Ok(file) => {
+                tracing::info!(
+                    target: "tx_trace",
+                    ?file_path,
+                    "Transaction trace file opened for appending"
+                );
+                Some(BufWriter::new(file))
+            }
+            Err(e) => {
+                tracing::warn!(
+                    target: "tx_trace",
+                    ?file_path,
+                    error = %e,
+                    "Failed to open transaction trace file"
+                );
+                None
+            }
+        };
+
+        let mut write_count: u64 = 0;
+        let mut last_flush_time = Instant::now();
+
+        while let Ok(msg) = rx.recv() {
+            match msg {
+                WriterMessage::Line(csv_line) => {
+                    if let Some(ref mut writer) = writer_opt {
+                        if writeln!(writer, "{csv_line}").is_err() {
+                            tracing::warn!(
+                                target: "tx_trace",
+                                "Failed to write to transaction trace file"
+                            );
+                        } else {
+                            write_count += 1;
+                            let now = Instant::now();
+                            let time_since_flush = now.duration_since(last_flush_time);
+                            let should_flush = write_count.is_multiple_of(FLUSH_INTERVAL_WRITES)
+                                || time_since_flush.as_secs() >= FLUSH_INTERVAL_SECONDS;
+                            if should_flush {
+                                if writer.flush().is_err() {
+                                    tracing::warn!(
+                                        target: "tx_trace",
+                                        "Failed to flush transaction trace file"
+                                    );
+                                }
+                                last_flush_time = now;
+                            }
+                        }
+                    }
+                }
+                WriterMessage::Flush(ack_tx) => {
+                    let result = match &mut writer_opt {
+                        Some(writer) => writer.flush(),
+                        None => Ok(()),
+                    };
+                    if let Some(tx) = ack_tx {
+                        let _ = tx.send(result);
+                    }
+                }
+                WriterMessage::SyncAll(ack_tx) => {
+                    let result = match &mut writer_opt {
+                        Some(writer) => writer.flush().and_then(|()| writer.get_ref().sync_all()),
+                        None => Ok(()),
+                    };
+                    if let Some(tx) = ack_tx {
+                        let _ = tx.send(result);
+                    }
+                }
+            }
+        }
+    });
 }
 
 /// Transaction tracer for logging transaction and block events
@@ -159,69 +270,33 @@ pub struct TransactionTracer {
 impl TransactionTracer {
     /// Create a new transaction tracer
     ///
+    /// Log lines are sent to a dedicated writer thread via a bounded channel;
+    /// callers never block on file I/O. When the channel is full, new lines are dropped.
+    ///
     /// # Arguments
     /// * `enabled` - Whether tracing is enabled
     /// * `output_path` - Optional path to output file (defaults to `/data/logs/trace.log` if None)
     pub fn new(enabled: bool, output_path: Option<PathBuf>) -> Self {
-        // Default path if not specified: /data/logs/trace.log
         let default_path = PathBuf::from("/data/logs/trace.log");
         let final_path = output_path.unwrap_or(default_path);
 
-        let output_file = {
-            let file_path = if final_path.to_string_lossy().ends_with('/')
-                || final_path.to_string_lossy().ends_with('\\')
-                || (final_path.extension().is_none() && !final_path.exists())
-            {
-                final_path.join("trace.log")
-            } else {
-                final_path
-            };
-
-            // Create parent directories if they don't exist
-            if let Some(parent) = file_path.parent()
-                && let Err(e) = fs::create_dir_all(parent)
-            {
-                tracing::warn!(
-                    target: "tx_trace",
-                    ?parent,
-                    error = %e,
-                    "Failed to create transaction trace output directory"
-                );
-            }
-
-            match OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&file_path)
-            {
-                Ok(file) => {
-                    tracing::info!(
-                        target: "tx_trace",
-                        ?file_path,
-                        "Transaction trace file opened for appending"
-                    );
-                    // Use BufWriter for efficient batch writes
-                    // Default buffer size is 8KB, which is good for our use case
-                    Some(BufWriter::new(file))
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        target: "tx_trace",
-                        ?file_path,
-                        error = %e,
-                        "Failed to open transaction trace file"
-                    );
-                    None
-                }
-            }
+        let file_path = if final_path.to_string_lossy().ends_with('/')
+            || final_path.to_string_lossy().ends_with('\\')
+            || (final_path.extension().is_none() && !final_path.exists())
+        {
+            final_path.join("trace.log")
+        } else {
+            final_path
         };
+
+        let (tx, rx) = bounded(CHANNEL_CAPACITY);
+        run_writer_thread(rx, file_path);
 
         Self {
             inner: Arc::new(TransactionTracerInner {
                 enabled,
-                output_file: Mutex::new(output_file),
-                write_count: AtomicU64::new(0),
-                last_flush_time: Mutex::new(Instant::now()),
+                tx,
+                dropped_count: AtomicU64::new(0),
             }),
         }
     }
@@ -231,92 +306,57 @@ impl TransactionTracer {
         self.inner.enabled
     }
 
-    /// Write CSV line to trace file with periodic flush.
-    ///
-    /// Uses `BufWriter` to batch writes, reducing system calls for better performance.
-    /// Automatically flushes every `FLUSH_INTERVAL_WRITES` writes or `FLUSH_INTERVAL_SECONDS`.
-    fn write_to_file(&self, csv_line: &str) {
-        match self.inner.output_file.lock() {
-            Ok(mut file_guard) => {
-                if let Some(ref mut writer) = *file_guard {
-                    if let Err(e) = writeln!(writer, "{csv_line}") {
-                        tracing::warn!(
-                            target: "tx_trace",
-                            error = %e,
-                            "Failed to write to transaction trace file"
-                        );
-                    } else {
-                        let count = self.inner.write_count.fetch_add(1, Ordering::Relaxed) + 1;
+    /// Number of log lines dropped because the writer channel was full.
+    /// Useful for observability when tuning `CHANNEL_CAPACITY` or load.
+    pub fn dropped_count(&self) -> u64 {
+        self.inner.dropped_count.load(Ordering::Relaxed)
+    }
 
-                        let should_flush = {
-                            match self.inner.last_flush_time.lock() {
-                                Ok(mut last_flush) => {
-                                    let now = Instant::now();
-                                    let time_since_flush = now.duration_since(*last_flush);
-
-                                    if count.is_multiple_of(FLUSH_INTERVAL_WRITES)
-                                        || time_since_flush.as_secs() >= FLUSH_INTERVAL_SECONDS
-                                    {
-                                        *last_flush = now;
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                }
-                                Err(_) => {
-                                    // If lock is poisoned, still flush to ensure data safety
-                                    true
-                                }
-                            }
-                        };
-
-                        if should_flush && let Err(e) = writer.flush() {
-                            tracing::warn!(
-                                target: "tx_trace",
-                                error = %e,
-                                "Failed to flush transaction trace file"
-                            );
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                tracing::warn!(
+    /// Enqueue a CSV line for the writer thread. Non-blocking; if the channel is full, the line is dropped.
+    fn send_line(&self, csv_line: String) {
+        match self.inner.tx.try_send(WriterMessage::Line(csv_line)) {
+            Ok(()) => {}
+            Err(crossbeam_channel::TrySendError::Full(line)) => {
+                self.inner.dropped_count.fetch_add(1, Ordering::Relaxed);
+                tracing::debug!(
                     target: "tx_trace",
-                    error = %e,
-                    "Failed to acquire lock for transaction trace file"
+                    dropped = self.inner.dropped_count.load(Ordering::Relaxed),
+                    "Trace channel full, dropping log line"
                 );
+                drop(line);
+            }
+            Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
+                tracing::debug!(target: "tx_trace", "Writer thread disconnected");
             }
         }
     }
 
     /// Force flush the trace file.
     ///
-    /// Flushes the `BufWriter` buffer to the underlying file.
+    /// Sends a flush request to the writer thread and waits for completion.
     /// This ensures all buffered data is written to the OS (but not necessarily to disk).
     /// Use `sync_all()` if you need actual disk persistence.
     ///
     /// # Errors
     ///
-    /// Returns an error if the lock cannot be acquired or if flushing fails.
+    /// Returns an error if the writer is disconnected or if flushing fails.
     pub fn flush(&self) -> Result<(), std::io::Error> {
-        match self.inner.output_file.lock() {
-            Ok(mut file_guard) => {
-                if let Some(ref mut writer) = *file_guard {
-                    writer.flush()
-                } else {
-                    Ok(())
-                }
-            }
-            Err(_) => Err(std::io::Error::other(
-                "Failed to acquire lock for flushing transaction trace file",
-            )),
+        let (ack_tx, ack_rx) = mpsc::channel();
+        if self.inner.tx.send(WriterMessage::Flush(Some(ack_tx))).is_err() {
+            return Err(std::io::Error::other(
+                "Writer thread disconnected for transaction trace file",
+            ));
         }
+        ack_rx
+            .recv()
+            .map_err(|_| {
+                std::io::Error::other("Writer thread did not acknowledge flush request")
+            })?
     }
 
     /// Force sync the trace file to disk.
     ///
-    /// First flushes the `BufWriter` buffer, then syncs to disk.
+    /// Sends a sync request to the writer thread and waits for completion.
     /// This ensures all written data is persisted to disk, not just in OS page cache.
     /// Use this when you need strong durability guarantees (e.g., before shutdown).
     ///
@@ -324,23 +364,24 @@ impl TransactionTracer {
     ///
     /// # Errors
     ///
-    /// Returns an error if the lock cannot be acquired or if flushing/syncing fails.
+    /// Returns an error if the writer is disconnected or if flushing/syncing fails.
     pub fn sync_all(&self) -> Result<(), std::io::Error> {
-        match self.inner.output_file.lock() {
-            Ok(mut file_guard) => {
-                if let Some(ref mut writer) = *file_guard {
-                    // First flush the buffer
-                    writer.flush()?;
-                    // Then get the underlying file and sync
-                    writer.get_ref().sync_all()
-                } else {
-                    Ok(())
-                }
-            }
-            Err(_) => Err(std::io::Error::other(
-                "Failed to acquire lock for syncing transaction trace file",
-            )),
+        let (ack_tx, ack_rx) = mpsc::channel();
+        if self
+            .inner
+            .tx
+            .send(WriterMessage::SyncAll(Some(ack_tx)))
+            .is_err()
+        {
+            return Err(std::io::Error::other(
+                "Writer thread disconnected for transaction trace file",
+            ));
         }
+        ack_rx
+            .recv()
+            .map_err(|_| {
+                std::io::Error::other("Writer thread did not acknowledge sync request")
+            })?
     }
 
     /// Format CSV line with 23 fields.
@@ -423,7 +464,7 @@ impl TransactionTracer {
         let csv_line =
             Self::format_csv_line(&trace_hash, process_id, timestamp_ms, None, block_number);
 
-        self.write_to_file(&csv_line);
+        self.send_line(csv_line);
     }
 
     /// Log block event at current time point
@@ -448,7 +489,7 @@ impl TransactionTracer {
             Some(block_number),
         );
 
-        self.write_to_file(&csv_line);
+        self.send_line(csv_line);
     }
 
     /// Log block event with a specific timestamp.
@@ -477,7 +518,7 @@ impl TransactionTracer {
             Some(block_number),
         );
 
-        self.write_to_file(&csv_line);
+        self.send_line(csv_line);
     }
 }
 
