@@ -7,7 +7,19 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: 'op-reth-seq'
+  - job_name: 'sequencer-nodes'
     static_configs:
-      - targets: ['op-reth-seq:9001']
-    metrics_path: /metrics
+      - targets:
+          - 'op-reth-seq:9001'
+          - 'op-reth-seq2:9001'
+        labels:
+          node_type: 'sequencer'
+
+  - job_name: 'rpc-nodes'
+    static_configs:
+      - targets:
+          - 'op-reth-rpc:9001'
+          - 'op-reth-rpc2:9001'
+        labels:
+          node_type: 'rpc'
+

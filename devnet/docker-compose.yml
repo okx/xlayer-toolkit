@@ -303,6 +303,7 @@ services:
       - "11113:1111" # outbound flashblocks ws port
       - "30304:30303"
       - "30304:30303/udp"
+      - "9002:9001"  # metrics port
 
   op-seq:
     image: "${OP_STACK_IMAGE_TAG}"
@@ -485,6 +486,7 @@ services:
       - "8128:8545"
       - "30309:30303"
       - "30309:30303/udp"
+      - "9003:9001" # metrics port
 
   op-conductor:
     image: "${OP_STACK_IMAGE_TAG}"
@@ -670,6 +672,7 @@ services:
       - "30305:30303"
       - "30305:30303/udp"
       - "11112:1111" # outbound flashblocks ws port
+      - "9004:9001"  # metrics port
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
       interval: 3s
@@ -987,7 +990,7 @@ services:
       - --data-dir=/data
 
   prometheus:
-    image: prom/prometheus:v2.47.0
+    image: prom/prometheus:main
     container_name: prometheus
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
