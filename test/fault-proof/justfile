@@ -1,9 +1,36 @@
 FAULT_PROOF_ROOT := justfile_directory()
 BIN_ROOT := FAULT_PROOF_ROOT + "/bin"
 
-# Show help by default
+# Official Cannon Docker image from OP Labs (Google Artifact Registry)
+# Available versions: v1.0.0, v1.2.0, v1.3.0, v1.4.0, v1.6.0
+CANNON_IMAGE := "us-docker.pkg.dev/oplabs-tools-artifacts/images/cannon:v1.6.0"
+
+# Official Asterisc Docker image from OP Labs (Google Artifact Registry)
+# Available versions: v1.2.0, v1.3.0, latest
+ASTERISC_IMAGE := "us-docker.pkg.dev/oplabs-tools-artifacts/images/asterisc:v1.3.0"
+
 default:
   @just --list
+
+# ============================================================================
+# Docker Image Commands
+# ============================================================================
+
+# Pull official Cannon Docker image
+pull-cannon-image:
+  docker pull {{CANNON_IMAGE}}
+
+# Check if cannon image exists locally
+check-cannon-image:
+  @docker image inspect {{CANNON_IMAGE}} > /dev/null 2>&1 || (echo "Cannon image not found. Run: just pull-cannon-image" && exit 1)
+
+# Pull official Asterisc Docker image
+pull-asterisc-image:
+  docker pull {{ASTERISC_IMAGE}}
+
+# Check if asterisc image exists locally
+check-asterisc-image:
+  @docker image inspect {{ASTERISC_IMAGE}} > /dev/null 2>&1 || (echo "Asterisc image not found. Run: just pull-asterisc-image" && exit 1)
 
 # ============================================================================
 # Build Commands
@@ -45,37 +72,80 @@ build-all: build build-cannon build-asterisc
 run: build
   {{FAULT_PROOF_ROOT}}/target/release/fibonacci
 
-# Run Cannon version
+# Run Cannon version (requires cannon on host)
 run-cannon: build-cannon
   #!/usr/bin/env bash
-  # Load ELF
   cannon load-elf \
     --type multithreaded64-5 \
     --path={{FAULT_PROOF_ROOT}}/target/mips64-unknown-none/release-client-lto/fibonacci \
     --out={{BIN_ROOT}}/state-cannon.bin.gz
-
-  # Run until completion
   cannon run \
     --input {{BIN_ROOT}}/state-cannon.bin.gz \
     --info-at '%100000'
 
-# Run Asterisc version
+# Run Cannon version using Docker (official image)
+run-cannon-docker: build-cannon check-cannon-image
+  #!/usr/bin/env bash
+  set -e
+  mkdir -p {{BIN_ROOT}}
+  docker run --rm \
+    -v {{FAULT_PROOF_ROOT}}:/workdir \
+    -w /workdir \
+    --entrypoint /usr/local/bin/cannon \
+    {{CANNON_IMAGE}} \
+    load-elf \
+      --type multithreaded64-5 \
+      --path=/workdir/target/mips64-unknown-none/release-client-lto/fibonacci \
+      --out=/workdir/bin/state-cannon.bin.gz
+  docker run --rm \
+    -v {{FAULT_PROOF_ROOT}}:/workdir \
+    -w /workdir \
+    --entrypoint /usr/local/bin/cannon \
+    {{CANNON_IMAGE}} \
+    run \
+      --input /workdir/bin/state-cannon.bin.gz \
+      --info-at '%100000'
+
+# Run Asterisc version (requires rvgo/asterisc on host)
 run-asterisc: build-asterisc
   #!/usr/bin/env bash
-  # Load ELF
   rvgo load-elf \
     --path={{FAULT_PROOF_ROOT}}/target/riscv64imac-unknown-none-elf/release-client-lto/fibonacci \
     --out={{BIN_ROOT}}/state-asterisc.bin.gz
 
-  # Run until completion
   rvgo run \
     --input {{BIN_ROOT}}/state-asterisc.bin.gz \
     --info-at '%100000'
 
-# Run all versions
+# Run Asterisc version using Docker (official image)
+run-asterisc-docker: build-asterisc check-asterisc-image
+  #!/usr/bin/env bash
+  set -e
+  mkdir -p {{BIN_ROOT}}
+  docker run --rm \
+    -v {{FAULT_PROOF_ROOT}}:/workdir \
+    -w /workdir \
+    --entrypoint /usr/local/bin/asterisc \
+    {{ASTERISC_IMAGE}} \
+    load-elf \
+      --path=/workdir/target/riscv64imac-unknown-none-elf/release-client-lto/fibonacci \
+      --out=/workdir/bin/state-asterisc.bin.gz
+  docker run --rm \
+    -v {{FAULT_PROOF_ROOT}}:/workdir \
+    -w /workdir \
+    --entrypoint /usr/local/bin/asterisc \
+    {{ASTERISC_IMAGE}} \
+    run \
+      --input /workdir/bin/state-asterisc.bin.gz \
+      --info-at '%100000'
+
+# Run all versions (host)
 run-all: run run-cannon run-asterisc
   @echo "✅ All platforms tested!"
 
+# Run all versions (Docker for FPVM)
+run-all-docker: run run-cannon-docker run-asterisc-docker
+  @echo "✅ All platforms tested (Docker mode)!"
 # ============================================================================
 # Clean Commands
 # ============================================================================

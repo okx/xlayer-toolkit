@@ -83,6 +83,69 @@ just build-all
 just run-all
 ```
 
+## 🐳 Docker Execution (No Local Installation)
+
+If you don't want to install `cannon` or `asterisc` locally, you can use official Docker images from OP Labs.
+
+### Docker Images
+
+| Tool | Image | Versions |
+|------|-------|----------|
+| Cannon | `us-docker.pkg.dev/oplabs-tools-artifacts/images/cannon` | v1.0.0, v1.2.0, v1.3.0, v1.4.0, v1.6.0 |
+| Asterisc | `us-docker.pkg.dev/oplabs-tools-artifacts/images/asterisc` | v1.2.0, v1.3.0, latest |
+| Cannon Builder | `ghcr.io/op-rs/kona/cannon-builder` | 0.3.0 |
+| Asterisc Builder | `ghcr.io/op-rs/kona/asterisc-builder` | 0.3.0 |
+
+### Pull Docker Images
+
+```bash
+# Pull Cannon image
+just pull-cannon-image
+
+# Pull Asterisc image
+just pull-asterisc-image
+```
+
+### Run with Docker
+
+```bash
+# Run Cannon FPVM using Docker
+just run-cannon-docker
+
+# Run Asterisc FPVM using Docker
+just run-asterisc-docker
+
+# Run all (native + Docker for FPVM)
+just run-all-docker
+```
+
+### How It Works
+
+1. **Build**: Uses `cannon-builder` / `asterisc-builder` images containing cross-compilation toolchains
+2. **Run**: Uses official `cannon` / `asterisc` images to execute the compiled binary in FPVM
+
+Example workflow for Cannon:
+```bash
+# 1. Build (uses cannon-builder image)
+docker run --rm -v $(pwd):/workdir -w /workdir \
+  ghcr.io/op-rs/kona/cannon-builder:0.3.0 \
+  cargo build -Zbuild-std=core,alloc -p fibonacci-fpvm --profile release-client-lto
+
+# 2. Load ELF (uses cannon image)
+docker run --rm -v $(pwd):/workdir -w /workdir \
+  --entrypoint /usr/local/bin/cannon \
+  us-docker.pkg.dev/oplabs-tools-artifacts/images/cannon:v1.6.0 \
+  load-elf --type multithreaded64-5 \
+    --path=/workdir/target/mips64-unknown-none/release-client-lto/fibonacci \
+    --out=/workdir/bin/state-cannon.bin.gz
+
+# 3. Run FPVM (uses cannon image)
+docker run --rm -v $(pwd):/workdir -w /workdir \
+  --entrypoint /usr/local/bin/cannon \
+  us-docker.pkg.dev/oplabs-tools-artifacts/images/cannon:v1.6.0 \
+  run --input /workdir/bin/state-cannon.bin.gz --info-at '%100000'
+```
+
 ### Clean
 
 ```bash
