@@ -16,36 +16,13 @@ fault-proof/
         └── main.rs     # Fibonacci source code
 ```
 
-## ✨ Features
+## 🎯 Supported Target Platforms
 
-- **Fully Independent**: Dependencies referenced via GitHub repository, no local code copying required
-- **Multi-Platform Support**: Supports native execution, Cannon (MIPS64), and Asterisc (RISC-V64)
-- **Easy to Use**: Build and run with `just` commands
-- **Lightweight**: Contains only necessary code and configuration
+This project can compile and run on three different platforms:
 
-## 🚀 Quick Start
-
-### 1. View All Available Commands
-
-```bash
-just --list
-```
-
-### 2. Build and Run
-
-```bash
-# Build and run native version
-just run
-
-# Build all versions (native + Cannon + Asterisc)
-just build-all
-
-# Run Cannon (MIPS64) version
-just run-cannon
-
-# Run Asterisc (RISC-V64) version
-just run-asterisc
-```
+1. **Native** - Standard x86_64/ARM64 binary for local development and testing
+2. **Cannon (MIPS64)** - Runs in Cannon FPVM for fault proof verification
+3. **Asterisc (RISC-V64)** - Runs in Asterisc FPVM for fault proof verification
 
 ## 📋 Prerequisites
 
@@ -57,7 +34,7 @@ just run-asterisc
   cargo install just
   ```
 
-### Optional (for cross-compilation and execution)
+### Optional (for FPVM targets)
 
 - **Docker**: For cross-compiling to MIPS64 and RISC-V64
 - **cannon**: Cannon FPVM emulator (for running MIPS64 version)
@@ -78,15 +55,115 @@ git clone --depth 1 https://github.com/ethereum-optimism/optimism.git
 cd optimism/cannon && go install .
 ```
 
-## 📚 Example Programs
+## 🚀 Quick Start
+
+### View All Available Commands
+
+```bash
+just --list
+```
+
+## 🔨 Build Commands
+
+### Build Native Binary
+
+```bash
+just build
+```
+
+Compiles the program for your local machine (x86_64 or ARM64).
+
+### Build Cannon (MIPS64) Binary
+
+```bash
+just build-cannon
+```
+
+Cross-compiles to MIPS64 architecture using Docker. The binary will be located at:
+```
+target/mips64-unknown-none/release-client-lto/fibonacci
+```
+
+### Build Asterisc (RISC-V64) Binary
+
+```bash
+just build-asterisc
+```
+
+Cross-compiles to RISC-V64 architecture using Docker. The binary will be located at:
+```
+target/riscv64imac-unknown-none-elf/release-client-lto/fibonacci
+```
+
+### Build All Versions
+
+```bash
+just build-all
+```
+
+Builds native, Cannon, and Asterisc versions in sequence.
+
+## ▶️ Run Commands
+
+### Run Native Version
+
+```bash
+just run
+```
+
+Builds and executes the native binary directly on your machine.
+
+### Run Cannon (MIPS64) Version
+
+```bash
+just run-cannon
+```
+
+Builds the MIPS64 binary, loads it into Cannon FPVM, and executes it. Requires `cannon` to be installed.
+
+### Run Asterisc (RISC-V64) Version
+
+```bash
+just run-asterisc
+```
+
+Builds the RISC-V64 binary, loads it into Asterisc FPVM, and executes it. Requires `rvgo` to be installed.
+
+### Run All Versions
+
+```bash
+just run-all
+```
+
+Runs native, Cannon, and Asterisc versions in sequence.
+
+## 🧹 Clean Commands
+
+### Clean Generated State Files
+
+```bash
+just clean
+```
+
+Removes generated FPVM state files (`state-*.bin.gz`, `meta.json`).
+
+### Clean All Build Artifacts
+
+```bash
+just clean-all
+```
+
+Removes all build artifacts and state files.
+
+## 📚 Example Program
 
 ### Fibonacci Calculator
 
-A Fibonacci sequence calculator program that demonstrates:
+A simple Fibonacci sequence calculator that demonstrates:
 - How to use `kona-std-fpvm` for I/O operations
 - How to use the `#[client_entry]` macro to simplify program entry
 - How to write Rust programs in a `no_std` environment
-- How to run on multiple FPVM platforms
+- How to run the same code on multiple FPVM platforms
 
 ## 🔧 Dependencies
 
@@ -98,35 +175,9 @@ This project depends on the following libraries (automatically fetched from GitH
 
 These dependencies come from the [ethereum-optimism/optimism](https://github.com/ethereum-optimism/optimism/tree/develop/kona) repository.
 
-## 🛠️ Development
-
-### Building the Project
-
-```bash
-# Build native version
-just build
-
-# Build all versions
-just build-all
-```
-
-### Cleaning Build Artifacts
-
-```bash
-# Clean generated state files
-just clean
-
-# Clean all build artifacts
-just clean-all
-```
-
 ## 📖 Related Resources
 
 - [Optimism Fault Proof Specification](https://specs.optimism.io/experimental/fault-proof/index.html)
 - [Kona Project](https://github.com/ethereum-optimism/optimism/tree/develop/kona)
 - [Cannon FPVM](https://github.com/ethereum-optimism/optimism/tree/develop/cannon)
 - [Asterisc FPVM](https://github.com/ethereum-optimism/asterisc)
-
-## 📄 License
-
-MIT License
