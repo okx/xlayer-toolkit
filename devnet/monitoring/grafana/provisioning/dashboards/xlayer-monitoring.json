@@ -18,7 +18,7 @@
     "editable": true,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 1,
-    "id": 949646446645248,
+    "id": 1254758427131904,
     "links": [],
     "liveNow": true,
     "panels": [
@@ -2012,6 +2012,7 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
+        "description": "Time difference between newPayload call completion and beginning of next FCU call",
         "fieldConfig": {
           "defaults": {
             "color": {
@@ -2402,6 +2403,6 @@
     "timezone": "browser",
     "title": "XLayer Monitoring",
     "uid": "xlayer-monitoring",
-    "version": 3,
+    "version": 1,
     "weekStart": ""
   }
