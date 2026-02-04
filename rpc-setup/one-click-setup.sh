@@ -400,18 +400,7 @@ validate_rpc_type() {
 }
 
 validate_sync_mode() {
-    local mode="$1"
-    if [ "$mode" != "snapshot" ] && [ "$mode" != "genesis" ]; then
-        print_error "Invalid sync mode. Must be 'genesis' or 'snapshot'"
-        return 1
-    fi
-    # Genesis mode is temporarily disabled; exit so user re-runs and chooses snapshot
-    if [ "$mode" = "genesis" ]; then
-        print_error "Genesis sync mode is temporarily disabled"
-        print_info "Please use 'snapshot' sync mode to start the node from a snapshot"
-        exit 1
-    fi
-    return 0
+    [[ "$1" =~ ^(genesis|snapshot)$ ]] || { print_error "Invalid sync mode. Must be 'genesis' or 'snapshot'"; return 1; }
 }
 
 validate_url() {
@@ -522,6 +511,13 @@ get_user_input() {
     
     # Step 1.5: Sync mode (interactive)
     SYNC_MODE=$(prompt_input "2. Sync mode (genesis/snapshot) [default: $DEFAULT_SYNC_MODE]: " "$DEFAULT_SYNC_MODE" "validate_sync_mode")
+    
+    # geth + testnet + genesis is temporarily disabled; use snapshot for this combination
+    if [ "$RPC_TYPE" = "geth" ] && [ "$NETWORK_TYPE" = "testnet" ] && [ "$SYNC_MODE" = "genesis" ]; then
+        print_error "geth + testnet + genesis is temporarily disabled"
+        print_info "Please use 'snapshot' sync mode for geth + testnet, or choose another network/RPC combination"
+        exit 1
+    fi
     
     # Validate snapshot support
     if [ "$SYNC_MODE" = "snapshot" ]; then
