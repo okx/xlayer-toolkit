@@ -400,7 +400,18 @@ validate_rpc_type() {
 }
 
 validate_sync_mode() {
-    [[ "$1" =~ ^(genesis|snapshot)$ ]] || { print_error "Invalid sync mode. Must be 'genesis' or 'snapshot'"; return 1; }
+    local mode="$1"
+    if [ "$mode" != "snapshot" ] && [ "$mode" != "genesis" ]; then
+        print_error "Invalid sync mode. Must be 'genesis' or 'snapshot'"
+        return 1
+    fi
+    # Genesis mode is temporarily disabled; use snapshot to start
+    if [ "$mode" = "genesis" ]; then
+        print_error "Genesis sync mode is temporarily disabled"
+        print_info "Please use 'snapshot' sync mode to start the node from a snapshot"
+        return 1
+    fi
+    return 0
 }
 
 validate_url() {
