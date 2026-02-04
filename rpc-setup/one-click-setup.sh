@@ -405,11 +405,11 @@ validate_sync_mode() {
         print_error "Invalid sync mode. Must be 'genesis' or 'snapshot'"
         return 1
     fi
-    # Genesis mode is temporarily disabled; use snapshot to start
+    # Genesis mode is temporarily disabled; exit so user re-runs and chooses snapshot
     if [ "$mode" = "genesis" ]; then
         print_error "Genesis sync mode is temporarily disabled"
         print_info "Please use 'snapshot' sync mode to start the node from a snapshot"
-        return 1
+        exit 1
     fi
     return 0
 }
