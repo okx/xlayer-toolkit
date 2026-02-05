@@ -492,7 +492,31 @@ impl Challenger {
         let game_addresses: Vec<String> = self.active_games.keys().cloned().collect();
         
         for game_address in game_addresses {
-            // Check if it's our turn
+            // First check if game is resolved
+            let status = self.get_game_status(&game_address).await.unwrap_or(0);
+            // 0 = IN_PROGRESS, 1 = CHALLENGER_WINS, 2 = DEFENDER_WINS
+            if status != 0 {
+                let winner = if status == 1 { "CHALLENGER" } else { "DEFENDER" };
+                info!("Game {} resolved: {} WINS", game_address, winner);
+                self.active_games.remove(&game_address);
+                continue;
+            }
+            
+            // Check bisection status
+            let bisection_status = self.get_bisection_status(&game_address).await.unwrap_or(0);
+            
+            // 0 = NOT_STARTED, 1 = IN_PROGRESS, 2 = COMPLETED
+            if bisection_status == 0 {
+                // Waiting for proposer to start bisection
+                info!("Game {} waiting for proposer to start bisection...", game_address);
+                continue;
+            } else if bisection_status == 2 {
+                // Bisection complete, waiting for proof
+                info!("Game {} bisection complete, waiting for proof", game_address);
+                continue;
+            }
+
+            // Check if it's our turn (bisection is IN_PROGRESS)
             let is_our_turn = self.check_is_challenger_turn(&game_address).await.unwrap_or(false);
             
             if !is_our_turn {
@@ -540,11 +564,56 @@ impl Challenger {
                     }
                 }
                 BisectionResponse::Complete { disputed_block } => {
-                    info!("Game {} bisection COMPLETE! Disputed block: {}", game_address, disputed_block);
+                    // Local manager thinks it's complete, but chain might not be
+                    // Submit one more bisect to potentially trigger chain completion
+                    let trace_hash = manager.get_trace_hash(disputed_block).unwrap_or([0u8; 32]);
+                    info!("Game {} local bisection complete, submitting final bisect for block {}", 
+                          game_address, disputed_block);
+                    
+                    if let Err(e) = self.submit_bisection_response(&game_address, false, disputed_block, trace_hash).await {
+                        warn!("Final bisect submission failed (expected if chain already complete): {}", e);
+                    }
                 }
             }
         }
         Ok(())
+    }
+
+    /// Get bisection status from L1 DisputeGame
+    /// Get game status from L1 DisputeGame
+    async fn get_game_status(&self, game_address: &str) -> Result<u8> {
+        let selector = &tiny_keccak_hash(b"status()")[..4];
+        
+        let result = self.rpc_call(&self.config.l1_rpc, "eth_call", serde_json::json!([
+            {
+                "to": game_address,
+                "data": format!("0x{}", hex::encode(selector))
+            },
+            "latest"
+        ])).await?;
+
+        let hex_result = result.as_str().ok_or_else(|| anyhow!("Invalid result"))?;
+        let bytes = hex::decode(hex_result.trim_start_matches("0x"))?;
+        
+        Ok(bytes.last().copied().unwrap_or(0))
+    }
+
+    /// Get bisection status from L1 DisputeGame
+    async fn get_bisection_status(&self, game_address: &str) -> Result<u8> {
+        let selector = &tiny_keccak_hash(b"bisectionStatus()")[..4];
+        
+        let result = self.rpc_call(&self.config.l1_rpc, "eth_call", serde_json::json!([
+            {
+                "to": game_address,
+                "data": format!("0x{}", hex::encode(selector))
+            },
+            "latest"
+        ])).await?;
+
+        let hex_result = result.as_str().ok_or_else(|| anyhow!("Invalid result"))?;
+        let bytes = hex::decode(hex_result.trim_start_matches("0x"))?;
+        
+        Ok(bytes.last().copied().unwrap_or(0))
     }
 
     /// Check if it's challenger's turn in the game

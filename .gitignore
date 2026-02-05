@@ -55,6 +55,7 @@ demo/contracts/deployments/
 demo/contracts/deployments.json
 demo/bin/
 demo/cannon-docker/work
+demo/.env
 
 demo-sp1/contracts/broadcast/
 demo-sp1/contracts/out/
@@ -63,3 +64,4 @@ demo-sp1/contracts/cache/
 demo-sp1/contracts/deployments.json
 demo-sp1/contracts/deployments/
 demo-sp1/cannon-docker/work
+demo-sp1/.env

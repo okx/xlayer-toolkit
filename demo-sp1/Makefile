@@ -55,37 +55,18 @@ deploy-contracts:
 	@OUTPUT_ORACLE=$$(grep "OutputOracle deployed at:" /tmp/deploy.log | awk '{print $$NF}') && \
 	SP1_VERIFIER=$$(grep "SP1Verifier deployed at:" /tmp/deploy.log | awk '{print $$NF}') && \
 	DISPUTE_FACTORY=$$(grep "DisputeGameFactory deployed at:" /tmp/deploy.log | awk '{print $$NF}') && \
-	echo "# ============================================" > $(ENV_FILE) && \
-	echo "# demo-sp1 Configuration" >> $(ENV_FILE) && \
-	echo "# ============================================" >> $(ENV_FILE) && \
-	echo "" >> $(ENV_FILE) && \
-	echo "# RPC Endpoints" >> $(ENV_FILE) && \
-	echo "L1_RPC=http://anvil:8545" >> $(ENV_FILE) && \
-	echo "L2_RPC=http://node:8546" >> $(ENV_FILE) && \
-	echo "" >> $(ENV_FILE) && \
-	echo "# Contract Addresses" >> $(ENV_FILE) && \
-	echo "OUTPUT_ORACLE_ADDRESS=$$OUTPUT_ORACLE" >> $(ENV_FILE) && \
-	echo "SP1_VERIFIER_ADDRESS=$$SP1_VERIFIER" >> $(ENV_FILE) && \
-	echo "DISPUTE_GAME_FACTORY_ADDRESS=$$DISPUTE_FACTORY" >> $(ENV_FILE) && \
-	echo "" >> $(ENV_FILE) && \
-	echo "# Proposer Settings" >> $(ENV_FILE) && \
-	echo "BATCH_INTERVAL=100" >> $(ENV_FILE) && \
-	echo "PRIVATE_KEY=0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" >> $(ENV_FILE) && \
-	echo "PROPOSER_ADDRESS=0x70997970C51812dc3A010C7d01b50e0d17dc79C8" >> $(ENV_FILE) && \
-	echo "" >> $(ENV_FILE) && \
-	echo "# Challenger Settings" >> $(ENV_FILE) && \
-	echo "CHALLENGE_EVERY_N_OUTPUTS=10" >> $(ENV_FILE) && \
-	echo "FORCE_CHALLENGE=true" >> $(ENV_FILE) && \
-	echo "FETCH_INTERVAL=2" >> $(ENV_FILE) && \
-	echo "" >> $(ENV_FILE) && \
-	echo "# SP1 Prover Settings" >> $(ENV_FILE) && \
-	echo "SP1_PROVER=mock" >> $(ENV_FILE) && \
-	echo "SP1_PRIVATE_KEY=" >> $(ENV_FILE) && \
-	echo "" >> $(ENV_FILE) && \
+	if [ ! -f $(ENV_FILE) ]; then \
+		echo "Creating .env from env.example..." && \
+		cp env.example $(ENV_FILE); \
+	fi && \
+	sed -i.bak "s|^OUTPUT_ORACLE_ADDRESS=.*|OUTPUT_ORACLE_ADDRESS=$$OUTPUT_ORACLE|" $(ENV_FILE) && \
+	sed -i.bak "s|^SP1_VERIFIER_ADDRESS=.*|SP1_VERIFIER_ADDRESS=$$SP1_VERIFIER|" $(ENV_FILE) && \
+	sed -i.bak "s|^DISPUTE_GAME_FACTORY_ADDRESS=.*|DISPUTE_GAME_FACTORY_ADDRESS=$$DISPUTE_FACTORY|" $(ENV_FILE) && \
+	rm -f $(ENV_FILE).bak && \
 	echo "✓ OutputOracle: $$OUTPUT_ORACLE" && \
 	echo "✓ SP1Verifier: $$SP1_VERIFIER" && \
 	echo "✓ DisputeGameFactory: $$DISPUTE_FACTORY" && \
-	echo "✓ Environment saved to $(ENV_FILE)"
+	echo "✓ Contract addresses updated in $(ENV_FILE)"
 
 # =============================================================================
 # Run Services (One Command - Like demo)

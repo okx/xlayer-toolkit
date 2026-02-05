@@ -360,19 +360,26 @@ impl Proposer {
                 }
             } else if bisection_status == 2 {
                 // Bisection complete, need to submit proof
-                let manager = match self.active_games.get(&game_address) {
-                    Some(m) => m,
-                    None => continue,
+                // Get disputed block from L1 contract (not local state)
+                let disputed_block = match self.get_disputed_block_from_l1(&game_address).await {
+                    Ok(block) => block,
+                    Err(e) => {
+                        warn!("Failed to get disputed block from L1: {}", e);
+                        continue;
+                    }
                 };
                 
-                if manager.is_bisection_complete() {
-                    if let Some(disputed_block) = manager.get_disputed_block() {
-                        info!("Game {} bisection complete, preparing ZK proof for block {}...", 
-                              game_address, disputed_block);
-                        
-                        if let Err(e) = self.submit_proof(game_address.clone(), disputed_block).await {
-                            error!("Failed to submit proof for game {}: {}", game_address, e);
-                        }
+                info!("Game {} bisection complete, preparing ZK proof for block {}...", 
+                      game_address, disputed_block);
+                
+                match self.submit_proof(game_address.clone(), disputed_block).await {
+                    Ok(_) => {
+                        info!("✓ Proof submitted for game {}", game_address);
+                        // Remove from active games after successful proof submission
+                        self.active_games.remove(&game_address);
+                    }
+                    Err(e) => {
+                        error!("Failed to submit proof for game {}: {}", game_address, e);
                     }
                 }
             }
@@ -385,6 +392,16 @@ impl Proposer {
     async fn check_for_new_games(&mut self) -> Result<()> {
         let factory = &self.config.dispute_game_factory;
         if factory.is_empty() {
+            // Only log once per minute to avoid spam
+            static LAST_LOG: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            if now - LAST_LOG.load(std::sync::atomic::Ordering::Relaxed) > 60 {
+                warn!("No DISPUTE_GAME_FACTORY_ADDRESS configured, skipping challenge monitoring");
+                LAST_LOG.store(now, std::sync::atomic::Ordering::Relaxed);
+            }
             return Ok(());
         }
 
@@ -462,6 +479,13 @@ impl Proposer {
                 .unwrap_or_else(|| "0x70997970c51812dc3a010c7d01b50e0d17dc79c8".to_string());
 
             if game_proposer.to_lowercase() == our_address {
+                // Check if game is already resolved
+                let status = self.get_game_status(&game_address).await.unwrap_or(0);
+                if status != 0 {
+                    // Game already resolved, skip
+                    continue;
+                }
+                
                 info!("Found new challenge game: {}", game_address);
                 
                 // Get batch range
@@ -539,6 +563,30 @@ impl Proposer {
         let bytes = hex::decode(hex_result.trim_start_matches("0x"))?;
         
         Ok(bytes.last().copied().unwrap_or(0))
+    }
+
+    /// Get disputed block from L1 DisputeGame contract
+    async fn get_disputed_block_from_l1(&self, game_address: &str) -> Result<u64> {
+        let selector = &tiny_keccak_hash(b"disputedBlock()")[..4];
+        
+        let result = self.rpc_call_l1("eth_call", serde_json::json!([
+            {
+                "to": game_address,
+                "data": format!("0x{}", hex::encode(selector))
+            },
+            "latest"
+        ])).await?;
+
+        let hex_result = result.as_str().ok_or_else(|| anyhow!("Invalid result"))?;
+        let bytes = hex::decode(hex_result.trim_start_matches("0x"))?;
+
+        if bytes.len() < 32 {
+            return Err(anyhow!("Invalid disputed block data"));
+        }
+
+        let mut block_bytes = [0u8; 8];
+        block_bytes.copy_from_slice(&bytes[24..32]);
+        Ok(u64::from_be_bytes(block_bytes))
     }
 
     /// Check if it's proposer's turn
@@ -647,7 +695,17 @@ impl Proposer {
                 self.submit_bisection_response(game_address, false, our_mid_block, our_trace_hash).await?;
             }
             BisectionResponse::Complete { disputed_block } => {
-                info!("Game {} bisection COMPLETE! Disputed block: {}", game_address, disputed_block);
+                // Local manager thinks it's complete, but chain might not be
+                // Submit one more bisect to potentially trigger chain completion
+                let trace_hash = manager.get_trace_hash(disputed_block).unwrap_or([0u8; 32]);
+                info!("Game {} local bisection complete, submitting final bisect for block {}", 
+                      game_address, disputed_block);
+                
+                // Submit as agree with the disputed block to potentially complete chain bisection
+                if let Err(e) = self.submit_bisection_response(game_address, true, disputed_block, trace_hash).await {
+                    // If this fails, chain bisection is likely already complete or we're not in our turn
+                    warn!("Final bisect submission failed (expected if chain already complete): {}", e);
+                }
             }
         }
 

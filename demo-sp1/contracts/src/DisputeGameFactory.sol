@@ -54,7 +54,8 @@ contract DisputeGameFactory {
             sp1Verifier,
             blockVerifyVkey,
             _batchIndex,
-            _challengerTraceHash
+            _challengerTraceHash,
+            msg.sender  // Pass the real challenger address
         );
 
         games.push(game);
