@@ -1,0 +1,11 @@
+[package]
+name = "xlayer-smt"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+hex.workspace = true
+tiny-keccak.workspace = true

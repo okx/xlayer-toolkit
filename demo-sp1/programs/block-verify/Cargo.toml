@@ -1,0 +1,15 @@
+[package]
+name = "block-verify-program"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sp1-zkvm.workspace = true
+serde.workspace = true
+tiny-keccak = { version = "2.0", features = ["keccak"] }
+
+# Note: In SP1 program, we include core logic directly to avoid linking issues
+# xlayer-core and xlayer-smt source files are embedded
+
+[features]
+default = []

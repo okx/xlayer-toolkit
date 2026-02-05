@@ -1,0 +1,10 @@
+[package]
+name = "xlayer-bindings"
+version.workspace = true
+edition.workspace = true
+
+# Note: Contract bindings will be added when we integrate with L1
+# For now, this crate is a placeholder
+
+[dependencies]
+serde.workspace = true

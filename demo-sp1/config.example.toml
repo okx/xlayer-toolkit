@@ -1,0 +1,40 @@
+# ZK Bisection Demo Configuration
+
+[network]
+# L1 RPC endpoint (Anvil for local testing)
+l1_rpc = "http://localhost:8545"
+# L2 RPC endpoint (xlayer-dex node)
+l2_rpc = "http://localhost:8546"
+
+[contracts]
+# Contract addresses (set after deployment)
+output_oracle = ""
+dispute_game_factory = ""
+sp1_verifier = ""
+# Block verify program verification key (generated during SP1 build)
+block_verify_vkey = ""
+
+[sp1]
+# SP1 Network prover configuration
+# Get your key from https://network.succinct.xyz/
+private_key = "your_sp1_network_key_here"
+# "network" for succinct.xyz remote proving, "local" for local proving
+prover = "network"
+
+[proposer]
+# Proposer private key (Anvil account #1)
+private_key = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+# Submit batch every N blocks
+batch_interval = 100
+
+[challenger]
+# Challenger private key (Anvil account #2)
+private_key = "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
+# Challenge every N outputs (for demo/testing)
+challenge_every_n_outputs = 100
+
+[demo]
+# Block time in milliseconds (0.1s = 100ms)
+block_time_ms = 100
+# Transactions per block
+txs_per_block = 10000

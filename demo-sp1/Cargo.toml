@@ -1,0 +1,54 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/smt",
+    "crates/host",
+    "crates/bindings",
+    "programs/block-verify",
+    "bin/node",
+    "bin/batcher",
+    "bin/proposer",
+    "bin/challenger",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+# Core
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+hex = "0.4"
+rand = "0.8"
+bincode = "1.3"
+
+# Crypto
+sha2 = "0.10"
+tiny-keccak = { version = "2.0", features = ["keccak"] }
+
+# Async
+tokio = { version = "1.0", features = ["full"] }
+async-trait = "0.1"
+
+# Web
+axum = "0.7"
+reqwest = { version = "0.11", features = ["json"] }
+
+# SP1 - use latest version which should have fixed alloy compatibility
+sp1-sdk = "5.2"
+sp1-zkvm = "5.2"
+
+# Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Internal crates
+xlayer-core = { path = "crates/core" }
+xlayer-smt = { path = "crates/smt" }
+xlayer-host = { path = "crates/host" }
+xlayer-bindings = { path = "crates/bindings" }

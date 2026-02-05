@@ -1,0 +1,28 @@
+[package]
+name = "xlayer-host"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+# Enable sp1-sdk for real proving (requires network download)
+sp1 = ["sp1-sdk"]
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+bincode.workspace = true
+reqwest.workspace = true
+tiny-keccak.workspace = true
+
+# Optional: Only include sp1-sdk when "sp1" feature is enabled
+sp1-sdk = { workspace = true, optional = true }
+
+xlayer-core = { path = "../core" }
+xlayer-smt = { path = "../smt" }
