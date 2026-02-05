@@ -18,7 +18,7 @@ services:
       - ./l1-geth/consensus:/consensus
 
   l1-create-beacon-chain-genesis:
-    image: "gcr.io/prysmaticlabs/prysm/cmd/prysmctl:v7.0.0"
+    image: "gcr.io/prysmaticlabs/prysm/cmd/prysmctl:v7.1.2" # upgrade to v7.1.2 to support osakaTime
     container_name: l1-create-beacon-chain-genesis
     command:
       - testnet
@@ -37,27 +37,18 @@ services:
       l1-beacon-remove-db:
         condition: service_completed_successfully
 
-  l1-fix-genesis-fork-times:
+  l1-add-bpo-config:
     image: "alpine:3.19.0"
-    container_name: l1-fix-genesis-fork-times
+    container_name: l1-add-bpo-config
     command:
       - /bin/sh
       - -c
       - |
         apk add --no-cache jq
-        echo "Fixing genesis.json fork times..."
-        sed -i 's/"shanghaiTime": [0-9]*/"shanghaiTime": 0/g' /execution/genesis.json
-        sed -i 's/"cancunTime": [0-9]*/"cancunTime": 0/g' /execution/genesis.json
-        echo "Adding pragueTime for Pectra support..."
-        jq '.config.pragueTime = 0' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
-        echo "Adding osakaTime for Fusaka support..."
-        jq '.config.osakaTime = 0' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
-        echo "Removing terminalTotalDifficultyPassed for op-node compatibility..."
-        jq 'del(.config.terminalTotalDifficultyPassed)' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
-        echo "Genesis.json: shanghai=0, cancun=0, osaka=0 (Fusaka enabled), blobSchedule added, terminalTotalDifficultyPassed removed"
-        cat /execution/genesis.json | jq '.config | {shanghaiTime, cancunTime, osakaTime, terminalTotalDifficulty, blobSchedule}'
+        /scripts/add-bpo-config.sh
     volumes:
       - ./l1-geth/execution:/execution
+      - ./scripts:/scripts
     depends_on:
       l1-create-beacon-chain-genesis:
         condition: service_completed_successfully
@@ -70,7 +61,7 @@ services:
       - ./l1-geth/execution:/execution
       - ./l1-geth/execution/genesis.json:/execution/genesis.json
     depends_on:
-      l1-fix-genesis-fork-times:
+      l1-add-bpo-config:
         condition: service_completed_successfully
       l1-geth-remove-db:
         condition: service_completed_successfully
@@ -123,7 +114,7 @@ services:
       retries: 5
 
   l1-beacon-chain:
-    image: "gcr.io/prysmaticlabs/prysm/beacon-chain:v7.0.0"
+    image: "gcr.io/prysmaticlabs/prysm/beacon-chain:v7.0.0" # seems not work with v7.1.2, so keeps v7.0.0
     container_name: l1-beacon-chain
     command:
       - --datadir=/consensus/beacondata
@@ -133,7 +124,7 @@ services:
       - --interop-eth1data-votes
       - --chain-config-file=/consensus/config.yml
       - --contract-deployment-block=0
-      - --chain-id=${CHAIN_ID:-1337}
+      - --chain-id=1337
       - --rpc-host=0.0.0.0
       - --grpc-gateway-host=0.0.0.0
       - --execution-endpoint=http://l1-geth:8551
@@ -531,10 +522,10 @@ services:
       - --l2-eth-rpc=${OP_BATCHER_L2_ETH_RPC:-http://op-${SEQ_TYPE}-seq:8545}
       - --rollup-rpc=${OP_BATCHER_ROLLUP_RPC:-http://op-seq:9545}
       - --private-key=${OP_BATCHER_PRIVATE_KEY}
-      - --poll-interval=5s
+      - --poll-interval=1s
       - --batch-type=1
       - --compression-algo=brotli-10
-      - --data-availability-type=auto
+      - --data-availability-type=blobs
       - --sub-safety-margin=6
       - --num-confirmations=4
       - --safe-abort-nonce-too-low-count=3
@@ -544,7 +535,7 @@ services:
       - --rpc.enable-admin
       - --max-channel-duration=150
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
-      - --max-pending-tx=10
+      - --max-pending-tx=20
       - --target-num-frames=6
       - --throttle.block-size-upper-limit=0
       - --throttle.block-size-lower-limit=0
