@@ -1,13 +1,13 @@
 //! Transaction tracing: log transaction/block lifecycle to a file.
 //! Logging is non-blocking (bounded channel + writer thread).
 
-use crossbeam_channel::{bounded, Sender};
+use crossbeam_channel::{Sender, bounded};
 use std::{
     borrow::Cow,
     fs::{self, File, OpenOptions},
     io::{BufWriter, Write},
     path::PathBuf,
-    sync::{mpsc, Arc, OnceLock},
+    sync::{Arc, OnceLock, mpsc},
     thread,
     time::Instant,
 };
@@ -282,16 +282,19 @@ impl TransactionTracer {
     /// Flush buffer to the OS. Use `sync_all()` for disk persistence.
     pub fn flush(&self) -> Result<(), std::io::Error> {
         let (ack_tx, ack_rx) = mpsc::channel();
-        if self.inner.tx.send(WriterMessage::Flush(Some(ack_tx))).is_err() {
+        if self
+            .inner
+            .tx
+            .send(WriterMessage::Flush(Some(ack_tx)))
+            .is_err()
+        {
             return Err(std::io::Error::other(
                 "Writer thread disconnected for transaction trace file",
             ));
         }
         ack_rx
             .recv()
-            .map_err(|_| {
-                std::io::Error::other("Writer thread did not acknowledge flush request")
-            })?
+            .map_err(|_| std::io::Error::other("Writer thread did not acknowledge flush request"))?
     }
 
     /// Sync to disk. Call before shutdown to persist buffered data.
@@ -309,9 +312,7 @@ impl TransactionTracer {
         }
         ack_rx
             .recv()
-            .map_err(|_| {
-                std::io::Error::other("Writer thread did not acknowledge sync request")
-            })?
+            .map_err(|_| std::io::Error::other("Writer thread did not acknowledge sync request"))?
     }
 
     /// Format CSV line with 23 fields.
