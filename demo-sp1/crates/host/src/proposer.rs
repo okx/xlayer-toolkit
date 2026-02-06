@@ -1016,11 +1016,7 @@ impl Proposer {
         } else {
             warn!("      ⚠ Proof may have failed: {:?}", status);
         }
-
-        // 5. Remove from active games
-        self.active_games.remove(&game_address);
-        info!("✓ Proof submitted for game {}", game_address);
-
+        
         Ok(())
     }
 

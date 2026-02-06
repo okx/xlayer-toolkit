@@ -14,7 +14,7 @@ COPY bin ./bin
 COPY programs ./programs
 
 # Build all binaries (without sp1 feature - uses mock prover)
-RUN cargo build --release --bin node --bin batcher --bin proposer --bin challenger
+RUN cargo build --release --bin node --bin batcher --bin proposer --bin challenger --bin benchmarker
 
 # =============================================================================
 # Node (L2 sequencer with block production)
@@ -73,3 +73,17 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /app/target/release/challenger /usr/local/bin/challenger
 
 CMD ["challenger"]
+
+# =============================================================================
+# Benchmarker (load testing)
+# =============================================================================
+FROM debian:bookworm-slim AS benchmarker
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/target/release/benchmarker /usr/local/bin/benchmarker
+
+CMD ["benchmarker"]

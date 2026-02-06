@@ -13,6 +13,8 @@ pub struct State {
     accounts: HashMap<Address, AccountState>,
     /// SMT for state commitment
     smt: SparseMerkleTree,
+    /// Pending SMT updates (batched for performance)
+    pending_smt_updates: Vec<(Address, [u8; 32])>,
 }
 
 impl State {
@@ -21,6 +23,7 @@ impl State {
         Self {
             accounts: HashMap::new(),
             smt: SparseMerkleTree::new(),
+            pending_smt_updates: Vec::new(),
         }
     }
 
@@ -29,13 +32,21 @@ impl State {
         self.accounts.get(address).cloned().unwrap_or_default()
     }
 
-    /// Set account state
+    /// Set account state (defers SMT update for batching)
     pub fn set_account(&mut self, address: Address, state: AccountState) {
         // Update account map
         self.accounts.insert(address, state.clone());
         
-        // Update SMT
-        self.smt.insert(address, state.to_bytes());
+        // Queue SMT update for batch processing
+        self.pending_smt_updates.push((address, state.to_bytes()));
+    }
+    
+    /// Commit all pending SMT updates in a single batch
+    /// Call this at the end of block execution for performance
+    pub fn commit_smt_updates(&mut self) {
+        if !self.pending_smt_updates.is_empty() {
+            self.smt.batch_insert(std::mem::take(&mut self.pending_smt_updates));
+        }
     }
 
     /// Get balance

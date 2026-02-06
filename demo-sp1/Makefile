@@ -19,12 +19,16 @@ help:
 	@echo "demo-sp1: ZK Bisection Fault Proof System"
 	@echo ""
 	@echo "Commands:"
-	@echo "  make run          Start all services (one command to run everything)"
-	@echo "  make stop         Stop all services"
-	@echo "  make logs         Show all logs"
+	@echo "  make run              Start all services"
+	@echo "  make stop             Stop all services"
+	@echo "  make logs             Show all logs"
 	@echo "  make logs-proposer    Show proposer logs"
 	@echo "  make logs-challenger  Show challenger logs"
-	@echo "  make clean        Clean all artifacts"
+	@echo "  make logs-benchmarker Show benchmarker logs"
+	@echo "  make clean            Clean all artifacts"
+	@echo ""
+	@echo "Config (.env):"
+	@echo "  BENCHMARK_TPS=100        Target TPS (0=disabled)"
 
 # =============================================================================
 # Build
@@ -95,9 +99,9 @@ run: stop build
 	@echo "[3/4] Starting Node (mock L2)..."
 	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d node
 	@sleep 2
-	@# Step 4: Start Batcher, Proposer and Challenger
-	@echo "[4/4] Starting Batcher, Proposer and Challenger..."
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d batcher proposer challenger
+	@# Step 4: Start all services
+	@echo "[4/4] Starting Batcher, Proposer, Challenger, Benchmarker..."
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d batcher proposer challenger benchmarker
 	@echo ""
 	@echo "═══════════════════════════════════════════════"
 	@echo "  ZK Bisection System Ready!"
@@ -105,14 +109,11 @@ run: stop build
 	@echo ""
 	@echo "  Anvil (L1):     http://localhost:8545"
 	@echo "  Node (L2):      http://localhost:8546"
-	@echo ""
-	@echo "  Proposer:       Submitting batches every 100 blocks"
-	@echo "  Challenger:     Challenging every 10 batches automatically"
+	@echo "  Benchmark TPS:  $${BENCHMARK_TPS:-100}"
 	@echo ""
 	@echo "  View logs:      make logs"
 	@echo "  Stop:           make stop"
 	@echo ""
-	@cat $(ENV_FILE) 2>/dev/null || true
 
 stop:
 	@echo "Stopping all services..."
@@ -140,6 +141,9 @@ logs-challenger:
 
 logs-batcher:
 	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f batcher
+
+logs-benchmarker:
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f benchmarker
 
 # =============================================================================
 # Clean

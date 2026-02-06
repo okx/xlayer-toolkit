@@ -1,16 +1,15 @@
 [package]
-name = "node"
+name = "benchmarker"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-xlayer-core.workspace = true
-xlayer-smt.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-axum.workspace = true
+reqwest.workspace = true
 hex.workspace = true
 tiny-keccak.workspace = true
+rand = "0.8"

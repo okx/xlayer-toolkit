@@ -5,6 +5,7 @@
 //! - Maintains state with SMT
 //! - Computes trace_hash per block
 //! - Provides RPC endpoints for proposer/challenger
+//! - Accepts transactions via x2_sendTransaction (mempool)
 
 use axum::{
     extract::State as AxumState,
@@ -12,10 +13,11 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::time::interval;
-use tracing::{info, Level};
+use tracing::{info, warn, Level};
 use tracing_subscriber::FmtSubscriber;
 use xlayer_core::{
     Block, BlockExecutor, Hash, State as L2State, Transaction, TxType,
@@ -27,14 +29,23 @@ struct Config {
     block_time: Duration,
     rpc_addr: String,
     batch_size: u64,
+    max_tx_per_block: usize,
+    mempool_size: usize,
 }
 
 impl Default for Config {
     fn default() -> Self {
+        let max_tx = std::env::var("MAX_TX_PER_BLOCK")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1000);
+        
         Self {
             block_time: Duration::from_secs(2),
             rpc_addr: "0.0.0.0:8546".to_string(),
             batch_size: 100,
+            max_tx_per_block: max_tx,
+            mempool_size: max_tx * 10, // 10 blocks worth
         }
     }
 }
@@ -49,6 +60,48 @@ struct BlockInfo {
     trace_hash: Hash,
     timestamp: u64,
     tx_count: u32,
+}
+
+/// Mempool for pending transactions
+struct Mempool {
+    /// Pending transactions
+    pending: VecDeque<Transaction>,
+    /// Max size
+    max_size: usize,
+    /// Stats
+    total_received: u64,
+    total_included: u64,
+}
+
+impl Mempool {
+    fn new(max_size: usize) -> Self {
+        Self {
+            pending: VecDeque::new(),
+            max_size,
+            total_received: 0,
+            total_included: 0,
+        }
+    }
+
+    fn add(&mut self, tx: Transaction) -> bool {
+        if self.pending.len() >= self.max_size {
+            return false;
+        }
+        self.pending.push_back(tx);
+        self.total_received += 1;
+        true
+    }
+
+    fn take(&mut self, count: usize) -> Vec<Transaction> {
+        let count = count.min(self.pending.len());
+        let txs: Vec<_> = self.pending.drain(..count).collect();
+        self.total_included += txs.len() as u64;
+        txs
+    }
+
+    fn len(&self) -> usize {
+        self.pending.len()
+    }
 }
 
 /// Shared node state
@@ -67,6 +120,10 @@ struct NodeState {
     prev_state_hash: Hash,
     /// Previous trace hash
     prev_trace_hash: Hash,
+    /// Transaction mempool
+    mempool: Mempool,
+    /// Config
+    config: Config,
 }
 
 #[derive(Clone, Serialize)]
@@ -78,9 +135,28 @@ struct Batch {
     trace_hash: Hash,
 }
 
+/// Treasury address (0x0000...0001)
+const TREASURY_ADDRESS: Hash = {
+    let mut addr = [0u8; 32];
+    addr[31] = 1;
+    addr
+};
+
+/// Treasury initial balance: 100,000 ETH = 10^22 wei
+const TREASURY_BALANCE: u128 = 100_000_000_000_000_000_000_000;
+
 impl NodeState {
-    fn new() -> Self {
-        let state = L2State::new();
+    fn new(config: Config) -> Self {
+        let mut state = L2State::new();
+        
+        // Initialize treasury account with 100,000 ETH
+        state.set_balance(TREASURY_ADDRESS, TREASURY_BALANCE);
+        // Commit SMT updates after initialization
+        state.commit_smt_updates();
+        info!("Initialized treasury account: 0x{} with {} ETH", 
+              hex::encode(&TREASURY_ADDRESS[28..32]), 
+              TREASURY_BALANCE / 1_000_000_000_000_000_000);
+        
         let genesis = BlockInfo {
             number: 0,
             hash: [0u8; 32],
@@ -99,6 +175,8 @@ impl NodeState {
             batches: vec![],
             prev_state_hash: [0u8; 32],
             prev_trace_hash: [0u8; 32],
+            mempool: Mempool::new(config.mempool_size),
+            config,
         }
     }
 }
@@ -116,14 +194,16 @@ async fn main() {
     info!("Starting ZK Bisection L2 Node...");
 
     let config = Config::default();
-    let state = Arc::new(RwLock::new(NodeState::new()));
+    info!("  Max TX per block: {}", config.max_tx_per_block);
+    info!("  Mempool size: {}", config.mempool_size);
+    
+    let rpc_addr = config.rpc_addr.clone();
+    let state = Arc::new(RwLock::new(NodeState::new(config)));
 
     // Start block production
     let block_state = state.clone();
-    let block_time = config.block_time;
-    let batch_size = config.batch_size;
     tokio::spawn(async move {
-        block_production_loop(block_state, block_time, batch_size).await;
+        block_production_loop(block_state).await;
     });
 
     // Start RPC server
@@ -133,50 +213,77 @@ async fn main() {
         .route("/", post(rpc_handler))
         .with_state(state);
 
-    info!("RPC server listening on {}", config.rpc_addr);
-    let listener = tokio::net::TcpListener::bind(&config.rpc_addr).await.unwrap();
+    info!("RPC server listening on {}", rpc_addr);
+    let listener = tokio::net::TcpListener::bind(&rpc_addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
 /// Block production loop - produces blocks every block_time
-async fn block_production_loop(state: SharedState, block_time: Duration, batch_size: u64) {
+/// 
+/// IMPORTANT: Lock is held minimally to allow concurrent RPC requests
+async fn block_production_loop(state: SharedState) {
+    // Get config from state
+    let (block_time, batch_size, max_tx_per_block) = {
+        let node_state = state.read().unwrap();
+        (
+            node_state.config.block_time,
+            node_state.config.batch_size,
+            node_state.config.max_tx_per_block,
+        )
+    };
+    
     let mut ticker = interval(block_time);
 
     loop {
         ticker.tick().await;
 
-        let mut node_state = state.write().unwrap();
+        // Phase 1: Acquire lock, get data, release lock quickly
+        let (txs, block, current_state, prev_state_hash, prev_trace_hash, mempool_len) = {
+            let mut node_state = state.write().unwrap();
+            
+            // Get transactions from mempool, fallback to mock if empty
+            let mempool_len = node_state.mempool.len();
+            let txs = if mempool_len > 0 {
+                node_state.mempool.take(max_tx_per_block)
+            } else {
+                // Create mock transactions when no mempool txs
+                create_mock_transactions(node_state.latest_block.number + 1)
+            };
 
-        // Create mock transactions for demo
-        let txs = create_mock_transactions(node_state.latest_block.number + 1);
+            // Create block
+            let block = Block::new(
+                node_state.latest_block.number + 1,
+                node_state.latest_block.hash,
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            );
 
-        // Create block
-        let block = Block::new(
-            node_state.latest_block.number + 1,
-            node_state.latest_block.hash,
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        );
+            (
+                txs, 
+                block, 
+                node_state.state.clone(),
+                node_state.prev_state_hash,
+                node_state.prev_trace_hash,
+                mempool_len,
+            )
+        }; // Lock released here!
 
-        // Create executor
+        // Phase 2: Execute block WITHOUT holding lock (slow operation)
         let mut executor = BlockExecutor::new(
-            node_state.state.clone(),
-            node_state.prev_state_hash,
-            node_state.prev_trace_hash,
+            current_state,
+            prev_state_hash,
+            prev_trace_hash,
         );
 
-        // Create block with transactions
         let mut block_with_txs = block;
         for tx in txs {
             block_with_txs.add_transaction(tx);
         }
 
-        // Execute block
         let result = executor.execute_block(&block_with_txs);
 
-        // Create block info
         let block_info = BlockInfo {
             number: block_with_txs.number,
             hash: block_with_txs.hash(),
@@ -187,44 +294,61 @@ async fn block_production_loop(state: SharedState, block_time: Duration, batch_s
             tx_count: result.tx_count,
         };
 
-        info!(
-            "Block {} produced: state_hash={}, trace_hash={}, txs={}/{}",
-            block_info.number,
-            hex::encode(&block_info.state_hash[..4]),
-            hex::encode(&block_info.trace_hash[..4]),
-            result.success_count,
-            result.tx_count
-        );
+        // Phase 3: Acquire lock again to update state
+        {
+            let mut node_state = state.write().unwrap();
+            
+            // Log with mempool info
+            let pending = node_state.mempool.len();
+            if pending > 0 || mempool_len > 0 {
+                info!(
+                    "Block {} produced: txs={}/{}, pending={}, state={}",
+                    block_info.number,
+                    result.success_count,
+                    result.tx_count,
+                    pending,
+                    hex::encode(&block_info.state_hash[..4]),
+                );
+            } else {
+                info!(
+                    "Block {} produced: txs={}/{}, state={}",
+                    block_info.number,
+                    result.success_count,
+                    result.tx_count,
+                    hex::encode(&block_info.state_hash[..4]),
+                );
+            }
 
-        // Update state
-        node_state.state = executor.state().clone();
-        node_state.prev_state_hash = result.state_hash;
-        node_state.prev_trace_hash = result.trace_hash;
-        node_state.latest_block = block_info.clone();
-        node_state.blocks.push(block_info.clone());
-        node_state.batch_blocks.push(block_info.clone());
+            // Update state
+            node_state.state = executor.state().clone();
+            node_state.prev_state_hash = result.state_hash;
+            node_state.prev_trace_hash = result.trace_hash;
+            node_state.latest_block = block_info.clone();
+            node_state.blocks.push(block_info.clone());
+            node_state.batch_blocks.push(block_info.clone());
 
-        // Check if batch is complete
-        if node_state.batch_blocks.len() as u64 >= batch_size {
-            let batch = Batch {
-                index: node_state.batches.len() as u64,
-                start_block: node_state.batch_blocks.first().unwrap().number,
-                end_block: node_state.batch_blocks.last().unwrap().number,
-                state_root: node_state.prev_state_hash,
-                trace_hash: node_state.prev_trace_hash,
-            };
+            // Check if batch is complete
+            if node_state.batch_blocks.len() as u64 >= batch_size {
+                let batch = Batch {
+                    index: node_state.batches.len() as u64,
+                    start_block: node_state.batch_blocks.first().unwrap().number,
+                    end_block: node_state.batch_blocks.last().unwrap().number,
+                    state_root: node_state.prev_state_hash,
+                    trace_hash: node_state.prev_trace_hash,
+                };
 
-            info!(
-                "Batch {} complete: blocks {}-{}, state_root={}",
-                batch.index,
-                batch.start_block,
-                batch.end_block,
-                hex::encode(&batch.state_root[..4])
-            );
+                info!(
+                    "Batch {} complete: blocks {}-{}, state_root={}",
+                    batch.index,
+                    batch.start_block,
+                    batch.end_block,
+                    hex::encode(&batch.state_root[..4])
+                );
 
-            node_state.batches.push(batch);
-            node_state.batch_blocks.clear();
-        }
+                node_state.batches.push(batch);
+                node_state.batch_blocks.clear();
+            }
+        } // Lock released here!
     }
 }
 
@@ -276,11 +400,32 @@ struct RpcResponse {
     id: serde_json::Value,
 }
 
+/// Transaction input for RPC
+#[derive(Deserialize)]
+struct TxInput {
+    #[serde(default)]
+    tx_type: String,  // "transfer" or "swap"
+    from: String,     // hex address
+    to: String,       // hex address
+    amount: u64,
+    #[serde(default)]
+    nonce: u64,
+}
+
 /// RPC handler
 async fn rpc_handler(
     AxumState(state): AxumState<SharedState>,
     Json(req): Json<RpcRequest>,
 ) -> Json<RpcResponse> {
+    // Handle write operations first
+    if req.method == "x2_sendTransaction" {
+        return handle_send_transaction(state, req).await;
+    }
+    if req.method == "x2_sendTransactionBatch" {
+        return handle_send_transaction_batch(state, req).await;
+    }
+
+    // Read operations
     let node_state = state.read().unwrap();
 
     let result = match req.method.as_str() {
@@ -379,6 +524,17 @@ async fn rpc_handler(
                 serde_json::json!([])
             }
         }
+        "x2_getMempoolStats" => {
+            serde_json::json!({
+                "pending": node_state.mempool.len(),
+                "totalReceived": node_state.mempool.total_received,
+                "totalIncluded": node_state.mempool.total_included,
+                "maxSize": node_state.config.mempool_size
+            })
+        }
+        "x2_getPendingCount" => {
+            serde_json::json!(node_state.mempool.len())
+        }
         _ => serde_json::json!(null),
     };
 
@@ -387,4 +543,135 @@ async fn rpc_handler(
         result,
         id: req.id,
     })
+}
+
+/// Handle x2_sendTransaction
+async fn handle_send_transaction(
+    state: SharedState,
+    req: RpcRequest,
+) -> Json<RpcResponse> {
+    let result = if let Some(params) = req.params {
+        if let Some(tx_input) = params.as_array().and_then(|arr| arr.first()) {
+            match serde_json::from_value::<TxInput>(tx_input.clone()) {
+                Ok(input) => {
+                    let tx = parse_tx_input(&input);
+                    let tx_hash = compute_tx_hash(&tx);
+                    
+                    let mut node_state = state.write().unwrap();
+                    if node_state.mempool.add(tx) {
+                        serde_json::json!({
+                            "success": true,
+                            "txHash": format!("0x{}", hex::encode(tx_hash))
+                        })
+                    } else {
+                        serde_json::json!({
+                            "success": false,
+                            "error": "mempool full"
+                        })
+                    }
+                }
+                Err(e) => {
+                    serde_json::json!({
+                        "success": false,
+                        "error": format!("invalid tx: {}", e)
+                    })
+                }
+            }
+        } else {
+            serde_json::json!({"success": false, "error": "no tx provided"})
+        }
+    } else {
+        serde_json::json!({"success": false, "error": "no params"})
+    };
+
+    Json(RpcResponse {
+        jsonrpc: "2.0".to_string(),
+        result,
+        id: req.id,
+    })
+}
+
+/// Handle x2_sendTransactionBatch (for benchmarking)
+async fn handle_send_transaction_batch(
+    state: SharedState,
+    req: RpcRequest,
+) -> Json<RpcResponse> {
+    let result = if let Some(params) = req.params {
+        if let Some(txs) = params.as_array().and_then(|arr| arr.first()).and_then(|v| v.as_array()) {
+            let mut success = 0;
+            let mut failed = 0;
+            
+            let mut node_state = state.write().unwrap();
+            for tx_val in txs {
+                if let Ok(input) = serde_json::from_value::<TxInput>(tx_val.clone()) {
+                    let tx = parse_tx_input(&input);
+                    if node_state.mempool.add(tx) {
+                        success += 1;
+                    } else {
+                        failed += 1;
+                    }
+                } else {
+                    failed += 1;
+                }
+            }
+            
+            serde_json::json!({
+                "success": success,
+                "failed": failed,
+                "pending": node_state.mempool.len()
+            })
+        } else {
+            serde_json::json!({"success": 0, "failed": 0, "error": "invalid batch format"})
+        }
+    } else {
+        serde_json::json!({"success": 0, "failed": 0, "error": "no params"})
+    };
+
+    Json(RpcResponse {
+        jsonrpc: "2.0".to_string(),
+        result,
+        id: req.id,
+    })
+}
+
+/// Parse TxInput to Transaction
+fn parse_tx_input(input: &TxInput) -> Transaction {
+    let mut from = [0u8; 32];
+    let mut to = [0u8; 32];
+    
+    // Parse hex addresses
+    if let Ok(bytes) = hex::decode(input.from.trim_start_matches("0x")) {
+        let len = bytes.len().min(32);
+        from[32-len..].copy_from_slice(&bytes[..len]);
+    }
+    if let Ok(bytes) = hex::decode(input.to.trim_start_matches("0x")) {
+        let len = bytes.len().min(32);
+        to[32-len..].copy_from_slice(&bytes[..len]);
+    }
+    
+    let tx_type = match input.tx_type.as_str() {
+        "swap" => TxType::Swap,
+        _ => TxType::Transfer,
+    };
+    
+    Transaction {
+        tx_type,
+        from,
+        to,
+        amount: input.amount as u128,
+        nonce: input.nonce,
+    }
+}
+
+/// Compute simple tx hash
+fn compute_tx_hash(tx: &Transaction) -> [u8; 32] {
+    use tiny_keccak::{Hasher, Keccak};
+    let mut hasher = Keccak::v256();
+    hasher.update(&tx.from);
+    hasher.update(&tx.to);
+    hasher.update(&tx.amount.to_be_bytes());
+    hasher.update(&tx.nonce.to_be_bytes());
+    let mut output = [0u8; 32];
+    hasher.finalize(&mut output);
+    output
 }

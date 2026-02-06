@@ -10,6 +10,7 @@ members = [
     "bin/batcher",
     "bin/proposer",
     "bin/challenger",
+    "bin/benchmarker",
 ]
 
 [workspace.package]

@@ -36,6 +36,9 @@ impl BlockExecutor {
             }
         }
 
+        // Commit all SMT updates in a single batch (performance optimization)
+        self.state.commit_smt_updates();
+
         // Compute new state hash
         let state_hash = self.state.compute_state_hash(&self.prev_state_hash);
         

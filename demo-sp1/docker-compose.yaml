@@ -82,6 +82,21 @@ services:
     networks:
       - demo-network
 
+  # Benchmarker (sends transactions to node)
+  benchmarker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: benchmarker
+    environment:
+      - NODE_RPC=http://node:8546
+      - BENCHMARK_TPS=${BENCHMARK_TPS:-100}
+    depends_on:
+      - node
+    restart: unless-stopped
+    networks:
+      - demo-network
+
 networks:
   demo-network:
     driver: bridge
