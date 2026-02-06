@@ -39,7 +39,5 @@ GlobalQueue = 100000
 AccountSlots = 50000
 AccountQueue = 10000
 
-[Eth.XLayer]
-EnableInnerTx = true
 [Eth.GPO]
 MinSuggestedPriorityFee = 1

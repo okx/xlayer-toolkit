@@ -35,9 +35,6 @@ Based on [op-geth migration RPC implementation](https://github.com/okx/op-geth/p
 | 20 | `eth_call` | ✅ | Supports BlockNumber, BlockHash, BlockTag |
 | 21 | `eth_estimateGas` | ✅ | Supports BlockNumber, BlockHash, BlockTag |
 | 22 | `eth_createAccessList` | ✅ | EIP-2930 access list creation |
-| 23 | `eth_transactionPreExec` | ✅ | XLayer custom method |
-| 24 | `eth_getInternalTransactions` | ✅ | Query by transaction hash |
-| 25 | `eth_getBlockInternalTransactions` | ✅ | Query by BlockNumber or BlockTag (not BlockHash) |
 | 26 | `eth_newFilter` | ❌ | Real-time query only |
 | 27 | `eth_getFilterLogs` | ❌ | Real-time query only |
 | 28 | `eth_getFilterChanges` | ❌ | Real-time query only |
