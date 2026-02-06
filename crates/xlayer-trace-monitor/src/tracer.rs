@@ -1,16 +1,14 @@
 use crate::{
-    constants::{BUSINESS_NAME, CHAIN_ID, CHAIN_NAME},
     transaction::TransactionProcessId,
-    utils::{Hash32, format_hash_hex},
+    utils::{Hash32, current_timestamp_ms, format_csv_line, format_hash_hex},
 };
 
-use crossbeam_channel::{Sender, bounded};
+use crossbeam_channel::Sender;
 use std::{
-    borrow::Cow,
     fs::{self, File, OpenOptions},
     io::{BufWriter, Write},
     path::PathBuf,
-    sync::{Arc, OnceLock, mpsc},
+    sync::{Arc, OnceLock},
     thread,
     time::Instant,
 };
@@ -61,8 +59,8 @@ pub fn sync_global_tracer() -> Result<(), std::io::Error> {
 #[derive(Debug)]
 enum WriterMessage {
     Line(String),
-    Flush(Option<mpsc::Sender<Result<(), std::io::Error>>>),
-    SyncAll(Option<mpsc::Sender<Result<(), std::io::Error>>>),
+    Flush(Option<Sender<Result<(), std::io::Error>>>),
+    SyncAll(Option<Sender<Result<(), std::io::Error>>>),
 }
 
 #[derive(Debug, Clone)]
@@ -86,7 +84,7 @@ impl TransactionTracer {
             final_path
         };
 
-        let (tx, rx) = bounded(CHANNEL_CAPACITY);
+        let (tx, rx) = crossbeam_channel::bounded(CHANNEL_CAPACITY);
         if enabled {
             thread::spawn(move || write_handle(rx, file_path));
         }
@@ -107,7 +105,11 @@ impl TransactionTracer {
 
     /// Flush buffer to the OS. Use `sync_all()` for disk persistence.
     pub fn flush(&self) -> Result<(), std::io::Error> {
-        let (ack_tx, ack_rx) = mpsc::channel();
+        if !self.is_enabled() {
+            return Ok(());
+        }
+
+        let (ack_tx, ack_rx) = crossbeam_channel::bounded(1);
         if self
             .inner
             .tx
@@ -125,7 +127,11 @@ impl TransactionTracer {
 
     /// Sync to disk. Call before shutdown to persist buffered data.
     pub fn sync_all(&self) -> Result<(), std::io::Error> {
-        let (ack_tx, ack_rx) = mpsc::channel();
+        if !self.is_enabled() {
+            return Ok(());
+        }
+
+        let (ack_tx, ack_rx) = crossbeam_channel::bounded(1);
         if self
             .inner
             .tx
@@ -141,69 +147,6 @@ impl TransactionTracer {
             .map_err(|_| std::io::Error::other("Writer thread did not acknowledge sync request"))?
     }
 
-    /// Format CSV line with 23 fields.
-    fn format_csv_line(
-        trace: &str,
-        process_id: TransactionProcessId,
-        current_time: u128,
-        block_hash: Option<Hash32>,
-        block_number: Option<u64>,
-    ) -> String {
-        fn escape_csv(s: &str) -> Cow<'_, str> {
-            if s.is_empty() {
-                return Cow::Borrowed("");
-            }
-
-            if s.contains(',') || s.contains('"') || s.contains('\n') {
-                Cow::Owned(format!("\"{}\"", s.replace('"', "\"\"")))
-            } else {
-                Cow::Borrowed(s)
-            }
-        }
-
-        // Pre-compute values that need conversion
-        let process_str = process_id.as_u64().to_string();
-        let current_time_str = current_time.to_string();
-        let block_height = block_number.map(|n| n.to_string()).unwrap_or_default();
-        let block_hash_str = block_hash.map(|h| format_hash_hex(&h)).unwrap_or_default();
-
-        // Build CSV line efficiently
-        format!(
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-            escape_csv(CHAIN_NAME),
-            escape_csv(trace),
-            "", // status_str (empty, no need to escape)
-            escape_csv(process_id.service_name()),
-            escape_csv(BUSINESS_NAME),
-            "", // client (empty)
-            escape_csv(CHAIN_ID),
-            escape_csv(&process_str),
-            escape_csv(process_id.as_str()),
-            "", // index (empty)
-            "", // inner_index (empty)
-            escape_csv(&current_time_str),
-            "", // referld (empty)
-            "", // contract_address (empty)
-            escape_csv(&block_height),
-            escape_csv(&block_hash_str),
-            "", // block_time (empty)
-            "", // deposit_confirm_height (empty)
-            "", // token_id (empty)
-            "", // mev_supplier (empty)
-            "", // business_hash (empty)
-            "", // transaction_type (empty)
-            ""  // ext_json (empty)
-        )
-    }
-
-    /// Get current timestamp in milliseconds since UNIX epoch
-    fn current_timestamp_ms() -> u128 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis()
-    }
-
     /// Log transaction event at current time point
     pub fn log_transaction(
         &self,
@@ -211,15 +154,14 @@ impl TransactionTracer {
         process_id: TransactionProcessId,
         block_number: Option<u64>,
     ) {
-        if !self.inner.enabled {
+        if !self.is_enabled() {
             return;
         }
 
-        let timestamp_ms = Self::current_timestamp_ms();
+        let timestamp_ms = current_timestamp_ms();
         let trace_hash = format_hash_hex(&tx_hash);
 
-        let csv_line =
-            Self::format_csv_line(&trace_hash, process_id, timestamp_ms, None, block_number);
+        let csv_line = format_csv_line(&trace_hash, process_id, timestamp_ms, None, block_number);
 
         self.send_line(csv_line);
     }
@@ -231,14 +173,14 @@ impl TransactionTracer {
         block_number: u64,
         process_id: TransactionProcessId,
     ) {
-        if !self.inner.enabled {
+        if !self.is_enabled() {
             return;
         }
 
-        let timestamp_ms = Self::current_timestamp_ms();
+        let timestamp_ms = current_timestamp_ms();
         let trace_hash = format_hash_hex(&block_hash);
 
-        let csv_line = Self::format_csv_line(
+        let csv_line = format_csv_line(
             &trace_hash,
             process_id,
             timestamp_ms,
@@ -257,13 +199,13 @@ impl TransactionTracer {
         process_id: TransactionProcessId,
         timestamp_ms: u128,
     ) {
-        if !self.inner.enabled {
+        if !self.is_enabled() {
             return;
         }
 
         let trace_hash = format_hash_hex(&block_hash);
 
-        let csv_line = Self::format_csv_line(
+        let csv_line = format_csv_line(
             &trace_hash,
             process_id,
             timestamp_ms,

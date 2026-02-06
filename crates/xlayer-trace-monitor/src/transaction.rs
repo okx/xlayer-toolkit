@@ -1,4 +1,8 @@
-use crate::constants::{RPC_SERVICE_NAME, SEQ_SERVICE_NAME};
+/// RPC service name
+const RPC_SERVICE_NAME: &str = "okx-defi-xlayer-rpcpay-pro";
+
+/// Sequencer service name
+const SEQ_SERVICE_NAME: &str = "okx-defi-xlayer-egseqz-pro";
 
 /// Transaction process ID for tracking different stages in the transaction lifecycle
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
