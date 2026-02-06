@@ -496,6 +496,7 @@ services:
       - --raft.server.id=conductor-1
       - --raft.storage.dir=/data/raft
       - --raft.bootstrap=true
+      - --raft.snapshot-threshold=2048
       - --consensus.addr=0.0.0.0
       - --consensus.port=50050
       - --consensus.advertised=op-conductor:50050
@@ -743,6 +744,7 @@ services:
       - --raft.server.id=conductor-2
       - --raft.storage.dir=/data/raft
       - --raft.bootstrap=false
+      - --raft.snapshot-threshold=2048
       - --consensus.addr=0.0.0.0
       - --consensus.port=50050
       - --consensus.advertised=op-conductor2:50050
@@ -864,6 +866,7 @@ services:
       - --raft.server.id=conductor-3
       - --raft.storage.dir=/data/raft
       - --raft.bootstrap=false
+      - --raft.snapshot-threshold=2048
       - --consensus.addr=0.0.0.0
       - --consensus.port=50050
       - --consensus.advertised=op-conductor3:50050
