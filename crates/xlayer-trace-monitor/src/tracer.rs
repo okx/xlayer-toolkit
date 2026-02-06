@@ -58,6 +58,7 @@ pub fn sync_global_tracer() -> Result<(), std::io::Error> {
     }
 }
 
+#[derive(Debug)]
 enum WriterMessage {
     Line(String),
     Flush(Option<mpsc::Sender<Result<(), std::io::Error>>>),
@@ -86,7 +87,9 @@ impl TransactionTracer {
         };
 
         let (tx, rx) = bounded(CHANNEL_CAPACITY);
-        write_handle(rx, file_path);
+        if enabled {
+            thread::spawn(move || write_handle(rx, file_path));
+        }
 
         Self {
             inner: Arc::new(TransactionTracerInner { enabled, tx }),
@@ -279,94 +282,92 @@ struct TransactionTracerInner {
 }
 
 fn write_handle(rx: crossbeam_channel::Receiver<WriterMessage>, file_path: PathBuf) {
-    thread::spawn(move || {
-        // Create parent directories if they don't exist
-        if let Some(parent) = file_path.parent()
-            && let Err(e) = fs::create_dir_all(parent)
-        {
+    // Create parent directories if they don't exist
+    if let Some(parent) = file_path.parent()
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        tracing::warn!(
+            target: "tx_trace",
+            ?parent,
+            error = %e,
+            "Failed to create transaction trace output directory"
+        );
+    }
+
+    let mut writer_opt: Option<BufWriter<File>> = match OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&file_path)
+    {
+        Ok(file) => {
+            tracing::info!(
+                target: "tx_trace",
+                ?file_path,
+                "Transaction trace file opened for appending"
+            );
+            Some(BufWriter::new(file))
+        }
+        Err(e) => {
             tracing::warn!(
                 target: "tx_trace",
-                ?parent,
+                ?file_path,
                 error = %e,
-                "Failed to create transaction trace output directory"
+                "Failed to open transaction trace file"
             );
+            None
         }
+    };
 
-        let mut writer_opt: Option<BufWriter<File>> = match OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&file_path)
-        {
-            Ok(file) => {
-                tracing::info!(
-                    target: "tx_trace",
-                    ?file_path,
-                    "Transaction trace file opened for appending"
-                );
-                Some(BufWriter::new(file))
-            }
-            Err(e) => {
-                tracing::warn!(
-                    target: "tx_trace",
-                    ?file_path,
-                    error = %e,
-                    "Failed to open transaction trace file"
-                );
-                None
-            }
-        };
+    let mut write_count: u64 = 0;
+    let mut last_flush_time = Instant::now();
 
-        let mut write_count: u64 = 0;
-        let mut last_flush_time = Instant::now();
-
-        while let Ok(msg) = rx.recv() {
-            match msg {
-                WriterMessage::Line(csv_line) => {
-                    if let Some(ref mut writer) = writer_opt {
-                        if writeln!(writer, "{csv_line}").is_err() {
-                            tracing::warn!(
-                                target: "tx_trace",
-                                "Failed to write to transaction trace file"
-                            );
-                        } else {
-                            write_count += 1;
-                            let now = Instant::now();
-                            let time_since_flush = now.duration_since(last_flush_time);
-                            let should_flush = write_count.is_multiple_of(FLUSH_INTERVAL_WRITES)
-                                || time_since_flush.as_secs() >= FLUSH_INTERVAL_SECONDS;
-                            if should_flush {
-                                if writer.flush().is_err() {
-                                    tracing::warn!(
-                                        target: "tx_trace",
-                                        "Failed to flush transaction trace file"
-                                    );
-                                }
-                                last_flush_time = now;
+    while let Ok(msg) = rx.recv() {
+        match msg {
+            WriterMessage::Line(csv_line) => {
+                if let Some(ref mut writer) = writer_opt {
+                    if writeln!(writer, "{csv_line}").is_err() {
+                        tracing::warn!(
+                            target: "tx_trace",
+                            "Failed to write to transaction trace file"
+                        );
+                    } else {
+                        write_count += 1;
+                        let now = Instant::now();
+                        let time_since_flush = now.duration_since(last_flush_time);
+                        let should_flush = write_count.is_multiple_of(FLUSH_INTERVAL_WRITES)
+                            || time_since_flush.as_secs() >= FLUSH_INTERVAL_SECONDS;
+                        if should_flush {
+                            if writer.flush().is_err() {
+                                tracing::warn!(
+                                    target: "tx_trace",
+                                    "Failed to flush transaction trace file"
+                                );
                             }
+                            last_flush_time = now;
                         }
                     }
                 }
-                WriterMessage::Flush(ack_tx) => {
-                    let result = match &mut writer_opt {
-                        Some(writer) => writer.flush(),
-                        None => Ok(()),
-                    };
-                    if let Some(tx) = ack_tx {
-                        let _ = tx.send(result);
-                    }
+            }
+            WriterMessage::Flush(ack_tx) => {
+                let result = match &mut writer_opt {
+                    Some(writer) => writer.flush(),
+                    None => Ok(()),
+                };
+                if let Some(tx) = ack_tx {
+                    let _ = tx.send(result);
                 }
-                WriterMessage::SyncAll(ack_tx) => {
-                    let result = match &mut writer_opt {
-                        Some(writer) => writer.flush().and_then(|()| writer.get_ref().sync_all()),
-                        None => Ok(()),
-                    };
-                    if let Some(tx) = ack_tx {
-                        let _ = tx.send(result);
-                    }
+            }
+            WriterMessage::SyncAll(ack_tx) => {
+                let result = match &mut writer_opt {
+                    Some(writer) => writer.flush().and_then(|()| writer.get_ref().sync_all()),
+                    None => Ok(()),
+                };
+                if let Some(tx) = ack_tx {
+                    let _ = tx.send(result);
                 }
             }
         }
-    });
+    }
 }
 
 #[cfg(test)]
