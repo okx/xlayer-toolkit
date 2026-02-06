@@ -8,6 +8,7 @@ homepage.workspace = true
 repository.workspace = true
 
 [dependencies]
+crossbeam-channel = "0.5"
 hex.workspace = true
 tracing.workspace = true
 
