@@ -334,7 +334,7 @@ services:
       - --l1.rpckind=standard
       - --rollup.l1-chain-config=/l1-genesis.json
       - --safedb.path=/data/safedb
-      - --conductor.enabled=${CONDUCTOR_ENABLED:-false}    # 默认关闭
+      - --conductor.enabled=${CONDUCTOR_ENABLED:-false}
       - --conductor.rpc=http://op-conductor:8547
       - --pprof.enabled
       - --pprof.addr=0.0.0.0
