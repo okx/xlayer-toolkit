@@ -4,50 +4,42 @@ use serde::{Deserialize, Serialize};
 use std::env;
 
 /// SP1 Prover mode
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub enum Sp1ProverMode {
-    /// Use local proving (slow, no cost)
-    Local,
-    /// Use Succinct Network (fast, requires SP1_PRIVATE_KEY)
-    Network,
-    /// Mock proving (for testing, instant)
-    Mock,
-}
+/// - false (default): Mock mode, no real ZK proof
+/// - true: SP1 Network mode, generates real ZK proof
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
+pub struct Sp1ProverMode(pub bool);
 
-impl Default for Sp1ProverMode {
-    fn default() -> Self {
-        Self::Mock
+impl Sp1ProverMode {
+    pub fn is_mock(&self) -> bool {
+        !self.0
     }
-}
-
-impl From<&str> for Sp1ProverMode {
-    fn from(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "local" => Self::Local,
-            "network" => Self::Network,
-            _ => Self::Mock,
-        }
+    
+    pub fn is_sp1(&self) -> bool {
+        self.0
     }
 }
 
 /// SP1 configuration
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Sp1Config {
-    /// Prover mode
+    /// Prover mode: false=mock, true=SP1
     pub prover_mode: Sp1ProverMode,
-    /// SP1 Network private key (required for Network mode)
-    /// Get from https://network.succinct.xyz/
+    /// SP1 Network private key (required for SP1 mode)
+    /// Get from https://app.succinct.xyz
     pub private_key: Option<String>,
-    /// Block verify program ELF path
+    /// Block verify program ELF path (auto-generated for SP1 mode)
     pub elf_path: Option<String>,
+    /// Block verify vkey (auto-generated for SP1 mode)
+    pub block_verify_vkey: Option<String>,
 }
 
 impl Default for Sp1Config {
     fn default() -> Self {
         Self {
-            prover_mode: Sp1ProverMode::Mock,
+            prover_mode: Sp1ProverMode(false),
             private_key: None,
             elf_path: None,
+            block_verify_vkey: None,
         }
     }
 }
@@ -55,17 +47,20 @@ impl Default for Sp1Config {
 impl Sp1Config {
     /// Load from environment variables
     pub fn from_env() -> Self {
+        // SP1_PROVER: "true" or "1" = SP1 mode, anything else = mock mode
         let prover_mode = env::var("SP1_PROVER")
-            .map(|s| Sp1ProverMode::from(s.as_str()))
-            .unwrap_or_default();
+            .map(|s| s == "true" || s == "1")
+            .unwrap_or(false);
         
-        let private_key = env::var("SP1_PRIVATE_KEY").ok();
-        let elf_path = env::var("ELF_PATH").ok();
+        let private_key = env::var("SP1_PRIVATE_KEY").ok().filter(|s| !s.is_empty());
+        let elf_path = env::var("ELF_PATH").ok().filter(|s| !s.is_empty());
+        let block_verify_vkey = env::var("BLOCK_VERIFY_VKEY").ok().filter(|s| !s.is_empty());
 
         Self {
-            prover_mode,
+            prover_mode: Sp1ProverMode(prover_mode),
             private_key,
             elf_path,
+            block_verify_vkey,
         }
     }
 }

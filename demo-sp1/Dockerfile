@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.85-bookworm AS builder
+FROM rust:1.88-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -13,7 +13,8 @@ COPY crates ./crates
 COPY bin ./bin
 COPY programs ./programs
 
-# Build all binaries (without sp1 feature - uses mock prover)
+# Build all binaries with sp1-sdk
+# SP1 prover mode (mock/local/network) is controlled by SP1_PROVER env var at runtime
 RUN cargo build --release --bin node --bin batcher --bin proposer --bin challenger --bin benchmarker
 
 # =============================================================================
@@ -47,7 +48,7 @@ COPY --from=builder /app/target/release/batcher /usr/local/bin/batcher
 CMD ["batcher"]
 
 # =============================================================================
-# Proposer
+# Proposer (with SP1 prover support)
 # =============================================================================
 FROM debian:bookworm-slim AS proposer
 
@@ -58,10 +59,14 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=builder /app/target/release/proposer /usr/local/bin/proposer
 
+# ELF file is mounted at runtime via docker-compose volume
+# Only required for local/network proving mode, not for mock mode
+# Set ELF_PATH environment variable to the mounted path
+
 CMD ["proposer"]
 
 # =============================================================================
-# Challenger
+# Challenger (with SP1 prover support)
 # =============================================================================
 FROM debian:bookworm-slim AS challenger
 
@@ -71,6 +76,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/challenger /usr/local/bin/challenger
+
+# ELF file is mounted at runtime via docker-compose volume
+# Only required for local/network proving mode, not for mock mode
+# Set ELF_PATH environment variable to the mounted path
 
 CMD ["challenger"]
 

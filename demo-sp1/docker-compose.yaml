@@ -1,5 +1,5 @@
 services:
-  # L1 (Anvil) - 和 demo 保持一致
+  # L1 (Anvil) - local Ethereum node for testing
   anvil:
     image: ghcr.io/foundry-rs/foundry:latest
     entrypoint: ["anvil"]
@@ -26,7 +26,7 @@ services:
     networks:
       - demo-network
 
-  # L2 Node (Mock for demo)
+  # L2 Node (block production and state management)
   node:
     build:
       context: .
@@ -54,7 +54,7 @@ services:
     networks:
       - demo-network
 
-  # Proposer
+  # Proposer (submits outputs and generates ZK proofs)
   proposer:
     build:
       context: .
@@ -62,13 +62,22 @@ services:
       target: proposer
     env_file:
       - .env
+    environment:
+      # SP1 prover settings (NETWORK_PRIVATE_KEY is what sp1-sdk expects)
+      - SP1_PROVER=${SP1_PROVER:-mock}
+      - SP1_PRIVATE_KEY=${SP1_PRIVATE_KEY:-}
+      - NETWORK_PRIVATE_KEY=${SP1_PRIVATE_KEY:-}
+      - ELF_PATH=${ELF_PATH:-}
+    volumes:
+      # Mount ELF directory for SP1 mode
+      - ./elf:/app/elf:ro
     depends_on:
       - node
     restart: unless-stopped
     networks:
       - demo-network
 
-  # Challenger
+  # Challenger (monitors outputs and initiates disputes)
   challenger:
     build:
       context: .
@@ -76,13 +85,22 @@ services:
       target: challenger
     env_file:
       - .env
+    environment:
+      # SP1 prover settings (NETWORK_PRIVATE_KEY is what sp1-sdk expects)
+      - SP1_PROVER=${SP1_PROVER:-mock}
+      - SP1_PRIVATE_KEY=${SP1_PRIVATE_KEY:-}
+      - NETWORK_PRIVATE_KEY=${SP1_PRIVATE_KEY:-}
+      - ELF_PATH=${ELF_PATH:-}
+    volumes:
+      # Mount ELF directory for SP1 mode
+      - ./elf:/app/elf:ro
     depends_on:
       - node
     restart: unless-stopped
     networks:
       - demo-network
 
-  # Benchmarker (sends transactions to node)
+  # Benchmarker (sends transactions to node for load testing)
   benchmarker:
     build:
       context: .

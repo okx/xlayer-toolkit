@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
     info!("  L1 RPC:         {}", config.l1_rpc);
     info!("  L2 RPC:         {}", config.l2_rpc);
     info!("  Batch interval: {} blocks", config.batch_interval);
-    info!("  SP1 mode:       {:?}", config.sp1.prover_mode);
+    info!("  SP1 mode:       {}", if config.sp1.prover_mode.is_sp1() { "SP1 Network" } else { "Mock" });
     info!("");
     info!("Features:");
     info!("  ✓ Submit batch outputs to L1");

@@ -40,8 +40,9 @@ async-trait = "0.1"
 axum = "0.7"
 reqwest = { version = "0.11", features = ["json"] }
 
-# SP1 - use latest version which should have fixed alloy compatibility
-sp1-sdk = "5.2"
+# SP1 - use network feature to avoid heavy local prover dependencies
+# This allows mock mode (handled by our code) and network mode (via Succinct infrastructure)
+sp1-sdk = { version = "5.2", default-features = false, features = ["network"] }
 sp1-zkvm = "5.2"
 
 # Tracing
