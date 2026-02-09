@@ -8,9 +8,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // DebugTraceBlockByHash traces all transactions in the block given by block hash
@@ -383,31 +381,6 @@ func EthGetStorageAt(address common.Address, position string, block string) (str
 	return result, nil
 }
 
-// EthTransactionPreExec executes a transaction and returns the result without creating a transaction on chain
-func EthTransactionPreExec(txRequest interface{}, blockParameter string, stateOverride interface{}) (interface{}, error) {
-	if clientRPC == nil {
-		return nil, fmt.Errorf("RPC client not initialized")
-	}
-
-	var result interface{}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	var args []interface{}
-	args = append(args, []interface{}{txRequest}) // eth_transactionPreExec expects array of transactions
-	args = append(args, blockParameter)
-	if stateOverride != nil {
-		args = append(args, stateOverride)
-	}
-
-	err := clientRPC.Client().CallContext(ctx, &result, "eth_transactionPreExec", args...)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
 // EthGetTransactionByBlockHashAndIndex returns information about a transaction by block hash and transaction index position
 func EthGetTransactionByBlockHashAndIndex(blockHash common.Hash, index string) (interface{}, error) {
 	var result interface{}
@@ -443,34 +416,6 @@ func EthGetTransactionByHash(txHash common.Hash) (interface{}, error) {
 	defer cancel()
 
 	err := clientRPC.Client().CallContext(ctx, &result, "eth_getTransactionByHash", txHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-// EthGetInternalTransactions returns the internal transactions for a given transaction hash
-func EthGetInternalTransactions(txHash common.Hash) ([]*types.InnerTx, error) {
-	var result []*types.InnerTx
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	err := clientRPC.Client().CallContext(ctx, &result, "eth_getInternalTransactions", txHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-// EthGetBlockInternalTransactions returns the internal transactions for a given block number
-func EthGetBlockInternalTransactions(blockNumber rpc.BlockNumber) (map[common.Hash][]*types.InnerTx, error) {
-	var result map[common.Hash][]*types.InnerTx
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	err := clientRPC.Client().CallContext(ctx, &result, "eth_getBlockInternalTransactions", blockNumber)
 	if err != nil {
 		return nil, err
 	}
