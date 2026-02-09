@@ -62,6 +62,32 @@ if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     sleep 10
     $SCRIPTS_DIR/active-sequencer.sh
 else
+    docker compose up -d op-${SEQ_TYPE}-seq
+
+    # Wait for XLayer genesis block to be logged
+    echo "⏳ Waiting for XLayer genesis block in op-${SEQ_TYPE}-seq logs..."
+    MAX_WAIT=300  # 5 minutes timeout
+    ELAPSED=0
+    FOUND=false
+
+    while [ $ELAPSED -lt $MAX_WAIT ]; do
+        if docker logs op-${SEQ_TYPE}-seq 2>&1 | grep -q "XLayer genesis block"; then
+            echo "✅ XLayer genesis block found in logs!"
+            FOUND=true
+            break
+        fi
+        sleep 2
+        ELAPSED=$((ELAPSED + 2))
+        if [ $((ELAPSED % 10)) -eq 0 ]; then
+            echo "   Still waiting... (${ELAPSED}s/${MAX_WAIT}s)"
+        fi
+    done
+
+    if [ "$FOUND" = false ]; then
+        echo "⚠️  Warning: Timeout waiting for XLayer genesis block (${MAX_WAIT}s)"
+        echo "   Proceeding anyway, but there may be issues..."
+    fi
+
     docker compose up -d op-seq
 fi
 

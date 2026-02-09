@@ -19,6 +19,7 @@ if [ -z "$FORK_BLOCK" ]; then
     exit 1
 fi
 
+echo "🔧 Setting fork block and parent hash in genesis.json ..."
 FORK_BLOCK_HEX=$(printf "0x%x" "$FORK_BLOCK")
 sed_inplace '/"config": {/,/}/ s/"optimism": {/"legacyXLayerBlock": '"$((FORK_BLOCK + 1))"',\n    "optimism": {/' ./config-op/genesis.json
 sed_inplace 's/"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"/"parentHash": "'"$PARENT_HASH"'"/' ./config-op/genesis.json
@@ -31,11 +32,24 @@ sed_inplace 's/"eip1559Elasticity": [0-9]*/"eip1559Elasticity": '"$(jq -r '.conf
 sed_inplace 's/"eip1559Denominator": [0-9]*/"eip1559Denominator": '"$(jq -r '.config.optimism.eip1559Denominator' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"$(jq -r '.config.optimism.eip1559DenominatorCanyon' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 
-# echo "🔧 Merging genesis files..."
-# /usr/local/bin/merge_genesis ~/dev/okx/xlayer-toolkit/devnet/config-op/genesis.json ~/data/xlayer/genesis_2m.json ~/dev/okx/xlayer-toolkit/devnet/config-op/merged.genesis.json
-# cp ./config-op/merged.genesis.json ./config-op/genesis-reth.json
-cp ./config-op/genesis.json ./config-op/genesis-reth.json
-sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
+if [ "$MERGE_RETH_GENESIS" = "true" ]; then
+    echo "🔧 Merging genesis files..."
+
+    if [ -z "$MERGE_RETH_DATADIR_PATH" ]; then
+        echo " ❌ MERGE_RETH_DATADIR_PATH environment variable is not set"
+        echo "Please set MERGE_RETH_DATADIR_PATH in your .env file"
+        exit 1
+    fi
+
+    docker run --rm -v "./config-op:/config-op" -v "$MERGE_RETH_DATADIR_PATH:/reth-datadir" $XLAYER_RETH_TOOLS_IMAGE_TAG \
+        gen-genesis --datadir /reth-datadir --chain $MERGE_RETH_CHAIN \
+        --template-genesis /config-op/genesis.json --output /config-op/genesis-reth.json
+else
+    # Create genesis-reth.json from genesis.json
+    echo "🔧 Creating genesis-reth.json from genesis.json ..."
+    cp ./config-op/genesis.json ./config-op/genesis-reth.json
+    sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
+fi
 
 # Extract contract addresses from state.json and update .env file
 echo "🔧 Extracting contract addresses from state.json..."
@@ -134,6 +148,7 @@ echo "🔧 Setting up System Config Parameters..."
 "$PWD_DIR/scripts/setup-system-config-params.sh"
 
 # init geth sequencer
+if [ "$CONDUCTOR_ENABLED" = "true" ] || [ "$SEQ_TYPE" = "geth" ]; then
 echo " 🔧 Initializing geth sequencer..."
 OP_GETH_DATADIR="$(pwd)/data/op-geth-seq"
 rm -rf "$OP_GETH_DATADIR"
@@ -152,6 +167,15 @@ docker compose run --no-deps --rm \
 # Remove nodekey to ensure other nodes generates a unique node ID
 echo " 🔑 Removing nodekey to generate unique node ID for other nodes..."
 rm -f "$OP_GETH_DATADIR/geth/nodekey"
+
+# Copy initialized database from op-geth-seq to other nodes
+OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
+
+echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
+rm -rf "$OP_GETH_RPC_DATADIR"
+cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
+
+fi
 
 # Get trusted peers enode url
 sed_inplace "s|TRUSTED_PEERS=.*|TRUSTED_PEERS=$(./scripts/trusted-peers.sh)|" .env
@@ -175,14 +199,6 @@ INIT_LOG=$(docker compose run --no-deps --rm \
 NEW_BLOCK_HASH=$(tail -n 1 init.log | jq -r .fields.hash)
 echo "NEW_BLOCK_HASH=$NEW_BLOCK_HASH"
 sed_inplace "s/NEW_BLOCK_HASH=.*/NEW_BLOCK_HASH=$NEW_BLOCK_HASH/" .env
-
-
-# Copy initialized database from op-geth-seq to other nodes
-OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
-
-echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
-rm -rf "$OP_GETH_RPC_DATADIR"
-cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
 
 if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     if [ "$SEQ_TYPE" = "geth" ]; then
