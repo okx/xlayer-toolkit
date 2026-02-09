@@ -38,29 +38,8 @@ type ValidationError struct {
 	Msg  string `json:"msg"`
 }
 
-// ValidationInnerTx represents an inner transaction for test validation
-type ValidationInnerTx struct {
-	Dept          *big.Int `json:"dept"`
-	InternalIndex *big.Int `json:"internal_index"`
-	CallType      string   `json:"call_type"`
-	Name          string   `json:"name"`
-	TraceAddress  string   `json:"trace_address"`
-	CodeAddress   string   `json:"code_address"`
-	From          string   `json:"from"`
-	To            string   `json:"to"`
-	Input         string   `json:"input"`
-	Output        string   `json:"output"`
-	IsError       bool     `json:"is_error"`
-	GasUsed       uint64   `json:"gas_used"`
-	Value         string   `json:"value"`
-	ValueWei      string   `json:"value_wei"`
-	Error         string   `json:"error"`
-	ReturnGas     uint64   `json:"return_gas"`
-}
-
 // ValidationResult represents a typed structure matching PreResult for test validation
 type ValidationResult struct {
-	InnerTxs    []ValidationInnerTx    `json:"innerTxs"`
 	Logs        []types.Log            `json:"logs"`
 	StateDiff   map[string]interface{} `json:"stateDiff"`
 	Error       ValidationError        `json:"error"`
@@ -532,25 +511,6 @@ func EncodeComplexCall(target common.Address) []byte {
 	copy(data[4+12:36], target.Bytes()) // Address goes in the last 20 bytes
 
 	return data
-}
-
-// validateInnerTransactionMatch validates that two inner transactions match each other
-func ValidateInnerTransactionMatch(t *testing.T, innerTx1, innerTx2 *types.InnerTx, contextMsg string) {
-	require.Equal(t, innerTx1.From, innerTx2.From, "%s: From addresses should match", contextMsg)
-	require.Equal(t, innerTx1.To, innerTx2.To, "%s: To addresses should match", contextMsg)
-	require.Equal(t, innerTx1.Input, innerTx2.Input, "%s: Input data should match", contextMsg)
-	require.Equal(t, innerTx1.Output, innerTx2.Output, "%s: Output data should match", contextMsg)
-	require.Equal(t, innerTx1.IsError, innerTx2.IsError, "%s: Error status should match", contextMsg)
-	require.Equal(t, innerTx1.CallType, innerTx2.CallType, "%s: Call types should match", contextMsg)
-	require.Equal(t, innerTx1.ValueWei, innerTx2.ValueWei, "%s: ValueWei should match", contextMsg)
-	require.Equal(t, innerTx1.CallValueWei, innerTx2.CallValueWei, "%s: CallValueWei should match", contextMsg)
-	require.Equal(t, innerTx1.Error, innerTx2.Error, "%s: Error messages should match", contextMsg)
-	require.Equal(t, innerTx1.Dept, innerTx2.Dept, "%s: Dept should match", contextMsg)
-	require.Equal(t, innerTx1.InternalIndex, innerTx2.InternalIndex, "%s: InternalIndex should match", contextMsg)
-	require.Equal(t, innerTx1.Name, innerTx2.Name, "%s: Name should match", contextMsg)
-	require.Equal(t, innerTx1.TraceAddress, innerTx2.TraceAddress, "%s: TraceAddress should match", contextMsg)
-	require.Equal(t, innerTx1.CodeAddress, innerTx2.CodeAddress, "%s: CodeAddress should match", contextMsg)
-	require.Equal(t, innerTx1.Value, innerTx2.Value, "%s: Value should match", contextMsg)
 }
 
 // CreateBasicTransaction creates a standard transaction with common fields

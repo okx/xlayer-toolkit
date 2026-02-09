@@ -13,10 +13,6 @@ FOR_OP_BLOCK_HASH="0xdc33d8c0ec9de14fc2c21bd6077309a0a856df22821bd092a2513426e09
 FOR_ERIGON_TRANSACTION_HASH="0x8d7c7927a74c0245f06b1da06bfaa727396c2bd47349de6f7fc579febce30fae" # transaction in block 42800000
 FOR_OP_TRANSACTION_HASH="0x9b52d72be301ae6928830be4a1cf25749f2d230a4bee940f1b55e9311960a4f5"
 
-# Real test parameters from production
-PREEXEC_FROM="0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
-PREEXEC_TO="0x8ec198c4149280e4004a64531648640b862fb887"
-
 # Real contract address
 CONTRACT_ADDRESS="0x4AAaCCfe00090665Dd74C56Db013978891D142f4"
 
@@ -159,24 +155,6 @@ call_rpc "eth_getBlockReceipts" "[\"0x$(printf '%x' $BELOW)\"]" \
 call_rpc "eth_getBlockReceipts" "[\"latest\"]" \
     "eth_getBlockReceipts (latest) → LOCAL"
 
-echo -e "\n${GREEN}=== BlockChainAPI: TransactionPreExec (XLayer Specific) ===${NC}"
-
-call_rpc "eth_transactionPreExec" \
-    "[[{\"from\":\"$PREEXEC_FROM\",\"to\":\"$PREEXEC_TO\",\"gas\":\"0x30000\",\"gasPrice\":\"0x4a817c800\",\"value\":\"0x0\",\"nonce\":\"0x11\",\"data\":\"0xf18c388a\"}], {\"blockNumber\":\"0x$(printf '%x' $BELOW)\"}, {\"$PREEXEC_FROM\":{\"balance\":\"0x56bc75e2d630eb20000\"}}]" \
-    "eth_transactionPreExec (block number $BELOW with state override) → PROXY"
-
-call_rpc "eth_transactionPreExec" \
-    "[[{\"from\":\"$PREEXEC_FROM\",\"to\":\"$PREEXEC_TO\",\"gas\":\"0x30000\",\"gasPrice\":\"0x4a817c800\",\"value\":\"0x0\",\"nonce\":\"0x11\",\"data\":\"0xf18c388a\"}], {\"blockHash\":\"$FOR_ERIGON_BLOCK_HASH\"}, {\"$PREEXEC_FROM\":{\"balance\":\"0x56bc75e2d630eb20000\"}}]" \
-    "eth_transactionPreExec (erigon block hash with state override) → fallback to PROXY"
-
-call_rpc "eth_transactionPreExec" \
-    "[[{\"from\":\"$PREEXEC_FROM\",\"to\":\"$PREEXEC_TO\",\"gas\":\"0x30000\",\"gasPrice\":\"0x4a817c800\",\"value\":\"0x0\",\"nonce\":\"0x11\",\"data\":\"0xf18c388a\"}], \"latest\", {\"$PREEXEC_FROM\":{\"balance\":\"0x56bc75e2d630eb20000\"}}]" \
-    "eth_transactionPreExec (latest with state override) → LOCAL"
-
-call_rpc "eth_transactionPreExec" \
-    "[[{\"from\":\"$PREEXEC_FROM\",\"to\":\"$PREEXEC_TO\",\"gas\":\"0x30000\",\"gasPrice\":\"0x4a817c800\",\"value\":\"0x0\",\"nonce\":\"0x11\",\"data\":\"0xf18c388a\"}], {\"blockHash\":\"$FOR_OP_BLOCK_HASH\"}, {\"$PREEXEC_FROM\":{\"balance\":\"0x56bc75e2d630eb20000\"}}]" \
-    "eth_transactionPreExec (op-geth block hash with state override) → LOCAL"
-
 # ============================================
 # TransactionAPI Tests
 # ============================================
@@ -248,20 +226,6 @@ call_rpc "eth_getTransactionCount" "[\"$TEST_ADDR\", \"0x$(printf '%x' $BELOW)\"
 
 call_rpc "eth_getTransactionCount" "[\"$TEST_ADDR\", \"latest\"]" \
     "eth_getTransactionCount (latest) → LOCAL"
-
-echo -e "\n${GREEN}=== TransactionAPI: Internal Transactions (XLayer Specific) ===${NC}"
-
-call_rpc "eth_getBlockInternalTransactions" "[\"0x$(printf '%x' $BELOW)\"]" \
-    "eth_getBlockInternalTransactions (block $BELOW) → PROXY"
-
-call_rpc "eth_getBlockInternalTransactions" "[\"latest\"]" \
-    "eth_getBlockInternalTransactions (latest) → LOCAL"
-
-call_rpc "eth_getInternalTransactions" "[\"$FOR_OP_TRANSACTION_HASH\"]" \
-    "eth_getInternalTransactions (op-geth tx) → LOCAL"
-
-call_rpc "eth_getInternalTransactions" "[\"$FOR_ERIGON_TRANSACTION_HASH\"]" \
-    "eth_getInternalTransactions (erigon tx) → fallback to PROXY"
 
 # ============================================
 # FilterAPI Tests

@@ -92,8 +92,9 @@ setup_cgt() {
   # Get required addresses from state.json
   echo "📝 Step 2: Running Custom Gas Token setup script..."
   STATE_JSON="$CONFIG_DIR/state.json"
-  SYSTEM_CONFIG_PROXY_ADDRESS=$(jq -r '.opChainDeployments[0].SystemConfigProxy' "$STATE_JSON")
-  OPTIMISM_PORTAL_PROXY_ADDRESS=$(jq -r '.opChainDeployments[0].OptimismPortalProxy' "$STATE_JSON")
+  # Use grep instead of jq to avoid dependency
+  SYSTEM_CONFIG_PROXY_ADDRESS=$(grep -o '"SystemConfigProxy"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_JSON" | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
+  OPTIMISM_PORTAL_PROXY_ADDRESS=$(grep -o '"OptimismPortalProxy"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_JSON" | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
 
   # Export required environment variables for the setup script
   export SYSTEM_CONFIG_PROXY_ADDRESS="$SYSTEM_CONFIG_PROXY_ADDRESS"
