@@ -19,6 +19,7 @@ if [ -z "$FORK_BLOCK" ]; then
     exit 1
 fi
 
+echo "🔧 Setting fork block and parent hash in genesis.json ..."
 FORK_BLOCK_HEX=$(printf "0x%x" "$FORK_BLOCK")
 sed_inplace '/"config": {/,/}/ s/"optimism": {/"legacyXLayerBlock": '"$((FORK_BLOCK + 1))"',\n    "optimism": {/' ./config-op/genesis.json
 sed_inplace 's/"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"/"parentHash": "'"$PARENT_HASH"'"/' ./config-op/genesis.json
@@ -31,9 +32,24 @@ sed_inplace 's/"eip1559Elasticity": [0-9]*/"eip1559Elasticity": '"$(jq -r '.conf
 sed_inplace 's/"eip1559Denominator": [0-9]*/"eip1559Denominator": '"$(jq -r '.config.optimism.eip1559Denominator' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"$(jq -r '.config.optimism.eip1559DenominatorCanyon' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 
-# Create genesis-reth.json from genesis.json
-cp ./config-op/genesis.json ./config-op/genesis-reth.json
-sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
+if [ "$MERGE_RETH_GENESIS" = "true" ]; then
+    echo "🔧 Merging genesis files..."
+
+    if [ -z "$MERGE_RETH_DATADIR_PATH" ]; then
+        echo " ❌ MERGE_RETH_DATADIR_PATH environment variable is not set"
+        echo "Please set MERGE_RETH_DATADIR_PATH in your .env file"
+        exit 1
+    fi
+
+    docker run --rm -v "./config-op:/config-op" -v "$MERGE_RETH_DATADIR_PATH:/reth-datadir" $XLAYER_RETH_TOOLS_IMAGE_TAG \
+        gen-genesis --datadir /reth-datadir --chain $MERGE_RETH_CHAIN \
+        --template-genesis /config-op/genesis.json --output /config-op/genesis-reth.json
+else
+    # Create genesis-reth.json from genesis.json
+    echo "🔧 Creating genesis-reth.json from genesis.json ..."
+    cp ./config-op/genesis.json ./config-op/genesis-reth.json
+    sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
+fi
 
 # Extract contract addresses from state.json and update .env file
 echo "🔧 Extracting contract addresses from state.json..."
