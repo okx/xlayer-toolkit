@@ -1,0 +1,12 @@
+[package]
+name = "multithread-test-guest"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+guest = []
+
+[dependencies]
+jolt = { workspace = true, features = ["guest-std", "thread", "stdout"] }
+serde = { workspace = true }
+postcard = { workspace = true }

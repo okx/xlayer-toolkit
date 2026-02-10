@@ -1,0 +1,32 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/multithread-test/guest",
+  "crates/multithread-test/host",
+]
+
+[workspace.dependencies]
+jolt = { package = "jolt-sdk", version = "0.1.0", default-features = false }
+jolt-core = { version = "0.1.0", default-features = false }
+zeroos = { version = "0.1.0", default-features = false }
+ark-ff = { version = "0.5.0" }
+ark-ec = { version = "0.5.0", default-features = false }
+ark-serialize = { version = "0.5.0", default-features = false, features = ["derive"] }
+ark-bn254 = { version = "0.5.0", default-features = false }
+ark-std = { version = "0.5.0", default-features = false }
+allocative = { version = "0.3.4" }
+serde = { version = "1", features = ["derive"] }
+postcard = { version = "1", features = ["alloc"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[patch.crates-io]
+jolt-sdk = { git = "https://github.com/LayerZero-Research/jolt.git", branch = "gx/integrate-zeroos" }
+jolt-core = { git = "https://github.com/LayerZero-Research/jolt.git", branch = "gx/integrate-zeroos" }
+zeroos = { git = "https://github.com/LayerZero-Labs/ZeroOS.git", branch = "main" }
+ark-ff = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-ec = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-serialize = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-bn254 = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-grumpkin = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+allocative = { git = "https://github.com/facebookexperimental/allocative", rev = "85b773d85d526d068ce94724ff7a7b81203fc95e" }

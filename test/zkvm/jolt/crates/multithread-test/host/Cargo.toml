@@ -1,0 +1,21 @@
+[package]
+name = "multithread-test"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "multithread-test"
+path = "src/main.rs"
+
+[[bin]]
+name = "native"
+path = "src/native.rs"
+
+[dependencies]
+jolt = { workspace = true, features = ["host"] }
+ark-ff = { workspace = true }
+guest = { package = "multithread-test-guest", path = "../guest" }
+serde = { workspace = true }
+postcard = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

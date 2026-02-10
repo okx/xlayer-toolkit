@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Installing cargo-jolt..."
+cargo install --git https://github.com/LayerZero-Research/jolt.git --branch gx/integrate-zeroos jolt-build
+
+echo "Done! cargo-jolt is now available."
