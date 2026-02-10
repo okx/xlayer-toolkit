@@ -43,7 +43,8 @@ CMD="op-reth node \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
-      --rpc.eth-proof-window=10000"
+      --rpc.eth-proof-window=10000 \
+      --metrics=0.0.0.0:9001"
 
 # For flashblocks architecture. Enable flashblocks RPC
 if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
