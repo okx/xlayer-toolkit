@@ -179,12 +179,12 @@ class ReorgDetectedException(Exception):
 class FlashblockReorgTester:
     def __init__(
         self,
-        ws_url: str,
+        ws_urls: List[str],
         rpc_url: str,
         duration: Optional[int] = None,
         verbose: bool = False,
     ):
-        self.ws_url = ws_url
+        self.ws_urls = ws_urls
         self.rpc_url = rpc_url
         self.duration = duration
         self.verbose = verbose
@@ -228,7 +228,7 @@ class FlashblockReorgTester:
             self.log(f"RPC Error: {e}")
             return None
 
-    def process_flashblock_payload(self, payload: dict):
+    def process_flashblock_payload(self, payload: dict, source_url: str = "unknown"):
         """Process a flashblock payload and track transactions."""
         try:
             payload_id = payload.get("payload_id")
@@ -249,7 +249,7 @@ class FlashblockReorgTester:
                 self.current_block_number = int(block_number_hex, 16)
                 self.current_payload_id = payload_id
                 self.log(
-                    f"New pending block #{self.current_block_number} "
+                    f"[{source_url}] New pending block #{self.current_block_number} "
                     f"(parent: {self.current_parent_hash[:16]}..., payload_id: {payload_id})"
                 )
 
@@ -268,7 +268,7 @@ class FlashblockReorgTester:
             # Skip index 0 (sequencer transactions - these are deterministic)
             if index == 0:
                 self.log(
-                    f"Flashblock idx=0 for block #{block_number}: "
+                    f"[{source_url}] Flashblock idx=0 for block #{block_number}: "
                     f"{len(raw_transactions)} sequencer txs (not tracking)"
                 )
                 return
@@ -302,7 +302,7 @@ class FlashblockReorgTester:
                     new_txs += 1
 
             msg = (
-                f"Flashblock idx={index} for block #{block_number}: "
+                f"[{source_url}] Flashblock idx={index} for block #{block_number}: "
                 f"{len(raw_transactions)} txs ({new_txs} new tracked)"
             )
             if decode_failures:
@@ -468,17 +468,17 @@ class FlashblockReorgTester:
 
             await asyncio.sleep(1.5)
 
-    async def subscribe_flashblocks(self):
-        """Subscribe to flashblocks WebSocket and process messages."""
+    async def subscribe_flashblocks_single(self, ws_url: str):
+        """Subscribe to a single flashblocks WebSocket and process messages."""
         reconnect_delay = 1
         max_reconnect_delay = 30
 
         while self.running:
             try:
-                self.log_always(f"Connecting to WebSocket: {self.ws_url}")
+                self.log_always(f"Connecting to WebSocket: {ws_url}")
 
-                async with connect(self.ws_url, ping_interval=20, ping_timeout=30, max_size=10 * 1024 * 1024) as ws:  # 10MB limit
-                    self.log_always("Connected to flashblocks WebSocket")
+                async with connect(ws_url, ping_interval=20, ping_timeout=30, max_size=10 * 1024 * 1024) as ws:  # 10MB limit
+                    self.log_always(f"Connected to flashblocks WebSocket: {ws_url}")
                     reconnect_delay = 1  # Reset on successful connection
 
                     async for message in ws:
@@ -491,33 +491,33 @@ class FlashblockReorgTester:
                             # Direct flashblock payload format (not JSON-RPC wrapped)
                             # Has payload_id, index, base (for index 0), diff
                             if "payload_id" in data and "diff" in data:
-                                self.process_flashblock_payload(data)
+                                self.process_flashblock_payload(data, source_url=ws_url)
                             # JSON-RPC subscription format (fallback)
                             elif "params" in data and "result" in data["params"]:
                                 result = data["params"]["result"]
                                 if isinstance(result, dict):
-                                    self.process_flashblock_payload(result)
+                                    self.process_flashblock_payload(result, source_url=ws_url)
 
                         except json.JSONDecodeError:
-                            self.log("Failed to parse WebSocket message")
+                            self.log(f"Failed to parse WebSocket message from {ws_url}")
                         except Exception as e:
-                            self.log(f"Error processing message: {e}")
+                            self.log(f"Error processing message from {ws_url}: {e}")
 
             except ConnectionClosed as e:
                 self.tracker.reconnection_count += 1
                 self.log_always(
-                    f"WebSocket connection closed: {e}. "
+                    f"WebSocket {ws_url} closed: {e}. "
                     f"Reconnecting in {reconnect_delay}s... "
                     f"(reconnection #{self.tracker.reconnection_count})"
                 )
             except WebSocketException as e:
                 self.tracker.reconnection_count += 1
                 self.log_always(
-                    f"WebSocket error: {e}. "
+                    f"WebSocket {ws_url} error: {e}. "
                     f"Reconnecting in {reconnect_delay}s..."
                 )
             except Exception as e:
-                self.log_always(f"Unexpected error: {e}. Reconnecting in {reconnect_delay}s...")
+                self.log_always(f"WebSocket {ws_url} unexpected error: {e}. Reconnecting in {reconnect_delay}s...")
 
             if self.running:
                 await asyncio.sleep(reconnect_delay)
@@ -531,7 +531,7 @@ class FlashblockReorgTester:
         print("FLASHBLOCK REORG MITIGATION TEST SUMMARY")
         print("=" * 60)
         print(f"Duration: {duration:.1f} seconds")
-        print(f"WebSocket URL: {self.ws_url}")
+        print(f"WebSocket URLs: {', '.join(self.ws_urls)}")
         print(f"RPC URL: {self.rpc_url}")
         print(f"Reconnections: {self.tracker.reconnection_count}")
         print()
@@ -572,7 +572,7 @@ class FlashblockReorgTester:
         print("=" * 60)
         print("FLASHBLOCK REORG MITIGATION TEST")
         print("=" * 60)
-        print(f"WebSocket URL: {self.ws_url}")
+        print(f"WebSocket URLs: {', '.join(self.ws_urls)}")
         print(f"RPC URL: {self.rpc_url}")
         print(f"Duration: {'unlimited' if self.duration is None else f'{self.duration}s'}")
         print(f"Verbose: {self.verbose}")
@@ -585,11 +585,12 @@ class FlashblockReorgTester:
         print("=" * 60)
         print()
 
-        # Create tasks
+        # Create tasks - one subscriber per WebSocket URL
         tasks = [
-            asyncio.create_task(self.subscribe_flashblocks()),
-            asyncio.create_task(self.poll_canonical_blocks()),
+            asyncio.create_task(self.subscribe_flashblocks_single(url))
+            for url in self.ws_urls
         ]
+        tasks.append(asyncio.create_task(self.poll_canonical_blocks()))
 
         # Add duration limit if specified
         if self.duration:
@@ -616,8 +617,9 @@ def main():
     )
     parser.add_argument(
         "--ws-url",
-        default="ws://localhost:11112",
-        help="Flashblocks WebSocket URL (default: ws://localhost:11111)",
+        nargs="+",
+        default=["ws://localhost:11111", "ws://localhost:11112"],
+        help="Flashblocks WebSocket URLs (default: ws://localhost:11111 ws://localhost:11112)",
     )
     parser.add_argument(
         "--rpc-url",
@@ -640,7 +642,7 @@ def main():
     args = parser.parse_args()
 
     tester = FlashblockReorgTester(
-        ws_url=args.ws_url,
+        ws_urls=args.ws_url,
         rpc_url=args.rpc_url,
         duration=args.duration,
         verbose=args.verbose,
