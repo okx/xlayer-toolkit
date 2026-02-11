@@ -7,3 +7,4 @@ set -e
 ./4-op-start-service.sh
 ./5-run-op-succinct.sh
 ./6-run-kailua.sh
+./7-run-railgain.sh

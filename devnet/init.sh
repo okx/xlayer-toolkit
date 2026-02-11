@@ -152,3 +152,38 @@ else
     build_and_tag_image "kailua" "$KAILUA_IMAGE_TAG" "$KAILUA_LOCAL_DIRECTORY" "Dockerfile.local"
   fi
 fi
+
+# Build RAILGUN SDK Test image
+if [ "$SKIP_RAILGUN_SDK_BUILD" = "true" ]; then
+  echo "⏭️  Skipping railgun SDK build"
+else
+  if [ -z "$RAILGUN_KOHAKU_LOCAL_DIRECTORY" ]; then
+    echo "❌ Please set RAILGUN_KOHAKU_LOCAL_DIRECTORY in .env"
+    exit 1
+  fi
+  echo "🔨 Building railgun SDK image"
+  docker build -t "${RAILGUN_SDK_IMAGE_TAG:-railgun-sdk:latest}" \
+    -f "$PWD_DIR/railgun/Dockerfile.sdk" \
+    --build-context kohaku="$RAILGUN_KOHAKU_LOCAL_DIRECTORY" \
+    --progress=plain \
+    "$PWD_DIR/railgun"
+  echo "✅ Built: ${RAILGUN_SDK_IMAGE_TAG:-railgun-sdk:latest}"
+fi
+
+# Build RAILGUN Contract Deploy image
+if [ "$SKIP_RAILGUN_CONTRACT_BUILD" = "true" ]; then
+  echo "⏭️  Skipping railgun contract build"
+else
+  if [ -z "$RAILGUN_CONTRACT_DIR" ]; then
+    echo "❌ Please set RAILGUN_CONTRACT_DIR in .env"
+    exit 1
+  fi
+  
+  echo "🔨 Building railgun contract image"
+  docker build -t "${RAILGUN_CONTRACT_IMAGE_TAG:-railgun-contract:latest}" \
+    -f "$PWD_DIR/railgun/Dockerfile.contract" \
+    --build-context contract="$RAILGUN_CONTRACT_DIR" \
+    --progress=plain \
+    "$PWD_DIR/railgun"
+  echo "✅ Built: ${RAILGUN_CONTRACT_IMAGE_TAG:-railgun-contract:latest}"
+fi
