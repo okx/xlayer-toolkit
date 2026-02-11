@@ -44,17 +44,15 @@ while true; do
 
     # Map leader to container names (all using reth)
     if [ "$OLD_LEADER" = "1" ]; then
-        CONDUCTOR_CONTAINER="op-conductor"
         SEQ_CONTAINER="op-reth-seq"
     else
-        CONDUCTOR_CONTAINER="op-conductor${OLD_LEADER}"
         SEQ_CONTAINER="op-reth-seq${OLD_LEADER}"
     fi
-    echo "  Current leader: conductor-$OLD_LEADER ($CONDUCTOR_CONTAINER + $SEQ_CONTAINER)"
+    echo "  Current leader: $OLD_LEADER ($SEQ_CONTAINER)"
 
     # --- Step 2: Pause leader's containers to trigger failover ---
-    echo "  Pausing $CONDUCTOR_CONTAINER and $SEQ_CONTAINER..."
-    docker pause "$CONDUCTOR_CONTAINER" "$SEQ_CONTAINER" 2>/dev/null
+    echo "  Pausing $SEQ_CONTAINER..."
+    docker stop "$SEQ_CONTAINER" 2>/dev/null
     if [ $? -ne 0 ]; then
         echo "  ERROR: Failed to pause containers"
         sleep 5
@@ -95,12 +93,12 @@ while true; do
     fi
 
     # --- Step 4: Unpause old leader's containers ---
-    echo "  Unpausing $CONDUCTOR_CONTAINER and $SEQ_CONTAINER..."
-    docker unpause "$CONDUCTOR_CONTAINER" "$SEQ_CONTAINER" 2>/dev/null
+    echo "  Unpausing $SEQ_CONTAINER..."
+    docker start "$SEQ_CONTAINER" 2>/dev/null
 
     # --- Wait before next iteration ---
     random_ms=$((RANDOM % 501))
-    sleep_time=$(printf '10.%03d' "$random_ms")
+    sleep_time=$(printf '30.%03d' "$random_ms")
     echo "  Waiting ${sleep_time}s before next iteration..."
     echo ""
     sleep "$sleep_time"
