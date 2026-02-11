@@ -26,8 +26,10 @@ while true; do
         echo "  WARNING: transfer_leader.sh exited with code $exit_code"
     fi
 
-    # Wait 10 seconds before next execution
-    echo "  Wait 5 seconds..."
+    # Wait 5 seconds + random 0-500ms before next execution
+    random_ms=$((RANDOM % 501))
+    sleep_time=$(printf '5.%03d' "$random_ms")
+    echo "  Wait ${sleep_time}s..."
     echo ""
-    sleep 5
+    sleep "$sleep_time"
 done
