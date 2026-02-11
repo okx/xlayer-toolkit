@@ -1,0 +1,19 @@
+devnet/scripts/test_transfer_leader.sh
+---
+{
+  "metadata": {
+    "base_commit_sha": "777c059000e5be1923d1d3169a196eff39f67024",
+    "prompts": {}
+  },
+  "agent_line_stats": {
+    "devnet/scripts/test_transfer_leader.sh": {
+      "Human": {
+        "file_path": "devnet/scripts/test_transfer_leader.sh",
+        "agent_type": "Human",
+        "additions": 14,
+        "deletions": 16,
+        "ai_accepted": 0
+      }
+    }
+  }
+}
