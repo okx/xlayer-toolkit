@@ -171,6 +171,9 @@ class BlockTracker:
     # Blocks to finalize after N confirmations
     blocks_to_confirm_after: int = 2
 
+    # Memory management: keep only recent canonical blocks for debugging
+    max_canonical_blocks_to_keep: int = 30
+
 
 class ReorgDetectedException(Exception):
     """Raised when flashblock transactions are missing from canonical chain."""
@@ -447,6 +450,42 @@ class FlashblockReorgTester:
             # Clean up finalized block from tracking
             if block_number in self.tracker.txs_by_block:
                 del self.tracker.txs_by_block[block_number]
+
+            # Clean up finalized transactions to prevent unbounded memory growth
+            txs_to_remove = [
+                tx_hash for tx_hash, tx in self.tracker.transactions.items()
+                if tx.block_number == block_number and tx.status != TxStatus.PENDING
+            ]
+            for tx_hash in txs_to_remove:
+                del self.tracker.transactions[tx_hash]
+
+            if len(txs_to_remove) > 0:
+                self.log(f"Cleaned up {len(txs_to_remove)} finalized transactions from block #{block_number}")
+
+        # Clean up old canonical blocks to prevent unbounded memory growth
+        self._cleanup_old_canonical_blocks()
+
+    def _cleanup_old_canonical_blocks(self):
+        """Remove old canonical blocks to prevent memory growth."""
+        if len(self.tracker.canonical_blocks) <= self.tracker.max_canonical_blocks_to_keep:
+            return
+
+        # Keep only the most recent max_canonical_blocks_to_keep blocks
+        cutoff_block = self.tracker.latest_canonical_block - self.tracker.max_canonical_blocks_to_keep
+
+        old_blocks = [
+            bn for bn in list(self.tracker.canonical_blocks.keys())
+            if bn < cutoff_block
+        ]
+
+        for bn in old_blocks:
+            del self.tracker.canonical_blocks[bn]
+
+        if len(old_blocks) > 0:
+            self.log(
+                f"Cleaned up {len(old_blocks)} old canonical blocks "
+                f"(keeping last {self.tracker.max_canonical_blocks_to_keep})"
+            )
 
     async def poll_canonical_blocks(self):
         """Periodically poll RPC for new canonical blocks."""
