@@ -195,9 +195,9 @@ if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     fi
 
     # op-seq3 default EL is always op-geth to ensure multiple seqs' geth and reth compatibilities
-    OP_GETH_DATADIR3="$(pwd)/data/op-geth-seq3"
-    rm -rf "$OP_GETH_DATADIR3"
-    cp -r $OP_GETH_DATADIR $OP_GETH_DATADIR3
+    OP_RETH_DATADIR3="$(pwd)/data/op-reth-seq3"
+    rm -rf "$OP_RETH_DATADIR3"
+    cp -r $OP_RETH_DATADIR $OP_RETH_DATADIR3
 fi
 
 if [ "$SEQ_TYPE" = "reth" ]; then

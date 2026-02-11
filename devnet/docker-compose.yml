@@ -681,6 +681,35 @@ services:
         aliases:
           - op-seq-el2
 
+  op-reth-seq3:
+    image: "${OP_RETH_IMAGE_TAG}"
+    container_name: op-reth-seq3
+    entrypoint: /entrypoint/reth-seq.sh 3
+    env_file:
+      - ./.env
+    volumes:
+      - ./data/op-reth-seq3:/datadir
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./config-op/genesis-reth.json:/genesis.json
+      - ./entrypoint:/entrypoint
+      - ./.env:/.env
+      - ./config-op/test.reth.seq.config.toml:/config.toml
+    ports:
+      - "8323:8545"
+      - "30305:30303"
+      - "30305:30303/udp"
+      - "11114:1111" # outbound flashblocks ws port
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+    networks:
+      default:
+        aliases:
+          - op-seq-el3
+
   op-seq2:
     image: "${OP_STACK_IMAGE_TAG}"
     container_name: op-seq2
