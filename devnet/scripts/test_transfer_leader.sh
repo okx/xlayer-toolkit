@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Usage: ./test_transfer_leader.sh [max_runs]
-# Repeatedly pauses the current leader's conductor+sequencer to trigger failover.
+# Repeatedly stops the current leader's conductor+sequencer to trigger failover.
 
 max_runs=${1:-0}  # 0 = unlimited
 BASE_PORT=8547
@@ -50,11 +50,11 @@ while true; do
     fi
     echo "  Current leader: $OLD_LEADER ($SEQ_CONTAINER)"
 
-    # --- Step 2: Pause leader's containers to trigger failover ---
-    echo "  Pausing $SEQ_CONTAINER..."
+    # --- Step 2: Stop leader's containers to trigger failover ---
+    echo "  Stopping $SEQ_CONTAINER..."
     docker stop "$SEQ_CONTAINER" 2>/dev/null
     if [ $? -ne 0 ]; then
-        echo "  ERROR: Failed to pause containers"
+        echo "  ERROR: Failed to stop containers"
         sleep 5
         continue
     fi
@@ -67,7 +67,7 @@ while true; do
         for i in {0..2}; do
             PORT=$((BASE_PORT + i))
 
-            # Skip paused conductor
+            # Skip stopped sequencer
             if [ $((i+1)) = "$OLD_LEADER" ]; then
                 continue
             fi
@@ -87,13 +87,13 @@ while true; do
     if [ "$NEW_LEADER" = "0" ]; then
         echo "  WARNING: No new leader elected after ${MAX_WAIT}s"
     else
-        # Wait for new leader to build blocks before unpausing old leader
+        # Wait for new leader to build blocks before starting old leader
         echo "  Waiting 5s for new leader to build blocks..."
         sleep 5
     fi
 
-    # --- Step 4: Unpause old leader's containers ---
-    echo "  Unpausing $SEQ_CONTAINER..."
+    # --- Step 4: Start old leader's containers ---
+    echo "  Starting $SEQ_CONTAINER..."
     docker start "$SEQ_CONTAINER" 2>/dev/null
 
     # --- Wait before next iteration ---
