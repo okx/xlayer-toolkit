@@ -1,35 +1,109 @@
 #!/bin/bash
 
-# Counter for number of times the script has run
+# Usage: ./test_transfer_leader.sh [max_runs]
+# Repeatedly pauses the current leader's conductor+sequencer to trigger failover.
+
+max_runs=${1:-0}  # 0 = unlimited
+BASE_PORT=8547
 count=0
 
-echo "Starting transfer_leader.sh loop (every 120 seconds)"
+if [ "$max_runs" -gt 0 ]; then
+    echo "Starting conductor failover test (max $max_runs runs)"
+else
+    echo "Starting conductor failover test (unlimited runs)"
+fi
 echo ""
 
-# Trap SIGINT and SIGTERM for graceful shutdown
 trap 'echo -e "\n\nStopped after $count executions"; exit 0' INT TERM
 
 while true; do
-    # Increment counter
     ((count++))
-
-    # Display current execution count with timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[$timestamp] Execution #$count - Running ./transfer_leader.sh"
+    echo "[$timestamp] Execution #$count"
 
-    # Run the transfer_leader script
-    ./transfer-leader.sh
+    # --- Step 1: Find current leader ---
+    LEADER_PORT=0
+    OLD_LEADER=0
+    for i in {0..2}; do
+        PORT=$((BASE_PORT + i))
+        IS_LEADER=$(curl -s -X POST -H "Content-Type: application/json" \
+            --data '{"jsonrpc":"2.0","method":"conductor_leader","params":[],"id":1}' \
+            http://localhost:$PORT 2>/dev/null | jq -r .result)
+        if [ "$IS_LEADER" = "true" ]; then
+            LEADER_PORT=$PORT
+            OLD_LEADER=$((i+1))
+            break
+        fi
+    done
 
-    # Capture exit code
-    exit_code=$?
-    if [ $exit_code -ne 0 ]; then
-        echo "  WARNING: transfer_leader.sh exited with code $exit_code"
+    if [ "$LEADER_PORT" = "0" ]; then
+        echo "  ERROR: No leader found"
+        sleep 5
+        continue
     fi
 
-    # Wait 5 seconds + random 0-500ms before next execution
+    # Map leader to container names (all using reth)
+    if [ "$OLD_LEADER" = "1" ]; then
+        CONDUCTOR_CONTAINER="op-conductor"
+        SEQ_CONTAINER="op-reth-seq"
+    else
+        CONDUCTOR_CONTAINER="op-conductor${OLD_LEADER}"
+        SEQ_CONTAINER="op-reth-seq${OLD_LEADER}"
+    fi
+    echo "  Current leader: conductor-$OLD_LEADER ($CONDUCTOR_CONTAINER + $SEQ_CONTAINER)"
+
+    # --- Step 2: Pause leader's containers to trigger failover ---
+    echo "  Pausing $CONDUCTOR_CONTAINER and $SEQ_CONTAINER..."
+    docker pause "$CONDUCTOR_CONTAINER" "$SEQ_CONTAINER" 2>/dev/null
+    if [ $? -ne 0 ]; then
+        echo "  ERROR: Failed to pause containers"
+        sleep 5
+        continue
+    fi
+
+    # --- Step 3: Wait for new leader election ---
+    NEW_LEADER=0
+    MAX_WAIT=15
+    for ((s=1; s<=MAX_WAIT; s++)); do
+        sleep 0.5
+        for i in {0..2}; do
+            PORT=$((BASE_PORT + i))
+
+            # Skip paused conductor
+            if [ $((i+1)) = "$OLD_LEADER" ]; then
+                continue
+            fi
+
+            IS_LEADER=$(curl -s -X POST -H "Content-Type: application/json" \
+                --data '{"jsonrpc":"2.0","method":"conductor_leader","params":[],"id":1}' \
+                http://localhost:$PORT 2>/dev/null | jq -r .result)
+
+            if [ "$IS_LEADER" = "true" ]; then
+                NEW_LEADER=$((i+1))
+                echo "  ✓ Failover completed: conductor-$OLD_LEADER → conductor-$NEW_LEADER (${s}s)"
+                break 2
+            fi
+        done
+    done
+
+    if [ "$NEW_LEADER" = "0" ]; then
+        echo "  WARNING: No new leader elected after ${MAX_WAIT}s"
+    fi
+
+    # --- Step 4: Unpause old leader's containers ---
+    echo "  Unpausing $CONDUCTOR_CONTAINER and $SEQ_CONTAINER..."
+    docker unpause "$CONDUCTOR_CONTAINER" "$SEQ_CONTAINER" 2>/dev/null
+
+    # --- Wait before next iteration ---
     random_ms=$((RANDOM % 501))
-    sleep_time=$(printf '5.%03d' "$random_ms")
-    echo "  Wait ${sleep_time}s..."
+    sleep_time=$(printf '10.%03d' "$random_ms")
+    echo "  Waiting ${sleep_time}s before next iteration..."
     echo ""
     sleep "$sleep_time"
+
+    # Stop if max runs reached
+    if [ "$max_runs" -gt 0 ] && [ "$count" -ge "$max_runs" ]; then
+        echo "Completed $max_runs runs. Exiting."
+        exit 0
+    fi
 done
