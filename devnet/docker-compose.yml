@@ -340,7 +340,6 @@ services:
       - --pprof.addr=0.0.0.0
       - --pprof.port=9091
       - --l2.enginekind=${SEQ_TYPE}
-      - --p2p.gossip.timestamp.threshold=${GOSSIP_TIMESTAMP_THRESHOLD:-60s}
     depends_on:
       - op-${SEQ_TYPE}-seq
     healthcheck:
