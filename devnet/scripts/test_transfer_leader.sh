@@ -88,6 +88,10 @@ while true; do
 
     if [ "$NEW_LEADER" = "0" ]; then
         echo "  WARNING: No new leader elected after ${MAX_WAIT}s"
+    else
+        # Wait for new leader to build blocks before unpausing old leader
+        echo "  Waiting 5s for new leader to build blocks..."
+        sleep 5
     fi
 
     # --- Step 4: Unpause old leader's containers ---
