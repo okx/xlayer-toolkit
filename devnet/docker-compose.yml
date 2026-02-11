@@ -696,8 +696,8 @@ services:
       - ./config-op/test.reth.seq.config.toml:/config.toml
     ports:
       - "8323:8545"
-      - "30305:30303"
-      - "30305:30303/udp"
+      - "30306:30303"
+      - "30306:30303/udp"
       - "11114:1111" # outbound flashblocks ws port
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8545" ]
@@ -798,39 +798,40 @@ services:
       op-seq2:
         condition: service_healthy
 
-  op-geth-seq3:
-    image: "${OP_GETH_IMAGE_TAG}"
-    container_name: op-geth-seq3
-    entrypoint: geth
-    volumes:
-      - ./data/op-geth-seq3:/datadir
-      - ./config-op/jwt.txt:/jwt.txt
-      - ./config-op/test.geth.seq.config.toml:/config.toml
-    ports:
-      - "8323:8545"
-      - "30306:30303"
-      - "30306:30303/udp"
-    command:
-      - --networkid=${CHAIN_ID}
-      - --verbosity=3
-      - --datadir=/datadir
-      - --db.engine=${DB_ENGINE}
-      - --config=/config.toml
-      - --gcmode=archive
-      - --rollup.disabletxpoolgossip=false
-      - --nodekeyhex=e95afe4502d7b84b03856047e8190a5ba4db55dd16e40945163e5cd9ed620227
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
-      interval: 3s
-      timeout: 3s
-      retries: 10
-      start_period: 3s
-    networks:
-      default:
-        aliases:
-          - op-seq-el3
+  # op-geth-seq3 - DISABLED (using op-reth-seq3 instead)
+  # op-geth-seq3:
+  #   image: "${OP_GETH_IMAGE_TAG}"
+  #   container_name: op-geth-seq3
+  #   entrypoint: geth
+  #   volumes:
+  #     - ./data/op-geth-seq3:/datadir
+  #     - ./config-op/jwt.txt:/jwt.txt
+  #     - ./config-op/test.geth.seq.config.toml:/config.toml
+  #   ports:
+  #     - "8323:8545"
+  #     - "30306:30303"
+  #     - "30306:30303/udp"
+  #   command:
+  #     - --networkid=${CHAIN_ID}
+  #     - --verbosity=3
+  #     - --datadir=/datadir
+  #     - --db.engine=${DB_ENGINE}
+  #     - --config=/config.toml
+  #     - --gcmode=archive
+  #     - --rollup.disabletxpoolgossip=false
+  #     - --nodekeyhex=e95afe4502d7b84b03856047e8190a5ba4db55dd16e40945163e5cd9ed620227
+  #   healthcheck:
+  #     test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
+  #     interval: 3s
+  #     timeout: 3s
+  #     retries: 10
+  #     start_period: 3s
+  #   networks:
+  #     default:
+  #       aliases:
+  #         - op-seq-el3
 
- # Keep op-seq3 to run op-geth as default EL
+ # Keep op-seq3 to run op-reth as default EL
   op-seq3:
     image: "${OP_STACK_IMAGE_TAG}"
     container_name: op-seq3
@@ -848,7 +849,7 @@ services:
       - /app/op-node/bin/op-node
       - --log.level=info
       - --log.format=logfmtms
-      - --l2=http://op-geth-seq3:8552
+      - --l2=http://op-reth-seq3:8552
       - --l2.jwt-secret=/jwt.txt
       - --sequencer.enabled
       - --sequencer.stopped
@@ -873,9 +874,9 @@ services:
       - --safedb.path=/data/safedb
       - --conductor.enabled=${CONDUCTOR_ENABLED:-false}
       - --conductor.rpc=http://op-conductor3:8547
-      - --l2.enginekind=geth
+      - --l2.enginekind=reth
     depends_on:
-      - op-geth-seq3
+      - op-reth-seq3
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9545"]
       interval: 3s
@@ -897,7 +898,7 @@ services:
       - --log.level=debug
       # already existed service
       - --node.rpc=http://op-seq3:9545
-      - --execution.rpc=http://op-geth-seq3:8545
+      - --execution.rpc=http://op-reth-seq3:8545
       # Raft Config
       - --raft.server.id=conductor-3
       - --raft.storage.dir=/data/raft
