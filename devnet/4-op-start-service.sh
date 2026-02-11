@@ -71,8 +71,8 @@ else
     FOUND=false
 
     while [ $ELAPSED -lt $MAX_WAIT ]; do
-        if docker logs op-${SEQ_TYPE}-seq 2>&1 | grep -q "XLayer genesis block"; then
-            echo "✅ XLayer genesis block found in logs!"
+        if docker logs op-${SEQ_TYPE}-seq 2>&1 | grep -q "X Layer genesis block"; then
+            echo "✅ X Layer genesis block found in logs!"
             FOUND=true
             break
         fi
@@ -84,7 +84,7 @@ else
     done
 
     if [ "$FOUND" = false ]; then
-        echo "⚠️  Warning: Timeout waiting for XLayer genesis block (${MAX_WAIT}s)"
+        echo "⚠️  Warning: Timeout waiting for X Layer genesis block (${MAX_WAIT}s)"
         echo "   Proceeding anyway, but there may be issues..."
     fi
 
