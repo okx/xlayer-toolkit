@@ -51,7 +51,8 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
         --flashblocks.addr=0.0.0.0 \
         --flashblocks.port=1111 \
         --flashblocks-url=ws://op-reth-seq:1111 \
-        --xlayer.flashblocks-subscription"
+        --xlayer.flashblocks-subscription \
+	--flashblocks.ws-subscriber-limit=256"
 fi
 
 exec $CMD
