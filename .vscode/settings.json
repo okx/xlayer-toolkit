@@ -6,5 +6,5 @@
   "go.alternateTools": {
     "go": "/opt/homebrew/bin/go",
     "gopls": "${env:HOME}/go/bin/gopls"
-  }
+  },
 }
