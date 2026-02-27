@@ -3,11 +3,16 @@ package utils
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"net/http"
+	"os"
+	"strconv"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
@@ -29,6 +34,119 @@ type SimpleTPSManager struct {
 	minTPS       float64
 
 	url string
+}
+
+var tpsCSVReportEnabled bool
+
+// EnableBenchmarkCSVReport controls whether TPS summaries are also written to CSV.
+func EnableBenchmarkCSVReport(enabled bool) {
+	tpsCSVReportEnabled = enabled
+}
+
+type tpsCSVWriter struct {
+	mu     sync.Mutex
+	closed bool
+	path   string
+	file   *os.File
+	writer *csv.Writer
+}
+
+var currentBenchmarkCSVWriter *tpsCSVWriter
+
+func buildBenchmarkCSVReportPath() string {
+	ts := time.Now().Format("20060102_150405")
+	return fmt.Sprintf("./benchmark_report_%s.csv", ts)
+}
+
+func initBenchmarkCSVWriter() (*tpsCSVWriter, error) {
+	if !tpsCSVReportEnabled {
+		return nil, nil
+	}
+
+	reportPath := buildBenchmarkCSVReportPath()
+	file, err := os.OpenFile(reportPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open tps csv file: %w", err)
+	}
+
+	writer := csv.NewWriter(file)
+	if err := writer.Write([]string{
+		"timestamp",
+		"start_block_num",
+		"new_block_num",
+		"total_tx_count",
+		"average_btps",
+		"max_tps",
+		"min_tps",
+		"time_last_seconds",
+	}); err != nil {
+		file.Close()
+		return nil, fmt.Errorf("failed to write tps csv header: %w", err)
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		file.Close()
+		return nil, fmt.Errorf("failed to flush tps csv header: %w", err)
+	}
+
+	log.Printf("📝 TPS CSV report enabled: %s\n", reportPath)
+	csvWriter := &tpsCSVWriter{path: reportPath, file: file, writer: writer}
+	currentBenchmarkCSVWriter = csvWriter
+	return csvWriter, nil
+}
+
+func (w *tpsCSVWriter) WriteRecord(startBlockNum, newBlockNum, totalTxCount uint64, avgTPS, maxTPS, minTPS float64, elapsedSeconds int64) error {
+	if w == nil {
+		return nil
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return nil
+	}
+
+	record := []string{
+		time.Now().Format(time.RFC3339),
+		strconv.FormatUint(startBlockNum, 10),
+		strconv.FormatUint(newBlockNum, 10),
+		strconv.FormatUint(totalTxCount, 10),
+		fmt.Sprintf("%.2f", avgTPS),
+		fmt.Sprintf("%.2f", maxTPS),
+		fmt.Sprintf("%.2f", minTPS),
+		strconv.FormatInt(elapsedSeconds, 10),
+	}
+	if err := w.writer.Write(record); err != nil {
+		return err
+	}
+	w.writer.Flush()
+	return w.writer.Error()
+}
+
+func (w *tpsCSVWriter) Close() {
+	if w == nil {
+		return
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return
+	}
+	w.closed = true
+	w.writer.Flush()
+	if err := w.writer.Error(); err != nil {
+		log.Printf("⚠️  Failed to flush TPS CSV report: %v\n", err)
+	}
+	if err := w.file.Close(); err != nil {
+		log.Printf("⚠️  Failed to close TPS CSV report: %v\n", err)
+	}
+}
+
+// CloseBenchmarkCSVReport flushes and closes active benchmark CSV report if enabled.
+func CloseBenchmarkCSVReport() {
+	if currentBenchmarkCSVWriter != nil {
+		currentBenchmarkCSVWriter.Close()
+		currentBenchmarkCSVWriter = nil
+	}
 }
 
 func NewTPSMan(clientURL string) *SimpleTPSManager {
@@ -79,6 +197,16 @@ func (tpsman *SimpleTPSManager) BlockHeder(height uint64) *types.Header {
 func (tpsman *SimpleTPSManager) TPSDisplay() {
 	time.Sleep(time.Second * 10)
 	fmt.Println("TPSDisplay")
+	csvWriter, err := initBenchmarkCSVWriter()
+	if err != nil {
+		log.Printf("⚠️  Failed to initialize TPS CSV report: %v\n", err)
+	}
+	defer func() {
+		if csvWriter != nil {
+			CloseBenchmarkCSVReport()
+		}
+	}()
+
 	var initHeight uint64
 	var totalTxCount uint64
 	var initTime time.Time
@@ -127,10 +255,14 @@ func (tpsman *SimpleTPSManager) TPSDisplay() {
 				minTps = avgTPS
 			}
 		}
+		elapsedSeconds := int64(time.Since(initTime).Seconds())
 		fmt.Println("========================================================")
 		fmt.Printf("[TPS log] StartBlock Num: %d, NewBlockNum: %d, totalTxCount:%d\n", initHeight+1, lastHeight, totalTxCount)
-		fmt.Printf("[Summary] Average BTPS: %5.2f, Max TPS: %5.2f, Min TPS: %5.2f, Time Last: %ds\n", avgTPS, maxTps, minTps, int64(time.Since(initTime).Seconds()))
+		fmt.Printf("[Summary] Average BTPS: %5.2f, Max TPS: %5.2f, Min TPS: %5.2f, Time Last: %ds\n", avgTPS, maxTps, minTps, elapsedSeconds)
 		fmt.Println("========================================================")
+		if err := csvWriter.WriteRecord(initHeight+1, lastHeight, totalTxCount, avgTPS, maxTps, minTps, elapsedSeconds); err != nil {
+			log.Printf("⚠️  Failed to write TPS CSV record: %v\n", err)
+		}
 
 		time.Sleep(5 * time.Second)
 	}

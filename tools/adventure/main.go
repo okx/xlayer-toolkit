@@ -18,11 +18,13 @@ func init() {
 const (
 	FlagConfigFile = "config-file"
 	FlagContract   = "contract"
+	FlagCSVReport  = "csv-report"
 )
 
 var (
 	configPath   string
 	contractAddr string
+	csvReport    bool
 )
 
 func main() {
@@ -92,7 +94,7 @@ Example:
 				os.Exit(1)
 			}
 
-			if err := bench.Erc20Bench(configPath, contractAddr); err != nil {
+			if err := bench.Erc20Bench(configPath, contractAddr, csvReport); err != nil {
 				fmt.Printf("ERC20 benchmark failed: %v\n", err)
 				os.Exit(1)
 			}
@@ -101,6 +103,7 @@ Example:
 
 	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
 	cmd.Flags().StringVar(&contractAddr, FlagContract, "", "ERC20 contract address")
+	cmd.Flags().BoolVar(&csvReport, FlagCSVReport, false, "Save benchmark stats to CSV report (benchmark_report_<timestamp>.csv)")
 
 	return cmd
 }
@@ -148,7 +151,7 @@ Example:
 				os.Exit(1)
 			}
 
-			if err := bench.NativeBench(configPath); err != nil {
+			if err := bench.NativeBench(configPath, csvReport); err != nil {
 				fmt.Printf("Native token benchmark failed: %v\n", err)
 				os.Exit(1)
 			}
@@ -156,6 +159,7 @@ Example:
 	}
 
 	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
+	cmd.Flags().BoolVar(&csvReport, FlagCSVReport, false, "Save benchmark stats to CSV report (benchmark_report_<timestamp>.csv)")
 
 	return cmd
 }
