@@ -1,0 +1,10 @@
+{
+  "go.useLanguageServer": true,
+  "go.toolsEnvVars": {
+    "PATH": "/opt/homebrew/bin:${env:HOME}/go/bin:${env:PATH}"
+  },
+  "go.alternateTools": {
+    "go": "/opt/homebrew/bin/go",
+    "gopls": "${env:HOME}/go/bin/gopls"
+  }
+}

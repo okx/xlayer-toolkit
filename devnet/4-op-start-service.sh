@@ -45,6 +45,8 @@ if [ "$SEQ_TYPE" = "geth" ]; then
     echo " ✅ Got block hash at block $TARGET_BLOCK: $NEW_BLOCK_HASH"
     sed_inplace "s/NEW_BLOCK_HASH=.*/NEW_BLOCK_HASH=$NEW_BLOCK_HASH/" .env
 else
+    echo "🚀 Starting op-reth-seq..."
+    docker compose up -d op-reth-seq
     echo "✅ Using existing NEW_BLOCK_HASH from .env for reth mode"
     if [ -z "$NEW_BLOCK_HASH" ]; then
         echo "❌ NEW_BLOCK_HASH is not set in .env for reth mode"
@@ -67,10 +69,11 @@ fi
 
 sleep 5
 
-# Start monitoring stack (Prometheus + Grafana) after op-reth is up
-echo "🚀 Starting monitoring stack (Prometheus + Grafana)..."
-docker compose up -d prometheus grafana
-echo "✅ Grafana available at http://localhost:3000 (admin/admin)"
+if [ "$MONITORING_ENABLED" = "true" ]; then
+    echo "🚀 Starting monitoring stack (Prometheus + Grafana)..."
+    docker compose up -d prometheus grafana
+    echo "✅ Grafana available at http://localhost:3000 (admin/admin)"
+fi
 
 #$SCRIPTS_DIR/add-peers.sh
 

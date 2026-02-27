@@ -134,55 +134,55 @@ echo "🔧 Setting up System Config Parameters..."
 "$PWD_DIR/scripts/setup-system-config-params.sh"
 
 # init geth sequencer
-echo " 🔧 Initializing geth sequencer..."
-OP_GETH_DATADIR="$(pwd)/data/op-geth-seq"
-rm -rf "$OP_GETH_DATADIR"
-mkdir -p "$OP_GETH_DATADIR"
+if [ "$SEQ_TYPE" = "geth" ]; then
+    echo " 🔧 Initializing geth sequencer..."
+    OP_GETH_DATADIR="$(pwd)/data/op-geth-seq"
+    rm -rf "$OP_GETH_DATADIR"
+    mkdir -p "$OP_GETH_DATADIR"
 
-docker compose run --no-deps --rm \
-  -v "$(pwd)/$CONFIG_DIR/genesis.json:/genesis.json" \
-  op-geth-seq \
-  --datadir "/datadir" \
-  --gcmode=archive \
-  --db.engine=$DB_ENGINE \
-  init \
-  --state.scheme=hash \
-  /genesis.json
+    docker compose run --no-deps --rm \
+    -v "$(pwd)/$CONFIG_DIR/genesis.json:/genesis.json" \
+    op-geth-seq \
+    --datadir "/datadir" \
+    --gcmode=archive \
+    --db.engine=$DB_ENGINE \
+    init \
+    --state.scheme=hash \
+    /genesis.json
 
-# Remove nodekey to ensure other nodes generates a unique node ID
-echo " 🔑 Removing nodekey to generate unique node ID for other nodes..."
-rm -f "$OP_GETH_DATADIR/geth/nodekey"
+    # Remove nodekey to ensure other nodes generates a unique node ID
+    echo " 🔑 Removing nodekey to generate unique node ID for other nodes..."
+    rm -f "$OP_GETH_DATADIR/geth/nodekey"
 
-# Get trusted peers enode url
-sed_inplace "s|TRUSTED_PEERS=.*|TRUSTED_PEERS=$(./scripts/trusted-peers.sh)|" .env
+    # Copy initialized database from op-geth-seq to other nodes
+    OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
+
+    echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
+    rm -rf "$OP_GETH_RPC_DATADIR"
+    cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
+fi
 
 # init reth sequencer
-echo " 🔧 Initializing reth sequencer..."
-OP_RETH_DATADIR="$(pwd)/data/op-reth-seq"
-OP_RETH_DATADIR2="$(pwd)/data/op-reth-seq2"
+if [ "$SEQ_TYPE" = "reth" ]; then
+    echo " 🔧 Initializing reth sequencer..."
+    OP_RETH_DATADIR="$(pwd)/data/op-reth-seq"
+    OP_RETH_DATADIR2="$(pwd)/data/op-reth-seq2"
 
-rm -rf "$OP_RETH_DATADIR"
-mkdir -p "$OP_RETH_DATADIR"
-INIT_LOG=$(docker compose run --no-deps --rm \
-  -v "$(pwd)/$CONFIG_DIR/genesis-reth.json:/genesis.json" \
-  --entrypoint op-reth \
-  op-reth-seq \
-  init \
-  --datadir="/datadir" \
-  --chain=/genesis.json \
-  --log.stdout.format=json | tee init.log)
+    rm -rf "$OP_RETH_DATADIR"
+    mkdir -p "$OP_RETH_DATADIR"
+    INIT_LOG=$(docker compose run --no-deps --rm \
+    -v "$(pwd)/$CONFIG_DIR/genesis-reth.json:/genesis.json" \
+    --entrypoint op-reth \
+    op-reth-seq \
+    init \
+    --datadir="/datadir" \
+    --chain=/genesis.json \
+    --log.stdout.format=json | tee init.log)
 
-NEW_BLOCK_HASH=$(tail -n 1 init.log | jq -r .fields.hash)
-echo "NEW_BLOCK_HASH=$NEW_BLOCK_HASH"
-sed_inplace "s/NEW_BLOCK_HASH=.*/NEW_BLOCK_HASH=$NEW_BLOCK_HASH/" .env
-
-
-# Copy initialized database from op-geth-seq to other nodes
-OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
-
-echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
-rm -rf "$OP_GETH_RPC_DATADIR"
-cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
+    NEW_BLOCK_HASH=$(tail -n 1 init.log | jq -r .fields.hash)
+    echo "NEW_BLOCK_HASH=$NEW_BLOCK_HASH"
+    sed_inplace "s/NEW_BLOCK_HASH=.*/NEW_BLOCK_HASH=$NEW_BLOCK_HASH/" .env
+fi
 
 if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     if [ "$SEQ_TYPE" = "geth" ]; then
@@ -194,11 +194,22 @@ if [ "$CONDUCTOR_ENABLED" = "true" ]; then
         cp -r $OP_RETH_DATADIR $OP_RETH_DATADIR2
     fi
 
-    # op-seq3 default EL is always op-geth to ensure multiple seqs' geth and reth compatibilities
-    OP_GETH_DATADIR3="$(pwd)/data/op-geth-seq3"
-    rm -rf "$OP_GETH_DATADIR3"
-    cp -r $OP_GETH_DATADIR $OP_GETH_DATADIR3
+    # op-seq3 copies from the same EL type as SEQ_TYPE (geth->geth, reth->reth)
+    # Note: original code always copied from geth to ensure geth/reth cross-compatibility,
+    # but that's not needed in local devnet testing.
+    if [ "$SEQ_TYPE" = "geth" ]; then
+        OP_GETH_DATADIR3="$(pwd)/data/op-geth-seq3"
+        rm -rf "$OP_GETH_DATADIR3"
+        cp -r $OP_GETH_DATADIR $OP_GETH_DATADIR3
+    elif [ "$SEQ_TYPE" = "reth" ]; then
+        OP_RETH_DATADIR3="$(pwd)/data/op-reth-seq3"
+        rm -rf "$OP_RETH_DATADIR3"
+        cp -r $OP_RETH_DATADIR $OP_RETH_DATADIR3
+    fi
 fi
+
+# Get trusted peers enode url
+sed_inplace "s|TRUSTED_PEERS=.*|TRUSTED_PEERS=$(./scripts/trusted-peers.sh)|" .env
 
 if [ "$SEQ_TYPE" = "reth" ]; then
   echo -n "1aba031aeb5aa8aedadaf04159d20e7d58eeefb3280176c7d59040476c2ab21b" > $OP_RETH_DATADIR/discovery-secret
