@@ -1,13 +1,3 @@
-# Adventure tool Makefile
-#111
-#222
-#333
-#444
-#555
-#666
-#777
-#888
-#999
 .PHONY: build lint erc20 native
 
 # Configuration variables
