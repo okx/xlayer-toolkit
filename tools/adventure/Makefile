@@ -2,6 +2,7 @@
 #111
 #222
 #333
+#444
 .PHONY: build lint erc20 native
 
 # Configuration variables
