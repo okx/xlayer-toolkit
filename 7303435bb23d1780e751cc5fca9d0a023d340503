@@ -1,0 +1,72 @@
+rpc-setup/one-click-setup.sh
+  # agent: cursor::default
+  80f5733 816-834,902-911
+---
+{
+  "metadata": {
+    "base_commit_sha": "7303435bb23d1780e751cc5fca9d0a023d340503",
+    "prompts": {
+      "80f5733": {
+        "agent_id": {
+          "tool": "cursor",
+          "id": "7e0292f0-1455-4a91-9183-f998a93cec1a",
+          "model": "default"
+        },
+        "human_name": "ruiwei.guo",
+        "human_email": "335209779@qq.com",
+        "messages": [
+          {
+            "type": "user",
+            "text": "如何清理我本地macOs的磁盘，我发现在用cursor的过程中磁盘会增长",
+            "timestamp": "2026-02-10T07:59:31.349Z"
+          },
+          {
+            "type": "assistant",
+            "text": "正在查找 Cursor 在 macOS 上的数据存储位置及可安全清理的项。",
+            "timestamp": "2026-02-10T07:59:35.698Z"
+          },
+          {
+            "type": "tool_use",
+            "name": "web_search",
+            "input": {
+              "searchTerm": "Cursor IDE macOS cache storage location disk space cleanup 2024",
+              "toolCallId": "tool_3de34153-4eea-451d-a8b5-eaa2e8ff032"
+            }
+          },
+          {
+            "type": "assistant",
+            "text": "下面是针对「用 Cursor 时磁盘变多」的清理思路和具体做法。\n\n---\n\n## 为什么用 Cursor 时磁盘会变大？\n\nCursor 基于 VS Code，会占用这些地方：\n\n- **缓存**：扩展、语言服务、索引、下载的依赖等  \n- **工作区/会话数据**：每个项目的 workspace 数据、AI 对话等  \n- **日志**：运行和扩展的日志  \n\n这些都会随时间增长，尤其是多项目、多扩展时。\n\n---\n\n## Cursor 在 macOS 上的主要位置\n\n| 路径 | 内容 | 可清理程度 |\n|------|------|------------|\n| `~/Library/Application Support/Cursor` | 主数据：缓存、扩展、用户配置、workspace 等 | 可清理，但会丢设置/扩展 |\n| `~/Library/Application Support/Cursor/Cache` | 缓存（最占空间） | **优先只清这里** |\n| `~/Library/Application Support/Cursor/CachedData` | 语言服务等缓存 | 可清 |\n| `~/.cursor` | 若存在，多为 CLI/额外数据 | 按需清理 |\n| `~/.cursor.json` | 全局配置 | 一般不删，除非要重置 |\n\n---\n\n## 推荐清理步骤（从轻到重）\n\n### 1. 只清缓存（推荐先做，风险最小）\n\n先关掉 Cursor，再在终端执行：\n\n```bash\n# 只清缓存，保留扩展和设置\nrm -rf ~/Library/Application\\ Support/Cursor/Cache\nrm -rf ~/Library/Application\\ Support/Cursor/CachedData\nrm -rf ~/Library/Application\\ Support/Cursor/Code\\ Cache\n```\n\n这样能释放不少空间，且不会丢扩展、主题、片段和大部分设置。\n\n### 2. 若仍不够，再清 CachedExtensions、CachedExtensionVSIXs\n\n```bash\nrm -rf ~/Library/Application\\ Support/Cursor/CachedExtensions\nrm -rf ~/Library/Application\\ Support/Cursor/CachedExtensionVSIXs\n```\n\n下次打开 Cursor 会重新下载扩展，可能稍慢一次。\n\n### 3. 查看 Cursor 目录占用多少空间\n\n```bash\ndu -sh ~/Library/Application\\ Support/Cursor\ndu -sh ~/Library/Application\\ Support/Cursor/*\n```\n\n便于判断是否值得做更彻底清理。\n\n### 4. 彻底重置（会丢失所有 Cursor 设置、扩展、会话）\n\n只有在确定要「重新开始」时才做：\n\n```bash\n# 完全关闭 Cursor 后再执行\nrm -rf ~/Library/Application\\ Support/Cursor\nrm -rf ~/.cursor\n# 可选：rm -f ~/.cursor.json\n```\n\n---\n\n## 其他 macOS 常见占空间来源（和 Cursor 无关也可一起清）\n\n- **Xcode 派生数据/模拟器**（若你在用 Xcode）  \n  - `~/Library/Developer/Xcode/DerivedData`  \n  - `~/Library/Developer/CoreSimulator`  \n- **Homebrew 缓存**：`brew cleanup`  \n- **Docker**：未用镜像/容器会占很多，在 Docker Desktop 里清理  \n- **系统缓存**：`~/Library/Caches` 下按应用查看，可删大文件夹（删前确认不用该应用）  \n- **废纸篓**：清空  \n- **“系统数据”**：在「关于本机 → 存储」里看大项，常包含 Docker、Xcode、虚拟机、Time Machine 本地快照等  \n\n---\n\n## 小结与建议\n\n- **优先做**：关掉 Cursor 后只删 `Cache`、`CachedData`、`Code Cache`（上面的第 1 步），并定期用 `du -sh` 看 `~/Library/Application Support/Cursor` 大小。  \n- **仍不够**：再清 `CachedExtensions` / `CachedExtensionVSIXs`；最后才考虑整删 `~/Library/Application Support/Cursor` 做彻底重置。  \n- 若你愿意，我可以根据你当前磁盘占用情况，帮你写一条「一键只清 Cursor 缓存」的脚本命令（不删设置和扩展）。",
+            "timestamp": "2026-02-10T07:59:50.377Z"
+          },
+          {
+            "type": "user",
+            "text": "帮我修复下这个配置，当选择testnet和snapshot格式时，能去正确的url下载快照，类似mainnet的逻辑",
+            "timestamp": "2026-02-27T08:48:51.667Z"
+          }
+        ],
+        "total_additions": 1240,
+        "total_deletions": 17,
+        "accepted_lines": 1240,
+        "overriden_lines": 0
+      }
+    }
+  },
+  "agent_line_stats": {
+    "rpc-setup/one-click-setup.sh": {
+      "Human": {
+        "file_path": "rpc-setup/one-click-setup.sh",
+        "agent_type": "Human",
+        "additions": 1,
+        "deletions": 1217,
+        "ai_accepted": 0
+      },
+      "cursor::default": {
+        "file_path": "rpc-setup/one-click-setup.sh",
+        "agent_type": "cursor::default",
+        "additions": 29,
+        "deletions": 4,
+        "ai_accepted": 0
+      }
+    }
+  }
+}
