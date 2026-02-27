@@ -32,7 +32,7 @@ erc20: build
 	@echo "🚀 Starting ERC20 test..."
 	@adventure erc20-init $(INIT_AMOUNT) -f $(CONFIG_FILE) 2>&1 | tee /tmp/erc20-init.log
 	@sleep 10
-	@adventure erc20-bench -f $(CONFIG_FILE) --contract $$(grep "ERC20 Address:" /tmp/erc20-init.log | awk '{print $$NF}')
+	@adventure erc20-bench -f $(CONFIG_FILE) --contract $$(grep "ERC20 Address:" /tmp/erc20-init.log | awk '{print $$NF}') --csv-report
 	@echo "✅ ERC20 test completed!"
 
 # Native Token stress test (init + bench)
@@ -40,5 +40,5 @@ native: build
 	@echo "🚀 Starting Native Token test..."
 	@adventure native-init $(INIT_AMOUNT) -f $(CONFIG_FILE)
 	@sleep 10
-	@adventure native-bench -f $(CONFIG_FILE)
+	@adventure native-bench -f $(CONFIG_FILE) --csv-report
 	@echo "✅ Native Token test completed!"

@@ -11,9 +11,11 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	ethcmn "github.com/ethereum/go-ethereum/common"
@@ -208,7 +210,14 @@ func RunTxs(e func(ethcmn.Address) []TxParam) {
 	}
 
 	go tpsman.TPSDisplay()
-	select {}
+
+	stopCh := make(chan os.Signal, 1)
+	signal.Notify(stopCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(stopCh)
+
+	<-stopCh
+	log.Printf("🛑 Interrupt received, flushing benchmark outputs...\n")
+	CloseBenchmarkCSVReport()
 }
 
 var defaultGasPrice = big.NewInt(100000000000)

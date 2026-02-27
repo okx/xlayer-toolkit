@@ -169,7 +169,7 @@ func Erc20Init(amountStr, configPath string) error {
 // ========================================
 
 // Erc20Bench runs ERC20 transfer benchmark
-func Erc20Bench(configPath, contractAddr string) error {
+func Erc20Bench(configPath, contractAddr string, csvReport bool) error {
 	if configPath == "" {
 		return errors.New("configPath must not be empty")
 	}
@@ -179,6 +179,7 @@ func Erc20Bench(configPath, contractAddr string) error {
 	}
 
 	gasPrice := utils.ParseGasPriceToBigInt(utils.TransferCfg.GasPriceGwei, 9)
+	utils.EnableBenchmarkCSVReport(csvReport)
 
 	eParam := utils.NewTxParam(
 		ethcmn.HexToAddress(contractAddr),
