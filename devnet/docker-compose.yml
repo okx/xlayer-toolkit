@@ -38,14 +38,12 @@ services:
         condition: service_completed_successfully
 
   l1-add-bpo-config:
-    image: "alpine:3.19.0"
+    image: "alpine-jq:local"
     container_name: l1-add-bpo-config
     command:
       - /bin/sh
       - -c
-      - |
-        apk add --no-cache jq
-        /scripts/add-bpo-config.sh
+      - /scripts/add-bpo-config.sh
     volumes:
       - ./l1-geth/execution:/execution
       - ./scripts:/scripts
