@@ -14,8 +14,8 @@ AuthVirtualHosts = ["*"]
 JWTSecret = "/jwt.txt"
 
 [Node.P2P]
-MaxPeers = 30
-DiscoveryV5 = true
+MaxPeers = 0
+DiscoveryV5 = false
 
 
 [Eth]

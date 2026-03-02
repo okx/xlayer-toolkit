@@ -813,9 +813,25 @@ download_snapshot() {
     local snapshot_file
     
     if [ "$network" = "testnet" ]; then
-        # Use configuration from network-presets.env (same structure as mainnet)
-        snapshot_url="${TESTNET_SNAPSHOT_BASE_URL}/${TESTNET_SNAPSHOT_FILE}"
-        snapshot_file="${TESTNET_SNAPSHOT_FILENAME}"
+        # Get latest snapshot filename from server (same logic as mainnet)
+        print_info "Fetching latest testnet snapshot filename for $rpc_type..."
+        local latest_url
+        if [ "$rpc_type" = "geth" ]; then
+            latest_url="${TESTNET_GETH_SNAPSHOT_LATEST_URL}"
+        else
+            print_error "Testnet snapshot is only supported for geth (got: $rpc_type)"
+            exit 1
+        fi
+        local latest_filename
+        latest_filename=$(curl -s -f "$latest_url" | tr -d '\n\r' | xargs)
+        if [ -z "$latest_filename" ]; then
+            print_error "Failed to fetch latest testnet snapshot filename from server"
+            exit 1
+        fi
+        snapshot_url="${TESTNET_SNAPSHOT_BASE_URL}/${latest_filename}"
+        snapshot_file="$latest_filename"
+        export TESTNET_SNAPSHOT_FILE="$snapshot_file"
+        print_info "Latest testnet $rpc_type snapshot: $snapshot_file"
     elif [ "$network" = "mainnet" ]; then
         # Get latest snapshot filename based on RPC type
         print_info "Fetching latest mainnet snapshot filename for $rpc_type..."
@@ -883,7 +899,16 @@ extract_snapshot() {
     # Determine snapshot file name based on network and RPC type
     local snapshot_file
     if [ "$network" = "testnet" ]; then
-        snapshot_file="${TESTNET_SNAPSHOT_FILENAME:-geth-testnet.tar.gz}"
+        if [ -n "$TESTNET_SNAPSHOT_FILE" ]; then
+            snapshot_file="$TESTNET_SNAPSHOT_FILE"
+        else
+            snapshot_file=$(ls -t testnet-geth*.tar.gz 2>/dev/null | head -1)
+            if [ -z "$snapshot_file" ]; then
+                snapshot_file="geth-testnet.tar.gz"
+            else
+                print_info "Using existing snapshot file: $snapshot_file"
+            fi
+        fi
     elif [ "$network" = "mainnet" ]; then
         # Use the filename from download_snapshot if available, otherwise fallback to default
         if [ -n "$MAINNET_SNAPSHOT_FILE" ]; then
