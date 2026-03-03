@@ -190,6 +190,29 @@ NEW_BLOCK_HASH=$(tail -n 1 init.log | jq -r .fields.hash)
 echo "NEW_BLOCK_HASH=$NEW_BLOCK_HASH"
 sed_inplace "s/NEW_BLOCK_HASH=.*/NEW_BLOCK_HASH=$NEW_BLOCK_HASH/" .env
 
+if [ "${USE_CHAINSPEC:-false}" = "true" ]; then
+    if [ -z "$OP_RETH_LOCAL_DIRECTORY" ]; then
+        echo " ❌ OP_RETH_LOCAL_DIRECTORY environment variable is not set."
+        echo "This is required to re-build op-reth with chainspec."
+        echo "Please set OP_RETH_LOCAL_DIRECTORY in your .env file"
+        exit 1
+    fi
+    cd "$OP_RETH_LOCAL_DIRECTORY"
+    if [ ! -f "crates/chainspec/res/genesis/xlayer-devnet-genesis-hash.txt" ]; then
+        echo " ❌ crates/chainspec/res/genesis/xlayer-devnet-genesis-hash.txt not found."
+        echo "This is required to re-build op-reth with chainspec."
+        echo "Please run 'just build-docker' to build op-reth with chainspec."
+        exit 1
+    fi
+    echo $NEW_BLOCK_HASH > crates/chainspec/res/genesis/xlayer-devnet-genesis-hash.txt
+    just build-docker
+    cd "$PWD_DIR"
+
+    if [ "$LAUNCH_RPC_NODE" = "true" ] && [ "$RPC_TYPE" = "reth" ]; then
+        echo " 🔄 Copying database from op-reth-seq to op-reth-rpc..."
+        cp -r $OP_RETH_DATADIR "$(pwd)/data/op-reth-rpc"
+    fi
+fi
 
 # Copy initialized database from op-geth-seq to other nodes
 OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
