@@ -6,7 +6,7 @@ use clap::Parser;
 use sp1_sdk::{include_elf, ProverClient, SP1Stdin};
 
 /// The ELF file for the program
-pub const PROGRAM_ELF: &[u8] = include_elf!("fibonacci-program");
+pub const PROGRAM_ELF: &[u8] = include_elf!("multithread-program");
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

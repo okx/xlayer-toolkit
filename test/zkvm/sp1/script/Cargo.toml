@@ -1,16 +1,12 @@
 [package]
 version = "0.1.0"
-name = "fibonacci-script"
+name = "multithread-script"
 edition = "2021"
-default-run = "fibonacci"
+default-run = "multithread"
 
 [[bin]]
-name = "fibonacci"
+name = "multithread"
 path = "src/bin/main.rs"
-
-[[bin]]
-name = "evm"
-path = "src/bin/evm.rs"
 
 [[bin]]
 name = "vkey"

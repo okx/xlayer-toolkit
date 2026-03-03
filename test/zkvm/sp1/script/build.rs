@@ -1,7 +1,7 @@
 use sp1_build::{build_program_with_args, BuildArgs};
 
 fn main() {
-    // Build the fibonacci program
+    // Build the multithread program
     build_program_with_args(
         "../program",
         BuildArgs {
