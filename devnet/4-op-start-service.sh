@@ -13,6 +13,38 @@ sed_inplace() {
   fi
 }
 
+wait_for_el_to_start() {
+    CONTAINER_NAME=$1
+    if [ -z "$CONTAINER_NAME" ]; then
+        echo "Error: CONTAINER_NAME is not set"
+        exit 1
+    fi
+
+    # Wait for execution layer to start
+    echo "⏳ Waiting for execution layer to start in ${CONTAINER_NAME} ..."
+    MAX_WAIT=300  # 5 minutes timeout
+    ELAPSED=0
+    FOUND=false
+
+    while [ $ELAPSED -lt $MAX_WAIT ]; do
+        if docker logs ${CONTAINER_NAME} 2>&1 | grep -q "Starting consensus engine"; then
+            echo "✅ Execution layer started!"
+            FOUND=true
+            break
+        fi
+        sleep 2
+        ELAPSED=$((ELAPSED + 2))
+        if [ $((ELAPSED % 10)) -eq 0 ]; then
+            echo "   Still waiting... (${ELAPSED}s/${MAX_WAIT}s)"
+        fi
+    done
+
+    if [ "$FOUND" = false ]; then
+        echo "❌ Error: Timeout waiting for execution layer to start (${MAX_WAIT}s)"
+        exit 1
+    fi
+}
+
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR=$PWD_DIR/scripts
 
@@ -63,31 +95,7 @@ if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     $SCRIPTS_DIR/active-sequencer.sh
 else
     docker compose up -d op-${SEQ_TYPE}-seq
-
-    # Wait for XLayer genesis block to be logged
-    echo "⏳ Waiting for XLayer genesis block in op-${SEQ_TYPE}-seq logs..."
-    MAX_WAIT=300  # 5 minutes timeout
-    ELAPSED=0
-    FOUND=false
-
-    while [ $ELAPSED -lt $MAX_WAIT ]; do
-        if docker logs op-${SEQ_TYPE}-seq 2>&1 | grep -q "X Layer genesis block"; then
-            echo "✅ X Layer genesis block found in logs!"
-            FOUND=true
-            break
-        fi
-        sleep 2
-        ELAPSED=$((ELAPSED + 2))
-        if [ $((ELAPSED % 10)) -eq 0 ]; then
-            echo "   Still waiting... (${ELAPSED}s/${MAX_WAIT}s)"
-        fi
-    done
-
-    if [ "$FOUND" = false ]; then
-        echo "⚠️  Warning: Timeout waiting for X Layer genesis block (${MAX_WAIT}s)"
-        echo "   Proceeding anyway, but there may be issues..."
-    fi
-
+    wait_for_el_to_start "op-${SEQ_TYPE}-seq"
     docker compose up -d op-seq
 fi
 
@@ -101,6 +109,8 @@ echo "✅ Grafana available at http://localhost:3000 (admin/admin)"
 #$SCRIPTS_DIR/add-peers.sh
 
 if [ "$LAUNCH_RPC_NODE" = "true" ]; then
+    docker compose up -d op-${RPC_TYPE}-rpc
+    wait_for_el_to_start "op-${RPC_TYPE}-rpc"
     docker compose up -d op-rpc
 fi
 
