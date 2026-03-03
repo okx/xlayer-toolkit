@@ -13,7 +13,9 @@ Based on [jolt-on-zeroos](https://github.com/zouguangxian/jolt-on-zeroos).
    ```bash
    ./bootstrap
 
-   cargo run --release -p multithread-test
+   cargo run --release -p multithread-test --bin native
+
+   cargo run --release -p multithread-test --bin multithread-test
    ```
 
 ## Test Description

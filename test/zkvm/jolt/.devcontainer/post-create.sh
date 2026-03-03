@@ -15,4 +15,5 @@ cargo install --git https://github.com/LayerZero-Research/jolt.git --branch gx/i
 
 echo ""
 echo "=== Setup Complete ==="
-echo "Run: cargo run --release -p multithread-test"
+echo "Run: cargo run --release -p multithread-test --bin native"
+echo "Run: cargo run --release -p multithread-test --bin multithread-test"
