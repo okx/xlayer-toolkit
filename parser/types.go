@@ -21,7 +21,11 @@
 //	codeRegistryAddress      (20 bytes) : ICodeRegistry contract address
 package erc8021
 
-import "strings"
+import (
+	"encoding/hex"
+	"fmt"
+	"strings"
+)
 
 // Marker is the 16-byte magic that terminates every ERC-8021 suffix.
 var Marker = [16]byte{
@@ -84,8 +88,11 @@ type Schema0 struct {
 	Codes []string
 }
 
-// String returns the codes as a comma-joined string.
-func (s Schema0) String() string { return strings.Join(s.Codes, ",") }
+// String returns a human-readable representation including the schema id.
+func (s Schema0) String() string {
+	return fmt.Sprintf("SchemaID: 0x00 (Canonical Code Registry)\nCodes:    %s",
+		strings.Join(s.Codes, ", "))
+}
 
 // Schema1 is the structured attribution for SchemaCanonicalV1 (0x01).
 // It extends Schema 0 with a reference to a custom on-chain Code Registry.
@@ -99,4 +106,14 @@ type Schema1 struct {
 
 	// RegistryAddress is the ICodeRegistry contract address on RegistryChainID.
 	RegistryAddress [20]byte
+}
+
+// String returns a human-readable representation including all Schema 1 fields.
+func (s Schema1) String() string {
+	return fmt.Sprintf(
+		"SchemaID:        0x01 (Custom Code Registry)\nCodes:           %s\nRegistryChainID: 0x%s\nRegistryAddress: 0x%s",
+		strings.Join(s.Codes, ", "),
+		hex.EncodeToString(s.RegistryChainID),
+		hex.EncodeToString(s.RegistryAddress[:]),
+	)
 }
