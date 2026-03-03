@@ -43,7 +43,7 @@ if [ "$MERGE_RETH_GENESIS" = "true" ]; then
 
     docker run --rm -v "./config-op:/config-op" -v "$MERGE_RETH_DATADIR_PATH:/reth-datadir" $XLAYER_RETH_TOOLS_IMAGE_TAG \
         gen-genesis --datadir /reth-datadir --chain $MERGE_RETH_CHAIN \
-        --template-genesis /config-op/genesis.json --output /config-op/genesis-reth.json
+        --template-genesis /config-op/genesis.json --output /config-op/genesis-reth.json --output-chainspec /config-op/xlayer-devnet.json
 else
     # Create genesis-reth.json from genesis.json
     echo "🔧 Creating genesis-reth.json from genesis.json ..."
@@ -205,6 +205,7 @@ if [ "${USE_CHAINSPEC:-false}" = "true" ]; then
         exit 1
     fi
     echo $NEW_BLOCK_HASH > crates/chainspec/res/genesis/xlayer-devnet-genesis-hash.txt
+    cp $PWD_DIR/config-op/xlayer-devnet.json crates/chainspec/res/genesis/xlayer-devnet.json
     just build-docker
     cd "$PWD_DIR"
 
