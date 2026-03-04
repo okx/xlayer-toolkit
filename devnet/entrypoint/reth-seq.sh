@@ -59,7 +59,6 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
     CMD="$CMD \
         --flashblocks.enabled \
         --flashblocks.disable-state-root \
-        --flashblocks.disable-async-calculate-state-root \
         --flashblocks.addr=0.0.0.0 \
         --flashblocks.port=1111 \
         --flashblocks.block-time=200"

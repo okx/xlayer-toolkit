@@ -148,6 +148,7 @@ echo "🔧 Setting up System Config Parameters..."
 "$PWD_DIR/scripts/setup-system-config-params.sh"
 
 # init geth sequencer
+if [ "$CONDUCTOR_ENABLED" = "true" ] || [ "$SEQ_TYPE" = "geth" ]; then
 echo " 🔧 Initializing geth sequencer..."
 OP_GETH_DATADIR="$(pwd)/data/op-geth-seq"
 rm -rf "$OP_GETH_DATADIR"
@@ -166,6 +167,15 @@ docker compose run --no-deps --rm \
 # Remove nodekey to ensure other nodes generates a unique node ID
 echo " 🔑 Removing nodekey to generate unique node ID for other nodes..."
 rm -f "$OP_GETH_DATADIR/geth/nodekey"
+
+# Copy initialized database from op-geth-seq to other nodes
+OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
+
+echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
+rm -rf "$OP_GETH_RPC_DATADIR"
+cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
+
+fi
 
 # Get trusted peers enode url
 sed_inplace "s|TRUSTED_PEERS=.*|TRUSTED_PEERS=$(./scripts/trusted-peers.sh)|" .env
