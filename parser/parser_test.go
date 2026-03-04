@@ -2,6 +2,7 @@ package erc8021
 
 import (
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -158,7 +159,7 @@ func TestParseSchema1_CrossChain(t *testing.T) {
 	// Simulate a multi-chain app referencing a registry on Optimism (chain 10).
 	txData := []byte{0xCA, 0xFE}
 	var addr [20]byte
-	addr[19] = 0x42 // minimal non-zero address
+	addr[19] = 0x42         // minimal non-zero address
 	chainID := []byte{0x0A} // chain 10
 
 	calldata := buildCalldataV1(txData, "crossapp", addr, chainID)
@@ -283,4 +284,31 @@ func mustDecodeHex(s string) []byte {
 		panic(err)
 	}
 	return b
+}
+
+func TestMainNetData(t *testing.T) {
+	hexcalldata := "0x74657374040080218021802180218021802180218021"
+	d, err := ParseHex(hexcalldata)
+	if err != nil {
+		t.Fatalf("ParseHex error: %v", err)
+	}
+	s0, err := d.Attribution.DecodeSchema0()
+	if err != nil {
+		t.Fatalf("DecodeSchema0 error: %v", err)
+	}
+	fmt.Println(s0)
+
+	// Schema1
+
+	hexcalldataV1 := "0x00a3b805dbf39e5d54f9d09c130ff2132b4a0a2107a00274657374040180218021802180218021802180218021"
+	d, err = ParseHex(hexcalldataV1)
+	if err != nil {
+		t.Fatalf("ParseHex error: %v", err)
+	}
+	s1, err := d.Attribution.DecodeSchema1()
+	if err != nil {
+		t.Fatalf("DecodeSchema1 error: %v", err)
+	}
+	fmt.Println(s1)
+
 }

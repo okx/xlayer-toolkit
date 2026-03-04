@@ -62,9 +62,9 @@ func Parse(calldata []byte) (*Data, error) {
 			return nil, fmt.Errorf("erc8021: Schema 1: not enough bytes for codeRegistryChainId (len=%d)", chainIdLen)
 		}
 		// Parse right-to-left within the remaining prefix.
-		addrEnd := txDataEnd - 1 - chainIdLen       // end of address block
-		addrStart := addrEnd - 20                    // start of address block
-		chainIdStart := txDataEnd - 1 - chainIdLen  // start of chainId block
+		addrEnd := txDataEnd - 1 - chainIdLen      // end of address block
+		addrStart := addrEnd - 20                  // start of address block
+		chainIdStart := txDataEnd - 1 - chainIdLen // start of chainId block
 		if addrStart < 0 {
 			return nil, fmt.Errorf("erc8021: Schema 1: not enough bytes for codeRegistryAddress")
 		}
