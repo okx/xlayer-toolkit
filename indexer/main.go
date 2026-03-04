@@ -1,24 +1,18 @@
-// Command erc8021 fetches a transaction by hash, parses its ERC-8021
-// attribution suffix, and optionally queries the on-chain BuilderCodes registry.
+// Command erc8021 parses ERC-8021 attribution data.
 //
-// Usage:
+// Subcommands:
+//
+//	erc8021 parse --input <hex> [-ca <0x…>] [-rpc <url>]
+//	    Parse ERC-8021 attribution from a raw hex calldata string.
 //
 //	erc8021 -txhash <0x…> [-rpc <url>] [-ca <0x…>]
-//
-// Flags:
-//
-//	-txhash  Transaction hash to inspect (required).
-//	-rpc     JSON-RPC endpoint for the chain the tx was sent on
-//	         (default: http://localhost:8545).
-//	-ca      BuilderCodes registry contract address.
-//	         Required for Schema 0 registry lookup.
-//	         For Schema 1 the address embedded in the calldata is used;
-//	         -ca is ignored in that case.
+//	    Fetch a transaction by hash and parse its ERC-8021 attribution suffix.
 package main
 
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -28,14 +22,55 @@ import (
 )
 
 func main() {
-	txHash := flag.String("txhash", "", "transaction hash (required)")
-	rpcURL := flag.String("rpc", "http://localhost:8545", "JSON-RPC endpoint URL")
-	caStr := flag.String("ca", "", "BuilderCodes registry contract address (for Schema 0 lookup)")
-	flag.Parse()
+	if len(os.Args) > 1 && os.Args[1] == "parse" {
+		cmdParse(os.Args[2:])
+		return
+	}
+	cmdTx(os.Args[1:])
+}
+
+// cmdParse handles: erc8021 parse --input <hex> [-ca <addr>] [-rpc <url>]
+func cmdParse(args []string) {
+	fs := flag.NewFlagSet("parse", flag.ExitOnError)
+	input := fs.String("input", "", "hex-encoded calldata to parse (required)")
+	caStr := fs.String("ca", "", "BuilderCodes registry address (Schema 0 lookup)")
+	rpcURL := fs.String("rpc", "http://localhost:8545", "JSON-RPC endpoint URL (for registry lookup)")
+	fs.Usage = func() {
+		fmt.Fprintln(os.Stderr, "usage: erc8021 parse --input <hex> [-ca <0x…>] [-rpc <url>]")
+		fs.PrintDefaults()
+	}
+	_ = fs.Parse(args)
+
+	if *input == "" {
+		fmt.Fprintln(os.Stderr, "error: --input is required")
+		fs.Usage()
+		os.Exit(1)
+	}
+
+	data, err := erc8021.ParseHex(*input)
+	if err != nil {
+		fatalf("parsing calldata: %v", err)
+	}
+
+	printAttribution(context.Background(), data, *rpcURL, *caStr)
+}
+
+// cmdTx handles: erc8021 -txhash <hash> [-rpc <url>] [-ca <addr>]
+func cmdTx(args []string) {
+	fs := flag.NewFlagSet("tx", flag.ExitOnError)
+	txHash := fs.String("txhash", "", "transaction hash (required)")
+	rpcURL := fs.String("rpc", "http://localhost:8545", "JSON-RPC endpoint URL")
+	caStr := fs.String("ca", "", "BuilderCodes registry contract address (for Schema 0 lookup)")
+	fs.Usage = func() {
+		fmt.Fprintln(os.Stderr, "usage: erc8021 -txhash <0x…> [-rpc <url>] [-ca <0x…>]")
+		fmt.Fprintln(os.Stderr, "       erc8021 parse --input <hex> [-rpc <url>] [-ca <0x…>]")
+		fs.PrintDefaults()
+	}
+	_ = fs.Parse(args)
 
 	if *txHash == "" {
 		fmt.Fprintln(os.Stderr, "error: -txhash is required")
-		flag.Usage()
+		fs.Usage()
 		os.Exit(1)
 	}
 
@@ -56,7 +91,12 @@ func main() {
 		fatalf("parsing ERC-8021 data: %v", err)
 	}
 
-	fmt.Printf("TxData: %s\n\n", data.TxDataHex())
+	printAttribution(ctx, data, *rpcURL, *caStr)
+}
+
+// printAttribution prints parsed ERC-8021 fields and optionally queries the registry.
+func printAttribution(ctx context.Context, data *erc8021.Data, rpcURL, caStr string) {
+	fmt.Printf("TxData(without attribution): %s\n\n", data.TxDataHex())
 	fmt.Println("── Attribution ──────────────────────────────────────────")
 
 	switch data.Attribution.SchemaID {
@@ -68,16 +108,15 @@ func main() {
 		}
 		fmt.Println(s0)
 
-		// Schema 0: registry address comes from the -ca flag (host chain).
-		if *caStr == "" {
+		if caStr == "" {
 			fmt.Println("\n(pass -ca <address> to query the BuilderCodes registry)")
 			return
 		}
-		registryAddr, err := parseAddr(*caStr)
+		registryAddr, err := parseAddr(caStr)
 		if err != nil {
-			fatalf("invalid -ca address %q: %v", *caStr, err)
+			fatalf("invalid -ca address %q: %v", caStr, err)
 		}
-		printRegistryResults(ctx, *rpcURL, registryAddr, s0.Codes, "")
+		printRegistryResults(ctx, rpcURL, registryAddr, s0.Codes, "")
 
 	case erc8021.SchemaCanonicalV1:
 		s1, err := data.Attribution.DecodeSchema1()
@@ -86,10 +125,9 @@ func main() {
 		}
 		fmt.Println(s1)
 
-		// Schema 1: registry address is embedded in the calldata; -ca is ignored.
 		registryAddr := s1.RegistryAddress
 		chainNote := fmt.Sprintf("chain 0x%s", hex.EncodeToString(s1.RegistryChainID))
-		printRegistryResults(ctx, *rpcURL, registryAddr, s1.Codes, chainNote)
+		printRegistryResults(ctx, rpcURL, registryAddr, s1.Codes, chainNote)
 
 	default:
 		fmt.Printf("SchemaID: 0x%02x (unknown)\n", data.Attribution.SchemaID)
@@ -98,7 +136,6 @@ func main() {
 }
 
 // printRegistryResults queries the BuilderCodes registry and prints per-code info.
-// chainNote is an optional label (e.g. "chain 0x0a") shown in the section header.
 func printRegistryResults(ctx context.Context, rpcURL string, registryAddr [20]byte, codes []string, chainNote string) {
 	if len(codes) == 0 {
 		return
@@ -114,7 +151,11 @@ func printRegistryResults(ctx context.Context, rpcURL string, registryAddr [20]b
 
 	infos, err := erc8021.QueryRegistry(ctx, rpcURL, registryAddr, codes)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "registry query error: %v\n", err)
+		if errors.Is(err, erc8021.ErrNotDeployed) {
+			fmt.Fprintf(os.Stderr, "error: registry not deployed at %s (rpc: %s)\n", addrHex, rpcURL)
+		} else {
+			fmt.Fprintf(os.Stderr, "registry query error: %v\n", err)
+		}
 		return
 	}
 

@@ -2,6 +2,7 @@ package erc8021
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -11,6 +12,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
+
+// ErrNotDeployed is returned when an eth_call to a registry address returns
+// empty data, which means no contract is deployed at that address.
+var ErrNotDeployed = errors.New("no contract deployed at registry address")
 
 // builderCodesABI is the minimal ABI for BuilderCodes.sol functions we query.
 const builderCodesABI = `[
@@ -168,6 +173,9 @@ func abiCall(ctx context.Context, client *ethclient.Client, contractABI abi.ABI,
 	result, err := client.CallContract(ctx, ethereum.CallMsg{To: &addr, Data: data}, nil)
 	if err != nil {
 		return nil, fmt.Errorf("eth_call %s: %w", method, err)
+	}
+	if len(result) == 0 {
+		return nil, ErrNotDeployed
 	}
 	out, err := contractABI.Unpack(method, result)
 	if err != nil {
