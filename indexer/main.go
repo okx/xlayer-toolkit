@@ -124,6 +124,7 @@ func printRegistryResults(ctx context.Context, rpcURL string, registryAddr [20]b
 		if info.IsRegistered {
 			fmt.Printf("  Owner:         %s\n", info.Owner.Hex())
 			fmt.Printf("  PayoutAddress: %s\n", info.PayoutAddress.Hex())
+			fmt.Printf("  CodeURI:       %s\n", info.CodeURI)
 		}
 	}
 }

@@ -25,7 +25,10 @@ const builderCodesABI = `[
    "outputs":[{"name":"tokenId","type":"uint256"}]},
   {"name":"ownerOf","type":"function","stateMutability":"view",
    "inputs":[{"name":"tokenId","type":"uint256"}],
-   "outputs":[{"name":"","type":"address"}]}
+   "outputs":[{"name":"","type":"address"}]},
+  {"name":"codeURI","type":"function","stateMutability":"view",
+   "inputs":[{"name":"code","type":"string"}],
+   "outputs":[{"name":"","type":"string"}]}
 ]`
 
 // CodeInfo holds on-chain data fetched from a BuilderCodes registry for one code.
@@ -38,6 +41,8 @@ type CodeInfo struct {
 	Owner common.Address
 	// PayoutAddress is the registered payout address (populated when IsRegistered is true).
 	PayoutAddress common.Address
+	// CodeURI is the metadata URI for the code (populated when IsRegistered is true).
+	CodeURI string
 }
 
 // QueryRegistry queries the BuilderCodes contract at registryAddr (via rpcURL)
@@ -96,10 +101,28 @@ func queryOneCode(ctx context.Context, client *ethclient.Client, contractABI abi
 	}
 	info.Owner = owner
 
+	uri, err := abiCallString(ctx, client, contractABI, addr, "codeURI", code)
+	if err != nil {
+		return info, fmt.Errorf("erc8021/registry: codeURI(%q): %w", code, err)
+	}
+	info.CodeURI = uri
+
 	return info, nil
 }
 
 // ── low-level ABI call helpers ─────────────────────────────────────────────
+
+func abiCallString(ctx context.Context, client *ethclient.Client, contractABI abi.ABI, addr common.Address, method string, args ...any) (string, error) {
+	out, err := abiCall(ctx, client, contractABI, addr, method, args...)
+	if err != nil {
+		return "", err
+	}
+	v, ok := out[0].(string)
+	if !ok {
+		return "", fmt.Errorf("expected string, got %T", out[0])
+	}
+	return v, nil
+}
 
 func abiCallBool(ctx context.Context, client *ethclient.Client, contractABI abi.ABI, addr common.Address, method string, args ...any) (bool, error) {
 	out, err := abiCall(ctx, client, contractABI, addr, method, args...)
