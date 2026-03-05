@@ -3,6 +3,10 @@ name = "sha2-program"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+precompile = ["sha2-lib/precompile"]
+
 [dependencies]
 alloy-sol-types = { workspace = true }
 sp1-zkvm = { version = "6.0.1" }

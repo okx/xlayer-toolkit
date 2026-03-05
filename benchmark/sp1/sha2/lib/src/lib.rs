@@ -1,5 +1,11 @@
 use alloy_sol_types::sol;
-use sha2::{Digest, Sha224, Sha256, Sha384, Sha512};
+
+#[cfg(feature = "precompile")]
+use sha2_precompile as sha2_impl;
+#[cfg(not(feature = "precompile"))]
+use sha2 as sha2_impl;
+
+use sha2_impl::{Digest, Sha224, Sha256, Sha384, Sha512};
 
 sol! {
     struct PublicValuesStruct {

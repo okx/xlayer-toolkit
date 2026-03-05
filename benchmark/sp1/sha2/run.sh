@@ -6,6 +6,7 @@ N=${N:-256}
 MODE=${MODE:-execute}            # execute | prove
 PROOF_MODE=${PROOF_MODE:-core}   # core | compressed | groth16
 INPUT_SIZE=${INPUT_SIZE:-32}     # input data size in bytes
+PRECOMPILE=${PRECOMPILE:-false} # true | false (use SP1 precompile for SHA-256)
 CMD=${1:-run}                    # build | run | download-params
 
 SP1_CIRCUIT_VERSION="v6.0.0"
@@ -32,7 +33,8 @@ case "$CMD" in
         -e SP1_PROVER="${SP1_PROVER:-cpu}" \
         -e NETWORK_PRIVATE_KEY="${NETWORK_PRIVATE_KEY:-}" \
         "$IMAGE" \
-        "--${MODE}" --n "$N" --mode "$PROOF_MODE" --input-size "$INPUT_SIZE"
+        "--${MODE}" --n "$N" --mode "$PROOF_MODE" --input-size "$INPUT_SIZE" \
+        $([ "$PRECOMPILE" = "true" ] && echo "--precompile")
     ;;
   download-params)
     PARAM_DIR="$HOME/.sp1/circuits/groth16/${SP1_CIRCUIT_VERSION}"
@@ -77,7 +79,7 @@ case "$CMD" in
   *)
     echo "Usage: $0 [build|run|download-params]"
     echo "  build            Build the Docker image"
-    echo "  run              Run benchmark (N=256|512, MODE=execute|prove, PROOF_MODE=core|compressed|groth16, INPUT_SIZE=32)"
+    echo "  run              Run benchmark (N=256|512, MODE=execute|prove, PROOF_MODE=core|compressed|groth16, INPUT_SIZE=32, PRECOMPILE=true|false)"
     echo "  download-params  Pre-download Groth16 circuit params (~1GB) into Docker volume"
     exit 1
     ;;

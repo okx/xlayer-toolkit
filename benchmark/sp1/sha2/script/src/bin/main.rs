@@ -10,7 +10,8 @@ use sp1_sdk::{
     include_elf, Elf, ProvingKey, SP1Proof, SP1Stdin,
 };
 
-const SHA2_ELF: Elf = include_elf!("sha2-program");
+const SHA2_ELF_VANILLA: Elf = include_elf!("sha2-program-vanilla");
+const SHA2_ELF_PRECOMPILE: Elf = include_elf!("sha2-program-precompile");
 
 #[derive(ValueEnum, Clone, Debug)]
 enum ProofMode {
@@ -48,6 +49,10 @@ struct Args {
     /// Size of input data to hash (bytes)
     #[arg(long, default_value = "32")]
     input_size: usize,
+
+    /// Use SP1 precompile for SHA-256 (accelerated syscall)
+    #[arg(long, default_value = "false")]
+    precompile: bool,
 }
 
 fn main() {
@@ -67,17 +72,22 @@ fn main() {
 
     let client = ProverClient::from_env();
     let input_data: Vec<u8> = vec![0xAB; args.input_size];
+    let elf = if args.precompile {
+        SHA2_ELF_PRECOMPILE
+    } else {
+        SHA2_ELF_VANILLA
+    };
 
     println!(
-        "\n=== SP1 SHA-{} Benchmark ({}, input={}B) ===\n",
-        args.n, args.mode, args.input_size
+        "\n=== SP1 SHA-{} Benchmark ({}, input={}B, precompile={}) ===\n",
+        args.n, args.mode, args.input_size, args.precompile
     );
 
     if args.execute {
         let mut stdin = SP1Stdin::new();
         stdin.write(&args.n);
         stdin.write(&input_data);
-        let (output, report) = client.execute(SHA2_ELF, stdin).run().unwrap();
+        let (output, report) = client.execute(elf, stdin).run().unwrap();
         let decoded = PublicValuesStruct::abi_decode(output.as_slice()).unwrap();
         println!("Variant:      SHA-{}", decoded.variant);
         println!("Digest:       0x{}", hex::encode(decoded.digest));
@@ -87,11 +97,11 @@ fn main() {
         let mut stdin_exec = SP1Stdin::new();
         stdin_exec.write(&args.n);
         stdin_exec.write(&input_data);
-        let (_, report) = client.execute(SHA2_ELF, stdin_exec).run().unwrap();
+        let (_, report) = client.execute(elf, stdin_exec).run().unwrap();
         let cycle_count = report.total_instruction_count();
 
         // --- setup proving key ---
-        let pk = client.setup(SHA2_ELF).expect("failed to setup elf");
+        let pk = client.setup(elf).expect("failed to setup elf");
 
         // --- prove with selected mode ---
         let mut stdin_prove = SP1Stdin::new();
@@ -135,6 +145,7 @@ fn main() {
         };
 
         println!("Proof Mode:   {}", args.mode);
+        println!("Precompile:   {}", args.precompile);
         println!("SHA Variant:  SHA-{}", args.n);
         println!("Input Size:   {} bytes", args.input_size);
         println!("Cycle Count:  {} cycles", cycle_count);
