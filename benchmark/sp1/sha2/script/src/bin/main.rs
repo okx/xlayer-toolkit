@@ -7,7 +7,7 @@ use clap::{Parser, ValueEnum};
 use sha2_lib::PublicValuesStruct;
 use sp1_sdk::{
     blocking::{ProveRequest, Prover, ProverClient},
-    include_elf, Elf, ProvingKey, SP1Stdin,
+    include_elf, Elf, ProvingKey, SP1Proof, SP1Stdin,
 };
 
 const SHA2_ELF: Elf = include_elf!("sha2-program");
@@ -113,10 +113,13 @@ fn main() {
         stop_flag.store(true, Ordering::Relaxed);
         let peak_stats = monitor_handle.join().unwrap();
 
-        let proof_size_kb = postcard::to_allocvec(&proof)
+        let total_size = postcard::to_allocvec(&proof)
             .expect("failed to serialize proof")
-            .len() as f64
-            / 1024.0;
+            .len();
+        let raw_proof_bytes = match &proof.proof {
+            SP1Proof::Groth16(p) => p.raw_proof.len() / 2, // hex string → bytes
+            _ => postcard::to_allocvec(&proof.proof).unwrap().len(),
+        };
 
         // --- verify (skip for Core which is not on-chain verifiable) ---
         let verify_time = match args.mode {
@@ -136,7 +139,7 @@ fn main() {
         println!("Input Size:   {} bytes", args.input_size);
         println!("Cycle Count:  {} cycles", cycle_count);
         println!("Prove Time:   {:.2}s", prove_time.as_secs_f64());
-        println!("Proof Size:   {:.1} KB", proof_size_kb);
+        println!("Proof Size:   {} bytes (raw proof) / {} bytes (total)", raw_proof_bytes, total_size);
         match verify_time {
             Some(t) => println!("Verify Time:  {:.3}s", t.as_secs_f64()),
             None => println!("Verify:       skipped (Core, not on-chain verifiable)"),

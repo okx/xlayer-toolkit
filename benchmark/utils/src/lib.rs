@@ -7,9 +7,14 @@ pub struct PeakStats {
     pub peak_cpu_pct: f64,
 }
 
-/// Read VmRSS (current resident set) from /proc/self/status, in KB.
+/// Read VmRSS from /proc/self/status, in KB.
 pub fn read_vm_rss_kb() -> u64 {
-    std::fs::read_to_string("/proc/self/status")
+    read_vm_rss_kb_pid("self")
+}
+
+/// Read VmRSS from /proc/{pid}/status, in KB.
+pub fn read_vm_rss_kb_pid(pid: &str) -> u64 {
+    std::fs::read_to_string(format!("/proc/{}/status", pid))
         .unwrap_or_default()
         .lines()
         .find(|l| l.starts_with("VmRSS:"))
@@ -20,7 +25,12 @@ pub fn read_vm_rss_kb() -> u64 {
 
 /// Read utime+stime in jiffies from /proc/self/stat.
 pub fn read_cpu_ticks() -> u64 {
-    let stat = std::fs::read_to_string("/proc/self/stat").unwrap_or_default();
+    read_cpu_ticks_pid("self")
+}
+
+/// Read utime+stime in jiffies from /proc/{pid}/stat.
+pub fn read_cpu_ticks_pid(pid: &str) -> u64 {
+    let stat = std::fs::read_to_string(format!("/proc/{}/stat", pid)).unwrap_or_default();
     if let Some(pos) = stat.rfind(')') {
         let rest: Vec<&str> = stat[pos + 1..].split_whitespace().collect();
         let utime: u64 = rest.get(11).and_then(|s| s.parse().ok()).unwrap_or(0);
@@ -58,6 +68,57 @@ pub fn start_peak_monitor() -> (Arc<AtomicBool>, std::thread::JoinHandle<PeakSta
             }
 
             let curr_ticks = read_cpu_ticks();
+            let curr_time = Instant::now();
+            let elapsed = curr_time.duration_since(prev_time).as_secs_f64();
+            let cpu_secs = curr_ticks.saturating_sub(prev_ticks) as f64 / TICKS_PER_SEC;
+            let pct = if elapsed > 0.0 {
+                (cpu_secs / elapsed / ncpus * 100.0).min(100.0 * ncpus)
+            } else {
+                0.0
+            };
+            if pct > peak_cpu_pct {
+                peak_cpu_pct = pct;
+            }
+
+            prev_ticks = curr_ticks;
+            prev_time = curr_time;
+        }
+
+        PeakStats {
+            peak_memory_mb: peak_mem_mb,
+            peak_cpu_pct,
+        }
+    });
+
+    (stop, handle)
+}
+
+/// Like `start_peak_monitor`, but monitors an external process by PID.
+pub fn start_peak_monitor_pid(pid: u32) -> (Arc<AtomicBool>, std::thread::JoinHandle<PeakStats>) {
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_clone = Arc::clone(&stop);
+    let pid_str = pid.to_string();
+
+    let handle = std::thread::spawn(move || {
+        let mut peak_mem_mb = 0f64;
+        let mut peak_cpu_pct = 0f64;
+        let ncpus = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1) as f64;
+        const TICKS_PER_SEC: f64 = 100.0;
+
+        let mut prev_ticks = read_cpu_ticks_pid(&pid_str);
+        let mut prev_time = Instant::now();
+
+        while !stop_clone.load(Ordering::Relaxed) {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+
+            let rss_mb = read_vm_rss_kb_pid(&pid_str) as f64 / 1024.0;
+            if rss_mb > peak_mem_mb {
+                peak_mem_mb = rss_mb;
+            }
+
+            let curr_ticks = read_cpu_ticks_pid(&pid_str);
             let curr_time = Instant::now();
             let elapsed = curr_time.duration_since(prev_time).as_secs_f64();
             let cpu_secs = curr_ticks.saturating_sub(prev_ticks) as f64 / TICKS_PER_SEC;

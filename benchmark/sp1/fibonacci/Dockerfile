@@ -36,7 +36,8 @@ RUN --mount=type=cache,target=/root/.cargo/registry \
 
 # ─── Stage 2: runner (minimal image) ─────────────────────────────────────────
 FROM debian:bookworm-slim AS runner
-RUN apt-get update && apt-get install -y ca-certificates libssl3 \
+RUN apt-get update && apt-get install -y ca-certificates libssl3 curl \
+    && curl -fsSL https://get.docker.com | sh \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /fibonacci
 COPY --from=builder /fibonacci-bin ./fibonacci
