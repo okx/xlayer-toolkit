@@ -97,7 +97,7 @@ fn main() {
         let mut stdin_exec = SP1Stdin::new();
         stdin_exec.write(&args.n);
         stdin_exec.write(&input_data);
-        let (_, report) = client.execute(elf, stdin_exec).run().unwrap();
+        let (_, report) = client.execute(elf.clone(), stdin_exec).run().unwrap();
         let cycle_count = report.total_instruction_count();
 
         // --- setup proving key ---
