@@ -4,7 +4,7 @@
 #===============================================================================
 #
 #  Runs pre-warming benchmarks with varying worker counts on devnet.
-#  Uses devnet_comparison.sh for metric capture (with correct metric keys).
+#  Uses scripts/devnet-comparison.sh for metric capture (with correct metric keys).
 #
 #  Improvements over v1:
 #    - Updates BOTH pre-warming-workers AND pre-fetch-workers
@@ -13,7 +13,7 @@
 #    - Auto-generates comparison reports at end
 #    - Better logging and progress output
 #
-#  Metric Keys Used (via devnet_comparison.sh):
+#  Metric Keys Used (via devnet-comparison.sh):
 #    - reth_payloads_cached_reads_hits (always-on cache hits)
 #    - reth_payloads_cached_reads_misses (always-on cache misses)
 #    - reth_txpool_pre_warming_simulations_completed
@@ -23,7 +23,7 @@
 #    - reth_block_timing_build_calc_state_root_sum/count
 #
 #  USAGE:
-#    ./run-pre-warming-benchmark-v2.sh
+#    ./run-pre-warming-benchmark.sh
 #
 #  ENV VARS (optional):
 #    METRICS_HOST=localhost        # Metrics endpoint host
@@ -33,13 +33,13 @@
 #
 #===============================================================================
 
-set -e
+# set -e
 
 # Configuration (can override via env vars)
 WORKERS="${WORKERS:-8 16 32 64}"
 METRICS_HOST="${METRICS_HOST:-localhost}"
 METRICS_PORT="${METRICS_PORT:-9001}"
-BENCHMARK_DURATION="${BENCHMARK_DURATION:-3}"  # minutes
+BENCHMARK_DURATION="${BENCHMARK_DURATION:-10}"  # minutes
 
 wait_for_el_to_start() {
     CONTAINER_NAME=$1
@@ -114,7 +114,7 @@ docker compose up -d op-seq
 sleep 30
 
 echo "📊 Capturing metrics for ${BENCHMARK_DURATION} minutes..."
-./devnet_comparison.sh ${METRICS_HOST} ${METRICS_PORT} ${BENCHMARK_DURATION} ${LOGS}/prewarming_metrics_no_prewarming.json &
+./scripts/devnet-comparison.sh ${METRICS_HOST} ${METRICS_PORT} ${BENCHMARK_DURATION} ${LOGS}/prewarming_metrics_no_prewarming.json &
 timeout ${BENCHMARK_DURATION}m adventure native-bench -f ../tools/adventure/testdata/config.json --csv-report ${LOGS}/tps_no_prewarming.csv
 wait
 
@@ -152,7 +152,7 @@ for W in $WORKERS; do
     sleep 30
 
     echo "📊 Capturing metrics for ${BENCHMARK_DURATION} minutes with ${W} workers..."
-    ./devnet_comparison.sh ${METRICS_HOST} ${METRICS_PORT} ${BENCHMARK_DURATION} ${LOGS}/prewarming_metrics_${W}_workers.json &
+    ./scripts/devnet-comparison.sh ${METRICS_HOST} ${METRICS_PORT} ${BENCHMARK_DURATION} ${LOGS}/prewarming_metrics_${W}_workers.json &
     timeout ${BENCHMARK_DURATION}m adventure native-bench -f ../tools/adventure/testdata/config.json --csv-report ${LOGS}/tps_${W}_workers.csv
     wait
 
@@ -172,7 +172,7 @@ BASELINE="${LOGS}/prewarming_metrics_no_prewarming.json"
 
 for W in $WORKERS; do
     echo "  Comparing baseline vs ${W} workers..."
-    ./devnet_comparison.sh --compare ${BASELINE} ${LOGS}/prewarming_metrics_${W}_workers.json > ${LOGS}/comparison_${W}_workers.txt 2>&1 || true
+    ./scripts/devnet-comparison.sh --compare ${BASELINE} ${LOGS}/prewarming_metrics_${W}_workers.json > ${LOGS}/comparison_${W}_workers.txt 2>&1 || true
 done
 
 #-------------------------------------------------------------------------------
