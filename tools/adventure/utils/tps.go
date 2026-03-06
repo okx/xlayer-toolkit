@@ -79,6 +79,12 @@ func initBenchmarkCSVWriter() (*tpsCSVWriter, error) {
 		"max_tps",
 		"min_tps",
 		"time_last_seconds",
+		"cpu_percent",
+		"mem_percent",
+		"mem_used_bytes",
+		"mem_total_bytes",
+		"disk_read_bytes_per_sec",
+		"disk_write_bytes_per_sec",
 	}); err != nil {
 		file.Close()
 		return nil, fmt.Errorf("failed to write tps csv header: %w", err)
@@ -95,7 +101,7 @@ func initBenchmarkCSVWriter() (*tpsCSVWriter, error) {
 	return csvWriter, nil
 }
 
-func (w *tpsCSVWriter) WriteRecord(startBlockNum, newBlockNum, totalTxCount uint64, avgTPS, maxTPS, minTPS float64, elapsedSeconds int64) error {
+func (w *tpsCSVWriter) WriteRecord(startBlockNum, newBlockNum, totalTxCount uint64, avgTPS, maxTPS, minTPS float64, elapsedSeconds int64, sys SysMetrics) error {
 	if w == nil {
 		return nil
 	}
@@ -114,6 +120,12 @@ func (w *tpsCSVWriter) WriteRecord(startBlockNum, newBlockNum, totalTxCount uint
 		fmt.Sprintf("%.2f", maxTPS),
 		fmt.Sprintf("%.2f", minTPS),
 		strconv.FormatInt(elapsedSeconds, 10),
+		fmt.Sprintf("%.2f", sys.CPUPercent),
+		fmt.Sprintf("%.2f", sys.MemPercent),
+		strconv.FormatUint(sys.MemUsedBytes, 10),
+		strconv.FormatUint(sys.MemTotalBytes, 10),
+		fmt.Sprintf("%.0f", sys.DiskReadBytesPerSec),
+		fmt.Sprintf("%.0f", sys.DiskWriteBytesPerSec),
 	}
 	if err := w.writer.Write(record); err != nil {
 		return err
@@ -207,6 +219,8 @@ func (tpsman *SimpleTPSManager) TPSDisplay() {
 		}
 	}()
 
+	sysCollector := NewSysMetricsCollector()
+
 	var initHeight uint64
 	var totalTxCount uint64
 	var initTime time.Time
@@ -256,11 +270,15 @@ func (tpsman *SimpleTPSManager) TPSDisplay() {
 			}
 		}
 		elapsedSeconds := int64(time.Since(initTime).Seconds())
+
+		sys := sysCollector.Sample()
+
 		fmt.Println("========================================================")
 		fmt.Printf("[TPS log] StartBlock Num: %d, NewBlockNum: %d, totalTxCount:%d\n", initHeight+1, lastHeight, totalTxCount)
 		fmt.Printf("[Summary] Average BTPS: %5.2f, Max TPS: %5.2f, Min TPS: %5.2f, Time Last: %ds\n", avgTPS, maxTps, minTps, elapsedSeconds)
+		fmt.Printf("[SysMon]  %s\n", sys.FormatConsole())
 		fmt.Println("========================================================")
-		if err := csvWriter.WriteRecord(initHeight+1, lastHeight, totalTxCount, avgTPS, maxTps, minTps, elapsedSeconds); err != nil {
+		if err := csvWriter.WriteRecord(initHeight+1, lastHeight, totalTxCount, avgTPS, maxTps, minTps, elapsedSeconds, sys); err != nil {
 			log.Printf("⚠️  Failed to write TPS CSV record: %v\n", err)
 		}
 
