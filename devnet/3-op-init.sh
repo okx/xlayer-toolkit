@@ -19,6 +19,7 @@ if [ -z "$FORK_BLOCK" ]; then
     exit 1
 fi
 
+echo "🔧 Setting fork block and parent hash in genesis.json ..."
 FORK_BLOCK_HEX=$(printf "0x%x" "$FORK_BLOCK")
 sed_inplace '/"config": {/,/}/ s/"optimism": {/"legacyXLayerBlock": '"$((FORK_BLOCK + 1))"',\n    "optimism": {/' ./config-op/genesis.json
 sed_inplace 's/"parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"/"parentHash": "'"$PARENT_HASH"'"/' ./config-op/genesis.json
@@ -31,11 +32,24 @@ sed_inplace 's/"eip1559Elasticity": [0-9]*/"eip1559Elasticity": '"$(jq -r '.conf
 sed_inplace 's/"eip1559Denominator": [0-9]*/"eip1559Denominator": '"$(jq -r '.config.optimism.eip1559Denominator' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"$(jq -r '.config.optimism.eip1559DenominatorCanyon' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 
-# echo "🔧 Merging genesis files..."
-# /usr/local/bin/merge_genesis ~/dev/okx/xlayer-toolkit/devnet/config-op/genesis.json ~/data/xlayer/genesis_2m.json ~/dev/okx/xlayer-toolkit/devnet/config-op/merged.genesis.json
-# cp ./config-op/merged.genesis.json ./config-op/genesis-reth.json
-cp ./config-op/genesis.json ./config-op/genesis-reth.json
-sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
+if [ "$MERGE_RETH_GENESIS" = "true" ]; then
+    echo "🔧 Merging genesis files..."
+
+    if [ -z "$MERGE_RETH_DATADIR_PATH" ]; then
+        echo " ❌ MERGE_RETH_DATADIR_PATH environment variable is not set"
+        echo "Please set MERGE_RETH_DATADIR_PATH in your .env file"
+        exit 1
+    fi
+
+    docker run --rm -v "./config-op:/config-op" -v "$MERGE_RETH_DATADIR_PATH:/reth-datadir" $XLAYER_RETH_TOOLS_IMAGE_TAG \
+        gen-genesis --datadir /reth-datadir --chain $MERGE_RETH_CHAIN \
+        --template-genesis /config-op/genesis.json --output /config-op/genesis-reth.json --output-chainspec /config-op/xlayer-devnet.json
+else
+    # Create genesis-reth.json from genesis.json
+    echo "🔧 Creating genesis-reth.json from genesis.json ..."
+    cp ./config-op/genesis.json ./config-op/genesis-reth.json
+    sed_inplace 's/"number": "0x0"/"number": "'"$NEXT_BLOCK_NUMBER_HEX"'"/' ./config-op/genesis-reth.json
+fi
 
 # Extract contract addresses from state.json and update .env file
 echo "🔧 Extracting contract addresses from state.json..."
@@ -176,6 +190,30 @@ NEW_BLOCK_HASH=$(tail -n 1 init.log | jq -r .fields.hash)
 echo "NEW_BLOCK_HASH=$NEW_BLOCK_HASH"
 sed_inplace "s/NEW_BLOCK_HASH=.*/NEW_BLOCK_HASH=$NEW_BLOCK_HASH/" .env
 
+if [ "${USE_CHAINSPEC:-false}" = "true" ]; then
+    if [ -z "$OP_RETH_LOCAL_DIRECTORY" ]; then
+        echo " ❌ OP_RETH_LOCAL_DIRECTORY environment variable is not set."
+        echo "This is required to re-build op-reth with chainspec."
+        echo "Please set OP_RETH_LOCAL_DIRECTORY in your .env file"
+        exit 1
+    fi
+    cd "$OP_RETH_LOCAL_DIRECTORY"
+    if [ ! -f "crates/chainspec/res/genesis/xlayer-devnet-genesis-hash.txt" ]; then
+        echo " ❌ crates/chainspec/res/genesis/xlayer-devnet-genesis-hash.txt not found."
+        echo "This is required to re-build op-reth with chainspec."
+        echo "Please run 'just build-docker' to build op-reth with chainspec."
+        exit 1
+    fi
+    echo $NEW_BLOCK_HASH > crates/chainspec/res/genesis/xlayer-devnet-genesis-hash.txt
+    cp $PWD_DIR/config-op/xlayer-devnet.json crates/chainspec/res/genesis/xlayer-devnet.json
+    just build-docker
+    cd "$PWD_DIR"
+
+    if [ "$LAUNCH_RPC_NODE" = "true" ] && [ "$RPC_TYPE" = "reth" ]; then
+        echo " 🔄 Copying database from op-reth-seq to op-reth-rpc..."
+        cp -r $OP_RETH_DATADIR "$(pwd)/data/op-reth-rpc"
+    fi
+fi
 
 # Copy initialized database from op-geth-seq to other nodes
 OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"

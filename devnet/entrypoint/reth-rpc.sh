@@ -14,10 +14,16 @@ fi
 # Read the first argument (1 or 0), default to 0 if not provided
 FLASHBLOCKS_RPC=${FLASHBLOCKS_RPC:-"true"}
 
+if [ "${USE_CHAINSPEC:-false}" = "true" ]; then
+    CHAIN="xlayer-devnet"
+else
+    CHAIN="/genesis.json"
+fi
+
 # Build the command with common arguments
 CMD="op-reth node \
       --datadir=/datadir \
-      --chain=/genesis.json \
+      --chain=$CHAIN \
       --config=/config.toml \
       --http \
       --http.corsdomain=* \

@@ -11,9 +11,15 @@ if [ "${JEMALLOC_PROFILING:-false}" = "true" ]; then
     echo "Jemalloc profiling enabled: _RJEM_MALLOC_CONF=$_RJEM_MALLOC_CONF"
 fi
 
+if [ "${USE_CHAINSPEC:-false}" = "true" ]; then
+    CHAIN="xlayer-devnet"
+else
+    CHAIN="/genesis.json"
+fi
+
 CMD="op-reth node \
       --datadir=/datadir \
-      --chain=/genesis.json \
+      --chain=$CHAIN \
       --config=/config.toml \
       --http \
       --http.corsdomain=* \
