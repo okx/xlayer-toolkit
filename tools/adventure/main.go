@@ -24,8 +24,23 @@ const (
 var (
 	configPath   string
 	contractAddr string
-	csvReport    bool
 )
+
+// resolveCSVReportFlag converts the --csv-report flag value into the string passed
+// to EnableBenchmarkCSVReport:
+//   - flag not set  → "" (disabled)
+//   - flag set to "" → "-" (use default timestamped filename)
+//   - flag set to "foo.csv" → "foo.csv"
+func resolveCSVReportFlag(cmd *cobra.Command, flagName string) string {
+	if !cmd.Flags().Changed(flagName) {
+		return ""
+	}
+	val, _ := cmd.Flags().GetString(flagName)
+	if val == "" {
+		return "-"
+	}
+	return val
+}
 
 func main() {
 	rootCmd := &cobra.Command{
@@ -94,7 +109,8 @@ Example:
 				os.Exit(1)
 			}
 
-			if err := bench.Erc20Bench(configPath, contractAddr, csvReport); err != nil {
+			reportFile := resolveCSVReportFlag(cmd, FlagCSVReport)
+			if err := bench.Erc20Bench(configPath, contractAddr, reportFile); err != nil {
 				fmt.Printf("ERC20 benchmark failed: %v\n", err)
 				os.Exit(1)
 			}
@@ -103,7 +119,7 @@ Example:
 
 	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
 	cmd.Flags().StringVar(&contractAddr, FlagContract, "", "ERC20 contract address")
-	cmd.Flags().BoolVar(&csvReport, FlagCSVReport, false, "Save benchmark stats to CSV report (benchmark_report_<timestamp>.csv)")
+	cmd.Flags().String(FlagCSVReport, "", "Save benchmark stats to a CSV file; provide a filename or leave empty for a timestamped default (benchmark_report_<timestamp>.csv)")
 
 	return cmd
 }
@@ -151,7 +167,8 @@ Example:
 				os.Exit(1)
 			}
 
-			if err := bench.NativeBench(configPath, csvReport); err != nil {
+			reportFile := resolveCSVReportFlag(cmd, FlagCSVReport)
+			if err := bench.NativeBench(configPath, reportFile); err != nil {
 				fmt.Printf("Native token benchmark failed: %v\n", err)
 				os.Exit(1)
 			}
@@ -159,7 +176,7 @@ Example:
 	}
 
 	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
-	cmd.Flags().BoolVar(&csvReport, FlagCSVReport, false, "Save benchmark stats to CSV report (benchmark_report_<timestamp>.csv)")
+	cmd.Flags().String(FlagCSVReport, "", "Save benchmark stats to a CSV file; provide a filename or leave empty for a timestamped default (benchmark_report_<timestamp>.csv)")
 
 	return cmd
 }

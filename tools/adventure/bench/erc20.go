@@ -169,7 +169,7 @@ func Erc20Init(amountStr, configPath string) error {
 // ========================================
 
 // Erc20Bench runs ERC20 transfer benchmark
-func Erc20Bench(configPath, contractAddr string, csvReport bool) error {
+func Erc20Bench(configPath, contractAddr string, csvReport string) error {
 	if configPath == "" {
 		return errors.New("configPath must not be empty")
 	}

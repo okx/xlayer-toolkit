@@ -36,11 +36,13 @@ type SimpleTPSManager struct {
 	url string
 }
 
-var tpsCSVReportEnabled bool
+var tpsCSVReportFile string
 
-// EnableBenchmarkCSVReport controls whether TPS summaries are also written to CSV.
-func EnableBenchmarkCSVReport(enabled bool) {
-	tpsCSVReportEnabled = enabled
+// EnableBenchmarkCSVReport sets the CSV report filename. An empty string disables
+// reporting. A non-empty string enables it; if the value equals "-", the default
+// timestamped filename is used instead.
+func EnableBenchmarkCSVReport(filename string) {
+	tpsCSVReportFile = filename
 }
 
 type tpsCSVWriter struct {
@@ -59,11 +61,14 @@ func buildBenchmarkCSVReportPath() string {
 }
 
 func initBenchmarkCSVWriter() (*tpsCSVWriter, error) {
-	if !tpsCSVReportEnabled {
+	if tpsCSVReportFile == "" {
 		return nil, nil
 	}
 
-	reportPath := buildBenchmarkCSVReportPath()
+	reportPath := tpsCSVReportFile
+	if reportPath == "-" {
+		reportPath = buildBenchmarkCSVReportPath()
+	}
 	file, err := os.OpenFile(reportPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open tps csv file: %w", err)

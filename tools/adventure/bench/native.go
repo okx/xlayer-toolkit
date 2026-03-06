@@ -105,7 +105,7 @@ func NativeInit(amountStr, configPath string) error {
 }
 
 // NativeBench runs native token transfer benchmark
-func NativeBench(configPath string, csvReport bool) error {
+func NativeBench(configPath string, csvReport string) error {
 	amount := new(big.Int).SetUint64(1)
 
 	if configPath == "" {
