@@ -1,5 +1,6 @@
 [workspace]
-members = ["lib", "program", "script"]
+members = ["lib", "script"]
+exclude = ["program"]
 resolver = "2"
 
 [workspace.dependencies]

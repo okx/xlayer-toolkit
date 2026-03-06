@@ -7,12 +7,14 @@ pub struct PeakStats {
     pub peak_cpu_pct: f64,
 }
 
-/// Read VmRSS from /proc/self/status, in KB.
+// ─── Linux: /proc filesystem ───────────────────────────────────────────────
+
+#[cfg(target_os = "linux")]
 pub fn read_vm_rss_kb() -> u64 {
     read_vm_rss_kb_pid("self")
 }
 
-/// Read VmRSS from /proc/{pid}/status, in KB.
+#[cfg(target_os = "linux")]
 pub fn read_vm_rss_kb_pid(pid: &str) -> u64 {
     std::fs::read_to_string(format!("/proc/{}/status", pid))
         .unwrap_or_default()
@@ -23,12 +25,12 @@ pub fn read_vm_rss_kb_pid(pid: &str) -> u64 {
         .unwrap_or(0)
 }
 
-/// Read utime+stime in jiffies from /proc/self/stat.
+#[cfg(target_os = "linux")]
 pub fn read_cpu_ticks() -> u64 {
     read_cpu_ticks_pid("self")
 }
 
-/// Read utime+stime in jiffies from /proc/{pid}/stat.
+#[cfg(target_os = "linux")]
 pub fn read_cpu_ticks_pid(pid: &str) -> u64 {
     let stat = std::fs::read_to_string(format!("/proc/{}/stat", pid)).unwrap_or_default();
     if let Some(pos) = stat.rfind(')') {
@@ -41,9 +43,69 @@ pub fn read_cpu_ticks_pid(pid: &str) -> u64 {
     }
 }
 
+#[cfg(target_os = "linux")]
+const TICKS_PER_SEC: f64 = 100.0;
+
+// ─── macOS: getrusage ──────────────────────────────────────────────────────
+
+#[cfg(target_os = "macos")]
+pub fn read_vm_rss_kb() -> u64 {
+    unsafe {
+        let mut usage: libc::rusage = std::mem::zeroed();
+        if libc::getrusage(libc::RUSAGE_SELF, &mut usage) == 0 {
+            // macOS ru_maxrss is in bytes
+            usage.ru_maxrss as u64 / 1024
+        } else {
+            0
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn read_vm_rss_kb_pid(_pid: &str) -> u64 {
+    read_vm_rss_kb()
+}
+
+#[cfg(target_os = "macos")]
+pub fn read_cpu_ticks() -> u64 {
+    unsafe {
+        let mut usage: libc::rusage = std::mem::zeroed();
+        if libc::getrusage(libc::RUSAGE_SELF, &mut usage) == 0 {
+            let utime =
+                usage.ru_utime.tv_sec as u64 * 1_000_000 + usage.ru_utime.tv_usec as u64;
+            let stime =
+                usage.ru_stime.tv_sec as u64 * 1_000_000 + usage.ru_stime.tv_usec as u64;
+            utime + stime
+        } else {
+            0
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn read_cpu_ticks_pid(_pid: &str) -> u64 {
+    read_cpu_ticks()
+}
+
+#[cfg(target_os = "macos")]
+const TICKS_PER_SEC: f64 = 1_000_000.0; // microseconds
+
+// ─── Fallback ──────────────────────────────────────────────────────────────
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub fn read_vm_rss_kb() -> u64 { 0 }
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub fn read_vm_rss_kb_pid(_pid: &str) -> u64 { 0 }
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub fn read_cpu_ticks() -> u64 { 0 }
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+pub fn read_cpu_ticks_pid(_pid: &str) -> u64 { 0 }
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+const TICKS_PER_SEC: f64 = 1.0;
+
+// ─── Monitor ───────────────────────────────────────────────────────────────
+
 /// Spawn a background thread that samples peak RSS and peak CPU every 100 ms.
-/// Returns a stop flag and a join handle. Set the flag to true to stop monitoring,
-/// then join the handle to get the peak stats.
 pub fn start_peak_monitor() -> (Arc<AtomicBool>, std::thread::JoinHandle<PeakStats>) {
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = Arc::clone(&stop);
@@ -54,7 +116,6 @@ pub fn start_peak_monitor() -> (Arc<AtomicBool>, std::thread::JoinHandle<PeakSta
         let ncpus = std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(1) as f64;
-        const TICKS_PER_SEC: f64 = 100.0;
 
         let mut prev_ticks = read_cpu_ticks();
         let mut prev_time = Instant::now();
@@ -105,7 +166,6 @@ pub fn start_peak_monitor_pid(pid: u32) -> (Arc<AtomicBool>, std::thread::JoinHa
         let ncpus = std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(1) as f64;
-        const TICKS_PER_SEC: f64 = 100.0;
 
         let mut prev_ticks = read_cpu_ticks_pid(&pid_str);
         let mut prev_time = Instant::now();

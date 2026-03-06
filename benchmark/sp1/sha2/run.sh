@@ -1,45 +1,33 @@
 #!/bin/bash
 set -e
 
-IMAGE=${IMAGE:-sp1-sha2}
 N=${N:-256}
 MODE=${MODE:-execute}            # execute | prove
 PROOF_MODE=${PROOF_MODE:-core}   # core | compressed | groth16
 INPUT_SIZE=${INPUT_SIZE:-32}     # input data size in bytes
-PRECOMPILE=${PRECOMPILE:-false} # true | false (use SP1 precompile for SHA-256)
+PRECOMPILE=${PRECOMPILE:-false}  # true | false (use SP1 precompile for SHA-256)
 CMD=${1:-run}                    # build | run | download-params
 
 SP1_CIRCUIT_VERSION="v6.0.0"
 S3_BASE="https://sp1-circuits.s3-us-east-2.amazonaws.com"
 
-# Build context must be benchmark/ root to include shared utils crate
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_CONTEXT="$SCRIPT_DIR/../.."
 
 case "$CMD" in
   build)
-    docker build -t "$IMAGE" -f "$SCRIPT_DIR/Dockerfile" "$BUILD_CONTEXT"
+    cd "$SCRIPT_DIR"
+    cargo build --release --bin sha2-bench
     ;;
   run)
-    DOCKER_FLAGS=""
-    if [ "$PROOF_MODE" = "groth16" ]; then
-        DOCKER_FLAGS="-v /var/run/docker.sock:/var/run/docker.sock \
-            -v $HOME/.sp1:$HOME/.sp1 -e HOME=$HOME \
-            -e TMPDIR=$HOME/.sp1/tmp"
-    fi
-    docker run --rm \
-        -v sp1-params:/root/.sp1 \
-        $DOCKER_FLAGS \
-        -e SP1_PROVER="${SP1_PROVER:-cpu}" \
-        -e NETWORK_PRIVATE_KEY="${NETWORK_PRIVATE_KEY:-}" \
-        "$IMAGE" \
+    RUST_LOG="${RUST_LOG:-info}" \
+    SP1_PROVER="${SP1_PROVER:-cpu}" \
+        "$SCRIPT_DIR/target/release/sha2-bench" \
         "--${MODE}" --n "$N" --mode "$PROOF_MODE" --input-size "$INPUT_SIZE" \
         $([ "$PRECOMPILE" = "true" ] && echo "--precompile")
     ;;
   download-params)
     PARAM_DIR="$HOME/.sp1/circuits/groth16/${SP1_CIRCUIT_VERSION}"
 
-    # 1) Download and extract Groth16 circuit params
     if [ -f "$PARAM_DIR/groth16_pk.bin" ]; then
         echo "Circuit params already exist at $PARAM_DIR, skipping download."
     else
@@ -54,7 +42,6 @@ case "$CMD" in
         echo "Params installed to $PARAM_DIR"
     fi
 
-    # 2) Pull arm64 gnark image if on Apple Silicon (v6.0.0 manifest lacks arm64)
     ARCH=$(uname -m)
     GNARK_IMAGE="ghcr.io/succinctlabs/sp1-gnark:${SP1_CIRCUIT_VERSION}"
     if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
@@ -70,7 +57,6 @@ case "$CMD" in
         echo "[2/3] x86_64 detected, gnark image will be pulled automatically."
     fi
 
-    # 3) Create tmp dir for Groth16 Docker-in-Docker witness exchange
     mkdir -p "$HOME/.sp1/tmp"
     echo "[3/3] Created $HOME/.sp1/tmp"
 
@@ -78,9 +64,9 @@ case "$CMD" in
     ;;
   *)
     echo "Usage: $0 [build|run|download-params]"
-    echo "  build            Build the Docker image"
-    echo "  run              Run benchmark (N=256|512, MODE=execute|prove, PROOF_MODE=core|compressed|groth16, INPUT_SIZE=32, PRECOMPILE=true|false)"
-    echo "  download-params  Pre-download Groth16 circuit params (~1GB) into Docker volume"
+    echo "  build            Build the binary (guest ELFs via Docker, host natively)"
+    echo "  run              Run benchmark"
+    echo "  download-params  Pre-download Groth16 circuit params (~1GB)"
     exit 1
     ;;
 esac

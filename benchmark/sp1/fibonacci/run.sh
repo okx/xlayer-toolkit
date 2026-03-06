@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-IMAGE=${IMAGE:-sp1-fibonacci}
 N=${N:-20}
 MODE=${MODE:-execute}            # execute | prove
 PROOF_MODE=${PROOF_MODE:-core}   # core | compressed | groth16
@@ -10,30 +9,19 @@ CMD=${1:-run}                    # build | run | download-params
 SP1_CIRCUIT_VERSION="v6.0.0"
 S3_BASE="https://sp1-circuits.s3-us-east-2.amazonaws.com"
 
-# Build context must be benchmark/ root to include shared utils crate
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_CONTEXT="$SCRIPT_DIR/../.."
 
 case "$CMD" in
   build)
-    docker build -t "$IMAGE" -f "$SCRIPT_DIR/Dockerfile" "$BUILD_CONTEXT"
+    # Guest ELF compiled in Docker via build.rs (docker: true),
+    # host binary compiled natively — runs directly on host.
+    cd "$SCRIPT_DIR"
+    cargo build --release --bin fibonacci
     ;;
   run)
-    DOCKER_FLAGS=""
-    if [ "$PROOF_MODE" = "groth16" ]; then
-        # Groth16 uses Docker-in-Docker (gnark prover). The inner container
-        # mounts circuit dir and temp files from the HOST filesystem, so we
-        # bind-mount $HOME/.sp1 and redirect TMPDIR to a host-accessible path.
-        DOCKER_FLAGS="-v /var/run/docker.sock:/var/run/docker.sock \
-            -v $HOME/.sp1:$HOME/.sp1 -e HOME=$HOME \
-            -e TMPDIR=$HOME/.sp1/tmp"
-    fi
-    docker run --rm \
-        -v sp1-params:/root/.sp1 \
-        $DOCKER_FLAGS \
-        -e SP1_PROVER="${SP1_PROVER:-cpu}" \
-        -e NETWORK_PRIVATE_KEY="${NETWORK_PRIVATE_KEY:-}" \
-        "$IMAGE" \
+    RUST_LOG="${RUST_LOG:-info}" \
+    SP1_PROVER="${SP1_PROVER:-cpu}" \
+        "$SCRIPT_DIR/target/release/fibonacci" \
         "--${MODE}" --n "$N" --mode "$PROOF_MODE"
     ;;
   download-params)
@@ -78,9 +66,9 @@ case "$CMD" in
     ;;
   *)
     echo "Usage: $0 [build|run|download-params]"
-    echo "  build            Build the Docker image"
-    echo "  run              Run benchmark (MODE=execute|prove, N=<n>, PROOF_MODE=core|compressed|groth16)"
-    echo "  download-params  Pre-download Groth16 circuit params (~1GB) into Docker volume"
+    echo "  build            Build the binary (guest ELF via Docker, host natively)"
+    echo "  run              Run benchmark"
+    echo "  download-params  Pre-download Groth16 circuit params (~1GB)"
     exit 1
     ;;
 esac

@@ -1,0 +1,16 @@
+[package]
+name = "fibonacci-host"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "fibonacci-bench"
+path = "src/main.rs"
+
+[dependencies]
+risc0-zkvm = { version = "3.0.5" }
+fibonacci-core = { path = "../lib" }
+fibonacci-methods = { path = "../methods" }
+clap = { version = "4.0", features = ["derive"] }
+benchmark-utils = { path = "../../../utils" }
+bincode = "1.3"

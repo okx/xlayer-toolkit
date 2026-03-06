@@ -1,0 +1,3 @@
+[workspace]
+members = ["lib", "methods", "host"]
+resolver = "2"
