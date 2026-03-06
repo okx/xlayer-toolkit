@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 source .env
+
+# Build alpine image with jq pre-installed (avoids slow apk add on every run)
+docker build -t alpine-jq:local - <<'EOF'
+FROM alpine:3.19.0
+RUN apk add --no-cache jq
+EOF
+
 docker compose up -d l1-validator
 
 sleep 3

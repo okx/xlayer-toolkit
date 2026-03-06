@@ -52,11 +52,11 @@ CMD="op-reth node \
 if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
     CMD="$CMD \
         --flashblocks.enabled \
-        --flashblocks.disable-rollup-boost \
         --flashblocks.disable-state-root \
         --flashblocks.addr=0.0.0.0 \
         --flashblocks.port=1111 \
-        --flashblocks.block-time=200"
+        --flashblocks.block-time=200 \
+        --flashblocks.replay-from-persistence-file"
 
     if [ "$FLASHBLOCK_P2P_ENABLED" = "true" ] && [ "$CONDUCTOR_ENABLED" = "true" ]; then
         CMD="$CMD \
