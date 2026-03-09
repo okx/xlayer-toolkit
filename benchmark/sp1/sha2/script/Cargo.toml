@@ -9,7 +9,7 @@ name = "sha2-bench"
 path = "src/bin/main.rs"
 
 [dependencies]
-sp1-sdk = { version = "6.0.1", features = ["blocking"] }
+sp1-sdk = { version = "6.0.1", features = ["blocking", "native-gnark"] }
 clap = { version = "4.0", features = ["derive", "env"] }
 alloy-sol-types = { workspace = true }
 sha2-lib = { path = "../lib" }
