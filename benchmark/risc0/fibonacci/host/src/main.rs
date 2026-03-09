@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use benchmark_utils::start_peak_monitor;
 use clap::{Parser, ValueEnum};
-use fibonacci_core::{fibonacci, FibonacciOutput};
+use fibonacci_core::fibonacci;
 use fibonacci_methods::FIBONACCI_GUEST_ELF;
 use risc0_zkvm::{default_executor, default_prover, ExecutorEnv, ProverOpts};
 
@@ -63,19 +63,16 @@ fn main() {
             .build()
             .unwrap();
         let session = default_executor().execute(env, FIBONACCI_GUEST_ELF).unwrap();
-        let output: FibonacciOutput = session.journal.decode().unwrap();
+        let (n, a, b): (u32, u32, u32) = session.journal.decode().unwrap();
 
         // Verify against host computation
         let (expected_a, expected_b) = fibonacci(args.n);
-        assert_eq!(output.a, expected_a);
-        assert_eq!(output.b, expected_b);
+        assert_eq!(a, expected_a);
+        assert_eq!(b, expected_b);
 
         println!(
             "Result:       fib({}) = {}, fib({}) = {}",
-            output.n - 1,
-            output.a,
-            output.n,
-            output.b
+            n - 1, a, n, b
         );
         println!("Cycle Count:  {} cycles", session.cycles());
     } else {
@@ -128,14 +125,11 @@ fn main() {
         let verify_time = verify_start.elapsed();
 
         // --- decode output ---
-        let output: FibonacciOutput = receipt.journal.decode().unwrap();
+        let (n, a, b): (u32, u32, u32) = receipt.journal.decode().unwrap();
 
         println!(
             "Result:       fib({}) = {}, fib({}) = {}",
-            output.n - 1,
-            output.a,
-            output.n,
-            output.b
+            n - 1, a, n, b
         );
         println!("Proof Mode:   {}", args.mode);
         println!("Cycle Count:  {} cycles", cycle_count);

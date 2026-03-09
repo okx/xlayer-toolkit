@@ -4,13 +4,14 @@ RISC Zero zkVM benchmark using Fibonacci as the guest program, supporting Compos
 
 ## Prerequisites
 
-- [Docker](https://docs.docker.com/get-docker/)
+- [Rust](https://rustup.rs/)
+- [RISC Zero toolchain](https://dev.risczero.com/api/zkvm/install) (`curl -L https://risczero.com/install | bash && rzup install`)
 
 ## Quick Start
 
-### 1. Build Docker Image
+### 1. Build
 
-Compiles the guest ELF and host binary into the image (only need to do this once, or when source changes):
+Guest ELF is compiled via `risc0-build`, host binary is compiled natively.
 
 ```sh
 ./run.sh build
@@ -54,8 +55,8 @@ In `--prove` mode, the following metrics are reported:
 | Prove Time | Wall-clock time for proof generation |
 | Proof Size | Size of the receipt (bincode serialized) |
 | Verify Time | Wall-clock time for receipt verification |
-| Peak Memory | Maximum RSS during proving (Linux /proc/self/status) |
-| Peak CPU | Peak CPU utilization during proving (Linux /proc/self/stat) |
+| Peak Memory | Maximum RSS during proving |
+| Peak CPU | Peak CPU utilization during proving |
 
 ## Environment Variables
 
@@ -64,13 +65,13 @@ In `--prove` mode, the following metrics are reported:
 | `N` | `20` | Fibonacci input number |
 | `MODE` | `execute` | `execute` or `prove` |
 | `PROOF_MODE` | `composite` | `composite`, `succinct`, or `groth16` |
-| `IMAGE` | `risc0-fibonacci` | Docker image name |
 | `RISC0_PROVER` | `local` | `local` or `bonsai` |
+| `RUST_LOG` | `info` | Log level (`info`, `debug`, `trace`) |
 
 ## Examples
 
 ```sh
-# Build image
+# Build
 ./run.sh build
 
 # Quick test - execute only (seconds)
@@ -88,6 +89,9 @@ N=20 MODE=prove PROOF_MODE=groth16 ./run.sh run
 # Try different input sizes
 N=100 MODE=prove PROOF_MODE=composite ./run.sh run
 N=1000 MODE=prove PROOF_MODE=composite ./run.sh run
+
+# Enable debug logging
+RUST_LOG=debug N=20 MODE=prove PROOF_MODE=composite ./run.sh run
 ```
 
 ## Project Structure
@@ -95,9 +99,8 @@ N=1000 MODE=prove PROOF_MODE=composite ./run.sh run
 ```
 benchmark/
 ├── utils/                    # Shared benchmark utilities
-│   └── src/lib.rs            # Peak memory/CPU monitoring
+│   └── src/lib.rs            # Peak memory/CPU monitoring (Linux + macOS)
 └── risc0/fibonacci/
-    ├── Dockerfile            # Multi-stage Docker build
     ├── run.sh                # Build/run helper script
     ├── Cargo.toml            # Workspace root
     ├── methods/              # Guest program build crate
@@ -113,13 +116,12 @@ benchmark/
 
 ## How It Works
 
-1. **Build** (`./run.sh build`): Docker compiles the guest program (`methods/guest/`) to a RISC-V ELF via the RISC Zero toolchain, then embeds it into the host binary via `risc0_build::embed_methods()`.
+1. **Build** (`./run.sh build`): The guest program (`methods/guest/`) is compiled to a RISC-V ELF via `risc0-build` and embedded into the host binary.
 2. **Execute** (`MODE=execute`): Runs the ELF in the RISC Zero zkVM without generating a proof. Reports cycle count.
 3. **Prove** (`MODE=prove`): Executes first to get cycle count, then generates a proof in the selected mode (Composite / Succinct / Groth16). Verifies the receipt and reports metrics.
 
 ## Notes
 
-- ELF is compiled once during `docker build`. Changing `N` or `PROOF_MODE` does NOT require rebuilding - they are runtime inputs.
-- One image supports all three proof modes. Build once, run with different `PROOF_MODE` values.
+- Guest ELF is compiled once during `./run.sh build`. Changing `N` or `PROOF_MODE` does NOT require rebuilding - they are runtime inputs.
+- One binary supports all three proof modes. Build once, run with different `PROOF_MODE` values.
 - Proof generation uses local CPU mode by default (`RISC0_PROVER=local`). For faster proving, use Bonsai proving service (`RISC0_PROVER=bonsai` + `BONSAI_API_KEY`).
-- Docker Desktop memory should be set to at least 8GB for proving.

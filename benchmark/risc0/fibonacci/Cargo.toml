@@ -1,3 +1,4 @@
 [workspace]
 members = ["lib", "methods", "host"]
+exclude = ["methods/guest"]
 resolver = "2"
