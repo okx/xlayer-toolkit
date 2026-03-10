@@ -1,0 +1,11 @@
+{
+    "name": "Jolt Fibonacci Benchmark",
+    "image": "mcr.microsoft.com/devcontainers/rust:2-1-trixie",
+    "customizations": {
+        "vscode": {
+            "extensions": ["rust-lang.rust-analyzer"]
+        }
+    },
+    "postCreateCommand": "./.devcontainer/post-create.sh",
+    "remoteUser": "vscode"
+}
