@@ -1,0 +1,31 @@
+[workspace]
+members = ["guest"]
+
+[package]
+name = "sha2-bench"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sha2-bench"
+path = "src/main.rs"
+
+[dependencies]
+jolt-sdk = { git = "https://github.com/a16z/jolt", rev = "2e05fe883920054df2ee3a6df8f85c2caba77c99", features = ["host"] }
+jolt-inlines-sha2 = { git = "https://github.com/a16z/jolt", rev = "2e05fe883920054df2ee3a6df8f85c2caba77c99", features = ["host"] }
+guest = { package = "sha2-guest", path = "./guest" }
+clap = { version = "4.0", features = ["derive"] }
+benchmark-utils = { path = "../../utils" }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+hex = "0.4"
+
+[package.metadata.cargo-machete]
+ignored = ["jolt-inlines-sha2"]
+
+[patch.crates-io]
+ark-bn254 = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-ff = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-ec = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+ark-serialize = { git = "https://github.com/a16z/arkworks-algebra", branch = "dev/twist-shout" }
+allocative = { git = "https://github.com/facebookexperimental/allocative", rev = "85b773d85d526d068ce94724ff7a7b81203fc95e" }
