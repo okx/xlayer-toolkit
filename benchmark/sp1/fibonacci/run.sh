@@ -23,10 +23,15 @@ case "$CMD" in
     cargo build --release --bin fibonacci $FEATURES
     ;;
   run)
-    RUST_LOG="${RUST_LOG:-info}" \
+    # sp1-cuda cleanup panics on exit (tokio runtime missing in Drop).
+    # Capture output, print stdout only, ignore crash exit code.
+    set +e
+    OUTPUT=$(RUST_LOG="${RUST_LOG:-info}" \
     SP1_PROVER="${SP1_PROVER:-cpu}" \
         "$SCRIPT_DIR/target/release/fibonacci" \
-        "--${MODE}" --n "$N" --mode "$PROOF_MODE"
+        "--${MODE}" --n "$N" --mode "$PROOF_MODE" 2>/dev/null)
+    set -e
+    echo "$OUTPUT"
     ;;
   download-params)
     PARAM_DIR="$HOME/.sp1/circuits/groth16/${SP1_CIRCUIT_VERSION}"
