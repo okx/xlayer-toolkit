@@ -34,6 +34,10 @@ func (c *Client) Close() {
 	c.eth.Close()
 }
 
+func (c *Client) ChainID(ctx context.Context) (*big.Int, error) {
+	return c.eth.ChainID(ctx)
+}
+
 type BlockInfo struct {
 	Number       uint64
 	Hash         common.Hash

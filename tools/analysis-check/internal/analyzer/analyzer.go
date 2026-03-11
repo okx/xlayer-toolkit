@@ -31,12 +31,22 @@ type Result struct {
 type Analyzer struct {
 	client *rpc.Client
 	cfg    Config
+	signer types.Signer
 }
 
 func New(client *rpc.Client, cfg Config) *Analyzer {
+	chainID, err := client.ChainID(context.Background())
+	if err != nil {
+		panic(err)
+	}
+	signer := types.LatestSignerForChainID(chainID)
+	if signer == nil {
+		panic(fmt.Errorf("no signer for chain id: %d", chainID))
+	}
 	return &Analyzer{
 		client: client,
 		cfg:    cfg,
+		signer: signer,
 	}
 }
 
@@ -82,7 +92,7 @@ func (a *Analyzer) analyzeBlock(ctx context.Context, block *rpc.BlockInfo, start
 		if tx.To() != nil {
 			accounts[*tx.To()] = struct{}{}
 		}
-		from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+		from, err := types.Sender(a.signer, tx)
 		if err == nil {
 			accounts[from] = struct{}{}
 		}
