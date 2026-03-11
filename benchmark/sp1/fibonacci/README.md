@@ -65,7 +65,7 @@ In `--prove` mode, the following metrics are reported:
 | `N` | `20` | Fibonacci input number |
 | `MODE` | `execute` | `execute` or `prove` |
 | `PROOF_MODE` | `core` | `core`, `compressed`, or `groth16` |
-| `SP1_PROVER` | `cpu` | `cpu` or `network` |
+| `SP1_PROVER` | `cpu` | `cpu`, `cuda`, `mock`, or `network` |
 | `RUST_LOG` | `info` | Log level (`info`, `debug`, `trace`) |
 
 ## Examples
@@ -119,9 +119,33 @@ benchmark/
 2. **Execute** (`MODE=execute`): Runs the ELF in the SP1 zkVM without generating a proof. Reports cycle count.
 3. **Prove** (`MODE=prove`): Runs setup, then generates a proof in the selected mode (Core / Compressed / Groth16). Verifies the proof for Compressed and Groth16 modes.
 
+## CUDA (GPU) Proving
+
+SP1 supports CUDA-accelerated proving on NVIDIA GPUs. Requirements:
+
+- NVIDIA GPU with Compute Capability >= 8.6 and >= 24 GB VRAM
+- CUDA drivers >= 12.5.1
+- [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
+
+### Build with CUDA
+
+```sh
+SP1_PROVER=cuda ./run.sh build
+```
+
+This enables the `cuda` feature flag in sp1-sdk.
+
+### Run with CUDA
+
+```sh
+SP1_PROVER=cuda N=20 MODE=prove PROOF_MODE=compressed ./run.sh run
+```
+
+> **Note:** Switching between CPU and CUDA requires rebuilding (`./run.sh build`), since CUDA support is a compile-time feature.
+
 ## Notes
 
 - Guest ELF is compiled once during `./run.sh build`. Changing `N` or `PROOF_MODE` does NOT require rebuilding — they are runtime inputs.
 - One binary supports all three proof modes. Build once, run with different `PROOF_MODE` values.
-- Proof generation uses CPU mode by default (`SP1_PROVER=cpu`). For faster proving, use Succinct's prover network (`SP1_PROVER=network` + `NETWORK_PRIVATE_KEY`).
+- Proof generation uses CPU mode by default (`SP1_PROVER=cpu`). For faster proving, use CUDA (`SP1_PROVER=cuda`) or Succinct's prover network (`SP1_PROVER=network` + `NETWORK_PRIVATE_KEY`).
 - Groth16 mode requires pre-downloading circuit params: `./run.sh download-params`.

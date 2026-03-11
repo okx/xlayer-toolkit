@@ -17,7 +17,11 @@ case "$CMD" in
     # host binary compiled natively — runs directly on host.
     # native-gnark: Groth16 uses CGo instead of Docker.
     cd "$SCRIPT_DIR"
-    cargo build --release --bin fibonacci
+    FEATURES=""
+    if [ "${SP1_PROVER:-}" = "cuda" ]; then
+        FEATURES="--features cuda"
+    fi
+    cargo build --release --bin fibonacci $FEATURES
     ;;
   run)
     RUST_LOG="${RUST_LOG:-info}" \
@@ -47,7 +51,8 @@ case "$CMD" in
   *)
     echo "Usage: $0 [build|run|download-params]"
     echo "  build            Build the binary (guest ELF via Docker, host natively)"
-    echo "  run              Run benchmark"
+    echo "                   Set SP1_PROVER=cuda to build with CUDA support"
+    echo "  run              Run benchmark (SP1_PROVER=cpu|cuda|mock|network)"
     echo "  download-params  Pre-download Groth16 circuit params (~1GB)"
     exit 1
     ;;
