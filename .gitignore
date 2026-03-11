@@ -35,6 +35,7 @@ devnet/l1-geth/execution/geth/genesis.json
 devnet/l1-geth/execution/geth
 devnet/tmp
 devnet/data
+devnet/logs
 devnet/saved-cannon-data
 devnet/init.log
 devnet/l1-geth/
