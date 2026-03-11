@@ -46,7 +46,7 @@ case "$CMD" in
     ;;
   *)
     echo "Usage: $0 [build|run|download-params]"
-    echo "  build            Build the binary (guest ELF via Docker, host natively)"
+    echo "  build            Build the binary (guest ELF locally, requires rzup toolchain)"
     echo "  run              Run benchmark (MODE=execute|prove, N=<n>, PROOF_MODE=composite|succinct|groth16)"
     echo "  download-params  Pre-download recursion circuit artifacts (~100MB)"
     exit 1
