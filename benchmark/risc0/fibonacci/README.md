@@ -65,7 +65,7 @@ In `--prove` mode, the following metrics are reported:
 | `N` | `20` | Fibonacci input number |
 | `MODE` | `execute` | `execute` or `prove` |
 | `PROOF_MODE` | `composite` | `composite`, `succinct`, or `groth16` |
-| `RISC0_PROVER` | `local` | `local` or `bonsai` |
+| `RISC0_PROVER` | `local` | `local`, `cuda`, or `bonsai` |
 | `RUST_LOG` | `info` | Log level (`info`, `debug`, `trace`) |
 
 ## Examples
@@ -120,8 +120,32 @@ benchmark/
 2. **Execute** (`MODE=execute`): Runs the ELF in the RISC Zero zkVM without generating a proof. Reports cycle count.
 3. **Prove** (`MODE=prove`): Executes first to get cycle count, then generates a proof in the selected mode (Composite / Succinct / Groth16). Verifies the receipt and reports metrics.
 
+## CUDA (GPU) Proving
+
+RISC Zero supports CUDA-accelerated proving on NVIDIA GPUs. Requirements:
+
+- NVIDIA GPU with sufficient VRAM (>= 24 GB recommended)
+- CUDA Toolkit >= 12.x
+- CUDA drivers installed
+
+### Build with CUDA
+
+```sh
+RISC0_PROVER=cuda ./run.sh build
+```
+
+This enables the `cuda` feature flag in risc0-zkvm.
+
+### Run with CUDA
+
+```sh
+RISC0_PROVER=cuda N=20 MODE=prove PROOF_MODE=succinct ./run.sh run
+```
+
+> **Note:** Switching between CPU and CUDA requires rebuilding (`./run.sh build`), since CUDA support is a compile-time feature.
+
 ## Notes
 
 - Guest ELF is compiled once during `./run.sh build`. Changing `N` or `PROOF_MODE` does NOT require rebuilding - they are runtime inputs.
 - One binary supports all three proof modes. Build once, run with different `PROOF_MODE` values.
-- Proof generation uses local CPU mode by default (`RISC0_PROVER=local`). For faster proving, use Bonsai proving service (`RISC0_PROVER=bonsai` + `BONSAI_API_KEY`).
+- Proof generation uses local CPU mode by default (`RISC0_PROVER=local`). For faster proving, use CUDA (`RISC0_PROVER=cuda`) or Bonsai proving service (`RISC0_PROVER=bonsai` + `BONSAI_API_KEY`).

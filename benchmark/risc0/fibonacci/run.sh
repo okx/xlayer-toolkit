@@ -21,7 +21,11 @@ case "$CMD" in
         echo "Using cached recursion zkr: $RECURSION_ZKR"
         export RECURSION_SRC_PATH="$RECURSION_ZKR"
     fi
-    cargo build --release --bin fibonacci-bench
+    FEATURES=""
+    if [ "${RISC0_PROVER:-}" = "cuda" ]; then
+        FEATURES="--features cuda"
+    fi
+    cargo build --release --bin fibonacci-bench $FEATURES
     ;;
   run)
     RUST_LOG="${RUST_LOG:-info}" \
