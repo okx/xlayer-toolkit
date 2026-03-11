@@ -138,4 +138,7 @@ fn main() {
     }
 
     println!();
+
+    // Exit immediately to avoid sp1-cuda Drop panic (requires tokio runtime for cleanup)
+    std::process::exit(0);
 }
