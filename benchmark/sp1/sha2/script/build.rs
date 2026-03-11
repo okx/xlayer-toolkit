@@ -11,8 +11,7 @@ fn main() {
     build_program_with_args(
         "../program",
         BuildArgs {
-            docker: true,
-            tag: "v6.0.2".to_string(),
+            docker: false,
             elf_name: Some("sha2-program-vanilla".to_string()),
             output_directory: Some(elf_dir_str.clone()),
             ..Default::default()
@@ -27,8 +26,7 @@ fn main() {
     build_program_with_args(
         "../program",
         BuildArgs {
-            docker: true,
-            tag: "v6.0.2".to_string(),
+            docker: false,
             features: vec!["precompile".to_string()],
             elf_name: Some("sha2-program-precompile".to_string()),
             output_directory: Some(elf_dir_str),
