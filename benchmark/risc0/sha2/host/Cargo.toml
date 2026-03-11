@@ -16,3 +16,6 @@ benchmark-utils = { path = "../../../utils" }
 bincode = "1.3"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 hex = "0.4"
+
+[features]
+cuda = ["risc0-zkvm/cuda"]

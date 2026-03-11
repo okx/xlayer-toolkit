@@ -131,16 +131,21 @@ fn main() {
             _ => postcard::to_allocvec(&proof.proof).unwrap().len(),
         };
 
-        // --- verify (skip for Core which is not on-chain verifiable) ---
+        // --- verify (skip for Core; tolerate mock prover failures) ---
+        let is_mock = std::env::var("SP1_PROVER").unwrap_or_default() == "mock";
         let verify_time = match args.mode {
             ProofMode::Core => None,
             _ => {
                 let vk = pk.verifying_key();
                 let start = Instant::now();
-                client
-                    .verify(&proof, vk, None)
-                    .expect("failed to verify proof");
-                Some(start.elapsed())
+                match client.verify(&proof, vk, None) {
+                    Ok(_) => Some(start.elapsed()),
+                    Err(e) if is_mock => {
+                        println!("Verify:       skipped (mock prover: {})", e);
+                        None
+                    }
+                    Err(e) => panic!("failed to verify proof: {}", e),
+                }
             }
         };
 
@@ -160,4 +165,7 @@ fn main() {
     }
 
     println!();
+
+    // Exit immediately to avoid sp1-cuda Drop panic
+    std::process::exit(0);
 }

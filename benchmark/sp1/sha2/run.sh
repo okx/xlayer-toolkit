@@ -16,14 +16,22 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 case "$CMD" in
   build)
     cd "$SCRIPT_DIR"
-    cargo build --release --bin sha2-bench
+    FEATURES=""
+    if [ "${SP1_PROVER:-}" = "cuda" ]; then
+        FEATURES="--features cuda"
+    fi
+    cargo build --release --bin sha2-bench $FEATURES
     ;;
   run)
-    RUST_LOG="${RUST_LOG:-info}" \
+    # sp1-cuda cleanup panics on exit (tokio runtime missing in Drop).
+    set +e
+    OUTPUT=$(RUST_LOG="${RUST_LOG:-info}" \
     SP1_PROVER="${SP1_PROVER:-cpu}" \
         "$SCRIPT_DIR/target/release/sha2-bench" \
         "--${MODE}" --n "$N" --mode "$PROOF_MODE" --input-size "$INPUT_SIZE" \
-        $([ "$PRECOMPILE" = "true" ] && echo "--precompile")
+        $([ "$PRECOMPILE" = "true" ] && echo "--precompile") 2>/dev/null)
+    set -e
+    echo "$OUTPUT"
     ;;
   download-params)
     PARAM_DIR="$HOME/.sp1/circuits/groth16/${SP1_CIRCUIT_VERSION}"

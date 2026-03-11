@@ -23,7 +23,12 @@ case "$CMD" in
         echo "Using cached recursion zkr: $RECURSION_ZKR"
         export RECURSION_SRC_PATH="$RECURSION_ZKR"
     fi
-    cargo build --release --bin sha2-bench
+    FEATURES=""
+    if [ "${RISC0_CUDA:-}" = "1" ] || [ "${RISC0_CUDA:-}" = "true" ]; then
+        FEATURES="--features cuda"
+        echo "CUDA feature enabled"
+    fi
+    cargo build --release --bin sha2-bench $FEATURES
     ;;
   run)
     RUST_LOG="${RUST_LOG:-debug}" \
