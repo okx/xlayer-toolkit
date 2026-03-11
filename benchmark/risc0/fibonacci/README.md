@@ -65,7 +65,8 @@ In `--prove` mode, the following metrics are reported:
 | `N` | `20` | Fibonacci input number |
 | `MODE` | `execute` | `execute` or `prove` |
 | `PROOF_MODE` | `composite` | `composite`, `succinct`, or `groth16` |
-| `RISC0_PROVER` | `local` | `local`, `cuda`, or `bonsai` |
+| `RISC0_PROVER` | `local` | `local` or `bonsai` |
+| `RISC0_CUDA` | - | Set to `1` to enable CUDA feature at build time |
 | `RUST_LOG` | `info` | Log level (`info`, `debug`, `trace`) |
 
 ## Examples
@@ -131,21 +132,23 @@ RISC Zero supports CUDA-accelerated proving on NVIDIA GPUs. Requirements:
 ### Build with CUDA
 
 ```sh
-RISC0_PROVER=cuda ./run.sh build
+RISC0_CUDA=1 ./run.sh build
 ```
 
-This enables the `cuda` feature flag in risc0-zkvm.
+This enables the `cuda` feature flag in risc0-zkvm. Unlike SP1, CUDA is a **compile-time only** option — the runtime prover is still `local`.
 
 ### Run with CUDA
 
 ```sh
-RISC0_PROVER=cuda N=20 MODE=prove PROOF_MODE=succinct ./run.sh run
+N=20 MODE=prove PROOF_MODE=succinct ./run.sh run
 ```
 
-> **Note:** Switching between CPU and CUDA requires rebuilding (`./run.sh build`), since CUDA support is a compile-time feature.
+The local prover automatically uses GPU acceleration when compiled with the `cuda` feature. No special env var needed at runtime.
+
+> **Note:** Switching between CPU and CUDA requires rebuilding (`RISC0_CUDA=1 ./run.sh build`), since CUDA support is a compile-time feature.
 
 ## Notes
 
 - Guest ELF is compiled once during `./run.sh build`. Changing `N` or `PROOF_MODE` does NOT require rebuilding - they are runtime inputs.
 - One binary supports all three proof modes. Build once, run with different `PROOF_MODE` values.
-- Proof generation uses local CPU mode by default (`RISC0_PROVER=local`). For faster proving, use CUDA (`RISC0_PROVER=cuda`) or Bonsai proving service (`RISC0_PROVER=bonsai` + `BONSAI_API_KEY`).
+- Proof generation uses local CPU mode by default (`RISC0_PROVER=local`). For GPU acceleration, rebuild with `RISC0_CUDA=1 ./run.sh build`. For remote proving, use Bonsai (`RISC0_PROVER=bonsai` + `BONSAI_API_KEY`).

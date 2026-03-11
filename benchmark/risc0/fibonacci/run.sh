@@ -22,8 +22,9 @@ case "$CMD" in
         export RECURSION_SRC_PATH="$RECURSION_ZKR"
     fi
     FEATURES=""
-    if [ "${RISC0_PROVER:-}" = "cuda" ]; then
+    if [ "${RISC0_CUDA:-}" = "1" ] || [ "${RISC0_CUDA:-}" = "true" ]; then
         FEATURES="--features cuda"
+        echo "CUDA feature enabled"
     fi
     cargo build --release --bin fibonacci-bench $FEATURES
     ;;
