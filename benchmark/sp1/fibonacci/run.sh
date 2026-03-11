@@ -13,9 +13,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 case "$CMD" in
   build)
-    # Guest ELF compiled in Docker via build.rs (docker: true),
-    # host binary compiled natively — runs directly on host.
-    # native-gnark: Groth16 uses CGo instead of Docker.
+    # Guest ELF compiled locally via build.rs (requires succinct toolchain).
+    # Host binary compiled natively. native-gnark: Groth16 uses CGo.
     cd "$SCRIPT_DIR"
     FEATURES=""
     if [ "${SP1_PROVER:-}" = "cuda" ]; then
