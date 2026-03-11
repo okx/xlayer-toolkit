@@ -13,22 +13,42 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 case "$CMD" in
   build)
-    # Guest ELF compiled locally via build.rs (requires succinct toolchain).
-    # Host binary compiled natively. native-gnark: Groth16 uses CGo.
+    # Build both CPU and GPU binaries
     cd "$SCRIPT_DIR"
-    FEATURES=""
-    if [ "${SP1_PROVER:-}" = "cuda" ]; then
-        FEATURES="--features cuda"
-    fi
-    cargo build --release --bin fibonacci $FEATURES
+    echo "=== Building CPU binary ==="
+    cargo build --release --bin fibonacci
+    cp "$SCRIPT_DIR/target/release/fibonacci" "$SCRIPT_DIR/target/release/fibonacci-cpu"
+    echo "=== Building GPU binary ==="
+    cargo build --release --bin fibonacci --features cuda
+    cp "$SCRIPT_DIR/target/release/fibonacci" "$SCRIPT_DIR/target/release/fibonacci-gpu"
+    echo "Done. Binaries: target/release/fibonacci-cpu, target/release/fibonacci-gpu"
+    ;;
+  build-cpu)
+    cd "$SCRIPT_DIR"
+    cargo build --release --bin fibonacci
+    cp "$SCRIPT_DIR/target/release/fibonacci" "$SCRIPT_DIR/target/release/fibonacci-cpu"
+    ;;
+  build-gpu)
+    cd "$SCRIPT_DIR"
+    cargo build --release --bin fibonacci --features cuda
+    cp "$SCRIPT_DIR/target/release/fibonacci" "$SCRIPT_DIR/target/release/fibonacci-gpu"
     ;;
   run)
+    # Select binary: GPU if SP1_PROVER=cuda, else CPU
+    if [ "${SP1_PROVER:-cpu}" = "cuda" ]; then
+        BIN="$SCRIPT_DIR/target/release/fibonacci-gpu"
+    else
+        BIN="$SCRIPT_DIR/target/release/fibonacci-cpu"
+    fi
+    if [ ! -f "$BIN" ]; then
+        echo "Error: $BIN not found. Run './run.sh build' first." >&2
+        exit 1
+    fi
     # sp1-cuda cleanup panics on exit (tokio runtime missing in Drop).
-    # Capture output, print stdout only, ignore crash exit code.
     set +e
     OUTPUT=$(RUST_LOG="${RUST_LOG:-info}" \
     SP1_PROVER="${SP1_PROVER:-cpu}" \
-        "$SCRIPT_DIR/target/release/fibonacci" \
+        "$BIN" \
         "--${MODE}" --n "$N" --mode "$PROOF_MODE" 2>/dev/null)
     set -e
     echo "$OUTPUT"
@@ -53,10 +73,11 @@ case "$CMD" in
     echo "Done. Groth16 is ready to use."
     ;;
   *)
-    echo "Usage: $0 [build|run|download-params]"
-    echo "  build            Build the binary (guest ELF via Docker, host natively)"
-    echo "                   Set SP1_PROVER=cuda to build with CUDA support"
-    echo "  run              Run benchmark (SP1_PROVER=cpu|cuda|mock|network)"
+    echo "Usage: $0 [build|build-cpu|build-gpu|run|download-params]"
+    echo "  build            Build both CPU and GPU binaries"
+    echo "  build-cpu        Build CPU-only binary"
+    echo "  build-gpu        Build GPU (CUDA) binary"
+    echo "  run              Run benchmark (SP1_PROVER=cpu|cuda|mock)"
     echo "  download-params  Pre-download Groth16 circuit params (~1GB)"
     exit 1
     ;;

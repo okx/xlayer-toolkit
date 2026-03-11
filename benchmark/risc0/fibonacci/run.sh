@@ -21,17 +21,44 @@ case "$CMD" in
         echo "Using cached recursion zkr: $RECURSION_ZKR"
         export RECURSION_SRC_PATH="$RECURSION_ZKR"
     fi
-    FEATURES=""
-    if [ "${RISC0_CUDA:-}" = "1" ] || [ "${RISC0_CUDA:-}" = "true" ]; then
-        FEATURES="--features cuda"
-        echo "CUDA feature enabled"
+    echo "=== Building CPU binary ==="
+    cargo build --release --bin fibonacci-bench
+    cp "$SCRIPT_DIR/target/release/fibonacci-bench" "$SCRIPT_DIR/target/release/fibonacci-bench-cpu"
+    echo "=== Building GPU binary ==="
+    cargo build --release --bin fibonacci-bench --features cuda
+    cp "$SCRIPT_DIR/target/release/fibonacci-bench" "$SCRIPT_DIR/target/release/fibonacci-bench-gpu"
+    echo "Done. Binaries: target/release/fibonacci-bench-cpu, target/release/fibonacci-bench-gpu"
+    ;;
+  build-cpu)
+    cd "$SCRIPT_DIR"
+    if [ -f "$RECURSION_ZKR" ]; then
+        export RECURSION_SRC_PATH="$RECURSION_ZKR"
     fi
-    cargo build --release --bin fibonacci-bench $FEATURES
+    cargo build --release --bin fibonacci-bench
+    cp "$SCRIPT_DIR/target/release/fibonacci-bench" "$SCRIPT_DIR/target/release/fibonacci-bench-cpu"
+    ;;
+  build-gpu)
+    cd "$SCRIPT_DIR"
+    if [ -f "$RECURSION_ZKR" ]; then
+        export RECURSION_SRC_PATH="$RECURSION_ZKR"
+    fi
+    cargo build --release --bin fibonacci-bench --features cuda
+    cp "$SCRIPT_DIR/target/release/fibonacci-bench" "$SCRIPT_DIR/target/release/fibonacci-bench-gpu"
     ;;
   run)
+    # Select binary: GPU if RISC0_CUDA=1, else CPU
+    if [ "${RISC0_CUDA:-}" = "1" ] || [ "${RISC0_CUDA:-}" = "true" ]; then
+        BIN="$SCRIPT_DIR/target/release/fibonacci-bench-gpu"
+    else
+        BIN="$SCRIPT_DIR/target/release/fibonacci-bench-cpu"
+    fi
+    if [ ! -f "$BIN" ]; then
+        echo "Error: $BIN not found. Run './run.sh build' first." >&2
+        exit 1
+    fi
     RUST_LOG="${RUST_LOG:-info}" \
     RISC0_PROVER="${RISC0_PROVER:-local}" \
-        "$SCRIPT_DIR/target/release/fibonacci-bench" \
+        "$BIN" \
         "--${MODE}" --n "$N" --mode "$PROOF_MODE"
     ;;
   download-params)
@@ -46,9 +73,11 @@ case "$CMD" in
     echo "Done. Run './run.sh build' to build with cached artifacts."
     ;;
   *)
-    echo "Usage: $0 [build|run|download-params]"
-    echo "  build            Build the binary (guest ELF locally, requires rzup toolchain)"
-    echo "  run              Run benchmark (MODE=execute|prove, N=<n>, PROOF_MODE=composite|succinct|groth16)"
+    echo "Usage: $0 [build|build-cpu|build-gpu|run|download-params]"
+    echo "  build            Build both CPU and GPU binaries"
+    echo "  build-cpu        Build CPU-only binary"
+    echo "  build-gpu        Build GPU (CUDA) binary"
+    echo "  run              Run benchmark (RISC0_CUDA=1 selects GPU binary)"
     echo "  download-params  Pre-download recursion circuit artifacts (~100MB)"
     exit 1
     ;;

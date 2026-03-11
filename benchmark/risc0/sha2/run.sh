@@ -23,17 +23,44 @@ case "$CMD" in
         echo "Using cached recursion zkr: $RECURSION_ZKR"
         export RECURSION_SRC_PATH="$RECURSION_ZKR"
     fi
-    FEATURES=""
-    if [ "${RISC0_CUDA:-}" = "1" ] || [ "${RISC0_CUDA:-}" = "true" ]; then
-        FEATURES="--features cuda"
-        echo "CUDA feature enabled"
+    echo "=== Building CPU binary ==="
+    cargo build --release --bin sha2-bench
+    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-cpu"
+    echo "=== Building GPU binary ==="
+    cargo build --release --bin sha2-bench --features cuda
+    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-gpu"
+    echo "Done. Binaries: target/release/sha2-bench-cpu, target/release/sha2-bench-gpu"
+    ;;
+  build-cpu)
+    cd "$SCRIPT_DIR"
+    if [ -f "$RECURSION_ZKR" ]; then
+        export RECURSION_SRC_PATH="$RECURSION_ZKR"
     fi
-    cargo build --release --bin sha2-bench $FEATURES
+    cargo build --release --bin sha2-bench
+    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-cpu"
+    ;;
+  build-gpu)
+    cd "$SCRIPT_DIR"
+    if [ -f "$RECURSION_ZKR" ]; then
+        export RECURSION_SRC_PATH="$RECURSION_ZKR"
+    fi
+    cargo build --release --bin sha2-bench --features cuda
+    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-gpu"
     ;;
   run)
+    # Select binary: GPU if RISC0_CUDA=1, else CPU
+    if [ "${RISC0_CUDA:-}" = "1" ] || [ "${RISC0_CUDA:-}" = "true" ]; then
+        BIN="$SCRIPT_DIR/target/release/sha2-bench-gpu"
+    else
+        BIN="$SCRIPT_DIR/target/release/sha2-bench-cpu"
+    fi
+    if [ ! -f "$BIN" ]; then
+        echo "Error: $BIN not found. Run './run.sh build' first." >&2
+        exit 1
+    fi
     RUST_LOG="${RUST_LOG:-debug}" \
     RISC0_PROVER="${RISC0_PROVER:-local}" \
-        "$SCRIPT_DIR/target/release/sha2-bench" \
+        "$BIN" \
         "--${MODE}" --n "$N" --mode "$PROOF_MODE" --input-size "$INPUT_SIZE" \
         $([ "$PRECOMPILE" = "true" ] && echo "--precompile")
     ;;
@@ -49,9 +76,11 @@ case "$CMD" in
     echo "Done. Run './run.sh build' to build with cached artifacts."
     ;;
   *)
-    echo "Usage: $0 [build|run|download-params]"
-    echo "  build            Build the binary (guest ELFs via Docker, host natively)"
-    echo "  run              Run benchmark"
+    echo "Usage: $0 [build|build-cpu|build-gpu|run|download-params]"
+    echo "  build            Build both CPU and GPU binaries"
+    echo "  build-cpu        Build CPU-only binary"
+    echo "  build-gpu        Build GPU (CUDA) binary"
+    echo "  run              Run benchmark (RISC0_CUDA=1 selects GPU binary)"
     echo "  download-params  Pre-download recursion circuit artifacts (~100MB)"
     exit 1
     ;;

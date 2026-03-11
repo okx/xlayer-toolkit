@@ -15,19 +15,42 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 case "$CMD" in
   build)
+    # Build both CPU and GPU binaries
     cd "$SCRIPT_DIR"
-    FEATURES=""
-    if [ "${SP1_PROVER:-}" = "cuda" ]; then
-        FEATURES="--features cuda"
-    fi
-    cargo build --release --bin sha2-bench $FEATURES
+    echo "=== Building CPU binary ==="
+    cargo build --release --bin sha2-bench
+    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-cpu"
+    echo "=== Building GPU binary ==="
+    cargo build --release --bin sha2-bench --features cuda
+    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-gpu"
+    echo "Done. Binaries: target/release/sha2-bench-cpu, target/release/sha2-bench-gpu"
+    ;;
+  build-cpu)
+    cd "$SCRIPT_DIR"
+    cargo build --release --bin sha2-bench
+    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-cpu"
+    ;;
+  build-gpu)
+    cd "$SCRIPT_DIR"
+    cargo build --release --bin sha2-bench --features cuda
+    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-gpu"
     ;;
   run)
+    # Select binary: GPU if SP1_PROVER=cuda, else CPU
+    if [ "${SP1_PROVER:-cpu}" = "cuda" ]; then
+        BIN="$SCRIPT_DIR/target/release/sha2-bench-gpu"
+    else
+        BIN="$SCRIPT_DIR/target/release/sha2-bench-cpu"
+    fi
+    if [ ! -f "$BIN" ]; then
+        echo "Error: $BIN not found. Run './run.sh build' first." >&2
+        exit 1
+    fi
     # sp1-cuda cleanup panics on exit (tokio runtime missing in Drop).
     set +e
     OUTPUT=$(RUST_LOG="${RUST_LOG:-info}" \
     SP1_PROVER="${SP1_PROVER:-cpu}" \
-        "$SCRIPT_DIR/target/release/sha2-bench" \
+        "$BIN" \
         "--${MODE}" --n "$N" --mode "$PROOF_MODE" --input-size "$INPUT_SIZE" \
         $([ "$PRECOMPILE" = "true" ] && echo "--precompile") 2>/dev/null)
     set -e
@@ -53,9 +76,11 @@ case "$CMD" in
     echo "Done. Groth16 is ready to use."
     ;;
   *)
-    echo "Usage: $0 [build|run|download-params]"
-    echo "  build            Build the binary (guest ELFs via Docker, host natively)"
-    echo "  run              Run benchmark"
+    echo "Usage: $0 [build|build-cpu|build-gpu|run|download-params]"
+    echo "  build            Build both CPU and GPU binaries"
+    echo "  build-cpu        Build CPU-only binary"
+    echo "  build-gpu        Build GPU (CUDA) binary"
+    echo "  run              Run benchmark (SP1_PROVER=cpu|cuda|mock)"
     echo "  download-params  Pre-download Groth16 circuit params (~1GB)"
     exit 1
     ;;
