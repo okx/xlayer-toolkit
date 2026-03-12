@@ -47,7 +47,7 @@ echo ""
 
 # CSV header
 if [ -n "$OUTPUT_CSV" ]; then
-    echo "n,mode,prover,prove_time_s,peak_memory_mb,peak_cpu_pct,cycle_count,proof_size_bytes" > "$OUTPUT_CSV"
+    echo "n,mode,prover,prove_time_s,verify_time_s,peak_memory_mb,peak_cpu_pct,cycle_count,proof_size_bytes" > "$OUTPUT_CSV"
     echo "Results will be saved to: $OUTPUT_CSV"
 fi
 
@@ -98,7 +98,7 @@ for n in "${N_VALUES[@]}"; do
                 echo "  *** FAILED (exit code $EXIT_CODE) ***"
                 FAILED=$((FAILED + 1))
                 if [ -n "$OUTPUT_CSV" ]; then
-                    echo "$n,$mode,$prover,FAIL,FAIL,FAIL,FAIL,FAIL" >> "$OUTPUT_CSV"
+                    echo "$n,$mode,$prover,FAIL,FAIL,FAIL,FAIL,FAIL,FAIL" >> "$OUTPUT_CSV"
                 fi
                 continue
             fi
@@ -108,6 +108,7 @@ for n in "${N_VALUES[@]}"; do
             PEAK_MEM=$(echo "$OUTPUT" | grep -o 'Peak Memory: *[0-9.]*' | grep -o '[0-9.]*$' || echo "")
             PEAK_CPU=$(echo "$OUTPUT" | grep -o 'Peak CPU: *[0-9.]*' | grep -o '[0-9.]*$' || echo "")
             CYCLES=$(echo "$OUTPUT" | grep -o 'Cycle Count: *[0-9]*' | grep -o '[0-9]*$' || echo "")
+            VERIFY_TIME=$(echo "$OUTPUT" | grep -o 'Verify Time: *[0-9.]*' | grep -o '[0-9.]*$' || echo "")
             PROOF_SIZE=$(echo "$OUTPUT" | grep -o 'Proof Size: *[0-9]*' | grep -o '[0-9]*$' || echo "")
 
             if [ "$ITERATIONS" -gt 1 ]; then
@@ -118,10 +119,10 @@ for n in "${N_VALUES[@]}"; do
             fi
 
             echo ""
-            echo "  -> Prove: ${PROVE_TIME:-N/A}s | Memory: ${PEAK_MEM:-N/A} MB | CPU: ${PEAK_CPU:-N/A}%"
+            echo "  -> Prove: ${PROVE_TIME:-N/A}s | Verify: ${VERIFY_TIME:-N/A}s | Memory: ${PEAK_MEM:-N/A} MB | CPU: ${PEAK_CPU:-N/A}%"
 
             if [ -n "$OUTPUT_CSV" ]; then
-                echo "$n,$mode,$prover,${PROVE_TIME:-},${PEAK_MEM:-},${PEAK_CPU:-},${CYCLES:-},${PROOF_SIZE:-}" >> "$OUTPUT_CSV"
+                echo "$n,$mode,$prover,${PROVE_TIME:-},${VERIFY_TIME:-},${PEAK_MEM:-},${PEAK_CPU:-},${CYCLES:-},${PROOF_SIZE:-}" >> "$OUTPUT_CSV"
             fi
         done
     done
