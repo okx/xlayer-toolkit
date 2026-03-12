@@ -10,6 +10,10 @@ edition = "2021"
 name = "sha2-bench"
 path = "src/main.rs"
 
+[features]
+default = []
+inline = ["guest/inline"]
+
 [dependencies]
 jolt-sdk = { git = "https://github.com/a16z/jolt", rev = "2e05fe883920054df2ee3a6df8f85c2caba77c99", features = ["host"] }
 jolt-inlines-sha2 = { git = "https://github.com/a16z/jolt", rev = "2e05fe883920054df2ee3a6df8f85c2caba77c99", features = ["host"] }

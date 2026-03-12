@@ -5,6 +5,7 @@ edition = "2021"
 
 [features]
 guest = []
+inline = []
 
 [dependencies]
 jolt = { package = "jolt-sdk", git = "https://github.com/a16z/jolt", rev = "2e05fe883920054df2ee3a6df8f85c2caba77c99" }

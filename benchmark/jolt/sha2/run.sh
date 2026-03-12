@@ -18,39 +18,59 @@ case "$CMD" in
   build-guest)
     cd "$SCRIPT_DIR"
     echo "Building guest ELFs locally (requires jolt CLI + riscv64imac target)..."
+    # Build inline variant
+    echo "  Building inline guest..."
+    jolt build -p sha2-guest --backtrace off --stack-size 4096 \
+        -- --release --target-dir "$SCRIPT_DIR/target/jolt-guest" --features guest,inline
+    # Build native variant
+    echo "  Building native guest..."
     jolt build -p sha2-guest --backtrace off --stack-size 4096 \
         -- --release --target-dir "$SCRIPT_DIR/target/jolt-guest" --features guest
     echo "Guest ELFs built."
     ;;
   build-host)
     cd "$SCRIPT_DIR"
+    echo "Building host binaries..."
+    # Build native (default) binary
+    echo "  Building native binary..."
     cargo +nightly build --release --bin sha2-bench
+    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-native"
+    # Build inline binary
+    echo "  Building inline binary..."
+    cargo +nightly build --release --bin sha2-bench --features inline
+    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-inline"
+    echo "Host binaries built."
     ;;
   build)
-    # Build both guest ELFs and host binary locally
+    # Build both guest ELFs and host binaries
     cd "$SCRIPT_DIR"
     echo "=== Building guest ELFs ==="
-    jolt build -p sha2-guest --backtrace off --stack-size 4096 \
-        -- --release --target-dir "$SCRIPT_DIR/target/jolt-guest" --features guest
-    echo "=== Building host binary ==="
-    cargo +nightly build --release --bin sha2-bench
+    "$0" build-guest
+    echo "=== Building host binaries ==="
+    "$0" build-host
     echo "Done."
     ;;
   run)
-    INLINE_FLAG=""
     if [ "$INLINE" = "true" ]; then
+        BIN="$SCRIPT_DIR/target/release/sha2-bench-inline"
         INLINE_FLAG="--inline"
+    else
+        BIN="$SCRIPT_DIR/target/release/sha2-bench-native"
+        INLINE_FLAG=""
+    fi
+    if [ ! -f "$BIN" ]; then
+        echo "Error: $BIN not found. Run './run.sh build' first." >&2
+        exit 1
     fi
     RUST_LOG="${RUST_LOG:-info}" \
-        "$SCRIPT_DIR/target/release/sha2-bench" \
-        "--${MODE}" --n "$N" $INLINE_FLAG
+        "$BIN" "--${MODE}" --n "$N" $INLINE_FLAG
     ;;
   *)
     echo "Usage: $0 [build|build-guest|build-host|run|install-cli]"
     echo "  install-cli  Install jolt CLI tool (one-time setup)"
-    echo "  build        Build guest ELFs + host binary locally"
+    echo "  build        Build guest ELFs + host binaries locally"
     echo "  build-guest  Build guest ELFs only"
-    echo "  build-host   Build host binary only"
+    echo "  build-host   Build host binaries only"
     echo "  run          Run benchmark (MODE=execute|prove, N=<iters>, INLINE=true|false)"
     echo ""
     echo "Setup:"

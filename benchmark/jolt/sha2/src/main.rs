@@ -35,7 +35,19 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mode_label = if args.inline { "inline" } else { "native" };
+    let is_inline = cfg!(feature = "inline");
+    if args.inline != is_inline {
+        eprintln!(
+            "Error: binary was compiled {} inline support, but --inline={} was requested.\n\
+             Rebuild with: cargo build --release {}",
+            if is_inline { "with" } else { "without" },
+            args.inline,
+            if args.inline { "--features inline" } else { "" }
+        );
+        std::process::exit(1);
+    }
+
+    let mode_label = if is_inline { "inline" } else { "native" };
     println!(
         "\n=== Jolt SHA-256 Benchmark (n={}, mode={}) ===\n",
         args.n, mode_label
@@ -44,15 +56,15 @@ fn main() {
     let target_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/target/jolt-guest");
     let input = [0xABu8; 32];
 
-    if args.inline {
-        run_inline(&args, target_dir, input);
-    } else {
-        run_native(&args, target_dir, input);
-    }
+    #[cfg(feature = "inline")]
+    run_inline(&args, target_dir, input);
+    #[cfg(not(feature = "inline"))]
+    run_native(&args, target_dir, input);
 
     println!();
 }
 
+#[cfg(feature = "inline")]
 fn run_inline(args: &Args, target_dir: &str, input: [u8; 32]) {
     if args.execute {
         let program_summary = guest::analyze_sha2_chain_inline(input, args.n);
@@ -131,6 +143,7 @@ fn run_inline(args: &Args, target_dir: &str, input: [u8; 32]) {
     println!("Peak CPU:     {:.1}%", peak_stats.peak_cpu_pct);
 }
 
+#[cfg(not(feature = "inline"))]
 fn run_native(args: &Args, target_dir: &str, input: [u8; 32]) {
     if args.execute {
         let program_summary = guest::analyze_sha2_chain_native(input, args.n);
