@@ -34,3 +34,4 @@ sp1-build = { version = "6.0.1" }
 
 [features]
 cuda = ["sp1-sdk/cuda"]
+groth16-cuda = ["sp1-sdk/groth16-cuda"]

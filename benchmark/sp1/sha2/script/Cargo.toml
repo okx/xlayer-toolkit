@@ -20,6 +20,7 @@ hex = "0.4.3"
 
 [features]
 cuda = ["sp1-sdk/cuda"]
+groth16-cuda = ["sp1-sdk/groth16-cuda"]
 
 [build-dependencies]
 sp1-build = { version = "6.0.1" }

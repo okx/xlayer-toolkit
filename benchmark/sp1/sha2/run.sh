@@ -13,11 +13,14 @@ S3_BASE="https://sp1-circuits.s3-us-east-2.amazonaws.com"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# Enable AVX2 SIMD acceleration (Plonky3 hot path)
+export RUSTFLAGS="${RUSTFLAGS:--C target-cpu=native}"
+
 case "$CMD" in
   build)
     # Build both CPU and GPU binaries
     cd "$SCRIPT_DIR"
-    echo "=== Building CPU binary ==="
+    echo "=== Building CPU binary (RUSTFLAGS=$RUSTFLAGS) ==="
     cargo build --release --bin sha2-bench
     cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-cpu"
     echo "=== Building GPU binary ==="
@@ -35,9 +38,19 @@ case "$CMD" in
     cargo build --release --bin sha2-bench --features cuda
     cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-gpu"
     ;;
+  build-groth16-gpu)
+    # Build with icicle GPU acceleration for Groth16 proving
+    # Requires icicle CUDA libs in /usr/local/lib (or ICICLE_BACKEND_INSTALL_DIR)
+    cd "$SCRIPT_DIR"
+    cargo build --release --bin sha2-bench --features cuda,groth16-cuda
+    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-groth16-gpu"
+    ;;
   run)
-    # Select binary: GPU if SP1_PROVER=cuda, else CPU
-    if [ "${SP1_PROVER:-cpu}" = "cuda" ]; then
+    # Select binary based on SP1_PROVER and PROOF_MODE
+    if [ "${SP1_PROVER:-cpu}" = "cuda" ] && [ "$PROOF_MODE" = "groth16" ] \
+       && [ -f "$SCRIPT_DIR/target/release/sha2-bench-groth16-gpu" ]; then
+        BIN="$SCRIPT_DIR/target/release/sha2-bench-groth16-gpu"
+    elif [ "${SP1_PROVER:-cpu}" = "cuda" ]; then
         BIN="$SCRIPT_DIR/target/release/sha2-bench-gpu"
     else
         BIN="$SCRIPT_DIR/target/release/sha2-bench-cpu"
@@ -76,12 +89,13 @@ case "$CMD" in
     echo "Done. Groth16 is ready to use."
     ;;
   *)
-    echo "Usage: $0 [build|build-cpu|build-gpu|run|download-params]"
-    echo "  build            Build both CPU and GPU binaries"
-    echo "  build-cpu        Build CPU-only binary"
-    echo "  build-gpu        Build GPU (CUDA) binary"
-    echo "  run              Run benchmark (SP1_PROVER=cpu|cuda|mock)"
-    echo "  download-params  Pre-download Groth16 circuit params (~1GB)"
+    echo "Usage: $0 [build|build-cpu|build-gpu|build-groth16-gpu|run|download-params]"
+    echo "  build              Build both CPU and GPU binaries"
+    echo "  build-cpu          Build CPU-only binary"
+    echo "  build-gpu          Build GPU (CUDA) binary"
+    echo "  build-groth16-gpu  Build GPU binary with icicle Groth16 acceleration"
+    echo "  run                Run benchmark (SP1_PROVER=cpu|cuda|mock)"
+    echo "  download-params    Pre-download Groth16 circuit params (~1GB)"
     exit 1
     ;;
 esac
