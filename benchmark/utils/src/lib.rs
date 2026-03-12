@@ -47,16 +47,37 @@ pub fn read_cpu_ticks() -> u64 {
     read_cpu_ticks_pid("self")
 }
 
+/// Read total CPU ticks for a process including ALL threads.
+/// Uses /proc/<pid>/task/*/stat to sum utime+stime across every thread.
 #[cfg(target_os = "linux")]
 pub fn read_cpu_ticks_pid(pid: &str) -> u64 {
-    let stat = std::fs::read_to_string(format!("/proc/{}/stat", pid)).unwrap_or_default();
-    if let Some(pos) = stat.rfind(')') {
-        let rest: Vec<&str> = stat[pos + 1..].split_whitespace().collect();
-        let utime: u64 = rest.get(11).and_then(|s| s.parse().ok()).unwrap_or(0);
-        let stime: u64 = rest.get(12).and_then(|s| s.parse().ok()).unwrap_or(0);
-        utime + stime
+    let task_dir = format!("/proc/{}/task", pid);
+    if let Ok(entries) = std::fs::read_dir(&task_dir) {
+        let mut total: u64 = 0;
+        for entry in entries.flatten() {
+            let tid = entry.file_name();
+            let stat_path = format!("{}/{}/stat", task_dir, tid.to_string_lossy());
+            if let Ok(stat) = std::fs::read_to_string(&stat_path) {
+                if let Some(pos) = stat.rfind(')') {
+                    let rest: Vec<&str> = stat[pos + 1..].split_whitespace().collect();
+                    let utime: u64 = rest.get(11).and_then(|s| s.parse().ok()).unwrap_or(0);
+                    let stime: u64 = rest.get(12).and_then(|s| s.parse().ok()).unwrap_or(0);
+                    total += utime + stime;
+                }
+            }
+        }
+        total
     } else {
-        0
+        // Fallback: read process-level stat (main thread only)
+        let stat = std::fs::read_to_string(format!("/proc/{}/stat", pid)).unwrap_or_default();
+        if let Some(pos) = stat.rfind(')') {
+            let rest: Vec<&str> = stat[pos + 1..].split_whitespace().collect();
+            let utime: u64 = rest.get(11).and_then(|s| s.parse().ok()).unwrap_or(0);
+            let stime: u64 = rest.get(12).and_then(|s| s.parse().ok()).unwrap_or(0);
+            utime + stime
+        } else {
+            0
+        }
     }
 }
 
