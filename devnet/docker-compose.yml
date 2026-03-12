@@ -931,10 +931,12 @@ services:
   op-succinct-challenger:
     image: "${OP_SUCCINCT_IMAGE_TAG}"
     container_name: op-succinct-challenger
+    environment:
+      - RUST_LOG=info
     volumes:
       - ./op-succinct/.env.challenger:/app/.env
     ports:
-      - "9001:9001"
+      - "9002:9001"
     command:
       - challenger
       - --env-file=/app/.env

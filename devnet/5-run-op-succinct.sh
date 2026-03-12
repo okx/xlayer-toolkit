@@ -66,6 +66,7 @@ sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env
 sed_inplace "s|^L1_BEACON_RPC=.*|L1_BEACON_RPC=$L1_BEACON_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
 sed_inplace "s|^L2_RPC=.*|L2_RPC=$L2_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
 sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.proposer
+sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.proposer
 sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_NODE_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.proposer
 
 sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$PROOF_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.proposer
@@ -74,6 +75,7 @@ sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$PROOF_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.en
 sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
 sed_inplace "s|^L2_RPC=.*|L2_RPC=$L2_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
 sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.challenger
+sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.challenger
 
 docker compose up op-succinct-fetch-config
 OP_DEPLOYER_ADDR=$(cast wallet a "$DEPLOYER_PRIVATE_KEY")
