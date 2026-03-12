@@ -18,13 +18,13 @@ export RUSTFLAGS="${RUSTFLAGS:--C target-cpu=native}"
 
 case "$CMD" in
   build)
-    # Build both CPU and GPU binaries
+    # Build CPU (AVX) + GPU (CUDA + icicle Groth16) binaries
     cd "$SCRIPT_DIR"
     echo "=== Building CPU binary (RUSTFLAGS=$RUSTFLAGS) ==="
     cargo build --release --bin sha2-bench
     cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-cpu"
-    echo "=== Building GPU binary ==="
-    cargo build --release --bin sha2-bench --features cuda
+    echo "=== Building GPU binary (cuda + groth16-cuda/icicle) ==="
+    cargo build --release --bin sha2-bench --features cuda,groth16-cuda
     cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-gpu"
     echo "Done. Binaries: target/release/sha2-bench-cpu, target/release/sha2-bench-gpu"
     ;;
@@ -35,22 +35,12 @@ case "$CMD" in
     ;;
   build-gpu)
     cd "$SCRIPT_DIR"
-    cargo build --release --bin sha2-bench --features cuda
+    cargo build --release --bin sha2-bench --features cuda,groth16-cuda
     cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-gpu"
     ;;
-  build-groth16-gpu)
-    # Build with icicle GPU acceleration for Groth16 proving
-    # Requires icicle CUDA libs in /usr/local/lib (or ICICLE_BACKEND_INSTALL_DIR)
-    cd "$SCRIPT_DIR"
-    cargo build --release --bin sha2-bench --features cuda,groth16-cuda
-    cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-groth16-gpu"
-    ;;
   run)
-    # Select binary based on SP1_PROVER and PROOF_MODE
-    if [ "${SP1_PROVER:-cpu}" = "cuda" ] && [ "$PROOF_MODE" = "groth16" ] \
-       && [ -f "$SCRIPT_DIR/target/release/sha2-bench-groth16-gpu" ]; then
-        BIN="$SCRIPT_DIR/target/release/sha2-bench-groth16-gpu"
-    elif [ "${SP1_PROVER:-cpu}" = "cuda" ]; then
+    # Select binary: GPU if SP1_PROVER=cuda, else CPU
+    if [ "${SP1_PROVER:-cpu}" = "cuda" ]; then
         BIN="$SCRIPT_DIR/target/release/sha2-bench-gpu"
     else
         BIN="$SCRIPT_DIR/target/release/sha2-bench-cpu"
@@ -89,13 +79,14 @@ case "$CMD" in
     echo "Done. Groth16 is ready to use."
     ;;
   *)
-    echo "Usage: $0 [build|build-cpu|build-gpu|build-groth16-gpu|run|download-params]"
-    echo "  build              Build both CPU and GPU binaries"
-    echo "  build-cpu          Build CPU-only binary"
-    echo "  build-gpu          Build GPU (CUDA) binary"
-    echo "  build-groth16-gpu  Build GPU binary with icicle Groth16 acceleration"
-    echo "  run                Run benchmark (SP1_PROVER=cpu|cuda|mock)"
-    echo "  download-params    Pre-download Groth16 circuit params (~1GB)"
+    echo "Usage: $0 [build|build-cpu|build-gpu|run|download-params]"
+    echo "  build            Build CPU (AVX) + GPU (CUDA+icicle) binaries"
+    echo "  build-cpu        Build CPU-only binary (AVX enabled)"
+    echo "  build-gpu        Build GPU binary (CUDA + icicle Groth16)"
+    echo "  run              Run benchmark (SP1_PROVER=cpu|cuda|mock)"
+    echo "  download-params  Pre-download Groth16 circuit params (~1GB)"
+    echo ""
+    echo "For icicle setup, run: cd ../fibonacci && ./run.sh install-icicle"
     exit 1
     ;;
 esac

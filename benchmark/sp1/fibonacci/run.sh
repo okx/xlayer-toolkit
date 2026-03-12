@@ -4,7 +4,7 @@ set -e
 N=${N:-20}
 MODE=${MODE:-execute}            # execute | prove
 PROOF_MODE=${PROOF_MODE:-core}   # core | compressed | groth16
-CMD=${1:-run}                    # build | run | download-params
+CMD=${1:-run}                    # build | run | download-params | install-icicle
 
 SP1_CIRCUIT_VERSION="v6.0.0"
 S3_BASE="https://sp1-circuits.s3-us-east-2.amazonaws.com"
@@ -16,13 +16,13 @@ export RUSTFLAGS="${RUSTFLAGS:--C target-cpu=native}"
 
 case "$CMD" in
   build)
-    # Build both CPU and GPU binaries
+    # Build CPU (AVX) + GPU (CUDA + icicle Groth16) binaries
     cd "$SCRIPT_DIR"
     echo "=== Building CPU binary (RUSTFLAGS=$RUSTFLAGS) ==="
     cargo build --release --bin fibonacci
     cp "$SCRIPT_DIR/target/release/fibonacci" "$SCRIPT_DIR/target/release/fibonacci-cpu"
-    echo "=== Building GPU binary ==="
-    cargo build --release --bin fibonacci --features cuda
+    echo "=== Building GPU binary (cuda + groth16-cuda/icicle) ==="
+    cargo build --release --bin fibonacci --features cuda,groth16-cuda
     cp "$SCRIPT_DIR/target/release/fibonacci" "$SCRIPT_DIR/target/release/fibonacci-gpu"
     echo "Done. Binaries: target/release/fibonacci-cpu, target/release/fibonacci-gpu"
     ;;
@@ -33,22 +33,12 @@ case "$CMD" in
     ;;
   build-gpu)
     cd "$SCRIPT_DIR"
-    cargo build --release --bin fibonacci --features cuda
+    cargo build --release --bin fibonacci --features cuda,groth16-cuda
     cp "$SCRIPT_DIR/target/release/fibonacci" "$SCRIPT_DIR/target/release/fibonacci-gpu"
     ;;
-  build-groth16-gpu)
-    # Build with icicle GPU acceleration for Groth16 proving
-    # Requires icicle CUDA libs in /usr/local/lib (or ICICLE_BACKEND_INSTALL_DIR)
-    cd "$SCRIPT_DIR"
-    cargo build --release --bin fibonacci --features cuda,groth16-cuda
-    cp "$SCRIPT_DIR/target/release/fibonacci" "$SCRIPT_DIR/target/release/fibonacci-groth16-gpu"
-    ;;
   run)
-    # Select binary based on SP1_PROVER and PROOF_MODE
-    if [ "${SP1_PROVER:-cpu}" = "cuda" ] && [ "$PROOF_MODE" = "groth16" ] \
-       && [ -f "$SCRIPT_DIR/target/release/fibonacci-groth16-gpu" ]; then
-        BIN="$SCRIPT_DIR/target/release/fibonacci-groth16-gpu"
-    elif [ "${SP1_PROVER:-cpu}" = "cuda" ]; then
+    # Select binary: GPU if SP1_PROVER=cuda, else CPU
+    if [ "${SP1_PROVER:-cpu}" = "cuda" ]; then
         BIN="$SCRIPT_DIR/target/release/fibonacci-gpu"
     else
         BIN="$SCRIPT_DIR/target/release/fibonacci-cpu"
@@ -86,7 +76,7 @@ case "$CMD" in
     echo "Done. Groth16 is ready to use."
     ;;
   install-icicle)
-    # Download and install icicle CUDA backend libs (required for build-groth16-gpu)
+    # Download and install icicle CUDA backend libs (required for build-gpu)
     ICICLE_VERSION="${ICICLE_VERSION:-3.4.0}"
     ICICLE_INSTALL_DIR="${ICICLE_BACKEND_INSTALL_DIR:-/usr/local/lib}"
     ICICLE_TAG="icicle_$(echo "$ICICLE_VERSION" | tr '.' '_')"
@@ -121,17 +111,16 @@ case "$CMD" in
     fi
 
     echo ""
-    echo "Done. You can now run: ./run.sh build-groth16-gpu"
+    echo "Done. You can now run: ./run.sh build"
     ;;
   *)
-    echo "Usage: $0 [build|build-cpu|build-gpu|build-groth16-gpu|run|download-params|install-icicle]"
-    echo "  build              Build both CPU and GPU binaries"
-    echo "  build-cpu          Build CPU-only binary"
-    echo "  build-gpu          Build GPU (CUDA) binary"
-    echo "  build-groth16-gpu  Build GPU binary with icicle Groth16 acceleration"
-    echo "  run                Run benchmark (SP1_PROVER=cpu|cuda|mock)"
-    echo "  download-params    Pre-download Groth16 circuit params (~1GB)"
-    echo "  install-icicle     Download & install icicle CUDA libs (for Groth16 GPU)"
+    echo "Usage: $0 [build|build-cpu|build-gpu|run|download-params|install-icicle]"
+    echo "  build            Build CPU (AVX) + GPU (CUDA+icicle) binaries"
+    echo "  build-cpu        Build CPU-only binary (AVX enabled)"
+    echo "  build-gpu        Build GPU binary (CUDA + icicle Groth16)"
+    echo "  run              Run benchmark (SP1_PROVER=cpu|cuda|mock)"
+    echo "  download-params  Pre-download Groth16 circuit params (~1GB)"
+    echo "  install-icicle   Download & install icicle CUDA libs (one-time setup)"
     exit 1
     ;;
 esac
