@@ -85,14 +85,53 @@ case "$CMD" in
 
     echo "Done. Groth16 is ready to use."
     ;;
+  install-icicle)
+    # Download and install icicle CUDA backend libs (required for build-groth16-gpu)
+    ICICLE_VERSION="${ICICLE_VERSION:-3.4.0}"
+    ICICLE_INSTALL_DIR="${ICICLE_BACKEND_INSTALL_DIR:-/usr/local/lib}"
+    ICICLE_TAG="icicle_$(echo "$ICICLE_VERSION" | tr '.' '_')"
+    ICICLE_TARBALL="${ICICLE_TAG}-ubuntu22-cuda122.tar.gz"
+    ICICLE_URL="https://github.com/ingonyama-zk/icicle/releases/download/v${ICICLE_VERSION}/${ICICLE_TARBALL}"
+
+    # Check if already installed
+    if [ -f "${ICICLE_INSTALL_DIR}/libicicle_device.so" ] && \
+       [ -f "${ICICLE_INSTALL_DIR}/libicicle_field_bn254.so" ]; then
+        echo "Icicle libs already found in ${ICICLE_INSTALL_DIR}, skipping."
+        echo "To reinstall, remove ${ICICLE_INSTALL_DIR}/libicicle_*.so first."
+    else
+        DL_TMPDIR=$(mktemp -d)
+        trap "rm -rf $DL_TMPDIR" EXIT
+        echo "Downloading icicle v${ICICLE_VERSION} CUDA backend..."
+        echo "  URL: $ICICLE_URL"
+        curl -L --progress-bar -o "$DL_TMPDIR/icicle.tar.gz" "$ICICLE_URL"
+        echo "Size: $(ls -lh "$DL_TMPDIR/icicle.tar.gz" | awk '{print $5}')"
+
+        echo "Extracting to $DL_TMPDIR/icicle ..."
+        mkdir -p "$DL_TMPDIR/icicle"
+        tar xzf "$DL_TMPDIR/icicle.tar.gz" -C "$DL_TMPDIR/icicle"
+
+        echo "Installing to ${ICICLE_INSTALL_DIR} (requires sudo)..."
+        sudo mkdir -p "${ICICLE_INSTALL_DIR}"
+        # Copy all .so files to install dir
+        sudo find "$DL_TMPDIR/icicle" -name '*.so' -exec cp -v {} "${ICICLE_INSTALL_DIR}/" \;
+        sudo ldconfig
+        echo ""
+        echo "Installed icicle libs:"
+        ls -lh "${ICICLE_INSTALL_DIR}"/libicicle_*.so 2>/dev/null || echo "  (none found)"
+    fi
+
+    echo ""
+    echo "Done. You can now run: ./run.sh build-groth16-gpu"
+    ;;
   *)
-    echo "Usage: $0 [build|build-cpu|build-gpu|build-groth16-gpu|run|download-params]"
+    echo "Usage: $0 [build|build-cpu|build-gpu|build-groth16-gpu|run|download-params|install-icicle]"
     echo "  build              Build both CPU and GPU binaries"
     echo "  build-cpu          Build CPU-only binary"
     echo "  build-gpu          Build GPU (CUDA) binary"
     echo "  build-groth16-gpu  Build GPU binary with icicle Groth16 acceleration"
     echo "  run                Run benchmark (SP1_PROVER=cpu|cuda|mock)"
     echo "  download-params    Pre-download Groth16 circuit params (~1GB)"
+    echo "  install-icicle     Download & install icicle CUDA libs (for Groth16 GPU)"
     exit 1
     ;;
 esac
