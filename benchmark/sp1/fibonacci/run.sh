@@ -7,9 +7,11 @@ PROOF_MODE=${PROOF_MODE:-core}   # core | compressed | groth16
 CMD=${1:-run}                    # build | run | download-params | install-icicle
 
 SP1_CIRCUIT_VERSION="v6.0.0"
+SP1_VERSION="${SP1_VERSION:-v6.0.2}"
 S3_BASE="https://sp1-circuits.s3-us-east-2.amazonaws.com"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SP1_SRC_DIR="${SP1_SRC_DIR:-$HOME/sp1}"
 
 # Enable AVX2 SIMD acceleration (Plonky3 hot path)
 export RUSTFLAGS="${RUSTFLAGS:--C target-cpu=native}"
@@ -50,6 +52,7 @@ case "$CMD" in
     # sp1-cuda cleanup panics on exit (tokio runtime missing in Drop).
     # Set icicle backend path for Groth16 GPU acceleration
     export ICICLE_BACKEND_INSTALL_DIR="${ICICLE_BACKEND_INSTALL_DIR:-/usr/local/lib/backend}"
+    export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
     set +e
     OUTPUT=$(RUST_LOG="${RUST_LOG:-info}" \
     SP1_PROVER="${SP1_PROVER:-cpu}" \
@@ -76,6 +79,45 @@ case "$CMD" in
     fi
 
     echo "Done. Groth16 is ready to use."
+    ;;
+  build-gpu-server)
+    # Rebuild sp1-gpu-server from source with icicle (groth16-cuda) support.
+    # The pre-built server at ~/.sp1/bin/sp1-gpu-server does NOT include icicle.
+    # Groth16 proving happens inside sp1-gpu-server, so it must be compiled
+    # with groth16-cuda feature for icicle GPU acceleration to work.
+    if [ ! -d "$SP1_SRC_DIR" ]; then
+        echo "Cloning SP1 source to $SP1_SRC_DIR ..."
+        git clone --depth 1 --branch "$SP1_VERSION" https://github.com/succinctlabs/sp1 "$SP1_SRC_DIR"
+    else
+        echo "Using existing SP1 source at $SP1_SRC_DIR"
+        cd "$SP1_SRC_DIR"
+        CURRENT_TAG=$(git describe --tags --exact-match 2>/dev/null || true)
+        if [ "$CURRENT_TAG" != "$SP1_VERSION" ]; then
+            echo "Warning: SP1 source is at '$CURRENT_TAG', expected '$SP1_VERSION'"
+            echo "  To update: cd $SP1_SRC_DIR && git fetch --tags && git checkout $SP1_VERSION"
+        fi
+    fi
+
+    echo "=== Building sp1-gpu-server with groth16-cuda (icicle) ==="
+    cd "$SP1_SRC_DIR"
+    cargo build --release -p sp1-gpu-server --features groth16-cuda
+
+    # Replace the pre-built server binary
+    SERVER_DIR="$HOME/.sp1/bin"
+    mkdir -p "$SERVER_DIR"
+    if [ -f "$SERVER_DIR/sp1-gpu-server" ]; then
+        echo "Backing up existing server to sp1-gpu-server.bak"
+        cp "$SERVER_DIR/sp1-gpu-server" "$SERVER_DIR/sp1-gpu-server.bak"
+    fi
+    cp "$SP1_SRC_DIR/target/release/sp1-gpu-server" "$SERVER_DIR/sp1-gpu-server"
+    echo "Installed sp1-gpu-server (with icicle) to $SERVER_DIR/sp1-gpu-server"
+
+    # Verify icicle symbols
+    if nm "$SERVER_DIR/sp1-gpu-server" 2>/dev/null | grep -q "icicle_groth16"; then
+        echo "OK: icicle symbols found in sp1-gpu-server"
+    else
+        echo "Warning: icicle symbols NOT found — groth16-cuda may not have been enabled"
+    fi
     ;;
   install-icicle)
     # Download and install icicle core + CUDA backend libs (required for build-gpu)
@@ -138,10 +180,11 @@ case "$CMD" in
     echo "Done. You can now run: ./run.sh build"
     ;;
   *)
-    echo "Usage: $0 [build|build-cpu|build-gpu|run|download-params|install-icicle]"
+    echo "Usage: $0 [build|build-cpu|build-gpu|build-gpu-server|run|download-params|install-icicle]"
     echo "  build            Build CPU (AVX) + GPU (CUDA+icicle) binaries"
     echo "  build-cpu        Build CPU-only binary (AVX enabled)"
     echo "  build-gpu        Build GPU binary (CUDA + icicle Groth16)"
+    echo "  build-gpu-server Rebuild sp1-gpu-server with icicle (required for Groth16 GPU)"
     echo "  run              Run benchmark (SP1_PROVER=cpu|cuda|mock)"
     echo "  download-params  Pre-download Groth16 circuit params (~1GB)"
     echo "  install-icicle   Download & install icicle CUDA libs (one-time setup)"

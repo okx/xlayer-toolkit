@@ -9,9 +9,11 @@ PRECOMPILE=${PRECOMPILE:-false}  # true | false (use SP1 precompile for SHA-256)
 CMD=${1:-run}                    # build | run | download-params
 
 SP1_CIRCUIT_VERSION="v6.0.0"
+SP1_VERSION="${SP1_VERSION:-v6.0.2}"
 S3_BASE="https://sp1-circuits.s3-us-east-2.amazonaws.com"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SP1_SRC_DIR="${SP1_SRC_DIR:-$HOME/sp1}"
 
 # Enable AVX2 SIMD acceleration (Plonky3 hot path)
 export RUSTFLAGS="${RUSTFLAGS:--C target-cpu=native}"
@@ -52,6 +54,7 @@ case "$CMD" in
     # sp1-cuda cleanup panics on exit (tokio runtime missing in Drop).
     # Set icicle backend path for Groth16 GPU acceleration
     export ICICLE_BACKEND_INSTALL_DIR="${ICICLE_BACKEND_INSTALL_DIR:-/usr/local/lib/backend}"
+    export LD_LIBRARY_PATH="/usr/local/lib:${LD_LIBRARY_PATH}"
     set +e
     OUTPUT=$(RUST_LOG="${RUST_LOG:-info}" \
     SP1_PROVER="${SP1_PROVER:-cpu}" \
@@ -80,11 +83,17 @@ case "$CMD" in
 
     echo "Done. Groth16 is ready to use."
     ;;
+  build-gpu-server)
+    # Delegate to fibonacci's run.sh (shared sp1-gpu-server binary)
+    cd "$SCRIPT_DIR/../fibonacci"
+    ./run.sh build-gpu-server
+    ;;
   *)
-    echo "Usage: $0 [build|build-cpu|build-gpu|run|download-params]"
+    echo "Usage: $0 [build|build-cpu|build-gpu|build-gpu-server|run|download-params]"
     echo "  build            Build CPU (AVX) + GPU (CUDA+icicle) binaries"
     echo "  build-cpu        Build CPU-only binary (AVX enabled)"
     echo "  build-gpu        Build GPU binary (CUDA + icicle Groth16)"
+    echo "  build-gpu-server Rebuild sp1-gpu-server with icicle (required for Groth16 GPU)"
     echo "  run              Run benchmark (SP1_PROVER=cpu|cuda|mock)"
     echo "  download-params  Pre-download Groth16 circuit params (~1GB)"
     echo ""
