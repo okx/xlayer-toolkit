@@ -25,7 +25,7 @@ detect_repository() {
 # Load configuration from network-presets.env
 load_configuration() {
     local config_file
-    
+
     # If running from repository, use the file directly from presets/
     if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/presets/network-presets.env" ]; then
         config_file="$REPO_RPC_SETUP_DIR/presets/network-presets.env"
@@ -44,7 +44,7 @@ load_configuration() {
             fi
         fi
     fi
-    
+
     # Source the config file (will override built-in defaults)
     source "$config_file"
     print_success "Configuration loaded successfully"
@@ -71,7 +71,7 @@ print_info() { echo -e "\033[0;34mℹ️  $1\033[0m"; }
 print_success() { echo -e "\033[0;32m✅ $1\033[0m"; }
 print_warning() { echo -e "\033[1;33m⚠️  $1\033[0m"; }
 print_error() { echo -e "\033[0;31m❌ $1\033[0m"; }
-print_prompt() { 
+print_prompt() {
     # Try /dev/tty first, fallback to stdout
     if ! printf "\033[0;34m%s\033[0m" "$1" > /dev/tty 2>/dev/null; then
         printf "\033[0;34m%s\033[0m" "$1"
@@ -111,10 +111,10 @@ parse_arguments() {
                 ;;
         esac
     done
-    
+
     # Set default for RPC_TYPE only
     RPC_TYPE="${RPC_TYPE:-geth}"
-    
+
     # Validate RPC_TYPE if provided
     if ! validate_rpc_type "$RPC_TYPE"; then
         exit 1
@@ -125,9 +125,9 @@ parse_arguments() {
 check_existing_configurations() {
     print_info "Checking existing configurations..."
     echo ""
-    
+
     local has_configs=false
-    
+
     for config in mainnet-geth mainnet-reth testnet-geth testnet-reth; do
         if [ -d "$config" ]; then
             has_configs=true
@@ -139,11 +139,11 @@ check_existing_configurations() {
             fi
         fi
     done
-    
+
     if [ "$has_configs" = false ]; then
         echo "  ℹ️  No existing configurations found"
     fi
-    
+
     echo ""
 }
 
@@ -152,7 +152,7 @@ load_network_config() {
     local network=$1
     # Convert to uppercase using tr (more compatible)
     local prefix=$(echo "$network" | tr '[:lower:]' '[:upper:]')
-    
+
     # Dynamically set variables based on network prefix
     eval "OP_NODE_BOOTNODE=\${${prefix}_BOOTNODE_OP_NODE}"
     eval "OP_GETH_BOOTNODE=\${${prefix}_GETH_BOOTNODE}"
@@ -167,7 +167,7 @@ load_network_config() {
     eval "RETH_CONFIG=\${${prefix}_RETH_CONFIG}"
     eval "LEGACY_RPC_URL=\${${prefix}_LEGACY_RPC_URL}"
     eval "LEGACY_RPC_TIMEOUT=\${${prefix}_LEGACY_RPC_TIMEOUT}"
-    
+
     # Validate that configuration was loaded
     if [ -z "$OP_STACK_IMAGE_TAG" ]; then
         print_error "Failed to load configuration for network: $network"
@@ -183,7 +183,7 @@ command_exists() {
 # Check Docker and Docker Compose
 check_docker() {
     print_info "Checking Docker environment..."
-    
+
     # Check Docker
     if command_exists docker; then
         local docker_version=$(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
@@ -194,7 +194,7 @@ check_docker() {
         print_info "Visit: https://docs.docker.com/get-docker/"
         exit 1
     fi
-    
+
     # Check Docker Compose
     if command_exists docker-compose; then
         local compose_version=$(docker-compose --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
@@ -208,7 +208,7 @@ check_docker() {
         print_info "Visit: https://docs.docker.com/compose/install/"
         exit 1
     fi
-    
+
     # Check Docker daemon
     if docker info &> /dev/null; then
         echo "  ✓ docker daemon (running)"
@@ -218,18 +218,18 @@ check_docker() {
         exit 1
     fi
 }
-    
+
 # Check required system tools
 check_required_tools() {
     local missing_required=()
     local missing_optional=()
-    
+
     # Required tools
     local required_tools=("wget" "tar" "openssl" "curl" "sed" "make")
-    
+
     # Optional tools (script works without them but with degraded functionality)
     local optional_tools=("jq")
-    
+
     print_info "Checking required tools..."
     for tool in "${required_tools[@]}"; do
         if command_exists "$tool"; then
@@ -239,7 +239,7 @@ check_required_tools() {
             echo "  ✗ $tool (missing)"
         fi
     done
-    
+
     print_info "Checking optional tools..."
     for tool in "${optional_tools[@]}"; do
         if command_exists "$tool"; then
@@ -249,7 +249,7 @@ check_required_tools() {
             echo "  ⚠ $tool (optional, recommended)"
         fi
     done
-    
+
     # Exit if required tools are missing
     if [ ${#missing_required[@]} -gt 0 ]; then
         print_error "Missing required tools: ${missing_required[*]}"
@@ -261,7 +261,7 @@ check_required_tools() {
         echo "  sudo apt-get install ${missing_required[*]}"
         exit 1
     fi
-    
+
     # Warn if optional tools are missing
     if [ ${#missing_optional[@]} -gt 0 ]; then
         print_warning "Optional tools not found: ${missing_optional[*]}"
@@ -280,13 +280,13 @@ check_system_requirements() {
 get_file_from_source() {
     local file=$1
     local target_path="$WORK_DIR/$file"
-    
+
     # If file already exists in work directory, skip
     if [ -f "$target_path" ]; then
         print_info "✓ Using existing $file"
         return 0
     fi
-    
+
     # Try to copy from local repository
     if [ "$IN_REPO" = true ]; then
         local source_path="$REPO_RPC_SETUP_DIR/$file"
@@ -296,7 +296,7 @@ get_file_from_source() {
             return 0
         fi
     fi
-    
+
     # Download from GitHub
     local url="${REPO_URL}/${file}"
     print_info "Downloading $file from GitHub..."
@@ -311,38 +311,38 @@ get_file_from_source() {
 
 check_required_files() {
     print_info "Checking required files..."
-    
+
     # Always need Makefile
     if ! get_file_from_source "Makefile"; then
         print_error "Failed to get required file: Makefile"
         exit 1
     fi
-    
+
     # docker-compose.yml will be generated later based on sync mode
     # For genesis mode, we'll get it from source; for snapshot mode, we'll generate it
-    
+
     print_success "Required files ready"
 }
 
 # Get configuration files based on network and RPC type
 download_config_files() {
     print_info "Getting configuration files..."
-    
+
     load_network_config "$NETWORK_TYPE"
-    
+
     # Target directory config folder
     local config_dir="${TARGET_DIR}/config"
     mkdir -p "$config_dir"
-    
+
     local config_files=("presets/$ROLLUP_CONFIG")
-    
+
     # Add execution client config
     [ "$RPC_TYPE" = "reth" ] && config_files+=("presets/$RETH_CONFIG") || config_files+=("presets/$GETH_CONFIG")
-    
+
     for file in "${config_files[@]}"; do
         local filename=$(basename "$file")
         local target="$config_dir/$filename"
-        
+
         # Try to copy from local repository first
         if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/$file" ]; then
             cp "$REPO_RPC_SETUP_DIR/$file" "$target"
@@ -356,7 +356,7 @@ download_config_files() {
             fi
         fi
     done
-    
+
     print_success "Configuration files ready"
 }
 
@@ -367,7 +367,7 @@ prompt_input() {
     local validator=$3
     local result
     local input
-    
+
     while true; do
         print_prompt "$prompt_text"
         # Try to read from /dev/tty, fallback to stdin if it fails
@@ -379,12 +379,12 @@ prompt_input() {
             # If both fail, use default value
             result="$default_value"
         fi
-        
+
         # If validator function provided, call it
         if [ -n "$validator" ] && ! $validator "$result"; then
             continue
         fi
-        
+
         echo "$result"
         return 0
     done
@@ -415,64 +415,52 @@ validate_ws_url() {
 validate_snapshot_support() {
     local rpc_type=$1
     local network=$2
-    
+
     if [ "$network" != "testnet" ] && [ "$network" != "mainnet" ]; then
         print_error "Snapshot mode is currently only supported for testnet and mainnet"
         return 1
     fi
 
-    if [ "$network" = "testnet" ] && [ "$rpc_type" != "geth" ]; then
-        print_error "Testnet snapshot is currently only supported for geth"
-        print_info "Supported combinations:"
-        print_info "  - geth + testnet: ✅ snapshot supported"
-        print_info "  - geth + mainnet: ✅ snapshot supported"
-        print_info "  - reth + testnet: ❌ snapshot not supported (use genesis mode)"
-        print_info "  - reth + mainnet: ✅ snapshot supported"
-        print_info ""
-        print_info "Please use 'genesis' sync mode for reth + testnet configuration"
-        return 1
-    fi
-    
     return 0
 }
 
 check_existing_data() {
     local target_dir="$1"
-    
+
     if [ ! -d "$target_dir" ]; then
         print_info "Directory does not exist, will initialize: $target_dir"
         return 0  # Continue with initialization
     fi
-    
+
     print_warning "Directory already exists: $target_dir"
     echo ""
-    
+
     # Display directory information
     local size=$(du -sh "$target_dir" 2>/dev/null | cut -f1 || echo "unknown")
     echo "  📂 Location: $target_dir"
     echo "  💾 Size: $size"
-    
+
     # Check if initialized (unified structure: data/, config/ for both genesis and snapshot)
     if [ -d "$target_dir/data" ] && [ -d "$target_dir/config" ] && [ "$(ls -A "$target_dir/data" 2>/dev/null)" ]; then
         echo "  ✅ Status: Initialized with data"
     else
         echo "  ⚠️  Status: Empty or incomplete"
     fi
-    
+
     echo ""
     echo "Options:"
     echo "  [1] Keep existing data and skip initialization (recommended)"
     echo "  [2] Delete and re-initialize (will lose all data)"
     echo "  [3] Cancel"
     echo ""
-    
+
     while true; do
         print_prompt "Your choice [1/2/3, default: 1]: "
         if ! read -r choice </dev/tty 2>/dev/null && ! read -r choice; then
             choice="1"  # Default to keeping data if read fails
         fi
         choice="${choice:-1}"
-        
+
         case $choice in
             1)
                 print_success "Keeping existing data"
@@ -502,30 +490,30 @@ check_existing_data() {
 get_user_input() {
     print_info "Please provide the following information:"
     echo ""
-    
+
     # Step 1: Network type (interactive)
     NETWORK_TYPE=$(prompt_input "1. Network type (testnet/mainnet) [default: $DEFAULT_NETWORK]: " "$DEFAULT_NETWORK" "validate_network")
-    
+
     # Set target directory
     TARGET_DIR="${NETWORK_TYPE}-${RPC_TYPE}"
-    
+
     # Step 1.5: Sync mode (interactive)
     SYNC_MODE=$(prompt_input "2. Sync mode (genesis/snapshot) [default: $DEFAULT_SYNC_MODE]: " "$DEFAULT_SYNC_MODE" "validate_sync_mode")
-    
+
     # geth + testnet + genesis is temporarily disabled; use snapshot for this combination
     if [ "$RPC_TYPE" = "geth" ] && [ "$NETWORK_TYPE" = "testnet" ] && [ "$SYNC_MODE" = "genesis" ]; then
         print_error "geth + testnet + genesis is temporarily disabled"
         print_info "Please use 'snapshot' sync mode for geth + testnet, or choose another network/RPC combination"
         exit 1
     fi
-    
+
     # Validate snapshot support
     if [ "$SYNC_MODE" = "snapshot" ]; then
         if ! validate_snapshot_support "$RPC_TYPE" "$NETWORK_TYPE"; then
             exit 1
         fi
     fi
-    
+
     # Step 3-4: L1 URLs (required)
     while true; do
         print_prompt "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
@@ -535,7 +523,7 @@ get_user_input() {
         fi
         [ -n "$L1_RPC_URL" ] && validate_url "$L1_RPC_URL" && break
     done
-    
+
     while true; do
         print_prompt "4. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
         if ! read -r L1_BEACON_URL </dev/tty 2>/dev/null && ! read -r L1_BEACON_URL; then
@@ -544,7 +532,7 @@ get_user_input() {
         fi
         [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
     done
-    
+
     # Check existing data directory
     echo ""
     # Temporarily disable set -e to capture return value safely
@@ -552,7 +540,7 @@ get_user_input() {
     check_existing_data "$TARGET_DIR"
     SKIP_INIT=$?  # Save return value: 0=initialize, 1=skip
     set -e
-    
+
     # Optional configurations (always collect, regardless of SKIP_INIT)
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -560,14 +548,14 @@ get_user_input() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_info "Press Enter to use default values, or type new values:"
     echo ""
-    
+
     RPC_PORT=$(prompt_input "5. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
     WS_PORT=$(prompt_input "6. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "") || WS_PORT="$DEFAULT_WS_PORT"
     NODE_RPC_PORT=$(prompt_input "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
     GETH_P2P_PORT=$(prompt_input "8. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
     NODE_P2P_PORT=$(prompt_input "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
     ENGINE_API_PORT=$(prompt_input "10. Engine API port [default: $DEFAULT_ENGINE_API_PORT]: " "$DEFAULT_ENGINE_API_PORT" "") || ENGINE_API_PORT="$DEFAULT_ENGINE_API_PORT"
-    
+
     print_info "Using ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
 
     FLASHBLOCKS_ENABLED=$(prompt_input "11. Flashblocks enabled [default: $DEFAULT_FLASHBLOCKS_ENABLED]: " "$DEFAULT_FLASHBLOCKS_ENABLED" "") || FLASHBLOCKS_ENABLED="$DEFAULT_FLASHBLOCKS_ENABLED"
@@ -575,22 +563,22 @@ get_user_input() {
     if [ "$FLASHBLOCKS_ENABLED" = "true" ]; then
         FLASHBLOCKS_URL=$(prompt_input "12. Flashblocks URL [default: $DEFAULT_FLASHBLOCKS_URL]: " "$DEFAULT_FLASHBLOCKS_URL" "validate_ws_url") || FLASHBLOCKS_URL="$DEFAULT_FLASHBLOCKS_URL"
     fi
-    
+
     print_success "Configuration input completed"
 }
 
 generate_or_verify_jwt() {
     local jwt_file=$1
-    
+
     print_info "Checking JWT secret..."
-    
+
     # Generate if not exists
     if [ ! -s "$jwt_file" ]; then
         openssl rand -hex 32 | tr -d '\n' > "$jwt_file"
         print_success "JWT secret generated"
         return 0
     fi
-    
+
     # Verify existing JWT format (should be 64 hex characters)
     local jwt_content=$(cat "$jwt_file" 2>/dev/null | tr -d '\n\r ' || echo "")
     if [ ${#jwt_content} -ne 64 ]; then
@@ -604,10 +592,10 @@ generate_or_verify_jwt() {
 
 generate_config_files() {
     print_info "Generating configuration files..."
-    
+
     cd "$WORK_DIR" || exit 1
     load_network_config "$NETWORK_TYPE"
-    
+
     # Set execution client specific variables
     if [ "$RPC_TYPE" = "reth" ]; then
         EXEC_IMAGE_TAG="$OP_RETH_IMAGE_TAG"
@@ -618,13 +606,13 @@ generate_config_files() {
         EXEC_CONFIG="$GETH_CONFIG"
         EXEC_CLIENT="op-geth"
     fi
-    
+
     # Unified directory structure: data/, config/, logs/ for both genesis and snapshot (testnet and mainnet)
     DATA_DIR="${TARGET_DIR}/data"
     CONFIG_DIR="${TARGET_DIR}/config"
     LOGS_DIR="${TARGET_DIR}/logs"
     GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-    
+
     if [ "$SYNC_MODE" = "snapshot" ]; then
         # Snapshot mode: directory already exists from extraction, just verify
         if [ ! -d "$TARGET_DIR" ]; then
@@ -635,29 +623,29 @@ generate_config_files() {
     else
         # Genesis mode: create directory structure
         mkdir -p "$CONFIG_DIR" "$LOGS_DIR" "$DATA_DIR/op-node/p2p"
-        
+
         # Create execution client specific data directory
         if [ "$RPC_TYPE" = "reth" ]; then
             mkdir -p "$DATA_DIR/op-reth"
         else
             mkdir -p "$DATA_DIR/op-geth"
         fi
-        
+
         # Generate and verify JWT
         generate_or_verify_jwt "$CONFIG_DIR/jwt.txt"
     fi
-    
+
     # Note: Configuration files are already downloaded to CONFIG_DIR by download_config_files()
-    
+
     # Generate .env file
     generate_env_file
-    
+
     print_success "Configuration files generated"
 }
 
 generate_env_file() {
     print_info "Generating .env file..."
-    
+
     # Determine L2 engine URL based on RPC type (use service name, not container name)
     local l2_engine_url
     if [ "$RPC_TYPE" = "reth" ]; then
@@ -665,10 +653,10 @@ generate_env_file() {
     else
         l2_engine_url="http://op-geth:8552"
     fi
-    
+
     # Determine chain name based on network type
     local chain_name="xlayer-${NETWORK_TYPE}"
-    
+
     cat > .env << EOF
 # X Layer RPC Node Configuration
 # Generated by one-click-setup.sh
@@ -689,7 +677,7 @@ L2_ENGINE_URL=$l2_engine_url
 L1_RPC_URL=$L1_RPC_URL
 L1_BEACON_URL=$L1_BEACON_URL
 
-# Bootnode Configuration  
+# Bootnode Configuration
 OP_NODE_BOOTNODE=$OP_NODE_BOOTNODE
 OP_GETH_BOOTNODE=$OP_GETH_BOOTNODE
 P2P_STATIC_PEERS=$P2P_STATIC
@@ -719,19 +707,19 @@ LEGACY_RPC_TIMEOUT=$LEGACY_RPC_TIMEOUT
 FLASHBLOCKS_ENABLED=${FLASHBLOCKS_ENABLED:-${DEFAULT_FLASHBLOCKS_ENABLED:-false}}
 FLASHBLOCKS_URL=${FLASHBLOCKS_URL:-${DEFAULT_FLASHBLOCKS_URL:-}}
 EOF
-    
+
     print_success ".env file generated"
 }
 
 download_genesis() {
     local genesis_url=$1
     local network=$2
-    
+
     # Unified genesis filename with network type
     local genesis_file="genesis-${network}.tar.gz"
-    
+
     print_info "Preparing genesis file for $network..."
-    
+
     # Repository mode: check if file already exists (cache for faster re-runs)
     if [ "$IN_REPO" = true ] && [ -f "$genesis_file" ]; then
         local file_size=$(du -h "$genesis_file" 2>/dev/null | cut -f1 || echo "unknown")
@@ -739,20 +727,20 @@ download_genesis() {
         print_info "Repository mode: Skip download, reusing existing file"
         return 0
     fi
-    
+
     # Download genesis file
     if [ "$IN_REPO" = true ]; then
         print_info "Repository mode: Downloading (will be kept for next run)..."
     else
         print_info "Standalone mode: Downloading (will be cleaned up after use)..."
     fi
-    
+
     if ! wget -c "$genesis_url" -O "$genesis_file"; then
         print_error "Failed to download genesis file"
         rm -f "$genesis_file"  # Clean up failed download
         exit 1
     fi
-    
+
     if [ "$IN_REPO" = true ]; then
         print_success "Downloaded and cached: $genesis_file"
     else
@@ -763,18 +751,18 @@ download_genesis() {
 extract_genesis() {
     local target_dir=$1
     local target_file=$2
-    
+
     # Get genesis filename (consistent with download_genesis)
     local genesis_file="genesis-${NETWORK_TYPE}.tar.gz"
-    
+
     print_info "Extracting genesis file..."
-    
+
     if ! tar -xzf "$genesis_file" -C "$target_dir/"; then
         print_error "Failed to extract genesis file"
         rm -f "$genesis_file"
         exit 1
     fi
-    
+
     # Handle different genesis file names
     if [ -f "$target_dir/merged.genesis.json" ]; then
         mv "$target_dir/merged.genesis.json" "$target_dir/$target_file"
@@ -785,7 +773,7 @@ extract_genesis() {
         rm -f "$genesis_file"
         exit 1
     fi
-    
+
     # Standalone mode: clean up temporary file
     # if [ "$IN_REPO" = false ]; then
     #     rm -f "$genesis_file"
@@ -793,12 +781,12 @@ extract_genesis() {
     # else
     #     print_info "Kept genesis file for future use: $genesis_file"
     # fi
-    
+
     if [ ! -f "$target_dir/$target_file" ]; then
         print_error "Genesis file not found after extraction"
         exit 1
     fi
-    
+
     print_success "Genesis file extracted to $target_dir/$target_file"
 }
 
@@ -807,19 +795,21 @@ download_snapshot() {
     local target_dir=$1  # Target directory (e.g., testnet-geth or mainnet-geth)
     local network=$2     # Network type (testnet or mainnet)
     local rpc_type=$3    # RPC type (geth or reth)
-    
+
     # Determine snapshot URL and file name based on network and RPC type
     local snapshot_url
     local snapshot_file
-    
+
     if [ "$network" = "testnet" ]; then
         # Get latest snapshot filename from server (same logic as mainnet)
         print_info "Fetching latest testnet snapshot filename for $rpc_type..."
         local latest_url
         if [ "$rpc_type" = "geth" ]; then
             latest_url="${TESTNET_GETH_SNAPSHOT_LATEST_URL}"
+        elif [ "$rpc_type" = "reth" ]; then
+            latest_url="${TESTNET_RETH_SNAPSHOT_LATEST_URL}"
         else
-            print_error "Testnet snapshot is only supported for geth (got: $rpc_type)"
+            print_error "Unsupported RPC type for testnet snapshot: $rpc_type"
             exit 1
         fi
         local latest_filename
@@ -844,49 +834,49 @@ download_snapshot() {
             print_error "Unsupported RPC type for snapshot: $rpc_type"
             exit 1
         fi
-        
+
         local latest_filename
         latest_filename=$(curl -s -f "$latest_url" | tr -d '\n\r' | xargs)
-        
+
         if [ -z "$latest_filename" ]; then
             print_error "Failed to fetch latest snapshot filename from server"
             exit 1
         fi
-        
+
         snapshot_url="${MAINNET_SNAPSHOT_BASE_URL}/${latest_filename}"
         snapshot_file="$latest_filename"
-        
+
         # Export filename for extract_snapshot to use
         export MAINNET_SNAPSHOT_FILE="$snapshot_file"
-        
+
         print_info "Latest mainnet $rpc_type snapshot: $snapshot_file"
     else
         print_error "Unsupported network for snapshot: $network"
         exit 1
     fi
-    
+
     # Check if target directory already exists (data already extracted)
     # Unified: both testnet and mainnet use nested structure (data/, config/)
     if [ -n "$target_dir" ] && [ -d "$target_dir" ] && [ -d "$target_dir/data" ] && [ -d "$target_dir/config" ]; then
         print_success "Target directory already exists: $target_dir, skipping download"
         return 0
     fi
-    
+
     # Check if snapshot file already exists
     if [ -f "$snapshot_file" ]; then
         local file_size=$(du -h "$snapshot_file" 2>/dev/null | cut -f1 || echo "unknown")
         print_success "Using existing snapshot file: $snapshot_file ($file_size)"
         return 0
     fi
-    
+
     print_info "Downloading snapshot (this may take a while)..."
-    
+
     if ! wget -c "$snapshot_url" -O "$snapshot_file"; then
         print_error "Failed to download snapshot file"
         rm -f "$snapshot_file"
         exit 1
     fi
-    
+
     print_success "Snapshot downloaded: $snapshot_file"
 }
 
@@ -895,19 +885,26 @@ extract_snapshot() {
     local target_dir=$1
     local network=$2
     local rpc_type=$3
-    
+
     # Determine snapshot file name based on network and RPC type
     local snapshot_file
     if [ "$network" = "testnet" ]; then
         if [ -n "$TESTNET_SNAPSHOT_FILE" ]; then
             snapshot_file="$TESTNET_SNAPSHOT_FILE"
         else
-            snapshot_file=$(ls -t testnet-geth*.tar.gz 2>/dev/null | head -1)
-            if [ -z "$snapshot_file" ]; then
-                snapshot_file="geth-testnet.tar.gz"
+            if [ "$rpc_type" = "reth" ]; then
+                snapshot_file=$(ls -t testnet_reth*.tar.gz 2>/dev/null | head -1)
             else
-                print_info "Using existing snapshot file: $snapshot_file"
+                snapshot_file=$(ls -t testnet-geth*.tar.gz 2>/dev/null | head -1)
+                if [ -z "$snapshot_file" ]; then
+                    snapshot_file=$(ls -t xlayer-testnet-geth*.tar.gz 2>/dev/null | head -1)
+                fi
             fi
+            if [ -z "$snapshot_file" ]; then
+                print_error "Testnet $rpc_type snapshot file not found. Please run download_snapshot first."
+                exit 1
+            fi
+            print_info "Using existing snapshot file: $snapshot_file"
         fi
     elif [ "$network" = "mainnet" ]; then
         # Use the filename from download_snapshot if available, otherwise fallback to default
@@ -933,13 +930,13 @@ extract_snapshot() {
         print_error "Unsupported network for snapshot: $network"
         exit 1
     fi
-    
+
     # Priority 1: Check if target directory already exists with valid data (unified nested structure)
     if [ -d "$target_dir" ] && [ -d "$target_dir/data" ] && [ -d "$target_dir/config" ]; then
         print_success "Found existing snapshot directory: $target_dir, skipping extraction"
         return 0
     fi
-    
+
     # Priority 3: Extract from snapshot file (only if target directory doesn't exist)
     # Check if snapshot file exists before extracting
     if [ ! -f "$snapshot_file" ]; then
@@ -947,34 +944,34 @@ extract_snapshot() {
         print_info "Please run download_snapshot() first"
         exit 1
     fi
-    
+
     print_info "Extracting snapshot (this may take a while)..."
-    
+
     if ! tar -zxvf "$snapshot_file"; then
         print_error "Failed to extract snapshot file"
         exit 1
     fi
-    
+
     # Unified: both testnet and mainnet expect target_dir with data/ and config/
     if [ ! -d "$target_dir" ]; then
         print_error "Snapshot extraction failed: $target_dir directory not found"
         print_info "Standard snapshot tarball must extract to $target_dir/ with data/, config/, logs/ inside"
         exit 1
     fi
-    
+
     if [ ! -d "$target_dir/data" ] || [ ! -d "$target_dir/config" ]; then
         print_error "Snapshot extraction failed: invalid structure in $target_dir"
         print_info "Expected: $target_dir/data and $target_dir/config"
         exit 1
     fi
-    
+
     print_success "Snapshot extracted to $target_dir"
 }
 
 init_geth() {
     local data_dir=$1
     local genesis_file=$2
-    
+
     # Convert to absolute paths
     if [[ ! "$data_dir" = /* ]]; then
         data_dir="$(pwd)/$data_dir"
@@ -982,9 +979,9 @@ init_geth() {
     if [[ ! "$genesis_file" = /* ]]; then
         genesis_file="$(pwd)/$genesis_file"
     fi
-    
+
     print_info "Initializing op-geth... (This may take a while)"
-    
+
     if ! docker run --rm \
         -v "$data_dir:/data" \
         -v "$genesis_file:/genesis.json" \
@@ -999,14 +996,14 @@ init_geth() {
         print_error "Failed to initialize op-geth"
         exit 1
     fi
-    
+
     print_success "op-geth initialized successfully"
 }
 
 init_reth() {
     local data_dir=$1
     local genesis_file=$2
-    
+
     # Convert to absolute paths
     if [[ ! "$data_dir" = /* ]]; then
         data_dir="$(pwd)/$data_dir"
@@ -1014,10 +1011,10 @@ init_reth() {
     if [[ ! "$genesis_file" = /* ]]; then
         genesis_file="$(pwd)/$genesis_file"
     fi
-    
+
     print_info "Initializing op-reth... (This may take a while)"
     print_info "This is a one-time operation during setup"
-    
+
     if ! docker run --rm \
         -v "$data_dir:/datadir" \
         -v "$genesis_file:/genesis.json" \
@@ -1028,27 +1025,27 @@ init_reth() {
         print_error "Failed to initialize op-reth"
         exit 1
     fi
-    
+
     # Remove auto-generated reth.toml (we use custom config mounted as /config.toml)
     local auto_config="$data_dir/reth.toml"
     if [ -f "$auto_config" ]; then
         rm -f "$auto_config"
         print_info "Removed auto-generated reth.toml (using custom config instead)"
     fi
-    
+
     print_success "op-reth initialized successfully"
 }
 
 initialize_node() {
     print_info "Initializing X Layer RPC node..."
-    
+
     cd "$WORK_DIR" || exit 1
-    
+
     if [ "$SYNC_MODE" = "snapshot" ]; then
         # Snapshot mode: download and extract snapshot
         download_snapshot "$TARGET_DIR" "$NETWORK_TYPE" "$RPC_TYPE"
         extract_snapshot "$TARGET_DIR" "$NETWORK_TYPE" "$RPC_TYPE"
-        
+
         # Snapshot mode: same structure for testnet and mainnet, no special handling
         print_success "Node initialization completed (snapshot mode - $NETWORK_TYPE $RPC_TYPE)"
         print_info "Using snapshot data directory: $TARGET_DIR"
@@ -1059,14 +1056,14 @@ initialize_node() {
         # Genesis mode: download and extract genesis, then initialize
         download_genesis "$GENESIS_URL" "$NETWORK_TYPE"
         extract_genesis "$CONFIG_DIR" "$GENESIS_FILE"
-        
+
         # Initialize execution client
         if [ "$RPC_TYPE" = "reth" ]; then
             init_reth "$DATA_DIR/op-reth" "$CONFIG_DIR/$GENESIS_FILE"
         else
             init_geth "$DATA_DIR/op-geth" "$CONFIG_DIR/$GENESIS_FILE"
         fi
-        
+
         print_success "Node initialization completed"
         print_info "Directory structure created at: ${TARGET_DIR}"
         print_info "  - data/"
@@ -1078,18 +1075,18 @@ initialize_node() {
         print_info "    - op-node/: Op-node data"
         print_info "  - config/: Configuration files"
         print_info "  - logs/: Log files"
-        
+
         # Clean up genesis file after initialization (only for reth)
         if [ "$RPC_TYPE" = "reth" ]; then
             echo ""
             print_info "Cleaning up genesis file (no longer needed for reth startup)..."
-            
+
             # Remove extracted genesis file
             if [ -f "$CONFIG_DIR/$GENESIS_FILE" ]; then
                 rm -f "$CONFIG_DIR/$GENESIS_FILE"
                 print_success "Removed $GENESIS_FILE (6.8GB freed)"
             fi
-            
+
             # Remove genesis tarball in standalone mode
             local genesis_tarball="genesis-${NETWORK_TYPE}.tar.gz"
             if [ "$IN_REPO" = false ] && [ -f "$genesis_tarball" ]; then
@@ -1098,7 +1095,7 @@ initialize_node() {
             elif [ "$IN_REPO" = true ] && [ -f "$genesis_tarball" ]; then
                 print_info "Kept genesis tarball for repository mode: $genesis_tarball"
             fi
-            
+
             print_success "Optimization enabled: Fast startup mode"
             print_info "Subsequent restarts will use built-in 'xlayer-${NETWORK_TYPE}' chain for <1s startup"
             print_info "Genesis file cleaned up - 6.8GB disk space saved!"
@@ -1109,7 +1106,7 @@ initialize_node() {
 # Generate docker-compose.yml based on sync mode
 generate_docker_compose() {
     print_info "Generating docker-compose.yml..."
-    
+
     cd "$WORK_DIR" || exit 1
 
     # Unified: use standard docker-compose.yml for genesis and snapshot (testnet and mainnet)
@@ -1126,20 +1123,20 @@ generate_docker_compose() {
 
 start_services() {
     print_info "Starting Docker services..."
-    
+
     cd "$WORK_DIR" || exit 1
-    
+
     if [ ! -f "./Makefile" ]; then
         print_error "Makefile not found in $WORK_DIR"
         exit 1
     fi
-    
+
     print_info "Running 'make run'..."
     if ! make run; then
         print_error "Failed to start services"
         exit 1
     fi
-    
+
     print_success "Services started successfully"
 }
 
@@ -1148,42 +1145,42 @@ main() {
     echo "  X Layer RPC Node One-Click Setup"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    
+
     detect_repository
     if [ "$IN_REPO" = true ]; then
         print_info "📂 Running from repository: $REPO_ROOT"
     else
         print_info "🌐 Running standalone mode (will download files from GitHub)"
     fi
-    
+
     # Parse command line arguments first (only rpc_type)
     parse_arguments "$@"
-    
+
     # Show selected RPC type
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_info "RPC Client: $RPC_TYPE"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    
+
     # Load configuration from network-presets.env
     load_configuration
-    
+
     # System checks
     check_system_requirements
     check_required_files
-    
+
     # User interaction (network type, L1 URLs and ports)
     # This also calls check_existing_data and sets SKIP_INIT
     get_user_input
-    
+
     # Check existing configurations after network type is determined
     echo ""
     check_existing_configurations
-    
+
     # Generate docker-compose.yml based on sync mode
     generate_docker_compose
-    
+
     # Conditional initialization
     if [ "$SKIP_INIT" -eq 0 ]; then
         # Full initialization process
@@ -1204,24 +1201,24 @@ main() {
     else
         # Skip initialization, only generate .env
         print_info "Skipping initialization, updating configuration only..."
-        
+
         # Ensure basic directory structure exists (only for genesis mode)
         if [ "$SYNC_MODE" != "snapshot" ]; then
             mkdir -p "$TARGET_DIR/config" "$TARGET_DIR/logs" "$TARGET_DIR/data"
         fi
-        
+
         # Load network config for .env generation
         load_network_config "$NETWORK_TYPE"
-        
+
         # Generate .env file
         generate_env_file
-        
+
         print_success "Configuration updated"
-        
+
         # Auto-start services after configuration update
         start_services
     fi
-    
+
     # Cleanup for standalone mode
     cleanup_standalone_files
 }
