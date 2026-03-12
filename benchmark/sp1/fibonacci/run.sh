@@ -79,7 +79,8 @@ case "$CMD" in
     # Download and install icicle CUDA backend libs (required for build-gpu)
     ICICLE_VERSION="${ICICLE_VERSION:-3.4.0}"
     ICICLE_INSTALL_DIR="${ICICLE_BACKEND_INSTALL_DIR:-/usr/local/lib}"
-    ICICLE_TAG="icicle_$(echo "$ICICLE_VERSION" | tr '.' '_')"
+    # Asset naming: 3.4.0 → icicle_3_4, 3.9.2 → icicle_3_9_2 (trailing .0 is dropped)
+    ICICLE_TAG="icicle_$(echo "$ICICLE_VERSION" | sed 's/\.0$//; s/\./_/g')"
     ICICLE_TARBALL="${ICICLE_TAG}-ubuntu22-cuda122.tar.gz"
     ICICLE_URL="https://github.com/ingonyama-zk/icicle/releases/download/v${ICICLE_VERSION}/${ICICLE_TARBALL}"
 
