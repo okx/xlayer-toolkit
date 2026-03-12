@@ -48,6 +48,8 @@ case "$CMD" in
         exit 1
     fi
     # sp1-cuda cleanup panics on exit (tokio runtime missing in Drop).
+    # Set icicle backend path for Groth16 GPU acceleration
+    export ICICLE_BACKEND_INSTALL_DIR="${ICICLE_BACKEND_INSTALL_DIR:-/usr/local/lib/backend}"
     set +e
     OUTPUT=$(RUST_LOG="${RUST_LOG:-info}" \
     SP1_PROVER="${SP1_PROVER:-cpu}" \
@@ -76,39 +78,60 @@ case "$CMD" in
     echo "Done. Groth16 is ready to use."
     ;;
   install-icicle)
-    # Download and install icicle CUDA backend libs (required for build-gpu)
+    # Download and install icicle core + CUDA backend libs (required for build-gpu)
+    # Two packages needed:
+    #   1. Core libs (libicicle_device.so, libicicle_field_*.so, etc.) — linked at compile time
+    #   2. CUDA backend (libicicle_backend_cuda_*.so) — loaded at runtime
     ICICLE_VERSION="${ICICLE_VERSION:-3.4.0}"
     ICICLE_INSTALL_DIR="${ICICLE_BACKEND_INSTALL_DIR:-/usr/local/lib}"
     # Asset naming: 3.4.0 → icicle_3_4, 3.9.2 → icicle_3_9_2 (trailing .0 is dropped)
     ICICLE_TAG="icicle_$(echo "$ICICLE_VERSION" | sed 's/\.0$//; s/\./_/g')"
-    ICICLE_TARBALL="${ICICLE_TAG}-ubuntu22-cuda122.tar.gz"
-    ICICLE_URL="https://github.com/ingonyama-zk/icicle/releases/download/v${ICICLE_VERSION}/${ICICLE_TARBALL}"
+    ICICLE_BASE="https://github.com/ingonyama-zk/icicle/releases/download/v${ICICLE_VERSION}"
+    ICICLE_CORE="${ICICLE_TAG}-ubuntu22.tar.gz"
+    ICICLE_CUDA="${ICICLE_TAG}-ubuntu22-cuda122.tar.gz"
 
     # Check if already installed
     if [ -f "${ICICLE_INSTALL_DIR}/libicicle_device.so" ] && \
-       [ -f "${ICICLE_INSTALL_DIR}/libicicle_field_bn254.so" ]; then
+       [ -f "${ICICLE_INSTALL_DIR}/libicicle_field_bn254.so" ] && \
+       [ -f "${ICICLE_INSTALL_DIR}/libicicle_backend_cuda_device.so" ]; then
         echo "Icicle libs already found in ${ICICLE_INSTALL_DIR}, skipping."
         echo "To reinstall, remove ${ICICLE_INSTALL_DIR}/libicicle_*.so first."
     else
         DL_TMPDIR=$(mktemp -d)
         trap "rm -rf $DL_TMPDIR" EXIT
+
+        echo "Downloading icicle v${ICICLE_VERSION} core libs..."
+        curl -L --progress-bar -o "$DL_TMPDIR/core.tar.gz" "${ICICLE_BASE}/${ICICLE_CORE}"
         echo "Downloading icicle v${ICICLE_VERSION} CUDA backend..."
-        echo "  URL: $ICICLE_URL"
-        curl -L --progress-bar -o "$DL_TMPDIR/icicle.tar.gz" "$ICICLE_URL"
-        echo "Size: $(ls -lh "$DL_TMPDIR/icicle.tar.gz" | awk '{print $5}')"
+        curl -L --progress-bar -o "$DL_TMPDIR/cuda.tar.gz" "${ICICLE_BASE}/${ICICLE_CUDA}"
 
-        echo "Extracting to $DL_TMPDIR/icicle ..."
-        mkdir -p "$DL_TMPDIR/icicle"
-        tar xzf "$DL_TMPDIR/icicle.tar.gz" -C "$DL_TMPDIR/icicle"
+        mkdir -p "$DL_TMPDIR/extract"
+        echo "Extracting core libs..."
+        tar xzf "$DL_TMPDIR/core.tar.gz" -C "$DL_TMPDIR/extract"
+        echo "Extracting CUDA backend..."
+        tar xzf "$DL_TMPDIR/cuda.tar.gz" -C "$DL_TMPDIR/extract"
 
-        echo "Installing to ${ICICLE_INSTALL_DIR} (requires sudo)..."
+        echo "Installing core libs to ${ICICLE_INSTALL_DIR} (requires sudo)..."
         sudo mkdir -p "${ICICLE_INSTALL_DIR}"
-        # Copy all .so files to install dir
-        sudo find "$DL_TMPDIR/icicle" -name '*.so' -exec cp -v {} "${ICICLE_INSTALL_DIR}/" \;
+        # Core libs go to /usr/local/lib (for compile-time linking)
+        sudo find "$DL_TMPDIR/extract" -name 'libicicle_*.so' ! -name 'libicicle_backend_*' \
+            -exec cp -v {} "${ICICLE_INSTALL_DIR}/" \;
+
+        # CUDA backend libs go to /usr/local/lib/backend/ (loaded at runtime)
+        BACKEND_DIR="${ICICLE_INSTALL_DIR}/backend"
+        echo "Installing CUDA backend to ${BACKEND_DIR}..."
+        sudo mkdir -p "${BACKEND_DIR}"
+        sudo find "$DL_TMPDIR/extract" -name 'libicicle_backend_cuda_*.so' \
+            -exec cp -v {} "${BACKEND_DIR}/" \;
         sudo ldconfig
+
         echo ""
-        echo "Installed icicle libs:"
-        ls -lh "${ICICLE_INSTALL_DIR}"/libicicle_*.so 2>/dev/null || echo "  (none found)"
+        echo "Installed icicle core libs (${ICICLE_INSTALL_DIR}):"
+        ls -1 "${ICICLE_INSTALL_DIR}"/libicicle_device.so \
+              "${ICICLE_INSTALL_DIR}"/libicicle_field_bn254.so \
+              "${ICICLE_INSTALL_DIR}"/libicicle_curve_bn254.so 2>/dev/null || echo "  (missing!)"
+        echo "Installed icicle CUDA backend (${BACKEND_DIR}):"
+        ls -1 "${BACKEND_DIR}"/libicicle_backend_cuda_device.so 2>/dev/null || echo "  (missing!)"
     fi
 
     echo ""

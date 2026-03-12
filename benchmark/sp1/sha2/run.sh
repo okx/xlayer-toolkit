@@ -50,6 +50,8 @@ case "$CMD" in
         exit 1
     fi
     # sp1-cuda cleanup panics on exit (tokio runtime missing in Drop).
+    # Set icicle backend path for Groth16 GPU acceleration
+    export ICICLE_BACKEND_INSTALL_DIR="${ICICLE_BACKEND_INSTALL_DIR:-/usr/local/lib/backend}"
     set +e
     OUTPUT=$(RUST_LOG="${RUST_LOG:-info}" \
     SP1_PROVER="${SP1_PROVER:-cpu}" \
