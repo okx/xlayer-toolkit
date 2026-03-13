@@ -20,19 +20,12 @@ case "$CMD" in
     cd "$SCRIPT_DIR"
     echo "Building guest ELFs locally (requires jolt CLI + riscv64imac target)..."
     # Build inline variant
-    # jolt build overrides both --features and RUSTFLAGS, so we inject --cfg inline
-    # via .cargo/config.toml which cargo always respects.
+    # jolt build overrides --features and RUSTFLAGS. We use JOLT_INLINE env var
+    # which guest/build.rs reads to emit `cargo:rustc-cfg=inline`.
     echo "  Building inline guest..."
-    mkdir -p "$SCRIPT_DIR/guest/.cargo"
-    cat > "$SCRIPT_DIR/guest/.cargo/config.toml" << 'CARGO_CFG'
-[target.riscv64imac-unknown-none-elf]
-rustflags = ["--cfg", "inline"]
-CARGO_CFG
-    jolt build -p sha2-guest --backtrace off --stack-size 4096 \
+    JOLT_INLINE=1 jolt build -p sha2-guest --backtrace off --stack-size 4096 \
         -- --release --target-dir "$SCRIPT_DIR/target/jolt-guest" --features guest
-    rm -f "$SCRIPT_DIR/guest/.cargo/config.toml"
-    rmdir "$SCRIPT_DIR/guest/.cargo" 2>/dev/null || true
-    # Build native variant
+    # Build native variant (no JOLT_INLINE → cfg(not(inline)))
     echo "  Building native guest..."
     jolt build -p sha2-guest --backtrace off --stack-size 4096 \
         -- --release --target-dir "$SCRIPT_DIR/target/jolt-guest" --features guest
@@ -45,9 +38,9 @@ CARGO_CFG
     echo "  Building native binary..."
     cargo +nightly build --release --bin sha2-bench
     cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-native"
-    # Build inline binary (RUSTFLAGS --cfg inline for guest crate, --features inline for host)
+    # Build inline binary (JOLT_INLINE for guest build.rs, --features inline for host cfg)
     echo "  Building inline binary..."
-    RUSTFLAGS="--cfg inline" cargo +nightly build --release --bin sha2-bench --features inline
+    JOLT_INLINE=1 cargo +nightly build --release --bin sha2-bench --features inline
     cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-inline"
     echo "Host binaries built."
     ;;
