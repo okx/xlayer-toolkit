@@ -22,6 +22,10 @@ struct Args {
     /// Number of SHA-256 iterations
     #[arg(long, default_value = "1000")]
     n: u32,
+
+    /// Input size in bytes for the first hash
+    #[arg(long, default_value = "32")]
+    input_size: usize,
 }
 
 fn main() {
@@ -49,12 +53,12 @@ fn main() {
 
     let mode_label = if is_inline { "inline" } else { "native" };
     println!(
-        "\n=== Jolt SHA-256 Benchmark (n={}, mode={}) ===\n",
-        args.n, mode_label
+        "\n=== Jolt SHA-256 Benchmark (n={}, input_size={}, mode={}) ===\n",
+        args.n, args.input_size, mode_label
     );
 
     let target_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/target/jolt-guest");
-    let input = [0xABu8; 32];
+    let input = vec![0xABu8; args.input_size];
 
     #[cfg(feature = "inline")]
     run_inline(&args, target_dir, input);
@@ -65,9 +69,9 @@ fn main() {
 }
 
 #[cfg(feature = "inline")]
-fn run_inline(args: &Args, target_dir: &str, input: [u8; 32]) {
+fn run_inline(args: &Args, target_dir: &str, input: Vec<u8>) {
     if args.execute {
-        let program_summary = guest::analyze_sha2_chain_inline(input, args.n);
+        let program_summary = guest::analyze_sha2_chain_inline(input.clone(), args.n);
         println!("Trace Length: {} steps", program_summary.trace_len());
         return;
     }
@@ -113,7 +117,7 @@ fn run_inline(args: &Args, target_dir: &str, input: [u8; 32]) {
     let (stop_flag, monitor_handle) = start_peak_monitor();
     let prove_start = Instant::now();
 
-    let (output, proof, io_device) = prove_fn(input, args.n);
+    let (output, proof, io_device) = prove_fn(input.clone(), args.n);
 
     let prove_time = prove_start.elapsed();
     stop_flag.store(true, Ordering::Relaxed);
@@ -134,6 +138,7 @@ fn run_inline(args: &Args, target_dir: &str, input: [u8; 32]) {
     let is_valid = verify_fn(input, args.n, output, io_device.panic, proof);
     let verify_time = verify_start.elapsed();
 
+    println!("Input Size:   {} bytes", args.input_size);
     println!("Result:       {}", hex::encode(output));
     println!("Valid:        {}", is_valid);
     println!("Prove Time:   {:.2}s", prove_time.as_secs_f64());
@@ -144,9 +149,9 @@ fn run_inline(args: &Args, target_dir: &str, input: [u8; 32]) {
 }
 
 #[cfg(not(feature = "inline"))]
-fn run_native(args: &Args, target_dir: &str, input: [u8; 32]) {
+fn run_native(args: &Args, target_dir: &str, input: Vec<u8>) {
     if args.execute {
-        let program_summary = guest::analyze_sha2_chain_native(input, args.n);
+        let program_summary = guest::analyze_sha2_chain_native(input.clone(), args.n);
         println!("Trace Length: {} steps", program_summary.trace_len());
         return;
     }
@@ -192,7 +197,7 @@ fn run_native(args: &Args, target_dir: &str, input: [u8; 32]) {
     let (stop_flag, monitor_handle) = start_peak_monitor();
     let prove_start = Instant::now();
 
-    let (output, proof, io_device) = prove_fn(input, args.n);
+    let (output, proof, io_device) = prove_fn(input.clone(), args.n);
 
     let prove_time = prove_start.elapsed();
     stop_flag.store(true, Ordering::Relaxed);
@@ -213,6 +218,7 @@ fn run_native(args: &Args, target_dir: &str, input: [u8; 32]) {
     let is_valid = verify_fn(input, args.n, output, io_device.panic, proof);
     let verify_time = verify_start.elapsed();
 
+    println!("Input Size:   {} bytes", args.input_size);
     println!("Result:       {}", hex::encode(output));
     println!("Valid:        {}", is_valid);
     println!("Prove Time:   {:.2}s", prove_time.as_secs_f64());

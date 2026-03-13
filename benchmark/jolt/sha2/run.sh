@@ -4,6 +4,7 @@ set -e
 N=${N:-1000}
 MODE=${MODE:-execute}            # execute | prove
 INLINE=${INLINE:-false}          # true | false
+INPUT_SIZE=${INPUT_SIZE:-32}     # input size in bytes
 CMD=${1:-run}                    # build | build-guest | build-host | run | install-cli
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -63,7 +64,7 @@ case "$CMD" in
         exit 1
     fi
     RUST_LOG="${RUST_LOG:-info}" \
-        "$BIN" "--${MODE}" --n "$N" $INLINE_FLAG
+        "$BIN" "--${MODE}" --n "$N" --input-size "$INPUT_SIZE" $INLINE_FLAG
     ;;
   *)
     echo "Usage: $0 [build|build-guest|build-host|run|install-cli]"
@@ -71,13 +72,13 @@ case "$CMD" in
     echo "  build        Build guest ELFs + host binaries locally"
     echo "  build-guest  Build guest ELFs only"
     echo "  build-host   Build host binaries only"
-    echo "  run          Run benchmark (MODE=execute|prove, N=<iters>, INLINE=true|false)"
+    echo "  run          Run benchmark (MODE=execute|prove, N=<iters>, INPUT_SIZE=<bytes>, INLINE=true|false)"
     echo ""
     echo "Setup:"
     echo "  rustup target add riscv64imac-unknown-none-elf"
     echo "  ./run.sh install-cli"
     echo "  ./run.sh build"
-    echo "  N=1000 MODE=prove INLINE=true ./run.sh run"
+    echo "  N=1000 INPUT_SIZE=256 MODE=prove INLINE=true ./run.sh run"
     exit 1
     ;;
 esac
