@@ -19,10 +19,19 @@ case "$CMD" in
   build-guest)
     cd "$SCRIPT_DIR"
     echo "Building guest ELFs locally (requires jolt CLI + riscv64imac target)..."
-    # Build inline variant (use RUSTFLAGS --cfg inline since jolt build overrides --features)
+    # Build inline variant
+    # jolt build overrides both --features and RUSTFLAGS, so we inject --cfg inline
+    # via .cargo/config.toml which cargo always respects.
     echo "  Building inline guest..."
-    RUSTFLAGS="--cfg inline" jolt build -p sha2-guest --backtrace off --stack-size 4096 \
+    mkdir -p "$SCRIPT_DIR/guest/.cargo"
+    cat > "$SCRIPT_DIR/guest/.cargo/config.toml" << 'CARGO_CFG'
+[target.riscv64imac-unknown-none-elf]
+rustflags = ["--cfg", "inline"]
+CARGO_CFG
+    jolt build -p sha2-guest --backtrace off --stack-size 4096 \
         -- --release --target-dir "$SCRIPT_DIR/target/jolt-guest" --features guest
+    rm -f "$SCRIPT_DIR/guest/.cargo/config.toml"
+    rmdir "$SCRIPT_DIR/guest/.cargo" 2>/dev/null || true
     # Build native variant
     echo "  Building native guest..."
     jolt build -p sha2-guest --backtrace off --stack-size 4096 \
