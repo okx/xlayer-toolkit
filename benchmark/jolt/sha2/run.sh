@@ -19,10 +19,10 @@ case "$CMD" in
   build-guest)
     cd "$SCRIPT_DIR"
     echo "Building guest ELFs locally (requires jolt CLI + riscv64imac target)..."
-    # Build inline variant
+    # Build inline variant (use RUSTFLAGS --cfg inline since jolt build overrides --features)
     echo "  Building inline guest..."
-    jolt build -p sha2-guest --backtrace off --stack-size 4096 \
-        -- --release --target-dir "$SCRIPT_DIR/target/jolt-guest" --features guest,inline
+    RUSTFLAGS="--cfg inline" jolt build -p sha2-guest --backtrace off --stack-size 4096 \
+        -- --release --target-dir "$SCRIPT_DIR/target/jolt-guest" --features guest
     # Build native variant
     echo "  Building native guest..."
     jolt build -p sha2-guest --backtrace off --stack-size 4096 \
@@ -36,9 +36,9 @@ case "$CMD" in
     echo "  Building native binary..."
     cargo +nightly build --release --bin sha2-bench
     cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-native"
-    # Build inline binary
+    # Build inline binary (RUSTFLAGS --cfg inline for guest crate, --features inline for host)
     echo "  Building inline binary..."
-    cargo +nightly build --release --bin sha2-bench --features inline
+    RUSTFLAGS="--cfg inline" cargo +nightly build --release --bin sha2-bench --features inline
     cp "$SCRIPT_DIR/target/release/sha2-bench" "$SCRIPT_DIR/target/release/sha2-bench-inline"
     echo "Host binaries built."
     ;;

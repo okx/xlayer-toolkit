@@ -3,7 +3,11 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-#[cfg(feature = "inline")]
+// NOTE: We use raw `#[cfg(inline)]` instead of `#[cfg(feature = "inline")]` because
+// `jolt build` overrides --features and only passes `--features guest`.
+// The `inline` cfg flag is set via RUSTFLAGS="--cfg inline" in run.sh build-guest.
+
+#[cfg(inline)]
 mod inline {
     extern crate alloc;
     use alloc::vec::Vec;
@@ -19,10 +23,10 @@ mod inline {
         hash
     }
 }
-#[cfg(feature = "inline")]
+#[cfg(inline)]
 pub use inline::*;
 
-#[cfg(not(feature = "inline"))]
+#[cfg(not(inline))]
 mod native {
     extern crate alloc;
     use alloc::vec::Vec;
@@ -42,5 +46,5 @@ mod native {
         hash
     }
 }
-#[cfg(not(feature = "inline"))]
+#[cfg(not(inline))]
 pub use native::*;
