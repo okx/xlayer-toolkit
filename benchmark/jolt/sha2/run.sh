@@ -57,9 +57,11 @@ case "$CMD" in
     if [ "$INLINE" = "true" ]; then
         BIN="$SCRIPT_DIR/target/release/sha2-bench-inline"
         INLINE_FLAG="--inline"
+        export JOLT_INLINE=1
     else
         BIN="$SCRIPT_DIR/target/release/sha2-bench-native"
         INLINE_FLAG=""
+        unset JOLT_INLINE 2>/dev/null || true
     fi
     if [ ! -f "$BIN" ]; then
         echo "Error: $BIN not found. Run './run.sh build' first." >&2
