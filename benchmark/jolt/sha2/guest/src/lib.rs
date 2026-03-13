@@ -14,7 +14,7 @@ mod inline {
 
     /// SHA-256 chain using Jolt inline optimization.
     /// Hashes input of arbitrary size N times.
-    #[jolt::provable(heap_size = 65536, max_trace_length = 4194304)]
+    #[jolt::provable(heap_size = 65536, max_input_size = 16384, max_trace_length = 4194304)]
     fn sha2_chain_inline(input: Vec<u8>, num_iters: u32) -> [u8; 32] {
         let mut hash = jolt_inlines_sha2::Sha256::digest(&input);
         for _ in 1..num_iters {
@@ -33,7 +33,7 @@ mod native {
 
     /// SHA-256 chain without inline optimization.
     /// Uses pure Rust SHA-256 compiled to standard RISC-V instructions.
-    #[jolt::provable(heap_size = 65536, max_trace_length = 16777216)]
+    #[jolt::provable(heap_size = 65536, max_input_size = 16384, max_trace_length = 16777216)]
     fn sha2_chain_native(input: Vec<u8>, num_iters: u32) -> [u8; 32] {
         use sha2::Digest;
         let result = sha2::Sha256::digest(&input);
