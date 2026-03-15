@@ -33,6 +33,12 @@ func RunCommand() *cli.Command {
 			Usage:   "Directory containing reth-{block} template directories (defaults to work-dir)",
 			EnvVars: []string{"TEMPLATE_DIR"},
 		},
+		&cli.StringFlag{
+			Name:    "reth-image",
+			Usage:   "Docker image for op-reth node",
+			Value:   "op-reth:latest",
+			EnvVars: []string{"RETH_IMAGE"},
+		},
 	}
 	flags = append(flags, SharedFlags()...)
 	flags = append(flags, oplog.CLIFlags("MULTI_REPLAYOR")...)
@@ -55,6 +61,7 @@ func runAction(cliCtx *cli.Context) error {
 	segmentsStr := cliCtx.String("segments")
 	workDir := cliCtx.String("work-dir")
 	templateDir := cliCtx.String("template-dir")
+	rethImage := cliCtx.String("reth-image")
 	rollupConfigPath := cliCtx.String("rollup-config-path")
 	jwtSecretPath := cliCtx.String("jwt-secret-path")
 	genesisJsonPath := cliCtx.String("genesis-json-path")
@@ -142,6 +149,7 @@ func runAction(cliCtx *cli.Context) error {
 				jwtSecretPath:    jwtSecretPath,
 				genesisJsonPath:  genesisJsonPath,
 				chain:            chain,
+				rethImage:        rethImage,
 			})
 			if err != nil {
 				mu.Lock()
@@ -184,6 +192,7 @@ type runPartitionConfig struct {
 	jwtSecretPath    string
 	genesisJsonPath  string
 	chain            string
+	rethImage        string
 }
 
 func runPartition(ctx context.Context, logger log.Logger, cfg runPartitionConfig) error {
@@ -290,7 +299,7 @@ func runPartition(ctx context.Context, logger log.Logger, cfg runPartitionConfig
 	}
 
 	// Generate configuration files
-	if err := generateConfigFiles(partitionDir, cfg.partitionID, cfg.sourceNodeUrl, cfg.startBlock, cfg.blockCount, authrpcPort, wsPort, httpPort, genesisExists, cfg.chain); err != nil {
+	if err := generateConfigFiles(partitionDir, cfg.partitionID, cfg.sourceNodeUrl, cfg.startBlock, cfg.blockCount, authrpcPort, wsPort, httpPort, genesisExists, cfg.chain, cfg.rethImage); err != nil {
 		return fmt.Errorf("failed to generate config files: %w", err)
 	}
 
@@ -429,10 +438,13 @@ func runPartition(ctx context.Context, logger log.Logger, cfg runPartitionConfig
 	return nil
 }
 
-func generateConfigFiles(partitionDir string, partitionID int, sourceNodeUrl string, startBlock, blockCount, authrpcPort, wsPort, httpPort int, genesisExists bool, chain string) error {
+func generateConfigFiles(partitionDir string, partitionID int, sourceNodeUrl string, startBlock, blockCount, authrpcPort, wsPort, httpPort int, genesisExists bool, chain string, rethImage string) error {
 	// Generate docker-compose.yml
 	dockerComposePath := filepath.Join(partitionDir, "docker-compose.yml")
 	dockerComposeContent := dockerComposeTemplate
+
+	// Replace reth image
+	dockerComposeContent = strings.ReplaceAll(dockerComposeContent, `"op-reth:latest"`, fmt.Sprintf(`"%s"`, rethImage))
 
 	// Replace ports in all services (node-unwind, node-init, node)
 	// Format: "9123:9123" -> "httpPort:httpPort" and "8553:8553" -> "authrpcPort:authrpcPort"
