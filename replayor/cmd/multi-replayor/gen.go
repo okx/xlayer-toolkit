@@ -36,9 +36,7 @@ func genTemplateAction(cliCtx *cli.Context) error {
 	logger := oplog.NewLogger(oplog.AppOut(cliCtx), oplog.ReadCLIConfig(cliCtx))
 
 	sourceNodeData := cliCtx.String("source-node-data")
-	from := cliCtx.Int("from")
-	to := cliCtx.Int("to")
-	partition := cliCtx.Int("partition")
+	segmentsStr := cliCtx.String("segments")
 	workDir := cliCtx.String("work-dir")
 	rollupConfigPath := cliCtx.String("rollup-config-path")
 	jwtSecretPath := cliCtx.String("jwt-secret-path")
@@ -49,14 +47,11 @@ func genTemplateAction(cliCtx *cli.Context) error {
 	if sourceNodeData == "" {
 		return fmt.Errorf("--source-node-data is required")
 	}
-	if from < 0 {
-		return fmt.Errorf("from block must be non-negative, got %d", from)
-	}
-	if to < from {
-		return fmt.Errorf("to block (%d) must be >= from block (%d)", to, from)
-	}
-	if partition <= 0 {
-		return fmt.Errorf("partition must be positive, got %d", partition)
+
+	// Parse segments
+	segments, err := ParseSegments(segmentsStr)
+	if err != nil {
+		return fmt.Errorf("invalid --segments: %w", err)
 	}
 
 	// Validate source data directory
@@ -65,13 +60,11 @@ func genTemplateAction(cliCtx *cli.Context) error {
 	}
 
 	// Calculate unique template blocks
-	templateBlocks := GetUniqueTemplateBlocks(from, to, partition)
+	templateBlocks := GetUniqueTemplateBlocks(segments)
 
 	logger.Info("Starting template generation",
 		"source-node-data", sourceNodeData,
-		"from", from,
-		"to", to,
-		"partition", partition,
+		"segments", segmentsStr,
 		"work-dir", workDir,
 		"template-blocks", templateBlocks)
 

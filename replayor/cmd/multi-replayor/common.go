@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/urfave/cli/v2"
 )
@@ -19,23 +20,11 @@ var (
 		Usage:   "The source data directory to copy for each partition",
 		EnvVars: []string{"SOURCE_NODE_DATA"},
 	}
-	FromBlockFlag = &cli.IntFlag{
-		Name:    "from",
-		Usage:   "Starting block number",
-		Value:   0,
-		EnvVars: []string{"FROM_BLOCK"},
-	}
-	ToBlockFlag = &cli.IntFlag{
-		Name:    "to",
-		Usage:   "Ending block number (inclusive)",
-		Value:   0,
-		EnvVars: []string{"TO_BLOCK"},
-	}
-	PartitionFlag = &cli.IntFlag{
-		Name:    "partition",
-		Usage:   "Number of partitions to split the block range into",
-		Value:   0,
-		EnvVars: []string{"PARTITION"},
+	SegmentsFlag = &cli.StringFlag{
+		Name:     "segments",
+		Usage:    "Block number segments, e.g. --segments=0-10,10-20,20-30",
+		Required: true,
+		EnvVars:  []string{"SEGMENTS"},
 	}
 	WorkDirFlag = &cli.StringFlag{
 		Name:    "work-dir",
@@ -73,9 +62,7 @@ var (
 func SharedFlags() []cli.Flag {
 	return []cli.Flag{
 		SourceNodeDataFlag,
-		FromBlockFlag,
-		ToBlockFlag,
-		PartitionFlag,
+		SegmentsFlag,
 		WorkDirFlag,
 		RollupConfigPathFlag,
 		JwtSecretPathFlag,
@@ -92,57 +79,65 @@ type PartitionRange struct {
 	BlockCount int
 }
 
-// CalculatePartitionRanges calculates block ranges for each partition
-func CalculatePartitionRanges(from, to, partition int) []PartitionRange {
-	totalBlocks := to - from
-	blocksPerPartition := totalBlocks / partition
-	remainder := totalBlocks % partition
-
-	ranges := make([]PartitionRange, partition)
-	for i := 0; i < partition; i++ {
-		// Calculate start block: base + blocks from previous partitions + extra blocks from remainder
-		partitionStart := from + i*blocksPerPartition
-		if i > 0 {
-			// Add extra blocks from remainder that were distributed to previous partitions
-			partitionStart += min(i, remainder)
-		}
-
-		partitionBlocks := blocksPerPartition
-		// Distribute remainder blocks to first few partitions
-		if i < remainder {
-			partitionBlocks++
-		}
-		partitionEnd := partitionStart + partitionBlocks
-
-		// Adjust partitionEnd if it exceeds 'to'
-		if partitionEnd > to {
-			partitionEnd = to
-			partitionBlocks = partitionEnd - partitionStart
-		}
-
-		ranges[i] = PartitionRange{
-			ID:         i,
-			StartBlock: partitionStart,
-			EndBlock:   partitionEnd,
-			BlockCount: partitionBlocks,
-		}
+// ParseSegments parses a segments string like "0-10,10-20,20-30" into []PartitionRange
+func ParseSegments(segmentsStr string) ([]PartitionRange, error) {
+	parts := strings.Split(segmentsStr, ",")
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("segments string is empty")
 	}
 
-	return ranges
+	ranges := make([]PartitionRange, 0, len(parts))
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		dashIdx := strings.Index(part, "-")
+		if dashIdx <= 0 {
+			return nil, fmt.Errorf("invalid segment format %q, expected start-end (e.g. 0-10)", part)
+		}
+		startStr := part[:dashIdx]
+		endStr := part[dashIdx+1:]
+
+		startBlock, err := strconv.Atoi(startStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid start block in segment %q: %w", part, err)
+		}
+		endBlock, err := strconv.Atoi(endStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid end block in segment %q: %w", part, err)
+		}
+		if startBlock < 0 {
+			return nil, fmt.Errorf("start block must be non-negative in segment %q", part)
+		}
+		if endBlock <= startBlock {
+			return nil, fmt.Errorf("end block must be greater than start block in segment %q", part)
+		}
+
+		ranges = append(ranges, PartitionRange{
+			ID:         i,
+			StartBlock: startBlock,
+			EndBlock:   endBlock,
+			BlockCount: endBlock - startBlock,
+		})
+	}
+
+	if len(ranges) == 0 {
+		return nil, fmt.Errorf("no valid segments found")
+	}
+
+	return ranges, nil
 }
 
 // GetUniqueTemplateBlocks returns unique block numbers for template generation
-// This includes all partition start blocks plus the end block (to)
-func GetUniqueTemplateBlocks(from, to, partition int) []int {
-	ranges := CalculatePartitionRanges(from, to, partition)
-
+// This includes all partition start blocks plus end blocks
+func GetUniqueTemplateBlocks(ranges []PartitionRange) []int {
 	// Use a map to deduplicate
 	blockSet := make(map[int]bool)
 	for _, r := range ranges {
 		blockSet[r.StartBlock] = true
+		blockSet[r.EndBlock] = true
 	}
-	// Add the end block
-	blockSet[to] = true
 
 	// Convert to sorted slice
 	blocks := make([]int, 0, len(blockSet))
@@ -294,10 +289,3 @@ func CopyDirectory(src, dst string) error {
 	})
 }
 
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

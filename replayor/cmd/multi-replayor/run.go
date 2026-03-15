@@ -52,9 +52,7 @@ func runAction(cliCtx *cli.Context) error {
 
 	sourceNodeUrl := cliCtx.String("source-node-url")
 	sourceNodeData := cliCtx.String("source-node-data")
-	from := cliCtx.Int("from")
-	to := cliCtx.Int("to")
-	partition := cliCtx.Int("partition")
+	segmentsStr := cliCtx.String("segments")
 	workDir := cliCtx.String("work-dir")
 	templateDir := cliCtx.String("template-dir")
 	rollupConfigPath := cliCtx.String("rollup-config-path")
@@ -67,15 +65,10 @@ func runAction(cliCtx *cli.Context) error {
 		templateDir = workDir
 	}
 
-	// Validate inputs
-	if from < 0 {
-		return fmt.Errorf("from block must be non-negative, got %d", from)
-	}
-	if to < from {
-		return fmt.Errorf("to block (%d) must be >= from block (%d)", to, from)
-	}
-	if partition <= 0 {
-		return fmt.Errorf("partition must be positive, got %d", partition)
+	// Parse segments
+	ranges, err := ParseSegments(segmentsStr)
+	if err != nil {
+		return fmt.Errorf("invalid --segments: %w", err)
 	}
 
 	// Check if we have templates or source-node-data
@@ -97,17 +90,11 @@ func runAction(cliCtx *cli.Context) error {
 		"source-node-data", sourceNodeData,
 		"template-dir", templateDir,
 		"has-templates", hasTemplates,
-		"from", from,
-		"to", to,
-		"partition", partition,
+		"segments", segmentsStr,
 		"work-dir", workDir)
 
-	// Calculate block ranges for each partition
-	ranges := CalculatePartitionRanges(from, to, partition)
-
-	logger.Info("Calculated partition ranges",
-		"total-blocks", to-from,
-		"partition-count", len(ranges))
+	logger.Info("Parsed segments",
+		"segment-count", len(ranges))
 
 	// Create work directory
 	if err := os.MkdirAll(workDir, 0755); err != nil {
