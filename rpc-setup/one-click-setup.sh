@@ -115,7 +115,7 @@ run_with_spinner() {
     while kill -0 "$pid" 2>/dev/null; do
         i=$(( (i + 1) % ${#SPINNER_FRAMES[@]} ))
         printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s${C_RESET}" "$msg"
-        sleep 0.1
+        sleep 0.05
     done
     wait "$pid"
     return $?
@@ -221,7 +221,7 @@ extract_with_progress() {
         else
             printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s${C_RESET}" "$msg"
         fi
-        sleep 0.5
+        sleep 0.3
     done
 
     wait "$pid"
@@ -379,7 +379,7 @@ check_required_tools() {
     local required_tools=("wget" "tar" "openssl" "curl" "sed" "make")
 
     for tool in "${required_tools[@]}"; do
-        run_with_spinner "Checking $tool..." sleep 0.1
+        run_with_spinner "Checking $tool..." sleep 0.3
         if ! command_exists "$tool"; then
             missing_required+=("$tool")
         fi
