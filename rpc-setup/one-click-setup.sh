@@ -91,7 +91,7 @@ print_prompt() {
     fi
 }
 # Spinner frames
-SPINNER_FRAMES=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+SPINNER_FRAMES=('/' '-' '\' '|')
 SPINNER_IDX=0
 
 # Print in place with spinner (single frame)
@@ -149,7 +149,7 @@ download_with_progress() {
             [ $pct -gt 100 ] && pct=100
             local filled=$(( pct * bar_width / 100 ))
             local empty=$(( bar_width - filled ))
-            local bar=$(printf '%*s' "$filled" '' | tr ' ' '█')$(printf '%*s' "$empty" '' | tr ' ' '░')
+            local bar=$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' "$empty" '' | tr ' ' '-')
             local size_mb=$(( current_size / 1048576 ))
             local total_mb=$(( total_size / 1048576 ))
             printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s ${C_BOLD}%s${C_RESET} ${C_DIM}%d%%  %dMB/%dMB${C_RESET}" "$msg" "$bar" "$pct" "$size_mb" "$total_mb"
