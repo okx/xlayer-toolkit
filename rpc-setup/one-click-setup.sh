@@ -232,10 +232,17 @@ extract_with_progress() {
 
 # Section header
 print_section() {
+    local text=$1
+    local box_width=50
+    local text_len=${#text}
+    local pad_left=$(( (box_width - text_len) / 2 ))
+    local pad_right=$(( box_width - text_len - pad_left ))
+    local line=$(printf '%*s' "$box_width" '' | tr ' ' '-')
+    local content="$(printf '%*s' "$pad_left" '')${text}$(printf '%*s' "$pad_right" '')"
     echo ""
-    echo -e "${C_CYAN}  ┌──────────────────────────────────────────────────┐${C_RESET}"
-    echo -e "${C_CYAN}  │${C_BOLD}  $1$(printf '%*s' $((46 - ${#1})) '')${C_RESET}${C_CYAN}│${C_RESET}"
-    echo -e "${C_CYAN}  └──────────────────────────────────────────────────┘${C_RESET}"
+    echo -e "${C_CYAN}  +${line}+${C_RESET}"
+    echo -e "${C_CYAN}  |${C_BOLD}${content}${C_RESET}${C_CYAN}|${C_RESET}"
+    echo -e "${C_CYAN}  +${line}+${C_RESET}"
 }
 
 # Banner
@@ -1225,9 +1232,14 @@ main() {
 
     # Final summary
     echo ""
-    echo -e "${C_GREEN}  ┌──────────────────────────────────────────────────┐${C_RESET}"
-    echo -e "${C_GREEN}  │${C_BOLD}  X Layer RPC Node is running!                    ${C_RESET}${C_GREEN}│${C_RESET}"
-    echo -e "${C_GREEN}  └──────────────────────────────────────────────────┘${C_RESET}"
+    local summary_text="X Layer RPC Node is running!"
+    local slen=${#summary_text}
+    local spad_left=$(( (50 - slen) / 2 ))
+    local spad_right=$(( 50 - slen - spad_left ))
+    local sline=$(printf '%*s' 50 '' | tr ' ' '-')
+    echo -e "${C_GREEN}  +${sline}+${C_RESET}"
+    echo -e "${C_GREEN}  |${C_BOLD}$(printf '%*s' "$spad_left" '')${summary_text}$(printf '%*s' "$spad_right" '')${C_RESET}${C_GREEN}|${C_RESET}"
+    echo -e "${C_GREEN}  +${sline}+${C_RESET}"
     echo -e "${C_DIM}    Network: $NETWORK_TYPE | Client: $RPC_TYPE | Mode: $SYNC_MODE${C_RESET}"
     echo -e "${C_DIM}    RPC: http://localhost:${RPC_PORT:-8545} | WS: ws://localhost:${WS_PORT:-8546}${C_RESET}"
     echo ""
