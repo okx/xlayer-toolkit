@@ -460,17 +460,7 @@ validate_snapshot_support() {
         return 1
     fi
 
-    if [ "$network" = "testnet" ] && [ "$rpc_type" != "geth" ]; then
-        print_error "Testnet snapshot is currently only supported for geth"
-        print_info "Supported combinations:"
-        print_info "  - geth + testnet: ✅ snapshot supported"
-        print_info "  - geth + mainnet: ✅ snapshot supported"
-        print_info "  - reth + testnet: ❌ snapshot not supported (use genesis mode)"
-        print_info "  - reth + mainnet: ✅ snapshot supported"
-        print_info ""
-        print_info "Please use 'genesis' sync mode for reth + testnet configuration"
-        return 1
-    fi
+    # All testnet + mainnet combinations support snapshot mode
     
     return 0
 }
@@ -556,10 +546,10 @@ get_user_input() {
     # Set target directory
     TARGET_DIR="${NETWORK_TYPE}-${RPC_TYPE}"
 
-    # geth + testnet + genesis is temporarily disabled; use snapshot for this combination
-    if [ "$RPC_TYPE" = "geth" ] && [ "$NETWORK_TYPE" = "testnet" ] && [ "$SYNC_MODE" = "genesis" ]; then
-        print_error "geth + testnet + genesis is temporarily disabled"
-        print_info "Please use 'snapshot' sync mode for geth + testnet, or choose another network/RPC combination"
+    # testnet only supports snapshot mode (both geth and reth)
+    if [ "$NETWORK_TYPE" = "testnet" ] && [ "$SYNC_MODE" = "genesis" ]; then
+        print_error "Testnet does not support genesis mode"
+        print_info "Please use 'snapshot' sync mode for testnet"
         exit 1
     fi
 
@@ -898,8 +888,10 @@ download_snapshot() {
         local latest_url
         if [ "$rpc_type" = "geth" ]; then
             latest_url="${TESTNET_GETH_SNAPSHOT_LATEST_URL}"
+        elif [ "$rpc_type" = "reth" ]; then
+            latest_url="${TESTNET_RETH_SNAPSHOT_LATEST_URL}"
         else
-            print_error "Testnet snapshot is only supported for geth (got: $rpc_type)"
+            print_error "Unsupported RPC type for testnet snapshot: $rpc_type"
             exit 1
         fi
         local latest_filename
@@ -1003,9 +995,9 @@ extract_snapshot() {
         if [ -n "$TESTNET_SNAPSHOT_FILE" ]; then
             snapshot_file="$TESTNET_SNAPSHOT_FILE"
         else
-            snapshot_file=$(ls -t testnet-geth*.tar.gz 2>/dev/null | head -1)
+            snapshot_file=$(ls -t testnet-${rpc_type}*.tar.gz 2>/dev/null | head -1)
             if [ -z "$snapshot_file" ]; then
-                snapshot_file="geth-testnet.tar.gz"
+                snapshot_file="${rpc_type}-testnet.tar.gz"
             else
                 print_info "Using existing snapshot file: $snapshot_file"
             fi
