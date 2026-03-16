@@ -571,27 +571,33 @@ get_user_input() {
     fi
 
     if [ "$QUICK_START" = true ]; then
-        # L1 RPC URL with 5s countdown
+        # L1 RPC URL with visible countdown
         echo ""
         print_info "L1 RPC URL [default: $default_l1_rpc]"
-        printf "\033[0;34m  Press Enter to use default, or type a new URL (5s): \033[0m"
-        if read -r -t 5 L1_RPC_URL </dev/tty 2>/dev/null || read -r -t 5 L1_RPC_URL; then
-            L1_RPC_URL="${L1_RPC_URL:-$default_l1_rpc}"
-        else
-            L1_RPC_URL="$default_l1_rpc"
-        fi
+        local countdown=5 input=""
+        while [ $countdown -gt 0 ]; do
+            printf "\r\033[0;34m  Use default in %ds, or type a new URL: \033[0m" "$countdown"
+            if read -r -t 1 input </dev/tty 2>/dev/null || read -r -t 1 input; then
+                break
+            fi
+            countdown=$((countdown - 1))
+        done
         printf "\n"
+        L1_RPC_URL="${input:-$default_l1_rpc}"
         print_success "L1 RPC URL: $L1_RPC_URL"
 
-        # L1 Beacon URL with 5s countdown
+        # L1 Beacon URL with visible countdown
         print_info "L1 Beacon URL [default: $default_l1_beacon]"
-        printf "\033[0;34m  Press Enter to use default, or type a new URL (5s): \033[0m"
-        if read -r -t 5 L1_BEACON_URL </dev/tty 2>/dev/null || read -r -t 5 L1_BEACON_URL; then
-            L1_BEACON_URL="${L1_BEACON_URL:-$default_l1_beacon}"
-        else
-            L1_BEACON_URL="$default_l1_beacon"
-        fi
+        countdown=5 input=""
+        while [ $countdown -gt 0 ]; do
+            printf "\r\033[0;34m  Use default in %ds, or type a new URL: \033[0m" "$countdown"
+            if read -r -t 1 input </dev/tty 2>/dev/null || read -r -t 1 input; then
+                break
+            fi
+            countdown=$((countdown - 1))
+        done
         printf "\n"
+        L1_BEACON_URL="${input:-$default_l1_beacon}"
         print_success "L1 Beacon URL: $L1_BEACON_URL"
     else
         while true; do
