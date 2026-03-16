@@ -570,28 +570,11 @@ get_user_input() {
         fi
     fi
 
-    # Step 3-4: L1 URLs
-    local default_l1_rpc="https://api.zan.top/eth-mainnet"
-    while true; do
-        print_prompt "3. L1 RPC URL [default: $default_l1_rpc]: "
-        if ! read -r L1_RPC_URL </dev/tty 2>/dev/null && ! read -r L1_RPC_URL; then
-            print_error "Failed to read input"
-            exit 1
-        fi
-        L1_RPC_URL="${L1_RPC_URL:-$default_l1_rpc}"
-        validate_url "$L1_RPC_URL" && break
-    done
-
-    local default_l1_beacon="https://eth-beacon-chain.drpc.org"
-    while true; do
-        print_prompt "4. L1 Beacon URL [default: $default_l1_beacon]: "
-        if ! read -r L1_BEACON_URL </dev/tty 2>/dev/null && ! read -r L1_BEACON_URL; then
-            print_error "Failed to read input"
-            exit 1
-        fi
-        L1_BEACON_URL="${L1_BEACON_URL:-$default_l1_beacon}"
-        validate_url "$L1_BEACON_URL" && break
-    done
+    # L1 URLs (use defaults)
+    L1_RPC_URL="https://api.zan.top/eth-mainnet"
+    L1_BEACON_URL="https://eth-beacon-chain.drpc.org"
+    print_info "L1 RPC URL: $L1_RPC_URL"
+    print_info "L1 Beacon URL: $L1_BEACON_URL"
 
     # Check existing data directory
     echo ""
