@@ -571,10 +571,28 @@ get_user_input() {
     fi
 
     if [ "$QUICK_START" = true ]; then
-        L1_RPC_URL="$default_l1_rpc"
-        L1_BEACON_URL="$default_l1_beacon"
-        print_info "L1 RPC URL: $L1_RPC_URL"
-        print_info "L1 Beacon URL: $L1_BEACON_URL"
+        # L1 RPC URL with 5s countdown
+        echo ""
+        print_info "L1 RPC URL [default: $default_l1_rpc]"
+        printf "\033[0;34m  Press Enter to use default, or type a new URL (5s): \033[0m"
+        if read -r -t 5 L1_RPC_URL </dev/tty 2>/dev/null || read -r -t 5 L1_RPC_URL; then
+            L1_RPC_URL="${L1_RPC_URL:-$default_l1_rpc}"
+        else
+            L1_RPC_URL="$default_l1_rpc"
+        fi
+        printf "\n"
+        print_success "L1 RPC URL: $L1_RPC_URL"
+
+        # L1 Beacon URL with 5s countdown
+        print_info "L1 Beacon URL [default: $default_l1_beacon]"
+        printf "\033[0;34m  Press Enter to use default, or type a new URL (5s): \033[0m"
+        if read -r -t 5 L1_BEACON_URL </dev/tty 2>/dev/null || read -r -t 5 L1_BEACON_URL; then
+            L1_BEACON_URL="${L1_BEACON_URL:-$default_l1_beacon}"
+        else
+            L1_BEACON_URL="$default_l1_beacon"
+        fi
+        printf "\n"
+        print_success "L1 Beacon URL: $L1_BEACON_URL"
     else
         while true; do
             print_prompt "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
