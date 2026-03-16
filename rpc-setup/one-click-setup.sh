@@ -70,21 +70,72 @@ ENGINE_API_PORT=""
 FLASHBLOCKS_ENABLED=""
 FLASHBLOCKS_URL=""
 
-print_info() { echo -e "\033[0;34mℹ️  $1\033[0m"; }
-print_success() { echo -e "\033[0;32m✅ $1\033[0m"; }
-print_warning() { echo -e "\033[1;33m⚠️  $1\033[0m"; }
-print_error() { echo -e "\033[0;31m❌ $1\033[0m"; }
+# Colors
+C_RESET="\033[0m"
+C_CYAN="\033[0;36m"
+C_GREEN="\033[0;32m"
+C_YELLOW="\033[1;33m"
+C_RED="\033[0;31m"
+C_BLUE="\033[0;34m"
+C_MAGENTA="\033[0;35m"
+C_BOLD="\033[1m"
+C_DIM="\033[2m"
+
+print_info() { echo -e "${C_CYAN}  [*] $1${C_RESET}"; }
+print_success() { echo -e "${C_GREEN}  [+] $1${C_RESET}"; }
+print_warning() { echo -e "${C_YELLOW}  [!] $1${C_RESET}"; }
+print_error() { echo -e "${C_RED}  [-] $1${C_RESET}"; }
 print_prompt() {
-    # Try /dev/tty first, fallback to stdout
-    if ! printf "\033[0;34m%s\033[0m" "$1" > /dev/tty 2>/dev/null; then
-        printf "\033[0;34m%s\033[0m" "$1"
+    if ! printf "${C_CYAN}%s${C_RESET}" "$1" > /dev/tty 2>/dev/null; then
+        printf "${C_CYAN}%s${C_RESET}" "$1"
     fi
 }
-# Print in place - overwrites current line
-print_step() { printf "\r\033[K\033[0;34mℹ️  %s\033[0m" "$1"; }
-# Finish step - overwrite with result and move to next line
-print_step_ok() { printf "\r\033[K\033[0;32m✅ %s\033[0m\n" "$1"; }
-print_step_fail() { printf "\r\033[K\033[0;31m❌ %s\033[0m\n" "$1"; }
+# Spinner frames
+SPINNER_FRAMES=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+SPINNER_IDX=0
+
+# Print in place with spinner (single frame)
+print_step() {
+    SPINNER_IDX=$(( (SPINNER_IDX + 1) % ${#SPINNER_FRAMES[@]} ))
+    printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$SPINNER_IDX]} %s${C_RESET}" "$1"
+}
+# Finish step with result
+print_step_ok() { printf "\r\033[K${C_GREEN}  ✓ %s${C_RESET}\n" "$1"; }
+print_step_fail() { printf "\r\033[K${C_RED}  ✗ %s${C_RESET}\n" "$1"; }
+
+# Run a command with animated spinner
+# Usage: run_with_spinner "message" command [args...]
+run_with_spinner() {
+    local msg=$1
+    shift
+    # Run command in background
+    "$@" &>/dev/null &
+    local pid=$!
+    local i=0
+    while kill -0 "$pid" 2>/dev/null; do
+        i=$(( (i + 1) % ${#SPINNER_FRAMES[@]} ))
+        printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s${C_RESET}" "$msg"
+        sleep 0.1
+    done
+    wait "$pid"
+    return $?
+}
+
+# Section header
+print_section() {
+    echo ""
+    echo -e "${C_CYAN}  ┌──────────────────────────────────────────────────┐${C_RESET}"
+    echo -e "${C_CYAN}  │${C_BOLD}  $1$(printf '%*s' $((46 - ${#1})) '')${C_RESET}${C_CYAN}│${C_RESET}"
+    echo -e "${C_CYAN}  └──────────────────────────────────────────────────┘${C_RESET}"
+}
+
+# Banner
+print_banner() {
+    echo ""
+    echo -e "${C_CYAN}${C_BOLD}  X Layer RPC Node${C_RESET} ${C_DIM}· One-Click Setup${C_RESET}"
+    echo -e "${C_DIM}  ──────────────────────────────────────${C_RESET}"
+    echo ""
+}
 
 # Show usage information
 show_usage() {
@@ -178,33 +229,28 @@ command_exists() {
 
 # Check Docker and Docker Compose
 check_docker() {
-    # Check Docker
-    print_step "Checking docker..."
+    local docker_version="" compose_version=""
+
+    run_with_spinner "Checking docker..." sleep 0.3
     if command_exists docker; then
-        local docker_version=$(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        docker_version=$(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     else
         print_step_fail "Docker is not installed. Please install Docker 20.10+ first."
-        print_info "Visit: https://docs.docker.com/get-docker/"
         exit 1
     fi
 
-    # Check Docker Compose
-    print_step "Checking docker compose..."
-    local compose_version=""
+    run_with_spinner "Checking docker compose..." sleep 0.3
     if command_exists docker-compose; then
         compose_version=$(docker-compose --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     elif docker compose version &> /dev/null; then
         compose_version=$(docker compose version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     else
-        print_step_fail "Docker Compose is not installed. Please install Docker Compose 2.0+ first."
-        print_info "Visit: https://docs.docker.com/compose/install/"
+        print_step_fail "Docker Compose is not installed."
         exit 1
     fi
 
-    # Check Docker daemon
-    print_step "Checking docker daemon..."
-    if ! docker info &> /dev/null; then
-        print_step_fail "Docker daemon is not running. Please start Docker first."
+    if ! run_with_spinner "Checking docker daemon..." docker info; then
+        print_step_fail "Docker daemon is not running."
         exit 1
     fi
 
@@ -217,21 +263,20 @@ check_required_tools() {
     local required_tools=("wget" "tar" "openssl" "curl" "sed" "make")
 
     for tool in "${required_tools[@]}"; do
-        print_step "Checking $tool..."
+        run_with_spinner "Checking $tool..." sleep 0.1
         if ! command_exists "$tool"; then
             missing_required+=("$tool")
         fi
     done
 
     if [ ${#missing_required[@]} -gt 0 ]; then
-        print_step_fail "Missing required tools: ${missing_required[*]}"
-        print_info "Please install them first. Example:"
-        echo "  # macOS: brew install ${missing_required[*]}"
-        echo "  # Ubuntu: sudo apt-get install ${missing_required[*]}"
+        print_step_fail "Missing: ${missing_required[*]}"
+        echo -e "  ${C_DIM}macOS: brew install ${missing_required[*]}${C_RESET}"
+        echo -e "  ${C_DIM}Ubuntu: sudo apt-get install ${missing_required[*]}${C_RESET}"
         exit 1
     fi
 
-    print_step_ok "Required tools ready (${required_tools[*]})"
+    print_step_ok "Tools ready (${required_tools[*]})"
 }
 
 # Countdown prompt that updates in place
@@ -245,24 +290,20 @@ countdown_prompt() {
     local input=""
 
     while [ $countdown -gt 0 ]; do
-        # \r returns to line start, \033[K clears to end of line
-        printf "\r\033[K\033[0;34m  %s (%ds): \033[0m" "$prompt_text" "$countdown"
+        SPINNER_IDX=$(( (SPINNER_IDX + 1) % ${#SPINNER_FRAMES[@]} ))
+        printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$SPINNER_IDX]} %s: ${C_DIM}(%ds)${C_RESET} " "$prompt_text" "$countdown"
         if read -r -t 1 input </dev/tty 2>/dev/null || read -r -t 1 input; then
             break
         fi
         countdown=$((countdown - 1))
     done
-    # Clear countdown line and show result on same line
     printf "\r\033[K"
     eval "$var_name=\"\$input\""
 }
 
 # Quick start prompt with countdown
 prompt_quick_start() {
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    print_info "Launch X Layer Mainnet RPC ($RPC_TYPE) with default settings?"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_section "Launch X Layer Mainnet RPC ($RPC_TYPE)?"
     echo ""
 
     local choice=""
@@ -293,25 +334,20 @@ get_file_from_source() {
     local file=$1
     local target_path="$WORK_DIR/$file"
 
-    print_step "Preparing $file..."
-
-    # If file already exists in work directory, skip
     if [ -f "$target_path" ]; then
         return 0
     fi
 
-    # Try to copy from local repository
     if [ "$IN_REPO" = true ]; then
         local source_path="$REPO_RPC_SETUP_DIR/$file"
         if [ -f "$source_path" ]; then
-            cp "$source_path" "$target_path"
+            run_with_spinner "Preparing $file..." cp "$source_path" "$target_path"
             return 0
         fi
     fi
 
-    # Download from GitHub
     local url="${REPO_URL}/${file}"
-    if wget -q "$url" -O "$target_path"; then
+    if run_with_spinner "Downloading $file..." wget -q "$url" -O "$target_path"; then
         return 0
     else
         print_step_fail "Failed to get $file"
@@ -340,12 +376,11 @@ download_config_files() {
     for file in "${config_files[@]}"; do
         local filename=$(basename "$file")
         local target="$config_dir/$filename"
-        print_step "Preparing $filename..."
 
         if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/$file" ]; then
-            cp "$REPO_RPC_SETUP_DIR/$file" "$target"
+            run_with_spinner "Preparing $filename..." cp "$REPO_RPC_SETUP_DIR/$file" "$target"
         else
-            if ! wget -q "$REPO_URL/$file" -O "$target"; then
+            if ! run_with_spinner "Downloading $filename..." wget -q "$REPO_URL/$file" -O "$target"; then
                 print_step_fail "Failed to get $file"
                 exit 1
             fi
@@ -570,12 +605,8 @@ get_user_input() {
         FLASHBLOCKS_URL="${DEFAULT_FLASHBLOCKS_URL:-}"
         print_info "Using default ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
     else
-        # Optional configurations (always collect, regardless of SKIP_INIT)
-        echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        print_info "Port Configuration (Step 2/2)"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        print_info "Press Enter to use default values, or type new values:"
+        print_section "Port Configuration"
+        print_info "Press Enter to use defaults"
         echo ""
 
         RPC_PORT=$(prompt_input "5. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
@@ -610,7 +641,7 @@ generate_or_verify_jwt() {
 }
 
 generate_config_files() {
-    print_step "Generating configuration files..."
+    run_with_spinner "Generating configuration files..." sleep 0.3
 
     cd "$WORK_DIR" || exit 1
     load_network_config "$NETWORK_TYPE"
@@ -830,7 +861,7 @@ download_snapshot() {
 
     # Check if snapshot file already exists and verify MD5
     if [ -f "$snapshot_file" ]; then
-        print_step "Verifying MD5 of $snapshot_file..."
+        run_with_spinner "Verifying MD5 of $snapshot_file..." sleep 0.3
         local remote_md5=$(curl -s -f "${snapshot_url}.md5" 2>/dev/null | awk '{print $1}' | tr -d '\r\n')
         if [ -n "$remote_md5" ]; then
             local local_md5
@@ -998,7 +1029,7 @@ initialize_node() {
 
         # Clean up genesis file after initialization (only for reth)
         if [ "$RPC_TYPE" = "reth" ]; then
-            print_step "Cleaning up genesis file..."
+            run_with_spinner "Cleaning up genesis file..." sleep 0.3
             [ -f "$CONFIG_DIR/$GENESIS_FILE" ] && rm -f "$CONFIG_DIR/$GENESIS_FILE"
             local genesis_tarball="genesis-${NETWORK_TYPE}.tar.gz"
             [ "$IN_REPO" = false ] && [ -f "$genesis_tarball" ] && rm -f "$genesis_tarball"
@@ -1035,27 +1066,17 @@ start_services() {
 }
 
 main() {
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  X Layer RPC Node One-Click Setup"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    
+    print_banner
+
     detect_repository
     if [ "$IN_REPO" = true ]; then
-        print_info "📂 Running from repository: $REPO_ROOT"
+        print_info "Source: local repository"
     else
-        print_info "🌐 Running standalone mode (will download files from GitHub)"
+        print_info "Source: GitHub (standalone mode)"
     fi
-    
-    # Parse command line arguments first (only rpc_type)
+
     parse_arguments "$@"
-    
-    # Show selected RPC type
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     print_info "RPC Client: $RPC_TYPE"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
     
     # Load configuration from network-presets.env
     load_configuration
@@ -1098,8 +1119,16 @@ main() {
         start_services
     fi
     
-    # Cleanup for standalone mode
     cleanup_standalone_files
+
+    # Final summary
+    echo ""
+    echo -e "${C_GREEN}  ┌──────────────────────────────────────────────────┐${C_RESET}"
+    echo -e "${C_GREEN}  │${C_BOLD}  X Layer RPC Node is running!                    ${C_RESET}${C_GREEN}│${C_RESET}"
+    echo -e "${C_GREEN}  └──────────────────────────────────────────────────┘${C_RESET}"
+    echo -e "${C_DIM}    Network: $NETWORK_TYPE | Client: $RPC_TYPE | Mode: $SYNC_MODE${C_RESET}"
+    echo -e "${C_DIM}    RPC: http://localhost:${RPC_PORT:-8545} | WS: ws://localhost:${WS_PORT:-8546}${C_RESET}"
+    echo ""
 }
 
 # Clean up downloaded files in standalone mode
