@@ -16,7 +16,7 @@ pub fn main() {
     //
     // Behind the scenes, this compiles down to a custom system call which handles reading inputs
     // from the prover.
-    let n = sp1_zkvm::io::read::<u32>();
+    let n = sp1_zkvm::io::read::<u64>();
 
     // Compute the n'th fibonacci number using a function from the workspace lib crate.
     let (a, b) = fibonacci(n);
