@@ -587,23 +587,23 @@ get_user_input() {
         print_info "L1 Beacon URL: $L1_BEACON_URL"
     else
         while true; do
-            print_prompt "3. L1 RPC URL [default: $default_l1_rpc]: "
+            print_prompt "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
             if ! read -r L1_RPC_URL </dev/tty 2>/dev/null && ! read -r L1_RPC_URL; then
                 print_error "Failed to read input"
                 exit 1
             fi
-            L1_RPC_URL="${L1_RPC_URL:-$default_l1_rpc}"
-            validate_url "$L1_RPC_URL" && break
+            [ -n "$L1_RPC_URL" ] && validate_url "$L1_RPC_URL" && break
+            print_error "L1 RPC URL is required"
         done
 
         while true; do
-            print_prompt "4. L1 Beacon URL [default: $default_l1_beacon]: "
+            print_prompt "4. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
             if ! read -r L1_BEACON_URL </dev/tty 2>/dev/null && ! read -r L1_BEACON_URL; then
                 print_error "Failed to read input"
                 exit 1
             fi
-            L1_BEACON_URL="${L1_BEACON_URL:-$default_l1_beacon}"
-            validate_url "$L1_BEACON_URL" && break
+            [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
+            print_error "L1 Beacon URL is required"
         done
     fi
 
