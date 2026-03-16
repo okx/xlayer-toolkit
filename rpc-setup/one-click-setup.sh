@@ -74,12 +74,17 @@ print_info() { echo -e "\033[0;34mℹ️  $1\033[0m"; }
 print_success() { echo -e "\033[0;32m✅ $1\033[0m"; }
 print_warning() { echo -e "\033[1;33m⚠️  $1\033[0m"; }
 print_error() { echo -e "\033[0;31m❌ $1\033[0m"; }
-print_prompt() { 
+print_prompt() {
     # Try /dev/tty first, fallback to stdout
     if ! printf "\033[0;34m%s\033[0m" "$1" > /dev/tty 2>/dev/null; then
         printf "\033[0;34m%s\033[0m" "$1"
     fi
 }
+# Print in place - overwrites current line
+print_step() { printf "\r\033[K\033[0;34mℹ️  %s\033[0m" "$1"; }
+# Finish step - overwrite with result and move to next line
+print_step_ok() { printf "\r\033[K\033[0;32m✅ %s\033[0m\n" "$1"; }
+print_step_fail() { printf "\r\033[K\033[0;31m❌ %s\033[0m\n" "$1"; }
 
 # Show usage information
 show_usage() {
@@ -126,28 +131,16 @@ parse_arguments() {
 
 # Check and display existing configurations
 check_existing_configurations() {
-    print_info "Checking existing configurations..."
-    echo ""
-    
-    local has_configs=false
-    
+    local configs=""
     for config in mainnet-geth mainnet-reth testnet-geth testnet-reth; do
         if [ -d "$config" ]; then
-            has_configs=true
-            local size=$(du -sh "$config" 2>/dev/null | cut -f1 || echo "unknown")
-            if [ "$config" = "$TARGET_DIR" ]; then
-                echo "  📦 $config ($size) ← Current"
-            else
-                echo "  📦 $config ($size)"
-            fi
+            local size=$(du -sh "$config" 2>/dev/null | cut -f1 || echo "?")
+            configs="${configs}${config}(${size}) "
         fi
     done
-    
-    if [ "$has_configs" = false ]; then
-        echo "  ℹ️  No existing configurations found"
+    if [ -n "$configs" ]; then
+        print_step_ok "Existing configs: $configs"
     fi
-    
-    echo ""
 }
 
 # Load network-specific configuration dynamically
@@ -185,91 +178,83 @@ command_exists() {
 
 # Check Docker and Docker Compose
 check_docker() {
-    print_info "Checking Docker environment..."
-    
     # Check Docker
+    print_step "Checking docker..."
     if command_exists docker; then
         local docker_version=$(docker --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-        echo "  ✓ docker ($docker_version)"
     else
-        echo "  ✗ docker (missing)"
-        print_error "Docker is not installed. Please install Docker 20.10+ first."
+        print_step_fail "Docker is not installed. Please install Docker 20.10+ first."
         print_info "Visit: https://docs.docker.com/get-docker/"
         exit 1
     fi
-    
+
     # Check Docker Compose
+    print_step "Checking docker compose..."
+    local compose_version=""
     if command_exists docker-compose; then
-        local compose_version=$(docker-compose --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-        echo "  ✓ docker-compose ($compose_version)"
+        compose_version=$(docker-compose --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     elif docker compose version &> /dev/null; then
-        local compose_version=$(docker compose version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-        echo "  ✓ docker compose ($compose_version)"
+        compose_version=$(docker compose version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     else
-        echo "  ✗ docker compose (missing)"
-        print_error "Docker Compose is not installed. Please install Docker Compose 2.0+ first."
+        print_step_fail "Docker Compose is not installed. Please install Docker Compose 2.0+ first."
         print_info "Visit: https://docs.docker.com/compose/install/"
         exit 1
     fi
-    
+
     # Check Docker daemon
-    if docker info &> /dev/null; then
-        echo "  ✓ docker daemon (running)"
-    else
-        echo "  ✗ docker daemon (not running)"
-        print_error "Docker daemon is not running. Please start Docker first."
+    print_step "Checking docker daemon..."
+    if ! docker info &> /dev/null; then
+        print_step_fail "Docker daemon is not running. Please start Docker first."
         exit 1
     fi
+
+    print_step_ok "Docker ready (docker $docker_version, compose $compose_version)"
 }
     
 # Check required system tools
 check_required_tools() {
     local missing_required=()
-    local missing_optional=()
-    
-    # Required tools
     local required_tools=("wget" "tar" "openssl" "curl" "sed" "make")
-    
-    # Optional tools (script works without them but with degraded functionality)
-    local optional_tools=("jq")
-    
-    print_info "Checking required tools..."
+
     for tool in "${required_tools[@]}"; do
-        if command_exists "$tool"; then
-            echo "  ✓ $tool"
-        else
+        print_step "Checking $tool..."
+        if ! command_exists "$tool"; then
             missing_required+=("$tool")
-            echo "  ✗ $tool (missing)"
         fi
     done
-    
-    print_info "Checking optional tools..."
-    for tool in "${optional_tools[@]}"; do
-        if command_exists "$tool"; then
-            echo "  ✓ $tool"
-        else
-            missing_optional+=("$tool")
-            echo "  ⚠ $tool (optional, recommended)"
-        fi
-    done
-    
-    # Exit if required tools are missing
+
     if [ ${#missing_required[@]} -gt 0 ]; then
-        print_error "Missing required tools: ${missing_required[*]}"
+        print_step_fail "Missing required tools: ${missing_required[*]}"
         print_info "Please install them first. Example:"
-        echo "  # macOS:"
-        echo "  brew install ${missing_required[*]}"
-        echo ""
-        echo "  # Ubuntu/Debian:"
-        echo "  sudo apt-get install ${missing_required[*]}"
+        echo "  # macOS: brew install ${missing_required[*]}"
+        echo "  # Ubuntu: sudo apt-get install ${missing_required[*]}"
         exit 1
     fi
-    
-    # Warn if optional tools are missing
-    if [ ${#missing_optional[@]} -gt 0 ]; then
-        print_warning "Optional tools not found: ${missing_optional[*]}"
-        print_info "The script will work but some features may be slower"
-    fi
+
+    print_step_ok "Required tools ready (${required_tools[*]})"
+}
+
+# Countdown prompt that updates in place
+# Usage: countdown_prompt "prompt text" VAR_NAME [timeout]
+# Result is stored in the named variable. Empty if timed out.
+countdown_prompt() {
+    local prompt_text=$1
+    local var_name=$2
+    local timeout=${3:-5}
+    local countdown=$timeout
+    local input=""
+
+    while [ $countdown -gt 0 ]; do
+        # \r returns to line start, \033[K clears to end of line
+        printf "\r\033[K\033[0;34m  %s (%ds): \033[0m" "$prompt_text" "$countdown"
+        if read -r -t 1 input </dev/tty 2>/dev/null || read -r -t 1 input; then
+            break
+        fi
+        countdown=$((countdown - 1))
+    done
+    # Clear countdown line and show result on same line
+    printf "\r\033[K"
+    eval "$var_name=\"\$input\""
 }
 
 # Quick start prompt with countdown
@@ -279,19 +264,9 @@ prompt_quick_start() {
     print_info "Launch X Layer Mainnet RPC ($RPC_TYPE) with default settings?"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
-    print_info "Press 'n' for custom setup, or wait 5s to auto-start mainnet..."
-    echo ""
 
-    local countdown=5
     local choice=""
-    while [ $countdown -gt 0 ]; do
-        printf "\r\033[0;34m  Auto-starting in %ds... [Y/n]: \033[0m" "$countdown"
-        if read -r -t 1 choice </dev/tty 2>/dev/null || read -r -t 1 choice; then
-            break
-        fi
-        countdown=$((countdown - 1))
-    done
-    printf "\n"
+    countdown_prompt "Auto-starting... Press 'n' for custom setup [Y/n]" choice 5
 
     # Default to yes (quick start) on timeout or empty/Y/y input
     case "$choice" in
@@ -309,94 +284,75 @@ prompt_quick_start() {
 }
 
 check_system_requirements() {
-    print_info "Checking system requirements..."
     check_docker
     check_required_tools
-    print_success "All system requirements satisfied"
 }
 
 # Get file from repository or download from GitHub
 get_file_from_source() {
     local file=$1
     local target_path="$WORK_DIR/$file"
-    
+
+    print_step "Preparing $file..."
+
     # If file already exists in work directory, skip
     if [ -f "$target_path" ]; then
-        print_info "✓ Using existing $file"
         return 0
     fi
-    
+
     # Try to copy from local repository
     if [ "$IN_REPO" = true ]; then
         local source_path="$REPO_RPC_SETUP_DIR/$file"
         if [ -f "$source_path" ]; then
             cp "$source_path" "$target_path"
-            print_success "Copied $file from local repository"
             return 0
         fi
     fi
-    
+
     # Download from GitHub
     local url="${REPO_URL}/${file}"
-    print_info "Downloading $file from GitHub..."
     if wget -q "$url" -O "$target_path"; then
-        print_success "Downloaded $file"
         return 0
     else
-        print_error "Failed to get $file"
+        print_step_fail "Failed to get $file"
         return 1
     fi
 }
 
 check_required_files() {
-    print_info "Checking required files..."
-    
-    # Always need Makefile
     if ! get_file_from_source "Makefile"; then
-        print_error "Failed to get required file: Makefile"
+        print_step_fail "Failed to get required file: Makefile"
         exit 1
     fi
-    
-    # docker-compose.yml will be generated later based on sync mode
-    # For genesis mode, we'll get it from source; for snapshot mode, we'll generate it
-    
-    print_success "Required files ready"
+    print_step_ok "Required files ready"
 }
 
 # Get configuration files based on network and RPC type
 download_config_files() {
-    print_info "Getting configuration files..."
-    
     load_network_config "$NETWORK_TYPE"
-    
-    # Target directory config folder
+
     local config_dir="${TARGET_DIR}/config"
     mkdir -p "$config_dir"
-    
+
     local config_files=("presets/$ROLLUP_CONFIG")
-    
-    # Add execution client config
     [ "$RPC_TYPE" = "reth" ] && config_files+=("presets/$RETH_CONFIG") || config_files+=("presets/$GETH_CONFIG")
-    
+
     for file in "${config_files[@]}"; do
         local filename=$(basename "$file")
         local target="$config_dir/$filename"
-        
-        # Try to copy from local repository first
+        print_step "Preparing $filename..."
+
         if [ "$IN_REPO" = true ] && [ -f "$REPO_RPC_SETUP_DIR/$file" ]; then
             cp "$REPO_RPC_SETUP_DIR/$file" "$target"
-            print_info "✓ Copied $filename from local repository"
         else
-            # Download from GitHub
-            print_info "Downloading $filename from GitHub..."
             if ! wget -q "$REPO_URL/$file" -O "$target"; then
-                print_error "Failed to get $file"
-            exit 1
+                print_step_fail "Failed to get $file"
+                exit 1
             fi
         fi
     done
-    
-    print_success "Configuration files ready"
+
+    print_step_ok "Configuration files ready"
 }
 
 # Generic input prompt with validation
@@ -561,32 +517,12 @@ get_user_input() {
     fi
 
     if [ "$QUICK_START" = true ]; then
-        # L1 RPC URL with visible countdown
         echo ""
-        local countdown=5 input=""
-        while [ $countdown -gt 0 ]; do
-            printf "\r\033[0;34m  Enter your L1 RPC URL(recommended) in %ds: \033[0m" "$countdown"
-            if read -r -t 1 input </dev/tty 2>/dev/null || read -r -t 1 input; then
-                break
-            fi
-            countdown=$((countdown - 1))
-        done
-        printf "\n"
-        L1_RPC_URL="$input"
-        print_success "L1 RPC URL: $L1_RPC_URL"
+        countdown_prompt "Enter your L1 RPC URL(recommended)" L1_RPC_URL 5
+        print_success "L1 RPC URL: ${L1_RPC_URL:-(empty)}"
 
-        # L1 Beacon URL with visible countdown
-        countdown=5 input=""
-        while [ $countdown -gt 0 ]; do
-            printf "\r\033[0;34m  Enter your L1 Beacon URL(recommended) in %ds: \033[0m" "$countdown"
-            if read -r -t 1 input </dev/tty 2>/dev/null || read -r -t 1 input; then
-                break
-            fi
-            countdown=$((countdown - 1))
-        done
-        printf "\n"
-        L1_BEACON_URL="$input"
-        print_success "L1 Beacon URL: $L1_BEACON_URL"
+        countdown_prompt "Enter your L1 Beacon URL(recommended)" L1_BEACON_URL 5
+        print_success "L1 Beacon URL: ${L1_BEACON_URL:-(empty)}"
     else
         while true; do
             print_prompt "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
@@ -663,34 +599,22 @@ get_user_input() {
 
 generate_or_verify_jwt() {
     local jwt_file=$1
-    
-    print_info "Checking JWT secret..."
-    
-    # Generate if not exists
     if [ ! -s "$jwt_file" ]; then
         openssl rand -hex 32 | tr -d '\n' > "$jwt_file"
-        print_success "JWT secret generated"
         return 0
     fi
-    
-    # Verify existing JWT format (should be 64 hex characters)
     local jwt_content=$(cat "$jwt_file" 2>/dev/null | tr -d '\n\r ' || echo "")
     if [ ${#jwt_content} -ne 64 ]; then
-        print_warning "JWT file has incorrect format (expected 64 hex chars, got ${#jwt_content}), regenerating..."
         openssl rand -hex 32 | tr -d '\n' > "$jwt_file"
-        print_success "JWT secret regenerated"
-    else
-        print_info "Using existing JWT secret"
     fi
 }
 
 generate_config_files() {
-    print_info "Generating configuration files..."
-    
+    print_step "Generating configuration files..."
+
     cd "$WORK_DIR" || exit 1
     load_network_config "$NETWORK_TYPE"
-    
-    # Set execution client specific variables
+
     if [ "$RPC_TYPE" = "reth" ]; then
         EXEC_IMAGE_TAG="$OP_RETH_IMAGE_TAG"
         EXEC_CONFIG="$RETH_CONFIG"
@@ -700,45 +624,33 @@ generate_config_files() {
         EXEC_CONFIG="$GETH_CONFIG"
         EXEC_CLIENT="op-geth"
     fi
-    
-    # Unified directory structure: data/, config/, logs/ for both genesis and snapshot (testnet and mainnet)
+
     DATA_DIR="${TARGET_DIR}/data"
     CONFIG_DIR="${TARGET_DIR}/config"
     LOGS_DIR="${TARGET_DIR}/logs"
     GENESIS_FILE="genesis-${NETWORK_TYPE}.json"
-    
+
     if [ "$SYNC_MODE" = "snapshot" ]; then
-        # Snapshot mode: directory already exists from extraction, just verify
         if [ ! -d "$TARGET_DIR" ]; then
-            print_error "Snapshot directory not found: $TARGET_DIR. Please run extract_snapshot first."
+            print_step_fail "Snapshot directory not found: $TARGET_DIR"
             exit 1
         fi
-        print_info "Using snapshot data directory: $TARGET_DIR (nested structure: data/, config/, logs/)"
     else
-        # Genesis mode: create directory structure
         mkdir -p "$CONFIG_DIR" "$LOGS_DIR" "$DATA_DIR/op-node/p2p"
-        
-        # Create execution client specific data directory
         if [ "$RPC_TYPE" = "reth" ]; then
             mkdir -p "$DATA_DIR/op-reth"
         else
             mkdir -p "$DATA_DIR/op-geth"
         fi
-        
-        # Generate and verify JWT
         generate_or_verify_jwt "$CONFIG_DIR/jwt.txt"
     fi
-    
-    # Note: Configuration files are already downloaded to CONFIG_DIR by download_config_files()
-    
-    # Generate .env file
+
     generate_env_file
-    
-    print_success "Configuration files generated"
+
+    print_step_ok "Configuration files generated"
 }
 
 generate_env_file() {
-    print_info "Generating .env file..."
     
     # Determine L2 engine URL based on RPC type (use service name, not container name)
     local l2_engine_url
@@ -802,44 +714,24 @@ FLASHBLOCKS_ENABLED=${FLASHBLOCKS_ENABLED:-${DEFAULT_FLASHBLOCKS_ENABLED:-false}
 FLASHBLOCKS_URL=${FLASHBLOCKS_URL:-${DEFAULT_FLASHBLOCKS_URL:-}}
 EOF
     
-    print_success ".env file generated"
 }
 
 download_genesis() {
     local genesis_url=$1
     local network=$2
-    
-    # Unified genesis filename with network type
     local genesis_file="genesis-${network}.tar.gz"
-    
-    print_info "Preparing genesis file for $network..."
-    
-    # Repository mode: check if file already exists (cache for faster re-runs)
+
     if [ "$IN_REPO" = true ] && [ -f "$genesis_file" ]; then
-        local file_size=$(du -h "$genesis_file" 2>/dev/null | cut -f1 || echo "unknown")
-        print_success "Using cached genesis: $genesis_file ($file_size)"
-        print_info "Repository mode: Skip download, reusing existing file"
         return 0
     fi
-    
-    # Download genesis file
-    if [ "$IN_REPO" = true ]; then
-        print_info "Repository mode: Downloading (will be kept for next run)..."
-    else
-        print_info "Standalone mode: Downloading (will be cleaned up after use)..."
-    fi
-    
+
+    print_step "Downloading genesis file..."
     if ! wget -c "$genesis_url" -O "$genesis_file"; then
-        print_error "Failed to download genesis file"
-        rm -f "$genesis_file"  # Clean up failed download
+        print_step_fail "Failed to download genesis file"
+        rm -f "$genesis_file"
         exit 1
     fi
-    
-    if [ "$IN_REPO" = true ]; then
-        print_success "Downloaded and cached: $genesis_file"
-    else
-        print_success "Downloaded: $genesis_file"
-    fi
+    print_step_ok "Genesis file downloaded"
 }
 
 extract_genesis() {
@@ -849,39 +741,30 @@ extract_genesis() {
     # Get genesis filename (consistent with download_genesis)
     local genesis_file="genesis-${NETWORK_TYPE}.tar.gz"
     
-    print_info "Extracting genesis file..."
-    
+    print_step "Extracting genesis file..."
+
     if ! tar -xzf "$genesis_file" -C "$target_dir/"; then
-        print_error "Failed to extract genesis file"
+        print_step_fail "Failed to extract genesis file"
         rm -f "$genesis_file"
         exit 1
     fi
-    
-    # Handle different genesis file names
+
     if [ -f "$target_dir/merged.genesis.json" ]; then
         mv "$target_dir/merged.genesis.json" "$target_dir/$target_file"
     elif [ -f "$target_dir/genesis.json" ]; then
         mv "$target_dir/genesis.json" "$target_dir/$target_file"
     else
-        print_error "Failed to find genesis.json in the archive"
+        print_step_fail "Failed to find genesis.json in the archive"
         rm -f "$genesis_file"
         exit 1
     fi
-    
-    # Standalone mode: clean up temporary file
-    # if [ "$IN_REPO" = false ]; then
-    #     rm -f "$genesis_file"
-    #     print_info "Cleaned up temporary genesis file"
-    # else
-    #     print_info "Kept genesis file for future use: $genesis_file"
-    # fi
-    
+
     if [ ! -f "$target_dir/$target_file" ]; then
-        print_error "Genesis file not found after extraction"
+        print_step_fail "Genesis file not found after extraction"
         exit 1
     fi
-    
-    print_success "Genesis file extracted to $target_dir/$target_file"
+
+    print_step_ok "Genesis file extracted"
 }
 
 # Download snapshot for geth/reth testnet/mainnet
@@ -894,73 +777,60 @@ download_snapshot() {
     local snapshot_url
     local snapshot_file
     
+    print_step "Fetching latest $network snapshot for $rpc_type..."
+
     if [ "$network" = "testnet" ]; then
-        # Get latest snapshot filename from server (same logic as mainnet)
-        print_info "Fetching latest testnet snapshot filename for $rpc_type..."
         local latest_url
         if [ "$rpc_type" = "geth" ]; then
             latest_url="${TESTNET_GETH_SNAPSHOT_LATEST_URL}"
         elif [ "$rpc_type" = "reth" ]; then
             latest_url="${TESTNET_RETH_SNAPSHOT_LATEST_URL}"
         else
-            print_error "Unsupported RPC type for testnet snapshot: $rpc_type"
+            print_step_fail "Unsupported RPC type for testnet snapshot: $rpc_type"
             exit 1
         fi
         local latest_filename
         latest_filename=$(curl -s -f "$latest_url" | tr -d '\n\r' | xargs)
         if [ -z "$latest_filename" ]; then
-            print_error "Failed to fetch latest testnet snapshot filename from server"
+            print_step_fail "Failed to fetch latest testnet snapshot filename"
             exit 1
         fi
         snapshot_url="${TESTNET_SNAPSHOT_BASE_URL}/${latest_filename}"
         snapshot_file="$latest_filename"
         export TESTNET_SNAPSHOT_FILE="$snapshot_file"
-        print_info "Latest testnet $rpc_type snapshot: $snapshot_file"
     elif [ "$network" = "mainnet" ]; then
-        # Get latest snapshot filename based on RPC type
-        print_info "Fetching latest mainnet snapshot filename for $rpc_type..."
         local latest_url
         if [ "$rpc_type" = "geth" ]; then
             latest_url="${MAINNET_GETH_SNAPSHOT_LATEST_URL}"
         elif [ "$rpc_type" = "reth" ]; then
             latest_url="${MAINNET_RETH_SNAPSHOT_LATEST_URL}"
         else
-            print_error "Unsupported RPC type for snapshot: $rpc_type"
+            print_step_fail "Unsupported RPC type for snapshot: $rpc_type"
             exit 1
         fi
-        
         local latest_filename
         latest_filename=$(curl -s -f "$latest_url" | tr -d '\n\r' | xargs)
-        
         if [ -z "$latest_filename" ]; then
-            print_error "Failed to fetch latest snapshot filename from server"
+            print_step_fail "Failed to fetch latest snapshot filename"
             exit 1
         fi
-        
         snapshot_url="${MAINNET_SNAPSHOT_BASE_URL}/${latest_filename}"
         snapshot_file="$latest_filename"
-        
-        # Export filename for extract_snapshot to use
         export MAINNET_SNAPSHOT_FILE="$snapshot_file"
-        
-        print_info "Latest mainnet $rpc_type snapshot: $snapshot_file"
     else
-        print_error "Unsupported network for snapshot: $network"
+        print_step_fail "Unsupported network for snapshot: $network"
         exit 1
     fi
-    
+
     # Check if target directory already exists (data already extracted)
-    # Unified: both testnet and mainnet use nested structure (data/, config/)
     if [ -n "$target_dir" ] && [ -d "$target_dir" ] && [ -d "$target_dir/data" ] && [ -d "$target_dir/config" ]; then
-        print_success "Target directory already exists: $target_dir, skipping download"
+        print_step_ok "Snapshot data exists: $target_dir"
         return 0
     fi
-    
-    # Check if snapshot file already exists and verify MD5 against remote
-    if [ -f "$snapshot_file" ]; then
-        local file_size_h=$(du -h "$snapshot_file" 2>/dev/null | cut -f1 || echo "unknown")
-        print_info "Found existing snapshot: $snapshot_file ($file_size_h), verifying MD5..."
 
+    # Check if snapshot file already exists and verify MD5
+    if [ -f "$snapshot_file" ]; then
+        print_step "Verifying MD5 of $snapshot_file..."
         local remote_md5=$(curl -s -f "${snapshot_url}.md5" 2>/dev/null | awk '{print $1}' | tr -d '\r\n')
         if [ -n "$remote_md5" ]; then
             local local_md5
@@ -970,29 +840,27 @@ download_snapshot() {
                 local_md5=$(md5 -q "$snapshot_file")
             fi
             if [ "$local_md5" = "$remote_md5" ]; then
-                print_success "MD5 verified: $snapshot_file ($file_size_h)"
+                print_step_ok "MD5 verified: $snapshot_file"
                 return 0
             else
-                print_warning "MD5 mismatch: local=$local_md5 remote=$remote_md5"
-                print_info "Removing corrupted/outdated snapshot and re-downloading..."
+                print_step "MD5 mismatch, re-downloading..."
                 rm -f "$snapshot_file"
             fi
         else
-            print_warning "Remote MD5 not available, skipping verification"
-            print_success "Using existing snapshot file: $snapshot_file ($file_size_h)"
+            print_step_ok "Using existing snapshot: $snapshot_file"
             return 0
         fi
     fi
 
-    print_info "Downloading snapshot (this may take a while)..."
+    print_step "Downloading snapshot (this may take a while)..."
 
     if ! wget -c "$snapshot_url" -O "$snapshot_file"; then
-        print_error "Failed to download snapshot file"
+        print_step_fail "Failed to download snapshot"
         rm -f "$snapshot_file"
         exit 1
     fi
 
-    print_success "Snapshot downloaded: $snapshot_file"
+    print_step_ok "Snapshot downloaded: $snapshot_file"
 }
 
 # Extract snapshot
@@ -1001,79 +869,52 @@ extract_snapshot() {
     local network=$2
     local rpc_type=$3
     
-    # Determine snapshot file name based on network and RPC type
     local snapshot_file
     if [ "$network" = "testnet" ]; then
         if [ -n "$TESTNET_SNAPSHOT_FILE" ]; then
             snapshot_file="$TESTNET_SNAPSHOT_FILE"
         else
             snapshot_file=$(ls -t testnet-${rpc_type}*.tar.gz 2>/dev/null | head -1)
-            if [ -z "$snapshot_file" ]; then
-                snapshot_file="${rpc_type}-testnet.tar.gz"
-            else
-                print_info "Using existing snapshot file: $snapshot_file"
-            fi
+            [ -z "$snapshot_file" ] && snapshot_file="${rpc_type}-testnet.tar.gz"
         fi
     elif [ "$network" = "mainnet" ]; then
-        # Use the filename from download_snapshot if available, otherwise fallback to default
         if [ -n "$MAINNET_SNAPSHOT_FILE" ]; then
             snapshot_file="$MAINNET_SNAPSHOT_FILE"
         else
-            # Fallback: try to find any mainnet snapshot file in current directory
-            if [ "$rpc_type" = "geth" ]; then
-                snapshot_file=$(ls -t mainnet-geth*.tar.gz 2>/dev/null | head -1)
-            elif [ "$rpc_type" = "reth" ]; then
-                snapshot_file=$(ls -t mainnet-reth*.tar.gz 2>/dev/null | head -1)
-            else
-                print_error "Unsupported RPC type for snapshot: $rpc_type"
-                exit 1
-            fi
+            snapshot_file=$(ls -t mainnet-${rpc_type}*.tar.gz 2>/dev/null | head -1)
             if [ -z "$snapshot_file" ]; then
-                print_error "Mainnet $rpc_type snapshot file not found. Please run download_snapshot first."
+                print_step_fail "Snapshot file not found for $network $rpc_type"
                 exit 1
             fi
-            print_info "Using existing snapshot file: $snapshot_file"
         fi
     else
-        print_error "Unsupported network for snapshot: $network"
+        print_step_fail "Unsupported network: $network"
         exit 1
     fi
-    
-    # Priority 1: Check if target directory already exists with valid data (unified nested structure)
+
     if [ -d "$target_dir" ] && [ -d "$target_dir/data" ] && [ -d "$target_dir/config" ]; then
-        print_success "Found existing snapshot directory: $target_dir, skipping extraction"
+        print_step_ok "Snapshot directory exists: $target_dir"
         return 0
     fi
-    
-    # Priority 3: Extract from snapshot file (only if target directory doesn't exist)
-    # Check if snapshot file exists before extracting
+
     if [ ! -f "$snapshot_file" ]; then
-        print_error "Snapshot file not found: $snapshot_file"
-        print_info "Please run download_snapshot() first"
+        print_step_fail "Snapshot file not found: $snapshot_file"
         exit 1
     fi
-    
-    print_info "Extracting snapshot (this may take a while)..."
-    
+
+    print_step "Extracting snapshot (this may take a while)..."
+
     if ! tar -zxvf "$snapshot_file"; then
-        print_error "Failed to extract snapshot file"
+        print_step_fail "Failed to extract snapshot"
         exit 1
     fi
-    
-    # Unified: both testnet and mainnet expect target_dir with data/ and config/
-    if [ ! -d "$target_dir" ]; then
-        print_error "Snapshot extraction failed: $target_dir directory not found"
-        print_info "Standard snapshot tarball must extract to $target_dir/ with data/, config/, logs/ inside"
-        exit 1
-    fi
-    
+
     if [ ! -d "$target_dir/data" ] || [ ! -d "$target_dir/config" ]; then
-        print_error "Snapshot extraction failed: invalid structure in $target_dir"
-        print_info "Expected: $target_dir/data and $target_dir/config"
+        print_step_fail "Snapshot extraction failed: invalid structure in $target_dir"
         exit 1
     fi
-    
-    print_success "Snapshot extracted to $target_dir"
+
+    print_step_ok "Snapshot extracted to $target_dir"
 }
 
 init_geth() {
@@ -1088,8 +929,8 @@ init_geth() {
         genesis_file="$(pwd)/$genesis_file"
     fi
     
-    print_info "Initializing op-geth... (This may take a while)"
-    
+    print_step "Initializing op-geth..."
+
     if ! docker run --rm \
         -v "$data_dir:/data" \
         -v "$genesis_file:/genesis.json" \
@@ -1101,11 +942,11 @@ init_geth() {
         init \
         --state.scheme=hash \
         /genesis.json; then
-        print_error "Failed to initialize op-geth"
+        print_step_fail "Failed to initialize op-geth"
         exit 1
     fi
-    
-    print_success "op-geth initialized successfully"
+
+    print_step_ok "op-geth initialized"
 }
 
 init_reth() {
@@ -1120,9 +961,8 @@ init_reth() {
         genesis_file="$(pwd)/$genesis_file"
     fi
     
-    print_info "Initializing op-reth... (This may take a while)"
-    print_info "This is a one-time operation during setup"
-    
+    print_step "Initializing op-reth..."
+
     if ! docker run --rm \
         -v "$data_dir:/datadir" \
         -v "$genesis_file:/genesis.json" \
@@ -1130,122 +970,68 @@ init_reth() {
         init \
         --datadir /datadir \
         --chain /genesis.json; then
-        print_error "Failed to initialize op-reth"
+        print_step_fail "Failed to initialize op-reth"
         exit 1
     fi
-    
-    # Remove auto-generated reth.toml (we use custom config mounted as /config.toml)
+
     local auto_config="$data_dir/reth.toml"
-    if [ -f "$auto_config" ]; then
-        rm -f "$auto_config"
-        print_info "Removed auto-generated reth.toml (using custom config instead)"
-    fi
-    
-    print_success "op-reth initialized successfully"
+    [ -f "$auto_config" ] && rm -f "$auto_config"
+
+    print_step_ok "op-reth initialized"
 }
 
 initialize_node() {
-    print_info "Initializing X Layer RPC node..."
-    
     cd "$WORK_DIR" || exit 1
-    
+
     if [ "$SYNC_MODE" = "snapshot" ]; then
-        # Snapshot mode: download and extract snapshot
         download_snapshot "$TARGET_DIR" "$NETWORK_TYPE" "$RPC_TYPE"
         extract_snapshot "$TARGET_DIR" "$NETWORK_TYPE" "$RPC_TYPE"
-        
-        # Snapshot mode: same structure for testnet and mainnet, no special handling
-        print_success "Node initialization completed (snapshot mode - $NETWORK_TYPE $RPC_TYPE)"
-        print_info "Using snapshot data directory: $TARGET_DIR"
-        print_info "  - $TARGET_DIR/data/: Blockchain data (from snapshot)"
-        print_info "  - $TARGET_DIR/config/: Configuration files (from snapshot)"
-        print_info "  - $TARGET_DIR/logs/: Service logs (from snapshot)"
     else
-        # Genesis mode: download and extract genesis, then initialize
         download_genesis "$GENESIS_URL" "$NETWORK_TYPE"
         extract_genesis "$CONFIG_DIR" "$GENESIS_FILE"
-        
-        # Initialize execution client
+
         if [ "$RPC_TYPE" = "reth" ]; then
             init_reth "$DATA_DIR/op-reth" "$CONFIG_DIR/$GENESIS_FILE"
         else
             init_geth "$DATA_DIR/op-geth" "$CONFIG_DIR/$GENESIS_FILE"
         fi
-        
-        print_success "Node initialization completed"
-        print_info "Directory structure created at: ${TARGET_DIR}"
-        print_info "  - data/"
-        if [ "$RPC_TYPE" = "reth" ]; then
-            print_info "    - op-reth/: Reth blockchain data"
-        else
-            print_info "    - op-geth/: Geth blockchain data"
-        fi
-        print_info "    - op-node/: Op-node data"
-        print_info "  - config/: Configuration files"
-        print_info "  - logs/: Log files"
-        
+
         # Clean up genesis file after initialization (only for reth)
         if [ "$RPC_TYPE" = "reth" ]; then
-            echo ""
-            print_info "Cleaning up genesis file (no longer needed for reth startup)..."
-            
-            # Remove extracted genesis file
-            if [ -f "$CONFIG_DIR/$GENESIS_FILE" ]; then
-                rm -f "$CONFIG_DIR/$GENESIS_FILE"
-                print_success "Removed $GENESIS_FILE (6.8GB freed)"
-            fi
-            
-            # Remove genesis tarball in standalone mode
+            print_step "Cleaning up genesis file..."
+            [ -f "$CONFIG_DIR/$GENESIS_FILE" ] && rm -f "$CONFIG_DIR/$GENESIS_FILE"
             local genesis_tarball="genesis-${NETWORK_TYPE}.tar.gz"
-            if [ "$IN_REPO" = false ] && [ -f "$genesis_tarball" ]; then
-                rm -f "$genesis_tarball"
-                print_info "Removed genesis tarball"
-            elif [ "$IN_REPO" = true ] && [ -f "$genesis_tarball" ]; then
-                print_info "Kept genesis tarball for repository mode: $genesis_tarball"
-            fi
-            
-            print_success "Optimization enabled: Fast startup mode"
-            print_info "Subsequent restarts will use built-in 'xlayer-${NETWORK_TYPE}' chain for <1s startup"
-            print_info "Genesis file cleaned up - 6.8GB disk space saved!"
+            [ "$IN_REPO" = false ] && [ -f "$genesis_tarball" ] && rm -f "$genesis_tarball"
+            print_step_ok "Genesis cleaned up (6.8GB freed)"
         fi
     fi
 }
 
 # Generate docker-compose.yml based on sync mode
 generate_docker_compose() {
-    print_info "Generating docker-compose.yml..."
-    
     cd "$WORK_DIR" || exit 1
-
-    # Unified: use standard docker-compose.yml for genesis and snapshot (testnet and mainnet)
     if ! get_file_from_source "docker-compose.yml"; then
-        print_error "Failed to get docker-compose.yml"
+        print_step_fail "Failed to get docker-compose.yml"
         exit 1
     fi
-    if [ "$SYNC_MODE" = "snapshot" ]; then
-        print_success "docker-compose.yml generated (snapshot mode - $NETWORK_TYPE)"
-    else
-        print_success "docker-compose.yml generated (genesis mode)"
-    fi
+    print_step_ok "docker-compose.yml ready ($SYNC_MODE mode)"
 }
 
 start_services() {
-    print_info "Starting Docker services..."
-    
     cd "$WORK_DIR" || exit 1
-    
+
     if [ ! -f "./Makefile" ]; then
-        print_error "Makefile not found in $WORK_DIR"
+        print_step_fail "Makefile not found in $WORK_DIR"
         exit 1
     fi
-    
-    print_info "Running 'make run'..."
+
+    print_step "Starting Docker services..."
     if ! make run; then
-        print_error "Failed to start services"
+        print_step_fail "Failed to start services"
         exit 1
     fi
-    
-    print_success "Services started successfully"
+
+    print_step_ok "Services started successfully"
 }
 
 main() {
@@ -1285,48 +1071,30 @@ main() {
     # This also calls check_existing_data and sets SKIP_INIT
     get_user_input
     
-    # Check existing configurations after network type is determined
-    echo ""
     check_existing_configurations
-    
-    # Generate docker-compose.yml based on sync mode
+
     generate_docker_compose
-    
-    # Conditional initialization
+
     if [ "$SKIP_INIT" -eq 0 ]; then
-        # Full initialization process
-        print_info "Performing full initialization..."
         if [ "$SYNC_MODE" = "snapshot" ]; then
-            # Snapshot mode (testnet and mainnet): same flow - download/extract, set dirs, generate .env
             initialize_node
-            generate_config_files  # Set CONFIG_DIR, DATA_DIR, LOGS_DIR (no dir creation)
+            generate_config_files
             load_network_config "$NETWORK_TYPE"
             generate_env_file
         else
-            # Genesis mode: download config files and initialize
             download_config_files
             generate_config_files
             initialize_node
         fi
         start_services
     else
-        # Skip initialization, only generate .env
-        print_info "Skipping initialization, updating configuration only..."
-        
-        # Ensure basic directory structure exists (only for genesis mode)
+        print_step "Updating configuration..."
         if [ "$SYNC_MODE" != "snapshot" ]; then
             mkdir -p "$TARGET_DIR/config" "$TARGET_DIR/logs" "$TARGET_DIR/data"
         fi
-        
-        # Load network config for .env generation
         load_network_config "$NETWORK_TYPE"
-        
-        # Generate .env file
         generate_env_file
-        
-        print_success "Configuration updated"
-        
-        # Auto-start services after configuration update
+        print_step_ok "Configuration updated"
         start_services
     fi
     
