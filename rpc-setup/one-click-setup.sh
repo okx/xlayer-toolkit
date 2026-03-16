@@ -408,11 +408,11 @@ countdown_prompt() {
     local countdown=$timeout
     while [ $countdown -gt 0 ]; do
         local ticks=0
-        while [ $ticks -lt 10 ]; do
+        while [ $ticks -lt 4 ]; do
             local idx=$(( ticks % ${#SPINNER_FRAMES[@]} ))
             printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s ${C_DIM}(%ds)${C_RESET}" "$prompt_text" "$countdown"
             # Check if user pressed a key (non-blocking)
-            if read -r -t 0.1 -n 1 input </dev/tty 2>/dev/null; then
+            if read -r -t 0.25 -n 1 input </dev/tty 2>/dev/null; then
                 # User started typing, move to input mode
                 printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}%s" "$prompt_text" "$input"
                 # Read the rest of the line
