@@ -560,20 +560,9 @@ get_user_input() {
         fi
     fi
 
-    # L1 URLs - recommended values for display
-    local recommend_l1_rpc recommend_l1_beacon
-    if [ "$NETWORK_TYPE" = "mainnet" ]; then
-        recommend_l1_rpc="https://quick-silent-model.quiknode.pro/a829478f4d63cf14268c75661779e83cd606d675/"
-        recommend_l1_beacon="https://quick-silent-model.quiknode.pro/a829478f4d63cf14268c75661779e83cd606d675/"
-    else
-        recommend_l1_rpc="https://api.zan.top/eth-sepolia"
-        recommend_l1_beacon="https://sepolia-beacon.drpc.org"
-    fi
-
     if [ "$QUICK_START" = true ]; then
         # L1 RPC URL with visible countdown
         echo ""
-        print_info "L1 RPC URL (recommended: $recommend_l1_rpc)"
         local countdown=5 input=""
         while [ $countdown -gt 0 ]; do
             printf "\r\033[0;34m  Enter your L1 RPC URL(recommended) in %ds: \033[0m" "$countdown"
@@ -583,16 +572,10 @@ get_user_input() {
             countdown=$((countdown - 1))
         done
         printf "\n"
-        if [ -z "$input" ]; then
-            print_warning "No L1 RPC URL provided, using recommended value"
-            L1_RPC_URL="$recommend_l1_rpc"
-        else
-            L1_RPC_URL="$input"
-        fi
+        L1_RPC_URL="$input"
         print_success "L1 RPC URL: $L1_RPC_URL"
 
         # L1 Beacon URL with visible countdown
-        print_info "L1 Beacon URL (recommended: $recommend_l1_beacon)"
         countdown=5 input=""
         while [ $countdown -gt 0 ]; do
             printf "\r\033[0;34m  Enter your L1 Beacon URL(recommended) in %ds: \033[0m" "$countdown"
@@ -602,12 +585,7 @@ get_user_input() {
             countdown=$((countdown - 1))
         done
         printf "\n"
-        if [ -z "$input" ]; then
-            print_warning "No L1 Beacon URL provided, using recommended value"
-            L1_BEACON_URL="$recommend_l1_beacon"
-        else
-            L1_BEACON_URL="$input"
-        fi
+        L1_BEACON_URL="$input"
         print_success "L1 Beacon URL: $L1_BEACON_URL"
     else
         while true; do
