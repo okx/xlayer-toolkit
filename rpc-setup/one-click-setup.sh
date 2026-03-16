@@ -402,17 +402,30 @@ countdown_prompt() {
     local prompt_text=$1
     local var_name=$2
     local timeout=${3:-5}
-    local countdown=$timeout
     local input=""
 
-    while [ $countdown -gt 0 ]; do
-        SPINNER_IDX=$(( (SPINNER_IDX + 1) % ${#SPINNER_FRAMES[@]} ))
-        printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$SPINNER_IDX]} %s: ${C_DIM}(%ds)${C_RESET} " "$prompt_text" "$countdown"
-        if read -r -t 1 input </dev/tty 2>/dev/null || read -r -t 1 input; then
-            break
-        fi
-        countdown=$((countdown - 1))
-    done
+    # Background spinner with countdown
+    (
+        local countdown=$timeout
+        while [ $countdown -gt 0 ]; do
+            local ticks=0
+            while [ $ticks -lt 10 ]; do
+                local idx=$(( ticks % ${#SPINNER_FRAMES[@]} ))
+                printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s: ${C_DIM}(%ds)${C_RESET} " "$prompt_text" "$countdown" > /dev/tty 2>/dev/null
+                sleep 0.1
+                ticks=$((ticks + 1))
+            done
+            countdown=$((countdown - 1))
+        done
+    ) &
+    local spinner_pid=$!
+
+    # Foreground read - user can type freely during countdown
+    read -r -t "$timeout" input </dev/tty 2>/dev/null || read -r -t "$timeout" input || true
+
+    # Stop spinner
+    kill "$spinner_pid" 2>/dev/null
+    wait "$spinner_pid" 2>/dev/null
     printf "\r\033[K"
     eval "$var_name=\"\$input\""
 }
