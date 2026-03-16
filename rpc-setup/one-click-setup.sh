@@ -115,7 +115,7 @@ run_with_spinner() {
     while kill -0 "$pid" 2>/dev/null; do
         i=$(( (i + 1) % ${#SPINNER_FRAMES[@]} ))
         printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s${C_RESET}" "$msg"
-        sleep 0.05
+        sleep 0.25
     done
     wait "$pid"
     return $?
