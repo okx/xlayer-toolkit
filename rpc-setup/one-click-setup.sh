@@ -276,7 +276,7 @@ check_required_tools() {
 prompt_quick_start() {
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    print_info "Launch X Layer Mainnet RPC (reth) with default settings?"
+    print_info "Launch X Layer Mainnet RPC ($RPC_TYPE) with default settings?"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     print_info "Press 'n' for custom setup, or wait 5s to auto-start mainnet..."
@@ -301,7 +301,7 @@ prompt_quick_start() {
             ;;
         *)
             QUICK_START=true
-            print_success "Quick start: X Layer Mainnet RPC (reth)"
+            print_success "Quick start: X Layer Mainnet RPC ($RPC_TYPE)"
             NETWORK_TYPE="mainnet"
             SYNC_MODE="${DEFAULT_SYNC_MODE:-snapshot}"
             ;;
@@ -570,19 +570,55 @@ get_user_input() {
         fi
     fi
 
-    # L1 URLs (use defaults)
-    L1_RPC_URL="https://api.zan.top/eth-mainnet"
-    L1_BEACON_URL="https://eth-beacon-chain.drpc.org"
-    print_info "L1 RPC URL: $L1_RPC_URL"
-    print_info "L1 Beacon URL: $L1_BEACON_URL"
+    # L1 URLs
+    local default_l1_rpc default_l1_beacon
+    if [ "$NETWORK_TYPE" = "mainnet" ]; then
+        default_l1_rpc="https://api.zan.top/eth-mainnet"
+        default_l1_beacon="https://eth-beacon-chain.drpc.org"
+    else
+        default_l1_rpc="https://api.zan.top/eth-sepolia"
+        default_l1_beacon="https://sepolia-beacon.drpc.org"
+    fi
+
+    if [ "$QUICK_START" = true ]; then
+        L1_RPC_URL="$default_l1_rpc"
+        L1_BEACON_URL="$default_l1_beacon"
+        print_info "L1 RPC URL: $L1_RPC_URL"
+        print_info "L1 Beacon URL: $L1_BEACON_URL"
+    else
+        while true; do
+            print_prompt "3. L1 RPC URL [default: $default_l1_rpc]: "
+            if ! read -r L1_RPC_URL </dev/tty 2>/dev/null && ! read -r L1_RPC_URL; then
+                print_error "Failed to read input"
+                exit 1
+            fi
+            L1_RPC_URL="${L1_RPC_URL:-$default_l1_rpc}"
+            validate_url "$L1_RPC_URL" && break
+        done
+
+        while true; do
+            print_prompt "4. L1 Beacon URL [default: $default_l1_beacon]: "
+            if ! read -r L1_BEACON_URL </dev/tty 2>/dev/null && ! read -r L1_BEACON_URL; then
+                print_error "Failed to read input"
+                exit 1
+            fi
+            L1_BEACON_URL="${L1_BEACON_URL:-$default_l1_beacon}"
+            validate_url "$L1_BEACON_URL" && break
+        done
+    fi
 
     # Check existing data directory
     echo ""
-    # Temporarily disable set -e to capture return value safely
-    set +e
-    check_existing_data "$TARGET_DIR"
-    SKIP_INIT=$?  # Save return value: 0=initialize, 1=skip
-    set -e
+    if [ "$QUICK_START" = true ] && [ -d "$TARGET_DIR" ] && [ -d "$TARGET_DIR/data" ] && [ -d "$TARGET_DIR/config" ] && [ "$(ls -A "$TARGET_DIR/data" 2>/dev/null)" ]; then
+        print_success "Quick start: keeping existing data in $TARGET_DIR"
+        SKIP_INIT=1
+    else
+        # Temporarily disable set -e to capture return value safely
+        set +e
+        check_existing_data "$TARGET_DIR"
+        SKIP_INIT=$?  # Save return value: 0=initialize, 1=skip
+        set -e
+    fi
 
     if [ "$QUICK_START" = true ]; then
         # Quick start: use all default ports
@@ -923,7 +959,12 @@ download_snapshot() {
 
         local remote_md5=$(curl -s -f "${snapshot_url}.md5" 2>/dev/null | awk '{print $1}' | tr -d '\r\n')
         if [ -n "$remote_md5" ]; then
-            local local_md5=$(md5sum "$snapshot_file" 2>/dev/null | awk '{print $1}' || md5 -q "$snapshot_file" 2>/dev/null)
+            local local_md5
+            if command -v md5sum &>/dev/null; then
+                local_md5=$(md5sum "$snapshot_file" | awk '{print $1}')
+            else
+                local_md5=$(md5 -q "$snapshot_file")
+            fi
             if [ "$local_md5" = "$remote_md5" ]; then
                 print_success "MD5 verified: $snapshot_file ($file_size_h)"
                 return 0
