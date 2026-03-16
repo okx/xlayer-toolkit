@@ -916,21 +916,37 @@ download_snapshot() {
         return 0
     fi
     
-    # Check if snapshot file already exists
+    # Check if snapshot file already exists and verify MD5 against remote
     if [ -f "$snapshot_file" ]; then
-        local file_size=$(du -h "$snapshot_file" 2>/dev/null | cut -f1 || echo "unknown")
-        print_success "Using existing snapshot file: $snapshot_file ($file_size)"
-        return 0
+        local file_size_h=$(du -h "$snapshot_file" 2>/dev/null | cut -f1 || echo "unknown")
+        print_info "Found existing snapshot: $snapshot_file ($file_size_h), verifying MD5..."
+
+        local remote_md5=$(curl -s -f "${snapshot_url}.md5" 2>/dev/null | awk '{print $1}' | tr -d '\r\n')
+        if [ -n "$remote_md5" ]; then
+            local local_md5=$(md5sum "$snapshot_file" 2>/dev/null | awk '{print $1}' || md5 -q "$snapshot_file" 2>/dev/null)
+            if [ "$local_md5" = "$remote_md5" ]; then
+                print_success "MD5 verified: $snapshot_file ($file_size_h)"
+                return 0
+            else
+                print_warning "MD5 mismatch: local=$local_md5 remote=$remote_md5"
+                print_info "Removing corrupted/outdated snapshot and re-downloading..."
+                rm -f "$snapshot_file"
+            fi
+        else
+            print_warning "Remote MD5 not available, skipping verification"
+            print_success "Using existing snapshot file: $snapshot_file ($file_size_h)"
+            return 0
+        fi
     fi
-    
+
     print_info "Downloading snapshot (this may take a while)..."
-    
+
     if ! wget -c "$snapshot_url" -O "$snapshot_file"; then
         print_error "Failed to download snapshot file"
         rm -f "$snapshot_file"
         exit 1
     fi
-    
+
     print_success "Snapshot downloaded: $snapshot_file"
 }
 
