@@ -152,7 +152,7 @@ download_with_progress() {
             local bar=$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' "$empty" '' | tr ' ' '-')
             local size_mb=$(( current_size / 1048576 ))
             local total_mb=$(( total_size / 1048576 ))
-            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s ${C_BOLD}%s${C_RESET} ${C_DIM}%d%%  %dMB/%dMB${C_RESET}" "$msg" "$bar" "$pct" "$size_mb" "$total_mb"
+            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s ${C_BOLD}[%s]${C_RESET} ${C_DIM}%d%%  %dMB/%dMB${C_RESET}" "$msg" "$bar" "$pct" "$size_mb" "$total_mb"
         else
             local size_mb=0
             if [ "$current_size" -gt 0 ] 2>/dev/null; then
@@ -169,20 +169,59 @@ download_with_progress() {
     return $ret
 }
 
-# Extract with progress (hides raw tar output, shows spinner with file count)
-# Usage: extract_with_progress "message" tar_args...
+# Extract with progress bar (monitors target directory size growth)
+# Usage: extract_with_progress "message" archive_file tar_args...
 extract_with_progress() {
     local msg=$1
-    shift
+    local archive=$2
+    shift 2
 
-    tar "$@" &>/dev/null &
+    # Estimate uncompressed size (~3x compressed size as heuristic)
+    local archive_size=$(stat -f%z "$archive" 2>/dev/null || stat -c%s "$archive" 2>/dev/null || echo 0)
+    local est_total=$(( archive_size * 3 ))
+
+    # Determine target directory for size monitoring
+    local target_dir="."
+    local next_is_dir=false
+    for arg in "$@"; do
+        if [ "$next_is_dir" = true ]; then
+            target_dir="$arg"
+            break
+        fi
+        [ "$arg" = "-C" ] && next_is_dir=true
+    done
+
+    local base_size=0
+    if [ -d "$target_dir" ]; then
+        base_size=$(du -sb "$target_dir" 2>/dev/null | awk '{print $1}' || du -sk "$target_dir" 2>/dev/null | awk '{print $1 * 1024}' || echo 0)
+    fi
+
+    tar "$@" "$archive" &>/dev/null &
     local pid=$!
     local i=0
+    local bar_width=30
 
     while kill -0 "$pid" 2>/dev/null; do
         i=$(( (i + 1) % ${#SPINNER_FRAMES[@]} ))
-        printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s${C_RESET}" "$msg"
-        sleep 0.1
+        local current_size=0
+        if [ -d "$target_dir" ]; then
+            current_size=$(du -sb "$target_dir" 2>/dev/null | awk '{print $1}' || du -sk "$target_dir" 2>/dev/null | awk '{print $1 * 1024}' || echo 0)
+            current_size=$(( current_size - base_size ))
+            [ "$current_size" -lt 0 ] 2>/dev/null && current_size=0
+        fi
+
+        if [ "$est_total" -gt 0 ] 2>/dev/null; then
+            local pct=$(( current_size * 100 / est_total ))
+            [ $pct -gt 99 ] && pct=99
+            local filled=$(( pct * bar_width / 100 ))
+            local empty=$(( bar_width - filled ))
+            local bar=$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' "$empty" '' | tr ' ' '-')
+            local size_mb=$(( current_size / 1048576 ))
+            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s ${C_BOLD}[%s]${C_RESET} ${C_DIM}%d%%  %dMB${C_RESET}" "$msg" "$bar" "$pct" "$size_mb"
+        else
+            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s${C_RESET}" "$msg"
+        fi
+        sleep 0.5
     done
 
     wait "$pid"
@@ -373,7 +412,7 @@ countdown_prompt() {
 
 # Quick start prompt with countdown
 prompt_quick_start() {
-    print_section "Launch X Layer Mainnet RPC ($RPC_TYPE)?"
+    print_section "Launch X Layer Mainnet RPC ($RPC_TYPE)"
     echo ""
 
     local choice=""
@@ -841,7 +880,7 @@ extract_genesis() {
     # Get genesis filename (consistent with download_genesis)
     local genesis_file="genesis-${NETWORK_TYPE}.tar.gz"
     
-    if ! extract_with_progress "Extracting genesis file..." -xzf "$genesis_file" -C "$target_dir/"; then
+    if ! extract_with_progress "Extracting genesis file..." "$genesis_file" -xzf -C "$target_dir/"; then
         print_step_fail "Failed to extract genesis file"
         rm -f "$genesis_file"
         exit 1
@@ -998,7 +1037,7 @@ extract_snapshot() {
         exit 1
     fi
 
-    if ! extract_with_progress "Extracting snapshot..." -zxf "$snapshot_file"; then
+    if ! extract_with_progress "Extracting snapshot..." "$snapshot_file" -zxf; then
         print_step_fail "Failed to extract snapshot"
         exit 1
     fi
