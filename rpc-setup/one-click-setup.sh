@@ -121,6 +121,76 @@ run_with_spinner() {
     return $?
 }
 
+# Download with progress bar (hides raw wget output)
+# Usage: download_with_progress "message" url output_file
+download_with_progress() {
+    local msg=$1
+    local url=$2
+    local output=$3
+
+    # Get remote file size
+    local total_size=$(curl -sI "$url" | grep -i content-length | tail -1 | tr -d '\r' | awk '{print $2}')
+
+    # Start wget in background, suppress output
+    wget -c -q "$url" -O "$output" 2>/dev/null &
+    local pid=$!
+    local i=0
+    local bar_width=30
+
+    while kill -0 "$pid" 2>/dev/null; do
+        i=$(( (i + 1) % ${#SPINNER_FRAMES[@]} ))
+        local current_size=0
+        if [ -f "$output" ]; then
+            current_size=$(stat -f%z "$output" 2>/dev/null || stat -c%s "$output" 2>/dev/null || echo 0)
+        fi
+
+        if [ -n "$total_size" ] && [ "$total_size" -gt 0 ] 2>/dev/null; then
+            local pct=$(( current_size * 100 / total_size ))
+            [ $pct -gt 100 ] && pct=100
+            local filled=$(( pct * bar_width / 100 ))
+            local empty=$(( bar_width - filled ))
+            local bar=$(printf '%*s' "$filled" '' | tr ' ' '█')$(printf '%*s' "$empty" '' | tr ' ' '░')
+            local size_mb=$(( current_size / 1048576 ))
+            local total_mb=$(( total_size / 1048576 ))
+            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s ${C_BOLD}%s${C_RESET} ${C_DIM}%d%%  %dMB/%dMB${C_RESET}" "$msg" "$bar" "$pct" "$size_mb" "$total_mb"
+        else
+            local size_mb=0
+            if [ "$current_size" -gt 0 ] 2>/dev/null; then
+                size_mb=$(( current_size / 1048576 ))
+            fi
+            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s ${C_DIM}%dMB downloaded${C_RESET}" "$msg" "$size_mb"
+        fi
+        sleep 0.3
+    done
+
+    wait "$pid"
+    local ret=$?
+    printf "\r\033[K"
+    return $ret
+}
+
+# Extract with progress (hides raw tar output, shows spinner with file count)
+# Usage: extract_with_progress "message" tar_args...
+extract_with_progress() {
+    local msg=$1
+    shift
+
+    tar "$@" &>/dev/null &
+    local pid=$!
+    local i=0
+
+    while kill -0 "$pid" 2>/dev/null; do
+        i=$(( (i + 1) % ${#SPINNER_FRAMES[@]} ))
+        printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s${C_RESET}" "$msg"
+        sleep 0.1
+    done
+
+    wait "$pid"
+    local ret=$?
+    printf "\r\033[K"
+    return $ret
+}
+
 # Section header
 print_section() {
     echo ""
@@ -756,8 +826,7 @@ download_genesis() {
         return 0
     fi
 
-    print_step "Downloading genesis file..."
-    if ! wget -c "$genesis_url" -O "$genesis_file"; then
+    if ! download_with_progress "Downloading genesis..." "$genesis_url" "$genesis_file"; then
         print_step_fail "Failed to download genesis file"
         rm -f "$genesis_file"
         exit 1
@@ -772,9 +841,7 @@ extract_genesis() {
     # Get genesis filename (consistent with download_genesis)
     local genesis_file="genesis-${NETWORK_TYPE}.tar.gz"
     
-    print_step "Extracting genesis file..."
-
-    if ! tar -xzf "$genesis_file" -C "$target_dir/"; then
+    if ! extract_with_progress "Extracting genesis file..." -xzf "$genesis_file" -C "$target_dir/"; then
         print_step_fail "Failed to extract genesis file"
         rm -f "$genesis_file"
         exit 1
@@ -883,9 +950,7 @@ download_snapshot() {
         fi
     fi
 
-    print_step "Downloading snapshot (this may take a while)..."
-
-    if ! wget -c "$snapshot_url" -O "$snapshot_file"; then
+    if ! download_with_progress "Downloading snapshot..." "$snapshot_url" "$snapshot_file"; then
         print_step_fail "Failed to download snapshot"
         rm -f "$snapshot_file"
         exit 1
@@ -933,9 +998,7 @@ extract_snapshot() {
         exit 1
     fi
 
-    print_step "Extracting snapshot (this may take a while)..."
-
-    if ! tar -zxvf "$snapshot_file"; then
+    if ! extract_with_progress "Extracting snapshot..." -zxf "$snapshot_file"; then
         print_step_fail "Failed to extract snapshot"
         exit 1
     fi
