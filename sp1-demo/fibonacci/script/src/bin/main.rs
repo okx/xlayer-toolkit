@@ -14,7 +14,7 @@ use alloy_sol_types::SolType;
 use clap::Parser;
 use fibonacci_lib::PublicValuesStruct;
 use sp1_sdk::{
-    blocking::{ProveRequest, Prover, ProverClient},
+    blocking::{ProveRequest, Prover, ProverClient, EnvProver},
     include_elf, Elf, ProvingKey, SP1Stdin,
 };
 
@@ -49,7 +49,11 @@ fn main() {
     }
 
     // Setup the prover client.
-    let client = ProverClient::from_env();
+    let client = if args.execute {
+        EnvProver::Light(ProverClient::builder().light().build())
+    } else {
+        ProverClient::from_env()
+    };
 
     // Setup the inputs.
     let mut stdin = SP1Stdin::new();

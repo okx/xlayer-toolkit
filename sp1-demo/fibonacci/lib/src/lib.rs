@@ -1,3 +1,4 @@
+use std::hash::{BuildHasher, Hasher, RandomState};
 use alloy_sol_types::sol;
 
 sol! {
@@ -18,6 +19,15 @@ pub fn fibonacci(n: u64) -> (u64, u64) {
 }
 
 pub async fn fibonacci_async(n: u64) -> (u64, u64) {
+
+    let hasher = RandomState::new().build_hasher();
+
+    // Get the seed
+    let r = hasher.finish();
+
+    println!("rand_state: {}", r);
+
+
     let mut a = 0u64;
     let mut b = 1u64;
     for _ in 0..n {
