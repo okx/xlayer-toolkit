@@ -404,30 +404,33 @@ countdown_prompt() {
     local timeout=${3:-5}
     local input=""
 
-    # Background spinner with countdown
-    (
-        local countdown=$timeout
-        while [ $countdown -gt 0 ]; do
-            local ticks=0
-            while [ $ticks -lt 10 ]; do
-                local idx=$(( ticks % ${#SPINNER_FRAMES[@]} ))
-                printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s: ${C_DIM}(%ds)${C_RESET} " "$prompt_text" "$countdown" > /dev/tty 2>/dev/null
-                sleep 0.1
-                ticks=$((ticks + 1))
-            done
-            countdown=$((countdown - 1))
+    # Countdown animation on current line, then clear and show input prompt below
+    local countdown=$timeout
+    while [ $countdown -gt 0 ]; do
+        local ticks=0
+        while [ $ticks -lt 10 ]; do
+            local idx=$(( ticks % ${#SPINNER_FRAMES[@]} ))
+            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s ${C_DIM}(%ds)${C_RESET}" "$prompt_text" "$countdown"
+            # Check if user pressed a key (non-blocking)
+            if read -r -t 0.1 -n 1 input </dev/tty 2>/dev/null; then
+                # User started typing, move to input mode
+                printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}%s" "$prompt_text" "$input"
+                # Read the rest of the line
+                local rest=""
+                read -r rest </dev/tty 2>/dev/null || read -r rest
+                input="${input}${rest}"
+                printf "\r\033[K"
+                eval "$var_name=\"\$input\""
+                return 0
+            fi
+            ticks=$((ticks + 1))
         done
-    ) &
-    local spinner_pid=$!
+        countdown=$((countdown - 1))
+    done
 
-    # Foreground read - user can type freely during countdown
-    read -r -t "$timeout" input </dev/tty 2>/dev/null || read -r -t "$timeout" input || true
-
-    # Stop spinner
-    kill "$spinner_pid" 2>/dev/null
-    wait "$spinner_pid" 2>/dev/null
+    # Timeout - no input
     printf "\r\033[K"
-    eval "$var_name=\"\$input\""
+    eval "$var_name=''"
 }
 
 # Quick start prompt with countdown
