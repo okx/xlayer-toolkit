@@ -563,8 +563,8 @@ get_user_input() {
     # L1 URLs
     local default_l1_rpc default_l1_beacon
     if [ "$NETWORK_TYPE" = "mainnet" ]; then
-        default_l1_rpc="https://api.zan.top/eth-mainnet"
-        default_l1_beacon="https://eth-beacon-chain.drpc.org"
+        default_l1_rpc="https://www.okx.com/nodeone/eth/mainnet/v1/rpc/637f042f38a0a64dd59c954b8e6bd63de26d3e2e"
+        default_l1_beacon="https://quick-silent-model.quiknode.pro/a829478f4d63cf14268c75661779e83cd606d675/"
     else
         default_l1_rpc="https://api.zan.top/eth-sepolia"
         default_l1_beacon="https://sepolia-beacon.drpc.org"
