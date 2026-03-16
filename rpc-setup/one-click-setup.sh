@@ -50,6 +50,9 @@ load_configuration() {
     print_success "Configuration loaded successfully"
 }
 
+# Quick start flag
+QUICK_START=false
+
 # User input variables (runtime values, not in config file)
 NETWORK_TYPE=""
 RPC_TYPE=""
@@ -83,13 +86,13 @@ show_usage() {
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  --rpc_type=<geth|reth>   RPC client type (default: geth)"
+    echo "  --rpc_type=<geth|reth>   RPC client type (default: reth)"
     echo "  --help                   Show this help message"
     echo ""
     echo "Note: Network type (mainnet/testnet) will be prompted during setup"
     echo ""
     echo "Examples:"
-    echo "  $0                  # Use default geth (network type will be prompted)"
+    echo "  $0                  # Use default reth (network type will be prompted)"
     echo "  $0 --rpc_type=reth  # Use reth (network type will be prompted)"
 }
 
@@ -113,7 +116,7 @@ parse_arguments() {
     done
     
     # Set default for RPC_TYPE only
-    RPC_TYPE="${RPC_TYPE:-geth}"
+    RPC_TYPE="${RPC_TYPE:-reth}"
     
     # Validate RPC_TYPE if provided
     if ! validate_rpc_type "$RPC_TYPE"; then
@@ -267,6 +270,42 @@ check_required_tools() {
         print_warning "Optional tools not found: ${missing_optional[*]}"
         print_info "The script will work but some features may be slower"
     fi
+}
+
+# Quick start prompt with countdown
+prompt_quick_start() {
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    print_info "Launch X Layer Mainnet RPC (reth) with default settings?"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    print_info "Press 'n' for custom setup, or wait 5s to auto-start mainnet..."
+    echo ""
+
+    local countdown=5
+    local choice=""
+    while [ $countdown -gt 0 ]; do
+        printf "\r\033[0;34m  Auto-starting in %ds... [Y/n]: \033[0m" "$countdown"
+        if read -r -t 1 choice </dev/tty 2>/dev/null || read -r -t 1 choice; then
+            break
+        fi
+        countdown=$((countdown - 1))
+    done
+    printf "\n"
+
+    # Default to yes (quick start) on timeout or empty/Y/y input
+    case "$choice" in
+        [nN]|[nN][oO])
+            QUICK_START=false
+            print_info "Entering custom setup mode..."
+            ;;
+        *)
+            QUICK_START=true
+            print_success "Quick start: X Layer Mainnet RPC (reth)"
+            NETWORK_TYPE="mainnet"
+            SYNC_MODE="${DEFAULT_SYNC_MODE:-snapshot}"
+            ;;
+    esac
 }
 
 check_system_requirements() {
@@ -502,49 +541,58 @@ check_existing_data() {
 get_user_input() {
     print_info "Please provide the following information:"
     echo ""
-    
-    # Step 1: Network type (interactive)
-    NETWORK_TYPE=$(prompt_input "1. Network type (testnet/mainnet) [default: $DEFAULT_NETWORK]: " "$DEFAULT_NETWORK" "validate_network")
-    
+
+    if [ "$QUICK_START" = true ]; then
+        # Quick start: network and sync mode already set, skip to L1 URLs
+        print_info "Network: $NETWORK_TYPE | Sync: $SYNC_MODE | RPC: $RPC_TYPE"
+    else
+        # Step 1: Network type (interactive)
+        NETWORK_TYPE=$(prompt_input "1. Network type (testnet/mainnet) [default: $DEFAULT_NETWORK]: " "$DEFAULT_NETWORK" "validate_network")
+
+        # Step 1.5: Sync mode (interactive)
+        SYNC_MODE=$(prompt_input "2. Sync mode (genesis/snapshot) [default: $DEFAULT_SYNC_MODE]: " "$DEFAULT_SYNC_MODE" "validate_sync_mode")
+    fi
+
     # Set target directory
     TARGET_DIR="${NETWORK_TYPE}-${RPC_TYPE}"
-    
-    # Step 1.5: Sync mode (interactive)
-    SYNC_MODE=$(prompt_input "2. Sync mode (genesis/snapshot) [default: $DEFAULT_SYNC_MODE]: " "$DEFAULT_SYNC_MODE" "validate_sync_mode")
-    
+
     # geth + testnet + genesis is temporarily disabled; use snapshot for this combination
     if [ "$RPC_TYPE" = "geth" ] && [ "$NETWORK_TYPE" = "testnet" ] && [ "$SYNC_MODE" = "genesis" ]; then
         print_error "geth + testnet + genesis is temporarily disabled"
         print_info "Please use 'snapshot' sync mode for geth + testnet, or choose another network/RPC combination"
         exit 1
     fi
-    
+
     # Validate snapshot support
     if [ "$SYNC_MODE" = "snapshot" ]; then
         if ! validate_snapshot_support "$RPC_TYPE" "$NETWORK_TYPE"; then
             exit 1
         fi
     fi
-    
-    # Step 3-4: L1 URLs (required)
+
+    # Step 3-4: L1 URLs
+    local default_l1_rpc="https://api.zan.top/eth-mainnet"
     while true; do
-        print_prompt "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
+        print_prompt "3. L1 RPC URL [default: $default_l1_rpc]: "
         if ! read -r L1_RPC_URL </dev/tty 2>/dev/null && ! read -r L1_RPC_URL; then
             print_error "Failed to read input"
             exit 1
         fi
-        [ -n "$L1_RPC_URL" ] && validate_url "$L1_RPC_URL" && break
+        L1_RPC_URL="${L1_RPC_URL:-$default_l1_rpc}"
+        validate_url "$L1_RPC_URL" && break
     done
-    
+
+    local default_l1_beacon="https://eth-beacon-chain.drpc.org"
     while true; do
-        print_prompt "4. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
+        print_prompt "4. L1 Beacon URL [default: $default_l1_beacon]: "
         if ! read -r L1_BEACON_URL </dev/tty 2>/dev/null && ! read -r L1_BEACON_URL; then
             print_error "Failed to read input"
             exit 1
         fi
-        [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
+        L1_BEACON_URL="${L1_BEACON_URL:-$default_l1_beacon}"
+        validate_url "$L1_BEACON_URL" && break
     done
-    
+
     # Check existing data directory
     echo ""
     # Temporarily disable set -e to capture return value safely
@@ -552,30 +600,43 @@ get_user_input() {
     check_existing_data "$TARGET_DIR"
     SKIP_INIT=$?  # Save return value: 0=initialize, 1=skip
     set -e
-    
-    # Optional configurations (always collect, regardless of SKIP_INIT)
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    print_info "Port Configuration (Step 2/2)"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    print_info "Press Enter to use default values, or type new values:"
-    echo ""
-    
-    RPC_PORT=$(prompt_input "5. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
-    WS_PORT=$(prompt_input "6. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "") || WS_PORT="$DEFAULT_WS_PORT"
-    NODE_RPC_PORT=$(prompt_input "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
-    GETH_P2P_PORT=$(prompt_input "8. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
-    NODE_P2P_PORT=$(prompt_input "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
-    ENGINE_API_PORT=$(prompt_input "10. Engine API port [default: $DEFAULT_ENGINE_API_PORT]: " "$DEFAULT_ENGINE_API_PORT" "") || ENGINE_API_PORT="$DEFAULT_ENGINE_API_PORT"
-    
-    print_info "Using ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
 
-    FLASHBLOCKS_ENABLED=$(prompt_input "11. Flashblocks enabled [default: $DEFAULT_FLASHBLOCKS_ENABLED]: " "$DEFAULT_FLASHBLOCKS_ENABLED" "") || FLASHBLOCKS_ENABLED="$DEFAULT_FLASHBLOCKS_ENABLED"
+    if [ "$QUICK_START" = true ]; then
+        # Quick start: use all default ports
+        RPC_PORT="$DEFAULT_RPC_PORT"
+        WS_PORT="$DEFAULT_WS_PORT"
+        NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
+        GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
+        NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
+        ENGINE_API_PORT="$DEFAULT_ENGINE_API_PORT"
+        FLASHBLOCKS_ENABLED="${DEFAULT_FLASHBLOCKS_ENABLED:-false}"
+        FLASHBLOCKS_URL="${DEFAULT_FLASHBLOCKS_URL:-}"
+        print_info "Using default ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
+    else
+        # Optional configurations (always collect, regardless of SKIP_INIT)
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        print_info "Port Configuration (Step 2/2)"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        print_info "Press Enter to use default values, or type new values:"
+        echo ""
 
-    if [ "$FLASHBLOCKS_ENABLED" = "true" ]; then
-        FLASHBLOCKS_URL=$(prompt_input "12. Flashblocks URL [default: $DEFAULT_FLASHBLOCKS_URL]: " "$DEFAULT_FLASHBLOCKS_URL" "validate_ws_url") || FLASHBLOCKS_URL="$DEFAULT_FLASHBLOCKS_URL"
+        RPC_PORT=$(prompt_input "5. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
+        WS_PORT=$(prompt_input "6. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "") || WS_PORT="$DEFAULT_WS_PORT"
+        NODE_RPC_PORT=$(prompt_input "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
+        GETH_P2P_PORT=$(prompt_input "8. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
+        NODE_P2P_PORT=$(prompt_input "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
+        ENGINE_API_PORT=$(prompt_input "10. Engine API port [default: $DEFAULT_ENGINE_API_PORT]: " "$DEFAULT_ENGINE_API_PORT" "") || ENGINE_API_PORT="$DEFAULT_ENGINE_API_PORT"
+
+        print_info "Using ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
+
+        FLASHBLOCKS_ENABLED=$(prompt_input "11. Flashblocks enabled [default: $DEFAULT_FLASHBLOCKS_ENABLED]: " "$DEFAULT_FLASHBLOCKS_ENABLED" "") || FLASHBLOCKS_ENABLED="$DEFAULT_FLASHBLOCKS_ENABLED"
+
+        if [ "$FLASHBLOCKS_ENABLED" = "true" ]; then
+            FLASHBLOCKS_URL=$(prompt_input "12. Flashblocks URL [default: $DEFAULT_FLASHBLOCKS_URL]: " "$DEFAULT_FLASHBLOCKS_URL" "validate_ws_url") || FLASHBLOCKS_URL="$DEFAULT_FLASHBLOCKS_URL"
+        fi
     fi
-    
+
     print_success "Configuration input completed"
 }
 
@@ -1168,7 +1229,10 @@ main() {
     
     # Load configuration from network-presets.env
     load_configuration
-    
+
+    # Quick start prompt with 5s countdown
+    prompt_quick_start
+
     # System checks
     check_system_requirements
     check_required_files
