@@ -2,7 +2,7 @@
 
 # Configuration variables
 CONFIG_FILE := ./testdata/config.json
-INIT_AMOUNT := 100ETH
+INIT_AMOUNT := 10ETH
 
 # Lint the code using golangci-lint
 lint:
