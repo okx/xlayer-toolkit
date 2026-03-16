@@ -18,7 +18,7 @@ services:
       - ./l1-geth/consensus:/consensus
 
   l1-create-beacon-chain-genesis:
-    image: "gcr.io/prysmaticlabs/prysm/cmd/prysmctl:v7.1.2" # upgrade to v7.1.2 to support osakaTime
+    image: "gcr.io/prysmaticlabs/prysm/cmd/prysmctl:v7.0.0"
     container_name: l1-create-beacon-chain-genesis
     command:
       - testnet
@@ -37,16 +37,27 @@ services:
       l1-beacon-remove-db:
         condition: service_completed_successfully
 
-  l1-add-bpo-config:
-    image: "alpine-jq:local"
-    container_name: l1-add-bpo-config
+  l1-fix-genesis-fork-times:
+    image: "alpine:3.19.0"
+    container_name: l1-fix-genesis-fork-times
     command:
       - /bin/sh
       - -c
-      - /scripts/add-bpo-config.sh
+      - |
+        apk add --no-cache jq
+        echo "Fixing genesis.json fork times..."
+        sed -i 's/"shanghaiTime": [0-9]*/"shanghaiTime": 0/g' /execution/genesis.json
+        sed -i 's/"cancunTime": [0-9]*/"cancunTime": 0/g' /execution/genesis.json
+        echo "Adding pragueTime for Pectra support..."
+        jq '.config.pragueTime = 0' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
+        echo "Adding osakaTime for Fusaka support..."
+        jq '.config.osakaTime = 0' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
+        echo "Removing terminalTotalDifficultyPassed for op-node compatibility..."
+        jq 'del(.config.terminalTotalDifficultyPassed)' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
+        echo "Genesis.json: shanghai=0, cancun=0, osaka=0 (Fusaka enabled), blobSchedule added, terminalTotalDifficultyPassed removed"
+        cat /execution/genesis.json | jq '.config | {shanghaiTime, cancunTime, osakaTime, terminalTotalDifficulty, blobSchedule}'
     volumes:
       - ./l1-geth/execution:/execution
-      - ./scripts:/scripts
     depends_on:
       l1-create-beacon-chain-genesis:
         condition: service_completed_successfully
@@ -59,7 +70,7 @@ services:
       - ./l1-geth/execution:/execution
       - ./l1-geth/execution/genesis.json:/execution/genesis.json
     depends_on:
-      l1-add-bpo-config:
+      l1-fix-genesis-fork-times:
         condition: service_completed_successfully
       l1-geth-remove-db:
         condition: service_completed_successfully
@@ -112,7 +123,7 @@ services:
       retries: 5
 
   l1-beacon-chain:
-    image: "gcr.io/prysmaticlabs/prysm/beacon-chain:v7.0.0" # seems not work with v7.1.2, so keeps v7.0.0
+    image: "gcr.io/prysmaticlabs/prysm/beacon-chain:v7.0.0"
     container_name: l1-beacon-chain
     command:
       - --datadir=/consensus/beacondata
@@ -122,7 +133,7 @@ services:
       - --interop-eth1data-votes
       - --chain-config-file=/consensus/config.yml
       - --contract-deployment-block=0
-      - --chain-id=1337
+      - --chain-id=${CHAIN_ID:-1337}
       - --rpc-host=0.0.0.0
       - --grpc-gateway-host=0.0.0.0
       - --execution-endpoint=http://l1-geth:8551
@@ -179,7 +190,7 @@ services:
       - "8552:8552"
       - "30303:30303"
       - "30303:30303/udp"
-      - "9092:9092"  # pprof port
+      - "9090:9090"  # pprof port
     command:
       - --networkid=${CHAIN_ID}
       - --verbosity=3
@@ -189,9 +200,6 @@ services:
       - --gcmode=archive
       - --rollup.disabletxpoolgossip=false
       - --nodekeyhex=1aba031aeb5aa8aedadaf04159d20e7d58eeefb3280176c7d59040476c2ab21b
-      - --pprof=true
-      - --pprof.addr=0.0.0.0
-      - --pprof.port=9092
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
       interval: 3s
@@ -203,48 +211,6 @@ services:
         aliases:
           - op-seq-el
 
-  op-reth-seq:
-    image: "${OP_RETH_IMAGE_TAG}"
-    container_name: op-reth-seq
-    entrypoint: /entrypoint/reth-seq.sh
-    env_file:
-      - .env
-    # Enable privileged mode for perf profiling
-    privileged: true
-    cap_add:
-      - SYS_ADMIN
-      - SYS_PTRACE
-    security_opt:
-      - seccomp=unconfined
-    volumes:
-      - ./data/op-reth-seq:/datadir
-      - ./config-op/jwt.txt:/jwt.txt
-      - ./config-op/genesis-reth.json:/genesis.json
-      - ./entrypoint:/entrypoint
-      - ./.env:/.env
-      - ./logs/op-reth-seq:/logs/reth
-      # Profiling data directory
-      - ./profiling/op-reth-seq:/profiling
-      # Kernel tracing filesystem for perf profiling
-      - /sys/kernel/tracing:/sys/kernel/tracing:ro
-    ports:
-      - "8123:8545"
-      - "7546:7546"
-      - "8552:8552"
-      - "30303:30303"
-      - "30303:30303/udp"
-      - "11111:1111" # outbound flashblocks ws port
-      - "9001:9001"  # metrics port
-    healthcheck:
-      test: ["CMD", "curl", "-f", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
-      interval: 3s
-      timeout: 3s
-      retries: 10
-      start_period: 3s
-    networks:
-      default:
-        aliases:
-          - op-seq-el
 
   op-geth-rpc:
     image: "${OP_GETH_IMAGE_TAG}"
@@ -294,58 +260,51 @@ services:
       - "30304:30303/udp"
 
   op-seq:
-    image: "${OP_STACK_IMAGE_TAG}"
+    # Unified sequencer: op-reth (execution) + kona-node (consensus) in one container.
+    # xlayer-seq.sh starts op-reth in background, waits for HTTP ready, then execs kona-node.
+    # Engine API (--authrpc) binds to 127.0.0.1:8552 — internal only, never exposed.
+    image: "${OP_XLAYER_IMAGE_TAG}"
     container_name: op-seq
+    entrypoint: /entrypoint/xlayer-kona-seq.sh
+    env_file:
+      - .env
+    privileged: true
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
     volumes:
-      - ./config-op/rollup.json:/rollup.json
+      - ./data/op-reth-seq:/datadir
       - ./config-op/jwt.txt:/jwt.txt
-      - ./data/op-seq:/data
+      - ./config-op/genesis-reth.json:/genesis.json
+      - ./config-op/rollup.json:/rollup.json
       - ./l1-geth/execution/genesis.json:/l1-genesis.json
+      - ./entrypoint:/entrypoint
+      - ./.env:/.env
+      - ./data/op-seq:/data
+      - ./logs/op-reth-seq:/logs/reth
     ports:
-      - "9545:9545"
-      - "7070:7070"
-      - "9223:9223"
+      - "8123:8545"    # L2 public RPC
+      - "7546:7546"    # WebSocket
+      - "30303:30303"  # P2P TCP
+      - "30303:30303/udp"
+      - "9001:9001"    # reth metrics
+      - "11111:1111"   # flashblocks outbound WS (only active when FLASHBLOCK_ENABLED=true)
+      - "9545:9545"    # kona-node rollup RPC
+      - "9223:9223"    # kona-node P2P TCP
       - "9223:9223/udp"
-      - "9091:9091"  # pprof port
-    command:
-      - /app/op-node/bin/op-node
-      - --log.level=debug
-      - --log.format=logfmtms
-      - --l2=http://op-${SEQ_TYPE}-seq:8552
-      - --l2.jwt-secret=/jwt.txt
-      - --sequencer.enabled
-      - --sequencer.l1-confs=5
-      - --verifier.l1-confs=1
-      - --l1.epoch-poll-interval=10s
-      - --rollup.config=/rollup.json
-      - --rpc.addr=0.0.0.0
-      - --p2p.listen.tcp=9223
-      - --p2p.listen.udp=9223
-      - --p2p.priv.raw=e054b5748fb29a82994ea170af9e6094a163a0d11308dea91a38744c4e7c94da
-      - --p2p.peerstore.path=/data/p2p/opnode_peerstore_db
-      - --p2p.discovery.path=/data/p2p/opnode_discovery_db
-      - --p2p.no-discovery
-      - --rpc.enable-admin
-      - --p2p.sequencer.key=${SEQUENCER_P2P_KEY}
-      - --l1=${L1_RPC_URL_IN_DOCKER}
-      - --l1.beacon=${L1_BEACON_URL_IN_DOCKER}
-      - --l1.rpckind=standard
-      - --rollup.l1-chain-config=/l1-genesis.json
-      - --safedb.path=/data/safedb
-      - --conductor.enabled=${CONDUCTOR_ENABLED:-false}
-      - --conductor.rpc=http://op-conductor:8547
-      - --pprof.enabled
-      - --pprof.addr=0.0.0.0
-      - --pprof.port=9091
-      - --l2.enginekind=${SEQ_TYPE}
-    depends_on:
-      - op-${SEQ_TYPE}-seq
+      - "9002:9002"    # kona-node metrics
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9545"]
+      test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"optimism_syncStatus\",\"params\":[],\"id\":1}", "http://localhost:9545"]
       interval: 3s
       timeout: 3s
       retries: 10
-      start_period: 3s
+      start_period: 15s
+    networks:
+      default:
+        aliases:
+          - op-seq-el
 
   op-rpc:
     image: "${OP_STACK_IMAGE_TAG}"
@@ -432,7 +391,7 @@ services:
     container_name: op-geth-rpc2-init
     entrypoint: >
       sh -c "
-      rm -rf /datadir/* &&
+      rm -rf /datadir/* && 
       geth init --datadir=/datadir /genesis.json
       "
     volumes:
@@ -489,12 +448,11 @@ services:
       - --log.level=debug
       # already existed service
       - --node.rpc=http://op-seq:9545
-      - --execution.rpc=http://op-${SEQ_TYPE}-seq:8545
+      - --execution.rpc=http://op-seq:8545
       # Raft Config
       - --raft.server.id=conductor-1
       - --raft.storage.dir=/data/raft
       - --raft.bootstrap=true
-      - --raft.snapshot-threshold=2048
       - --consensus.addr=0.0.0.0
       - --consensus.port=50050
       - --consensus.advertised=op-conductor:50050
@@ -518,13 +476,13 @@ services:
     command:
       - /app/op-batcher/bin/op-batcher
       - --log.level=debug
-      - --l2-eth-rpc=${OP_BATCHER_L2_ETH_RPC:-http://op-${SEQ_TYPE}-seq:8545}
+      - --l2-eth-rpc=${OP_BATCHER_L2_ETH_RPC:-http://op-seq:8545}
       - --rollup-rpc=${OP_BATCHER_ROLLUP_RPC:-http://op-seq:9545}
       - --private-key=${OP_BATCHER_PRIVATE_KEY}
-      - --poll-interval=1s
+      - --poll-interval=5s
       - --batch-type=1
       - --compression-algo=brotli-10
-      - --data-availability-type=blobs
+      - --data-availability-type=auto
       - --sub-safety-margin=6
       - --num-confirmations=4
       - --safe-abort-nonce-too-low-count=3
@@ -534,7 +492,7 @@ services:
       - --rpc.enable-admin
       - --max-channel-duration=150
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
-      - --max-pending-tx=20
+      - --max-pending-tx=10
       - --target-num-frames=6
       - --throttle.block-size-upper-limit=0
       - --throttle.block-size-lower-limit=0
@@ -583,7 +541,7 @@ services:
       - --log.level=debug
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
-      - --l2-eth-rpc=http://op-${SEQ_TYPE}-seq:8545
+      - --l2-eth-rpc=http://op-seq:8545
       - --rollup-rpc=http://op-seq:9545
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
       - --cannon-bin=/app/cannon/bin/cannon
@@ -681,7 +639,7 @@ services:
       - ./l1-geth/execution/genesis.json:/l1-genesis.json
     ports:
       - "9546:9545"
-#      - "7070:7070"
+      #      - "7070:7070"
       - "9224:9223"
       - "9224:9223/udp"
     command:
@@ -742,7 +700,6 @@ services:
       - --raft.server.id=conductor-2
       - --raft.storage.dir=/data/raft
       - --raft.bootstrap=false
-      - --raft.snapshot-threshold=2048
       - --consensus.addr=0.0.0.0
       - --consensus.port=50050
       - --consensus.advertised=op-conductor2:50050
@@ -792,7 +749,7 @@ services:
         aliases:
           - op-seq-el3
 
- # Keep op-seq3 to run op-geth as default EL
+  # Keep op-seq3 to run op-geth as default EL
   op-seq3:
     image: "${OP_STACK_IMAGE_TAG}"
     container_name: op-seq3
@@ -803,7 +760,7 @@ services:
       - ./l1-geth/execution/genesis.json:/l1-genesis.json
     ports:
       - "9547:9545"
-#      - "7070:7070"
+      #      - "7070:7070"
       - "9225:9223"
       - "9225:9223/udp"
     command:
@@ -864,7 +821,6 @@ services:
       - --raft.server.id=conductor-3
       - --raft.storage.dir=/data/raft
       - --raft.bootstrap=false
-      - --raft.snapshot-threshold=2048
       - --consensus.addr=0.0.0.0
       - --consensus.port=50050
       - --consensus.advertised=op-conductor3:50050
@@ -887,7 +843,7 @@ services:
     container_name: mempool-rebroadcaster
     command:
       - --geth-mempool-endpoint=http://op-geth-seq3:8545
-      - --reth-mempool-endpoint=http://op-reth-seq:8545
+      - --reth-mempool-endpoint=http://op-seq:8545
 
   op-succinct-fetch-config:
     image: "${OP_SUCCINCT_IMAGE_TAG}"

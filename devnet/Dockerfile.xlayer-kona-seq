@@ -1,0 +1,29 @@
+# op-xlayer-kona-seq — unified sequencer image
+# Combines OKX op-reth (execution) + kona-node (consensus) in one container.
+# Engine API runs on 127.0.0.1:8552 — never exposed outside the container.
+
+FROM op-reth:al-prefetch AS reth-bin
+FROM ghcr.io/op-rs/kona/kona-node:latest AS kona-bin
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=reth-bin  /usr/local/bin/op-reth    /usr/local/bin/op-reth
+COPY --from=kona-bin  /usr/local/bin/kona-node  /usr/local/bin/kona-node
+
+# Bake in the supervisor entrypoint so the image is self-contained.
+# In devnet, docker-compose volume-mounts ./entrypoint:/entrypoint which
+# overrides this copy at runtime (useful for editing without rebuilding).
+# For distribution / docker run without xlayer-toolkit, this copy is used.
+COPY entrypoint/xlayer-kona-seq.sh /entrypoint/xlayer-kona-seq.sh
+RUN chmod +x /entrypoint/xlayer-kona-seq.sh
+
+# Verify both binaries are present and the entrypoint is executable
+RUN op-reth --version && kona-node --version && test -x /entrypoint/xlayer-kona-seq.sh
+
+ENTRYPOINT ["/entrypoint/xlayer-kona-seq.sh"]

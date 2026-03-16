@@ -180,7 +180,7 @@ mkdir -p "$OP_RETH_DATADIR"
 INIT_LOG=$(docker compose run --no-deps --rm \
   -v "$(pwd)/$CONFIG_DIR/genesis-reth.json:/genesis.json" \
   --entrypoint op-reth \
-  op-reth-seq \
+  op-seq \
   init \
   --datadir="/datadir" \
   --chain=/genesis.json \
