@@ -32,7 +32,7 @@ struct Args {
     prove: bool,
 
     #[arg(long, default_value = "20")]
-    n: u32,
+    n: u64,
 }
 
 fn main() {
