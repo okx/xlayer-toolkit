@@ -3,7 +3,7 @@
 # Default target
 help:
 	@printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"
-	@printf "\033[0;36m  |      \033[1mX Layer RPC Node - Makefile Commands\033[0m\033[0;36m          |\033[0m\n"
+	@printf "\033[0;36m  |      \033[1mX Layer RPC Node - Makefile Commands\033[0m\033[0;36m        |\033[0m\n"
 	@printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"
 	@echo ""
 	@printf "\033[0;32m    make run     \033[0m - Start RPC node services\n"
@@ -56,7 +56,7 @@ run:
 		WS_PORT=$$(grep '^WEBSOCKET_PORT=' .env | cut -d'=' -f2); \
 		NODE_PORT=$$(grep '^NODE_RPC_PORT=' .env | cut -d'=' -f2); \
 		printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"; \
-		printf "\033[0;36m  |         \033[1mConnection Info\033[0m\033[0;36m                             |\033[0m\n"; \
+		printf "\033[0;36m  |                 \033[1mConnection Info\033[0m\033[0;36m                  |\033[0m\n"; \
 		printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"; \
 		printf "\033[2m    Network:  $$NETWORK_TYPE\033[0m\n"; \
 		printf "\033[2m    RPC Type: $$RPC_TYPE\033[0m\n"; \
@@ -115,7 +115,7 @@ status:
 		WS_PORT=$$(grep '^WEBSOCKET_PORT=' .env | cut -d'=' -f2); \
 		NODE_PORT=$$(grep '^NODE_RPC_PORT=' .env | cut -d'=' -f2); \
 		printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"; \
-		printf "\033[0;36m  |         \033[1mConnection Info\033[0m\033[0;36m                             |\033[0m\n"; \
+		printf "\033[0;36m  |                 \033[1mConnection Info\033[0m\033[0;36m                  |\033[0m\n"; \
 		printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"; \
 		printf "\033[2m    Network:  $$NETWORK_TYPE\033[0m\n"; \
 		printf "\033[2m    RPC Type: $$RPC_TYPE\033[0m\n"; \
