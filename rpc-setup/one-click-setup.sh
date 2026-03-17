@@ -659,11 +659,11 @@ get_user_input() {
 
     if [ "$QUICK_START" = true ]; then
         echo ""
-        countdown_prompt "L1 RPC URL(recommended)... Press any key to input" L1_RPC_URL 5 "L1 RPC URL"
+        countdown_prompt "L1 RPC URL(recommended)... Press any key to input" L1_RPC_URL 5 "L1 RPC URL" || true
         print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
 
         if [ -n "$L1_RPC_URL" ]; then
-            countdown_prompt "L1 Beacon URL(recommended)... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL"
+            countdown_prompt "L1 Beacon URL(recommended)... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL" || true
             print_success "L1 Beacon URL: ${L1_BEACON_URL:-(empty)}"
         else
             L1_BEACON_URL=""
@@ -671,14 +671,14 @@ get_user_input() {
     else
         print_section "L1 Endpoints"
         echo ""
-        countdown_prompt "L1 RPC URL... Press any key to input" L1_RPC_URL 5 "L1 RPC URL"
+        countdown_prompt "L1 RPC URL... Press any key to input" L1_RPC_URL 5 "L1 RPC URL" || true
         if [ -n "$L1_RPC_URL" ] && ! validate_url "$L1_RPC_URL"; then
             L1_RPC_URL=""
         fi
         print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
 
         if [ -n "$L1_RPC_URL" ]; then
-            countdown_prompt "L1 Beacon URL... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL"
+            countdown_prompt "L1 Beacon URL... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL" || true
             if [ -n "$L1_BEACON_URL" ] && ! validate_url "$L1_BEACON_URL"; then
                 L1_BEACON_URL=""
             fi
