@@ -409,7 +409,8 @@ countdown_prompt() {
     while [ $countdown -gt 0 ]; do
         local idx=$(( countdown % ${#SPINNER_FRAMES[@]} ))
         printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s ${C_DIM}(%ds)${C_RESET}" "$prompt_text" "$countdown"
-        if read -r -t 1 input </dev/tty 2>/dev/null; then
+        read -r -t 1 input </dev/tty 2>/dev/null || true
+        if [ -n "$input" ]; then
             printf "\r\033[K"
             eval "$var_name=\"\$input\""
             return 0
