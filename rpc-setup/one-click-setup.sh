@@ -70,22 +70,24 @@ ENGINE_API_PORT=""
 FLASHBLOCKS_ENABLED=""
 FLASHBLOCKS_URL=""
 
-# Colors - black/white/gray palette (X Layer style)
+# Colors
 C_RESET="\033[0m"
-C_WHITE="\033[1;37m"
-C_GRAY="\033[0;37m"
-C_DARK="\033[0;90m"
+C_CYAN="\033[0;36m"
+C_GREEN="\033[0;32m"
+C_YELLOW="\033[1;33m"
 C_RED="\033[0;31m"
+C_BLUE="\033[0;34m"
+C_MAGENTA="\033[0;35m"
 C_BOLD="\033[1m"
 C_DIM="\033[2m"
 
-print_info() { echo -e "${C_GRAY}  [*] $1${C_RESET}"; }
-print_success() { echo -e "${C_WHITE}  [+] $1${C_RESET}"; }
-print_warning() { echo -e "${C_GRAY}  [!] $1${C_RESET}"; }
+print_info() { echo -e "${C_CYAN}  [*] $1${C_RESET}"; }
+print_success() { echo -e "${C_GREEN}  [+] $1${C_RESET}"; }
+print_warning() { echo -e "${C_YELLOW}  [!] $1${C_RESET}"; }
 print_error() { echo -e "${C_RED}  [-] $1${C_RESET}"; }
 print_prompt() {
-    if ! printf "${C_GRAY}%s${C_RESET}" "$1" > /dev/tty 2>/dev/null; then
-        printf "${C_GRAY}%s${C_RESET}" "$1"
+    if ! printf "${C_CYAN}%s${C_RESET}" "$1" > /dev/tty 2>/dev/null; then
+        printf "${C_CYAN}%s${C_RESET}" "$1"
     fi
 }
 # Spinner frames
@@ -95,10 +97,10 @@ SPINNER_IDX=0
 # Print in place with spinner (single frame)
 print_step() {
     SPINNER_IDX=$(( (SPINNER_IDX + 1) % ${#SPINNER_FRAMES[@]} ))
-    printf "\r\033[K${C_GRAY}  ${SPINNER_FRAMES[$SPINNER_IDX]} %s${C_RESET}" "$1"
+    printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$SPINNER_IDX]} %s${C_RESET}" "$1"
 }
 # Finish step with result
-print_step_ok() { printf "\r\033[K${C_WHITE}  ✓ %s${C_RESET}\n" "$1"; }
+print_step_ok() { printf "\r\033[K${C_GREEN}  ✓ %s${C_RESET}\n" "$1"; }
 print_step_fail() { printf "\r\033[K${C_RED}  ✗ %s${C_RESET}\n" "$1"; }
 
 # Run a command with animated spinner
@@ -112,7 +114,7 @@ run_with_spinner() {
     local i=0
     while kill -0 "$pid" 2>/dev/null; do
         i=$(( (i + 1) % ${#SPINNER_FRAMES[@]} ))
-        printf "\r\033[K${C_GRAY}  ${SPINNER_FRAMES[$i]} %s${C_RESET}" "$msg"
+        printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s${C_RESET}" "$msg"
         sleep 0.25
     done
     wait "$pid"
@@ -150,13 +152,13 @@ download_with_progress() {
             local bar=$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' "$empty" '' | tr ' ' '-')
             local size_mb=$(( current_size / 1048576 ))
             local total_mb=$(( total_size / 1048576 ))
-            printf "\r\033[K${C_GRAY}  ${SPINNER_FRAMES[$i]} %s ${C_BOLD}[%s]${C_RESET} ${C_DIM}%d%%  %dMB/%dMB${C_RESET}" "$msg" "$bar" "$pct" "$size_mb" "$total_mb"
+            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s ${C_BOLD}[%s]${C_RESET} ${C_DIM}%d%%  %dMB/%dMB${C_RESET}" "$msg" "$bar" "$pct" "$size_mb" "$total_mb"
         else
             local size_mb=0
             if [ "$current_size" -gt 0 ] 2>/dev/null; then
                 size_mb=$(( current_size / 1048576 ))
             fi
-            printf "\r\033[K${C_GRAY}  ${SPINNER_FRAMES[$i]} %s ${C_DIM}%dMB downloaded${C_RESET}" "$msg" "$size_mb"
+            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s ${C_DIM}%dMB downloaded${C_RESET}" "$msg" "$size_mb"
         fi
         sleep 0.3
     done
@@ -215,9 +217,9 @@ extract_with_progress() {
             local empty=$(( bar_width - filled ))
             local bar=$(printf '%*s' "$filled" '' | tr ' ' '#')$(printf '%*s' "$empty" '' | tr ' ' '-')
             local size_mb=$(( current_size / 1048576 ))
-            printf "\r\033[K${C_GRAY}  ${SPINNER_FRAMES[$i]} %s ${C_BOLD}[%s]${C_RESET} ${C_DIM}%d%%  %dMB${C_RESET}" "$msg" "$bar" "$pct" "$size_mb"
+            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s ${C_BOLD}[%s]${C_RESET} ${C_DIM}%d%%  %dMB${C_RESET}" "$msg" "$bar" "$pct" "$size_mb"
         else
-            printf "\r\033[K${C_GRAY}  ${SPINNER_FRAMES[$i]} %s${C_RESET}" "$msg"
+            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} %s${C_RESET}" "$msg"
         fi
         sleep 0.3
     done
@@ -238,15 +240,15 @@ print_section() {
     local line=$(printf '%*s' "$box_width" '' | tr ' ' '-')
     local content="$(printf '%*s' "$pad_left" '')${text}$(printf '%*s' "$pad_right" '')"
     echo ""
-    echo -e "${C_GRAY}  +${line}+${C_RESET}"
-    echo -e "${C_GRAY}  |${C_BOLD}${content}${C_RESET}${C_GRAY}|${C_RESET}"
-    echo -e "${C_GRAY}  +${line}+${C_RESET}"
+    echo -e "${C_CYAN}  +${line}+${C_RESET}"
+    echo -e "${C_CYAN}  |${C_BOLD}${content}${C_RESET}${C_CYAN}|${C_RESET}"
+    echo -e "${C_CYAN}  +${line}+${C_RESET}"
 }
 
 # Banner
 print_banner() {
     echo ""
-    echo -e "${C_GRAY}${C_BOLD}  X Layer RPC Node${C_RESET} ${C_DIM}· One-Click Setup${C_RESET}"
+    echo -e "${C_CYAN}${C_BOLD}  X Layer RPC Node${C_RESET} ${C_DIM}· One-Click Setup${C_RESET}"
     echo -e "${C_DIM}  ──────────────────────────────────────${C_RESET}"
     echo ""
 }
@@ -408,12 +410,12 @@ countdown_prompt() {
     local countdown=$timeout
     while [ $countdown -gt 0 ]; do
         local idx=$(( countdown % ${#SPINNER_FRAMES[@]} ))
-        printf "\r\033[K${C_GRAY}  ${SPINNER_FRAMES[$idx]} %s ${C_DIM}(%ds)${C_RESET}" "$prompt_text" "$countdown"
+        printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s ${C_DIM}(%ds)${C_RESET}" "$prompt_text" "$countdown"
         if read -r -t 1 -n 1 input </dev/tty 2>/dev/null; then
             printf "\r\033[K"
             if [ "$need_input" = "true" ]; then
                 # Show input prompt, read full line
-                printf "${C_GRAY}  > %s: ${C_RESET}" "$input_label"
+                printf "${C_CYAN}  > %s: ${C_RESET}" "$input_label"
                 local rest=""
                 read -r rest </dev/tty 2>/dev/null || read -r rest
                 input="${input}${rest}"
@@ -523,7 +525,7 @@ prompt_input() {
     local input
 
     while true; do
-        printf "${C_GRAY}  > %s${C_RESET}" "$prompt_text" > /dev/tty
+        printf "${C_CYAN}  > %s${C_RESET}" "$prompt_text" > /dev/tty
         if read -r input </dev/tty 2>/dev/null; then
             result="${input:-$default_value}"
         elif read -r input; then
@@ -594,13 +596,13 @@ check_existing_data() {
     print_section "Existing data found"
     echo -e "${C_DIM}    Path: $target_dir | Size: $size | Status: $status${C_RESET}"
     echo ""
-    echo -e "${C_GRAY}    [1] Keep existing data (recommended)${C_RESET}"
-    echo -e "${C_GRAY}    [2] Delete and re-initialize${C_RESET}"
-    echo -e "${C_GRAY}    [3] Cancel${C_RESET}"
+    echo -e "${C_CYAN}    [1] Keep existing data (recommended)${C_RESET}"
+    echo -e "${C_CYAN}    [2] Delete and re-initialize${C_RESET}"
+    echo -e "${C_CYAN}    [3] Cancel${C_RESET}"
     echo ""
 
     while true; do
-        printf "${C_GRAY}  > Choose [1/2/3, default: 1]: ${C_RESET}"
+        printf "${C_CYAN}  > Choose [1/2/3, default: 1]: ${C_RESET}"
         if ! read -r choice </dev/tty 2>/dev/null && ! read -r choice; then
             choice="1"
         fi
@@ -1258,9 +1260,9 @@ main() {
     local spad_left=$(( (50 - slen) / 2 ))
     local spad_right=$(( 50 - slen - spad_left ))
     local sline=$(printf '%*s' 50 '' | tr ' ' '-')
-    echo -e "${C_WHITE}  +${sline}+${C_RESET}"
-    echo -e "${C_WHITE}  |${C_BOLD}$(printf '%*s' "$spad_left" '')${summary_text}$(printf '%*s' "$spad_right" '')${C_RESET}${C_WHITE}|${C_RESET}"
-    echo -e "${C_WHITE}  +${sline}+${C_RESET}"
+    echo -e "${C_GREEN}  +${sline}+${C_RESET}"
+    echo -e "${C_GREEN}  |${C_BOLD}$(printf '%*s' "$spad_left" '')${summary_text}$(printf '%*s' "$spad_right" '')${C_RESET}${C_GREEN}|${C_RESET}"
+    echo -e "${C_GREEN}  +${sline}+${C_RESET}"
     echo -e "${C_DIM}    Network: $NETWORK_TYPE | Client: $RPC_TYPE | Mode: $SYNC_MODE${C_RESET}"
     echo -e "${C_DIM}    RPC: http://localhost:${RPC_PORT:-8545} | WS: ws://localhost:${WS_PORT:-8546}${C_RESET}"
     echo ""
