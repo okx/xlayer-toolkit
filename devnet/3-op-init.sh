@@ -222,6 +222,13 @@ echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
 rm -rf "$OP_GETH_RPC_DATADIR"
 cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
 
+if [ "$LAUNCH_RPC_NODE2" = "true" ] && [ "$RPC_TYPE" = "geth" ]; then
+    OP_GETH_RPC2_DATADIR="$(pwd)/data/op-geth-rpc2"
+    echo " 🔄 Copying database from op-geth-seq to op-geth-rpc2..."
+    rm -rf "$OP_GETH_RPC2_DATADIR"
+    cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC2_DATADIR"
+fi
+
 if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     if [ "$SEQ_TYPE" = "geth" ]; then
         OP_GETH_DATADIR2="$(pwd)/data/op-geth-seq2"
