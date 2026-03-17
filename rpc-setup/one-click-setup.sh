@@ -699,23 +699,6 @@ get_user_input() {
         print_step_ok "L1 endpoints configured"
     fi
 
-    # Validate: L1_BEACON_URL requires L1_RPC_URL
-    if [ -n "$L1_BEACON_URL" ] && [ -z "$L1_RPC_URL" ]; then
-        print_error "L1 Beacon URL is set but L1 RPC URL is empty. L1 RPC URL is required when L1 Beacon URL is provided."
-        exit 1
-    fi
-
-    # Constraint: L1_RPC_URL provided means no need to skip L1 check
-    if [ -n "$L1_RPC_URL" ]; then
-        L2_FOLLOW_SOURCE_SKIP_L1_CHECK="false"
-    fi
-
-    # Constraint: L1_BEACON_URL provided means use beacon, no need for follow source
-    if [ -n "$L1_BEACON_URL" ]; then
-        L1_BEACON_IGNORE="false"
-        L2_FOLLOW_SOURCE=""
-    fi
-
     # Check existing data directory
     echo ""
     if [ "$QUICK_START" = true ] && [ -d "$TARGET_DIR" ] && [ -d "$TARGET_DIR/data" ] && [ -d "$TARGET_DIR/config" ] && [ "$(ls -A "$TARGET_DIR/data" 2>/dev/null)" ]; then
@@ -730,7 +713,7 @@ get_user_input() {
     fi
 
     if [ "$QUICK_START" = true ]; then
-        # Quick start: use all default ports
+        # Quick start: use all default ports and op-node extra args
         RPC_PORT="$DEFAULT_RPC_PORT"
         WS_PORT="$DEFAULT_WS_PORT"
         NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
@@ -761,7 +744,28 @@ get_user_input() {
             FLASHBLOCKS_URL=$(prompt_input "Flashblocks URL [${DEFAULT_FLASHBLOCKS_URL}]: " "$DEFAULT_FLASHBLOCKS_URL" "validate_ws_url") || FLASHBLOCKS_URL="$DEFAULT_FLASHBLOCKS_URL"
         fi
 
+        # Custom mode: initialize op-node extra args based on L1 input
+        L1_BEACON_IGNORE="false"
+        L2_FOLLOW_SOURCE=""
+        L2_FOLLOW_SOURCE_SKIP_L1_CHECK="false"
+
         print_step_ok "Ports: RPC=$RPC_PORT WS=$WS_PORT Node=$NODE_RPC_PORT Engine=$ENGINE_API_PORT"
+    fi
+
+    # Apply constraints after all variables are set
+    # Constraint 1: L1_BEACON_URL requires L1_RPC_URL
+    if [ -n "$L1_BEACON_URL" ] && [ -z "$L1_RPC_URL" ]; then
+        print_error "L1 Beacon URL requires L1 RPC URL"
+        exit 1
+    fi
+    # Constraint 2: L1_RPC_URL provided -> no need to skip L1 check
+    if [ -n "$L1_RPC_URL" ]; then
+        L2_FOLLOW_SOURCE_SKIP_L1_CHECK="false"
+    fi
+    # Constraint 3: L1_BEACON_URL provided -> use beacon, no follow source
+    if [ -n "$L1_BEACON_URL" ]; then
+        L1_BEACON_IGNORE="false"
+        L2_FOLLOW_SOURCE=""
     fi
 }
 
