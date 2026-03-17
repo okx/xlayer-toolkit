@@ -531,7 +531,7 @@ prompt_input() {
     local input
 
     while true; do
-        printf "${C_CYAN}  > %s${C_RESET}" "$prompt_text"
+        printf "${C_CYAN}  > %s${C_RESET}" "$prompt_text" > /dev/tty
         if read -r input </dev/tty 2>/dev/null; then
             result="${input:-$default_value}"
         elif read -r input; then
