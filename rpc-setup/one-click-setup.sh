@@ -661,11 +661,11 @@ get_user_input() {
 
     if [ "$QUICK_START" = true ]; then
         echo ""
-        countdown_prompt "Enter your L1 RPC URL(recommended)" L1_RPC_URL 5
+        countdown_prompt "L1 RPC URL(recommended)... Press any key to input" L1_RPC_URL 5
         print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
 
         if [ -n "$L1_RPC_URL" ]; then
-            countdown_prompt "Enter your L1 Beacon URL(recommended)" L1_BEACON_URL 5
+            countdown_prompt "L1 Beacon URL(recommended)... Press any key to input" L1_BEACON_URL 5
             print_success "L1 Beacon URL: ${L1_BEACON_URL:-(empty)}"
         else
             L1_BEACON_URL=""
