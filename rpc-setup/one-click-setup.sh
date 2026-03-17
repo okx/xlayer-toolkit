@@ -439,21 +439,17 @@ prompt_quick_start() {
     echo ""
 
     local choice=""
-    countdown_prompt "Auto-starting... Press 'n' for custom setup [Y/n]" choice 5
+    countdown_prompt "Auto-starting... Press any key for custom setup" choice 5
 
-    # Default to yes (quick start) on timeout or empty/Y/y input
-    case "$choice" in
-        [nN]|[nN][oO])
-            QUICK_START=false
-            print_info "Entering custom setup mode..."
-            ;;
-        *)
-            QUICK_START=true
-            print_success "Quick start: X Layer Mainnet RPC ($RPC_TYPE)"
-            NETWORK_TYPE="mainnet"
-            SYNC_MODE="${DEFAULT_SYNC_MODE:-snapshot}"
-            ;;
-    esac
+    if [ -z "$choice" ]; then
+        QUICK_START=true
+        print_success "Quick start: X Layer Mainnet RPC ($RPC_TYPE)"
+        NETWORK_TYPE="mainnet"
+        SYNC_MODE="${DEFAULT_SYNC_MODE:-snapshot}"
+    else
+        QUICK_START=false
+        print_info "Entering custom setup mode..."
+    fi
 }
 
 check_system_requirements() {
@@ -677,26 +673,21 @@ get_user_input() {
     else
         print_section "L1 Endpoints"
         echo ""
-        while true; do
-            printf "${C_CYAN}  > L1 RPC URL: ${C_RESET}"
-            if ! read -r L1_RPC_URL </dev/tty 2>/dev/null && ! read -r L1_RPC_URL; then
-                print_error "Failed to read input"
-                exit 1
-            fi
-            [ -n "$L1_RPC_URL" ] && validate_url "$L1_RPC_URL" && break
-            print_error "L1 RPC URL is required"
-        done
+        countdown_prompt "Enter your L1 RPC URL... Press any key to input" L1_RPC_URL 5
+        if [ -n "$L1_RPC_URL" ] && ! validate_url "$L1_RPC_URL"; then
+            L1_RPC_URL=""
+        fi
+        print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
 
-        while true; do
-            printf "${C_CYAN}  > L1 Beacon URL: ${C_RESET}"
-            if ! read -r L1_BEACON_URL </dev/tty 2>/dev/null && ! read -r L1_BEACON_URL; then
-                print_error "Failed to read input"
-                exit 1
+        if [ -n "$L1_RPC_URL" ]; then
+            countdown_prompt "Enter your L1 Beacon URL... Press any key to input" L1_BEACON_URL 5
+            if [ -n "$L1_BEACON_URL" ] && ! validate_url "$L1_BEACON_URL"; then
+                L1_BEACON_URL=""
             fi
-            [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
-            print_error "L1 Beacon URL is required"
-        done
-        print_step_ok "L1 endpoints configured"
+            print_success "L1 Beacon URL: ${L1_BEACON_URL:-(skip)}"
+        else
+            L1_BEACON_URL=""
+        fi
     fi
 
     # Check existing data directory
