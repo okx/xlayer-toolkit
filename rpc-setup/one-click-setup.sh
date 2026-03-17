@@ -398,6 +398,7 @@ check_required_tools() {
 # Countdown prompt that updates in place
 # Usage: countdown_prompt "prompt text" VAR_NAME [timeout]
 # Result is stored in the named variable. Empty if timed out.
+# Returns 0 if user pressed a key, 1 if timed out
 countdown_prompt() {
     local prompt_text=$1
     local var_name=$2
@@ -426,6 +427,7 @@ countdown_prompt() {
     # Timeout - no input
     printf "\r\033[K"
     eval "$var_name=''"
+    return 1
 }
 
 # Quick start prompt with countdown
@@ -434,16 +436,14 @@ prompt_quick_start() {
     echo ""
 
     local choice=""
-    countdown_prompt "Auto-starting... Press any key for custom setup" choice 5
-
-    if [ -z "$choice" ]; then
+    if countdown_prompt "Auto-starting... Press any key for custom setup" choice 5; then
+        QUICK_START=false
+        print_info "Entering custom setup mode..."
+    else
         QUICK_START=true
         print_success "Quick start: X Layer Mainnet RPC ($RPC_TYPE)"
         NETWORK_TYPE="mainnet"
         SYNC_MODE="${DEFAULT_SYNC_MODE:-snapshot}"
-    else
-        QUICK_START=false
-        print_info "Entering custom setup mode..."
     fi
 }
 
