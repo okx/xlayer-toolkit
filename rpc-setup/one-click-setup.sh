@@ -405,29 +405,15 @@ countdown_prompt() {
     local input_label=${4:-$1}
     local input=""
 
-    # Countdown animation on current line, then clear and show input prompt below
     local countdown=$timeout
     while [ $countdown -gt 0 ]; do
-        local ticks=0
-        while [ $ticks -lt 4 ]; do
-            local idx=$(( ticks % ${#SPINNER_FRAMES[@]} ))
-            printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s ${C_DIM}(%ds)${C_RESET}" "$prompt_text" "$countdown"
-            # Check if user pressed a key (echo off to prevent paste display)
-            stty -echo 2>/dev/null
-            if read -r -t 0.25 -n 1 input </dev/tty 2>/dev/null; then
-                stty echo 2>/dev/null
-                # Show clean prompt with first char, read rest until Enter
-                printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}%s" "$input_label" "$input"
-                local rest=""
-                read -r rest </dev/tty 2>/dev/null || read -r rest
-                input="${input}${rest}"
-                printf "\r\033[K"
-                eval "$var_name=\"\$input\""
-                return 0
-            fi
-            stty echo 2>/dev/null
-            ticks=$((ticks + 1))
-        done
+        local idx=$(( countdown % ${#SPINNER_FRAMES[@]} ))
+        printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s ${C_DIM}(%ds)${C_RESET}" "$prompt_text" "$countdown"
+        if read -r -t 1 input </dev/tty 2>/dev/null; then
+            printf "\r\033[K"
+            eval "$var_name=\"\$input\""
+            return 0
+        fi
         countdown=$((countdown - 1))
     done
 
