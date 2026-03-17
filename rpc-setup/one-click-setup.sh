@@ -414,19 +414,11 @@ countdown_prompt() {
             printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s ${C_DIM}(%ds)${C_RESET}" "$prompt_text" "$countdown"
             # Check if user pressed a key (non-blocking)
             if read -r -t 0.25 -n 1 input </dev/tty 2>/dev/null; then
-                # Consume any remaining paste buffer
+                # Switch to input mode - show prompt and wait for Enter
+                printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}%s" "$input_label" "$input"
                 local rest=""
-                read -r -t 0.1 rest </dev/tty 2>/dev/null || true
+                read -r rest </dev/tty 2>/dev/null || read -r rest
                 input="${input}${rest}"
-                if [ -n "$rest" ]; then
-                    # Paste detected - got full input, show result
-                    printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}%s\n" "$input_label" "$input"
-                else
-                    # Single keypress - show prompt for user to finish typing
-                    printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}%s" "$input_label" "$input"
-                    read -r rest </dev/tty 2>/dev/null || read -r rest
-                    input="${input}${rest}"
-                fi
                 printf "\r\033[K"
                 eval "$var_name=\"\$input\""
                 return 0
