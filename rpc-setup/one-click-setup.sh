@@ -396,28 +396,31 @@ check_required_tools() {
 }
 
 # Countdown prompt that updates in place
-# Usage: countdown_prompt "prompt text" VAR_NAME [timeout]
-# Result is stored in the named variable. Empty if timed out.
+# Usage: countdown_prompt "prompt text" VAR_NAME [timeout] [input_label] [need_input]
+# need_input: "true" (default) shows input prompt after keypress, "false" returns immediately
 # Returns 0 if user pressed a key, 1 if timed out
 countdown_prompt() {
     local prompt_text=$1
     local var_name=$2
     local timeout=${3:-5}
     local input_label=${4:-$1}
+    local need_input=${5:-true}
     local input=""
 
     local countdown=$timeout
     while [ $countdown -gt 0 ]; do
         local idx=$(( countdown % ${#SPINNER_FRAMES[@]} ))
         printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s ${C_DIM}(%ds)${C_RESET}" "$prompt_text" "$countdown"
-        # read -n 1 detects any keypress, stops countdown immediately
         if read -r -t 1 -n 1 input </dev/tty 2>/dev/null; then
-            # Show input prompt, read full line
-            printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}" "$input_label"
-            local rest=""
-            read -r rest </dev/tty 2>/dev/null || read -r rest
-            input="${input}${rest}"
             printf "\r\033[K"
+            if [ "$need_input" = "true" ]; then
+                # Show input prompt, read full line
+                printf "${C_CYAN}  > %s: ${C_RESET}" "$input_label"
+                local rest=""
+                read -r rest </dev/tty 2>/dev/null || read -r rest
+                input="${input}${rest}"
+                printf "\r\033[K"
+            fi
             eval "$var_name=\"\$input\""
             return 0
         fi
@@ -436,7 +439,7 @@ prompt_quick_start() {
     echo ""
 
     local choice=""
-    if countdown_prompt "Auto-starting... Press any key for custom setup" choice 5; then
+    if countdown_prompt "Auto-starting... Press any key for custom setup" choice 5 "" "false"; then
         QUICK_START=false
         print_info "Entering custom setup mode..."
     else
