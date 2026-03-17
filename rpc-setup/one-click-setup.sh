@@ -522,31 +522,28 @@ download_config_files() {
     print_step_ok "Configuration files ready"
 }
 
-# Generic input prompt with validation
+# Styled input prompt with validation
 prompt_input() {
     local prompt_text=$1
     local default_value=$2
     local validator=$3
     local result
     local input
-    
+
     while true; do
-        print_prompt "$prompt_text"
-        # Try to read from /dev/tty, fallback to stdin if it fails
+        printf "${C_CYAN}  > %s${C_RESET}" "$prompt_text"
         if read -r input </dev/tty 2>/dev/null; then
             result="${input:-$default_value}"
         elif read -r input; then
             result="${input:-$default_value}"
         else
-            # If both fail, use default value
             result="$default_value"
         fi
-        
-        # If validator function provided, call it
+
         if [ -n "$validator" ] && ! $validator "$result"; then
             continue
         fi
-        
+
         echo "$result"
         return 0
     done
@@ -590,80 +587,63 @@ validate_snapshot_support() {
 
 check_existing_data() {
     local target_dir="$1"
-    
+
     if [ ! -d "$target_dir" ]; then
-        print_info "Directory does not exist, will initialize: $target_dir"
-        return 0  # Continue with initialization
+        print_info "New setup: $target_dir"
+        return 0
     fi
-    
-    print_warning "Directory already exists: $target_dir"
-    echo ""
-    
-    # Display directory information
-    local size=$(du -sh "$target_dir" 2>/dev/null | cut -f1 || echo "unknown")
-    echo "  📂 Location: $target_dir"
-    echo "  💾 Size: $size"
-    
-    # Check if initialized (unified structure: data/, config/ for both genesis and snapshot)
+
+    local size=$(du -sh "$target_dir" 2>/dev/null | cut -f1 || echo "?")
+    local status="empty"
     if [ -d "$target_dir/data" ] && [ -d "$target_dir/config" ] && [ "$(ls -A "$target_dir/data" 2>/dev/null)" ]; then
-        echo "  ✅ Status: Initialized with data"
-    else
-        echo "  ⚠️  Status: Empty or incomplete"
+        status="initialized"
     fi
-    
+
+    print_section "Existing data found"
+    echo -e "${C_DIM}    Path: $target_dir | Size: $size | Status: $status${C_RESET}"
     echo ""
-    echo "Options:"
-    echo "  [1] Keep existing data and skip initialization (recommended)"
-    echo "  [2] Delete and re-initialize (will lose all data)"
-    echo "  [3] Cancel"
+    echo -e "${C_CYAN}    [1] Keep existing data (recommended)${C_RESET}"
+    echo -e "${C_CYAN}    [2] Delete and re-initialize${C_RESET}"
+    echo -e "${C_CYAN}    [3] Cancel${C_RESET}"
     echo ""
-    
+
     while true; do
-        print_prompt "Your choice [1/2/3, default: 1]: "
+        printf "${C_CYAN}  > Choose [1/2/3, default: 1]: ${C_RESET}"
         if ! read -r choice </dev/tty 2>/dev/null && ! read -r choice; then
-            choice="1"  # Default to keeping data if read fails
+            choice="1"
         fi
         choice="${choice:-1}"
-        
+
         case $choice in
             1)
-                print_success "Keeping existing data"
-                return 1  # Skip initialization
+                print_step_ok "Keeping existing data"
+                return 1
                 ;;
             2)
-                print_warning "Deleting existing directory: $target_dir"
-                if rm -rf "$target_dir"; then
-                    print_success "Directory removed successfully"
-                    return 0  # Continue with initialization
-                else
-                    print_error "Failed to remove directory"
-                    exit 1
-                fi
+                run_with_spinner "Removing $target_dir..." rm -rf "$target_dir"
+                print_step_ok "Directory removed"
+                return 0
                 ;;
             3)
-                print_info "Setup cancelled by user"
+                print_info "Cancelled"
                 exit 0
                 ;;
             *)
-                print_error "Invalid choice. Please enter 1, 2, or 3"
+                print_error "Invalid choice"
                 ;;
         esac
     done
 }
 
 get_user_input() {
-    print_info "Please provide the following information:"
-    echo ""
-
     if [ "$QUICK_START" = true ]; then
-        # Quick start: network and sync mode already set, skip to L1 URLs
         print_info "Network: $NETWORK_TYPE | Sync: $SYNC_MODE | RPC: $RPC_TYPE"
     else
-        # Step 1: Network type (interactive)
-        NETWORK_TYPE=$(prompt_input "1. Network type (testnet/mainnet) [default: $DEFAULT_NETWORK]: " "$DEFAULT_NETWORK" "validate_network")
-
-        # Step 1.5: Sync mode (interactive)
-        SYNC_MODE=$(prompt_input "2. Sync mode (genesis/snapshot) [default: $DEFAULT_SYNC_MODE]: " "$DEFAULT_SYNC_MODE" "validate_sync_mode")
+        print_section "Network Configuration"
+        echo ""
+        NETWORK_TYPE=$(prompt_input "Network type (testnet/mainnet) [${DEFAULT_NETWORK}]: " "$DEFAULT_NETWORK" "validate_network")
+        SYNC_MODE=$(prompt_input "Sync mode (genesis/snapshot) [${DEFAULT_SYNC_MODE}]: " "$DEFAULT_SYNC_MODE" "validate_sync_mode")
+        print_step_ok "Network: $NETWORK_TYPE | Sync: $SYNC_MODE | RPC: $RPC_TYPE"
     fi
 
     # Set target directory
@@ -691,8 +671,10 @@ get_user_input() {
         countdown_prompt "Enter your L1 Beacon URL(recommended)" L1_BEACON_URL 5
         print_success "L1 Beacon URL: ${L1_BEACON_URL:-(empty)}"
     else
+        print_section "L1 Endpoints"
+        echo ""
         while true; do
-            print_prompt "3. L1 RPC URL (Ethereum L1 RPC endpoint): "
+            printf "${C_CYAN}  > L1 RPC URL: ${C_RESET}"
             if ! read -r L1_RPC_URL </dev/tty 2>/dev/null && ! read -r L1_RPC_URL; then
                 print_error "Failed to read input"
                 exit 1
@@ -702,7 +684,7 @@ get_user_input() {
         done
 
         while true; do
-            print_prompt "4. L1 Beacon URL (Ethereum L1 Beacon chain endpoint): "
+            printf "${C_CYAN}  > L1 Beacon URL: ${C_RESET}"
             if ! read -r L1_BEACON_URL </dev/tty 2>/dev/null && ! read -r L1_BEACON_URL; then
                 print_error "Failed to read input"
                 exit 1
@@ -710,6 +692,7 @@ get_user_input() {
             [ -n "$L1_BEACON_URL" ] && validate_url "$L1_BEACON_URL" && break
             print_error "L1 Beacon URL is required"
         done
+        print_step_ok "L1 endpoints configured"
     fi
 
     # Check existing data directory
@@ -738,26 +721,24 @@ get_user_input() {
         print_info "Using default ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
     else
         print_section "Port Configuration"
-        print_info "Press Enter to use defaults"
+        echo -e "${C_DIM}    Press Enter to use defaults${C_RESET}"
         echo ""
 
-        RPC_PORT=$(prompt_input "5. RPC port [default: $DEFAULT_RPC_PORT]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
-        WS_PORT=$(prompt_input "6. WebSocket port [default: $DEFAULT_WS_PORT]: " "$DEFAULT_WS_PORT" "") || WS_PORT="$DEFAULT_WS_PORT"
-        NODE_RPC_PORT=$(prompt_input "7. Node RPC port [default: $DEFAULT_NODE_RPC_PORT]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
-        GETH_P2P_PORT=$(prompt_input "8. Execution client P2P port [default: $DEFAULT_GETH_P2P_PORT]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
-        NODE_P2P_PORT=$(prompt_input "9. Node P2P port [default: $DEFAULT_NODE_P2P_PORT]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
-        ENGINE_API_PORT=$(prompt_input "10. Engine API port [default: $DEFAULT_ENGINE_API_PORT]: " "$DEFAULT_ENGINE_API_PORT" "") || ENGINE_API_PORT="$DEFAULT_ENGINE_API_PORT"
+        RPC_PORT=$(prompt_input "RPC port [${DEFAULT_RPC_PORT}]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
+        WS_PORT=$(prompt_input "WebSocket port [${DEFAULT_WS_PORT}]: " "$DEFAULT_WS_PORT" "") || WS_PORT="$DEFAULT_WS_PORT"
+        NODE_RPC_PORT=$(prompt_input "Node RPC port [${DEFAULT_NODE_RPC_PORT}]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
+        GETH_P2P_PORT=$(prompt_input "EL P2P port [${DEFAULT_GETH_P2P_PORT}]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
+        NODE_P2P_PORT=$(prompt_input "Node P2P port [${DEFAULT_NODE_P2P_PORT}]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
+        ENGINE_API_PORT=$(prompt_input "Engine API port [${DEFAULT_ENGINE_API_PORT}]: " "$DEFAULT_ENGINE_API_PORT" "") || ENGINE_API_PORT="$DEFAULT_ENGINE_API_PORT"
 
-        print_info "Using ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
-
-        FLASHBLOCKS_ENABLED=$(prompt_input "11. Flashblocks enabled [default: $DEFAULT_FLASHBLOCKS_ENABLED]: " "$DEFAULT_FLASHBLOCKS_ENABLED" "") || FLASHBLOCKS_ENABLED="$DEFAULT_FLASHBLOCKS_ENABLED"
+        FLASHBLOCKS_ENABLED=$(prompt_input "Flashblocks enabled [${DEFAULT_FLASHBLOCKS_ENABLED}]: " "$DEFAULT_FLASHBLOCKS_ENABLED" "") || FLASHBLOCKS_ENABLED="$DEFAULT_FLASHBLOCKS_ENABLED"
 
         if [ "$FLASHBLOCKS_ENABLED" = "true" ]; then
-            FLASHBLOCKS_URL=$(prompt_input "12. Flashblocks URL [default: $DEFAULT_FLASHBLOCKS_URL]: " "$DEFAULT_FLASHBLOCKS_URL" "validate_ws_url") || FLASHBLOCKS_URL="$DEFAULT_FLASHBLOCKS_URL"
+            FLASHBLOCKS_URL=$(prompt_input "Flashblocks URL [${DEFAULT_FLASHBLOCKS_URL}]: " "$DEFAULT_FLASHBLOCKS_URL" "validate_ws_url") || FLASHBLOCKS_URL="$DEFAULT_FLASHBLOCKS_URL"
         fi
-    fi
 
-    print_success "Configuration input completed"
+        print_step_ok "Ports: RPC=$RPC_PORT WS=$WS_PORT Node=$NODE_RPC_PORT Engine=$ENGINE_API_PORT"
+    fi
 }
 
 generate_or_verify_jwt() {
