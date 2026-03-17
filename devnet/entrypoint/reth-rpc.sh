@@ -20,11 +20,21 @@ else
     CHAIN="/genesis.json"
 fi
 
+# Build base RocksDB flags
+ROCKSDB_FLAGS=""
+if [ "${RETH_STORAGE_V2:-false}" = "true" ]; then
+    ROCKSDB_FLAGS="--storage.v2"
+    if [ -n "${RETH_ROCKSDB_PATH:-}" ]; then
+        ROCKSDB_FLAGS="$ROCKSDB_FLAGS --datadir.rocksdb=$RETH_ROCKSDB_PATH"
+    fi
+fi
+
 # Build the command with common arguments
 CMD="op-reth node \
       --datadir=/datadir \
       --chain=$CHAIN \
       --config=/config.toml \
+      $ROCKSDB_FLAGS \
       --http \
       --http.corsdomain=* \
       --http.port=8545 \
@@ -58,6 +68,17 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
         --flashblocks.port=1111 \
         --flashblocks-url=ws://op-reth-seq:1111 \
         --xlayer.flashblocks-subscription"
+fi
+
+# Bridge intercept configuration
+if [ "${XLAYER_INTERCEPT_ENABLED:-false}" = "true" ]; then
+    CMD="$CMD --xlayer.intercept.enabled"
+    if [ -n "${XLAYER_INTERCEPT_BRIDGE_CONTRACT:-}" ]; then
+        CMD="$CMD --xlayer.intercept.bridge-contract=$XLAYER_INTERCEPT_BRIDGE_CONTRACT"
+    fi
+    if [ -n "${XLAYER_INTERCEPT_TARGET_TOKEN:-}" ]; then
+        CMD="$CMD --xlayer.intercept.target-token=$XLAYER_INTERCEPT_TARGET_TOKEN"
+    fi
 fi
 
 exec $CMD

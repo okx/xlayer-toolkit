@@ -15,9 +15,17 @@ sed_inplace() {
 
 wait_for_el_to_start() {
     CONTAINER_NAME=$1
+    EL_TYPE=${2:-reth}
     if [ -z "$CONTAINER_NAME" ]; then
         echo "Error: CONTAINER_NAME is not set"
         exit 1
+    fi
+
+    # reth: "Starting consensus engine", geth: "HTTP server started"
+    if [ "$EL_TYPE" = "geth" ]; then
+        READY_LOG="HTTP server started"
+    else
+        READY_LOG="Starting consensus engine"
     fi
 
     # Wait for execution layer to start
@@ -27,7 +35,7 @@ wait_for_el_to_start() {
     FOUND=false
 
     while [ $ELAPSED -lt $MAX_WAIT ]; do
-        if docker logs ${CONTAINER_NAME} 2>&1 | grep -q "Starting consensus engine"; then
+        if docker logs ${CONTAINER_NAME} 2>&1 | grep -q "$READY_LOG"; then
             echo "✅ Execution layer started!"
             FOUND=true
             break
@@ -95,7 +103,7 @@ if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     $SCRIPTS_DIR/active-sequencer.sh
 else
     docker compose up -d op-${SEQ_TYPE}-seq
-    wait_for_el_to_start "op-${SEQ_TYPE}-seq"
+    wait_for_el_to_start "op-${SEQ_TYPE}-seq" "$SEQ_TYPE"
     docker compose up -d op-seq
 fi
 
@@ -110,8 +118,12 @@ echo "✅ Grafana available at http://localhost:3000 (admin/admin)"
 
 if [ "$LAUNCH_RPC_NODE" = "true" ]; then
     docker compose up -d op-${RPC_TYPE}-rpc
-    wait_for_el_to_start "op-${RPC_TYPE}-rpc"
+    wait_for_el_to_start "op-${RPC_TYPE}-rpc" "$RPC_TYPE"
     docker compose up -d op-rpc
+fi
+
+if [ "$LAUNCH_RPC_NODE2" = "true" ]; then
+    docker compose up -d op-rpc2
 fi
 
 # Configure op-batcher endpoints based on conductor mode

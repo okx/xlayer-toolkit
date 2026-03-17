@@ -14,12 +14,22 @@ fi
 # Read the first argument (1 or 0), default to 0 if not provided
 FLASHBLOCKS_RPC=${FLASHBLOCKS_RPC:-"true"}
 
+# Build base RocksDB flags
+ROCKSDB_FLAGS=""
+if [ "${RETH_STORAGE_V2:-false}" = "true" ]; then
+    ROCKSDB_FLAGS="--storage.v2"
+    if [ -n "${RETH_ROCKSDB_PATH:-}" ]; then
+        ROCKSDB_FLAGS="$ROCKSDB_FLAGS --datadir.rocksdb=$RETH_ROCKSDB_PATH"
+    fi
+fi
+
 # Build the command with common arguments
 #      --trusted-peers=enode://da6f07c5216e51cfab6320ffeebc6e8fadbb8ce32d489c8dedba9f910fa91b82a534ecef67a42202e7beb92313ee9023bd6dd9a9b2548d175baabf3842dc3053@op-geth-rpc:30303 \
 CMD="op-reth node \
       --datadir=/datadir \
       --chain=/genesis.json \
       --config=/config.toml \
+      $ROCKSDB_FLAGS \
       --http \
       --http.corsdomain=* \
       --http.port=8545 \
