@@ -37,13 +37,18 @@ services:
           --p2p.bootnodes=${OP_NODE_BOOTNODE} \
           --p2p.static=${P2P_STATIC_PEERS} \
           --rpc.enable-admin=true \
-          --l1=${L1_RPC_URL} \
-          --l1.beacon=${L1_BEACON_URL} \
+          $$([ -n "${L1_RPC_URL}" ] && echo "--l1=${L1_RPC_URL}") \
+          $$([ -n "${L1_BEACON_URL}" ] && echo "--l1.beacon=${L1_BEACON_URL}") \
           --l1.rpckind=standard \
           --conductor.enabled=false \
           --safedb.path=/data/safedb \
+          --syncmode=execution-layer \
           --l2.enginekind=${RPC_TYPE} \
+          $$([ "${L1_BEACON_IGNORE}" = "true" ] && echo "--l1.beacon.ignore") \
+          $$([ -n "${L2_FOLLOW_SOURCE}" ] && echo "--l2.follow.source=${L2_FOLLOW_SOURCE}") \
+          $$([ "${L2_FOLLOW_SOURCE_SKIP_L1_CHECK}" = "true" ] && echo "--l2.follow.source.skip-l1-check") \
           2>&1 | tee /logs/op-node.log
+    stop_grace_period: 60s
     restart: unless-stopped
     # Note: Service startup order is controlled by Makefile
 
@@ -74,6 +79,7 @@ services:
       - --rollup.enabletxpooladmission
       - --rollup.sequencerhttp=${SEQUENCER_HTTP_URL}
       - --log.file=/logs/geth.log
+    stop_grace_period: 300s
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
@@ -129,14 +135,16 @@ services:
           --rollup.disable-tx-pool-gossip \
           --rollup.sequencer-http=${SEQUENCER_HTTP_URL} \
           --disable-discovery \
-          --max-outbound-peers=0 \
-          --max-inbound-peers=0 \
+          --max-outbound-peers=10 \
+          --max-inbound-peers=10 \
+          --trusted-peers=enode://64bdad0cf19d06744a371bd35eb6a6468db5407f1811ced1483a7f80ddc544f330ccc5c6574bd9c1a6fb6223693ef42fa00353804829d6730c3cd28e24193f2c@47.242.37.143:30303,enode://162cacbb3e102633735cecd24abe92db03b196e70fa6c098e9e59c53049272da8da92cee487edb9de673f433912db14e26c50495f569f083f4e3e0c1574c29df@47.242.38.0:30303 \
           --rpc.legacy-url=${LEGACY_RPC_URL} \
           --rpc.legacy-timeout=${LEGACY_RPC_TIMEOUT} \
           --log.stdout.filter=info \
           --log.file.directory=/logs/ \
           --log.file.filter=info \
           $${FLASHBLOCKS_FLAG}
+    stop_grace_period: 300s
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "--data", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
