@@ -1196,7 +1196,7 @@ start_services() {
     fi
 
     print_step "Starting Docker services..."
-    if ! make run; then
+    if ! make --no-print-directory run; then
         print_step_fail "Failed to start services"
         exit 1
     fi

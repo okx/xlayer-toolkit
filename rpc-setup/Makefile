@@ -49,7 +49,21 @@ run:
 	fi
 	@printf "\033[0;32m  [+] Services started\033[0m\n"
 	@echo ""
-	@$(MAKE) status
+	@if [ -f .env ]; then \
+		NETWORK_TYPE=$$(grep '^NETWORK_TYPE=' .env | cut -d'=' -f2); \
+		RPC_TYPE=$$(grep '^RPC_TYPE=' .env | cut -d'=' -f2); \
+		HTTP_PORT=$$(grep '^HTTP_RPC_PORT=' .env | cut -d'=' -f2); \
+		WS_PORT=$$(grep '^WEBSOCKET_PORT=' .env | cut -d'=' -f2); \
+		NODE_PORT=$$(grep '^NODE_RPC_PORT=' .env | cut -d'=' -f2); \
+		printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"; \
+		printf "\033[0;36m  |         \033[1mConnection Info\033[0m\033[0;36m                             |\033[0m\n"; \
+		printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"; \
+		printf "\033[2m    Network:  $$NETWORK_TYPE\033[0m\n"; \
+		printf "\033[2m    RPC Type: $$RPC_TYPE\033[0m\n"; \
+		printf "\033[0;32m    HTTP:     http://localhost:$$HTTP_PORT\033[0m\n"; \
+		printf "\033[0;32m    WS:       ws://localhost:$$WS_PORT\033[0m\n"; \
+		printf "\033[0;32m    Op-Node:  http://localhost:$$NODE_PORT\033[0m\n"; \
+	fi
 
 # Stop services
 # Usage: make stop [TARGET=<network>-<rpc>]
