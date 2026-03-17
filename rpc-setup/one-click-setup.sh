@@ -409,8 +409,13 @@ countdown_prompt() {
     while [ $countdown -gt 0 ]; do
         local idx=$(( countdown % ${#SPINNER_FRAMES[@]} ))
         printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s ${C_DIM}(%ds)${C_RESET}" "$prompt_text" "$countdown"
-        read -r -t 1 input </dev/tty 2>/dev/null || true
-        if [ -n "$input" ]; then
+        # read -n 1 detects any keypress, stops countdown immediately
+        if read -r -t 1 -n 1 input </dev/tty 2>/dev/null; then
+            # Show input prompt, read full line
+            printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}" "$input_label"
+            local rest=""
+            read -r rest </dev/tty 2>/dev/null || read -r rest
+            input="${input}${rest}"
             printf "\r\033[K"
             eval "$var_name=\"\$input\""
             return 0
