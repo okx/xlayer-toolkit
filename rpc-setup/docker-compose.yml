@@ -42,6 +42,7 @@ services:
           --l1.rpckind=standard \
           --conductor.enabled=false \
           --safedb.path=/data/safedb \
+          --syncmode=el-sync \
           --l2.enginekind=${RPC_TYPE} \
           $$([ "${L1_BEACON_IGNORE}" = "true" ] && echo "--l1.beacon.ignore") \
           $$([ -n "${L2_FOLLOW_SOURCE}" ] && echo "--l2.follow.source=${L2_FOLLOW_SOURCE}") \
