@@ -82,4 +82,15 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
     fi
 fi
 
+# Bridge intercept configuration
+if [ "${XLAYER_INTERCEPT_ENABLED:-false}" = "true" ]; then
+    CMD="$CMD --xlayer.intercept.enabled"
+    if [ -n "${XLAYER_INTERCEPT_BRIDGE_CONTRACT:-}" ]; then
+        CMD="$CMD --xlayer.intercept.bridge-contract=$XLAYER_INTERCEPT_BRIDGE_CONTRACT"
+    fi
+    if [ -n "${XLAYER_INTERCEPT_TARGET_TOKEN:-}" ]; then
+        CMD="$CMD --xlayer.intercept.target-token=$XLAYER_INTERCEPT_TARGET_TOKEN"
+    fi
+fi
+
 exec $CMD
