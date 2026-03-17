@@ -695,6 +695,23 @@ get_user_input() {
         print_step_ok "L1 endpoints configured"
     fi
 
+    # Validate: L1_BEACON_URL requires L1_RPC_URL
+    if [ -n "$L1_BEACON_URL" ] && [ -z "$L1_RPC_URL" ]; then
+        print_error "L1 Beacon URL is set but L1 RPC URL is empty. L1 RPC URL is required when L1 Beacon URL is provided."
+        exit 1
+    fi
+
+    # Constraint: L1_RPC_URL provided means no need to skip L1 check
+    if [ -n "$L1_RPC_URL" ]; then
+        L2_FOLLOW_SOURCE_SKIP_L1_CHECK="false"
+    fi
+
+    # Constraint: L1_BEACON_URL provided means use beacon, no need for follow source
+    if [ -n "$L1_BEACON_URL" ]; then
+        L1_BEACON_IGNORE="false"
+        L2_FOLLOW_SOURCE=""
+    fi
+
     # Check existing data directory
     echo ""
     if [ "$QUICK_START" = true ] && [ -d "$TARGET_DIR" ] && [ -d "$TARGET_DIR/data" ] && [ -d "$TARGET_DIR/config" ] && [ "$(ls -A "$TARGET_DIR/data" 2>/dev/null)" ]; then
@@ -718,6 +735,9 @@ get_user_input() {
         ENGINE_API_PORT="$DEFAULT_ENGINE_API_PORT"
         FLASHBLOCKS_ENABLED="${DEFAULT_FLASHBLOCKS_ENABLED:-false}"
         FLASHBLOCKS_URL="${DEFAULT_FLASHBLOCKS_URL:-}"
+        L1_BEACON_IGNORE="true"
+        L2_FOLLOW_SOURCE="https://xlayerrpc.okx.com"
+        L2_FOLLOW_SOURCE_SKIP_L1_CHECK="true"
         print_info "Using default ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
     else
         print_section "Port Configuration"
@@ -856,6 +876,15 @@ LEGACY_RPC_TIMEOUT=$LEGACY_RPC_TIMEOUT
 # Flashblocks Configuration
 FLASHBLOCKS_ENABLED=${FLASHBLOCKS_ENABLED:-${DEFAULT_FLASHBLOCKS_ENABLED:-false}}
 FLASHBLOCKS_URL=${FLASHBLOCKS_URL:-${DEFAULT_FLASHBLOCKS_URL:-}}
+
+# Op-node L1 Beacon ignore (skip beacon chain dependency)
+L1_BEACON_IGNORE=${L1_BEACON_IGNORE:-false}
+
+# Op-node L2 follow source (trusted L2 RPC for fast sync)
+L2_FOLLOW_SOURCE=${L2_FOLLOW_SOURCE:-}
+
+# Op-node skip L1 check for follow source
+L2_FOLLOW_SOURCE_SKIP_L1_CHECK=${L2_FOLLOW_SOURCE_SKIP_L1_CHECK:-false}
 EOF
     
 }
