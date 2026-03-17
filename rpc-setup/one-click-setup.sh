@@ -412,23 +412,15 @@ countdown_prompt() {
         while [ $ticks -lt 4 ]; do
             local idx=$(( ticks % ${#SPINNER_FRAMES[@]} ))
             printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$idx]} %s ${C_DIM}(%ds)${C_RESET}" "$prompt_text" "$countdown"
-            # Check if user pressed a key (non-blocking, echo disabled to prevent paste mess)
+            # Check if user pressed a key (echo off to prevent paste display)
             stty -echo 2>/dev/null
             if read -r -t 0.25 -n 1 input </dev/tty 2>/dev/null; then
-                # Drain remaining paste buffer silently
-                local rest=""
-                read -r -t 0.1 rest </dev/tty 2>/dev/null || true
-                input="${input}${rest}"
                 stty echo 2>/dev/null
-                if [ -n "$rest" ]; then
-                    # Paste complete - show result
-                    printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}%s\n" "$input_label" "$input"
-                else
-                    # Single keypress - show prompt for user to type
-                    printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}%s" "$input_label" "$input"
-                    read -r rest </dev/tty 2>/dev/null || read -r rest
-                    input="${input}${rest}"
-                fi
+                # Show clean prompt with first char, read rest until Enter
+                printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}%s" "$input_label" "$input"
+                local rest=""
+                read -r rest </dev/tty 2>/dev/null || read -r rest
+                input="${input}${rest}"
                 printf "\r\033[K"
                 eval "$var_name=\"\$input\""
                 return 0
