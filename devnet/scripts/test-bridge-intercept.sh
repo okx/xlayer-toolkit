@@ -17,7 +17,6 @@
 
 set -e
 
-ROOT_DIR=$(git rev-parse --show-toplevel)
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd $PWD_DIR

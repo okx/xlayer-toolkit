@@ -59,13 +59,12 @@ contract BridgeContractMock {
         );
     }
 
-    // 不抛出事件的直接调用
+    // Direct call that emits no event
     function bridgeDirectNoEvent(
-        address targetToken,
-        uint256 amount,
-        address destinationAddr
+        address,
+        uint256,
+        address
     ) external {
-        // 不抛出事件，仅增加 depositCount
         depositCount++;
     }
 
@@ -92,11 +91,11 @@ contract BridgeContractMock {
             depositCount++
         );
     }
-    // 不抛出事件的间接调用
+    // Internal call that emits no event
     function bridgeInternalNoEvent(
-        address targetToken,
-        uint256 amount,
-        address destinationAddr
+        address,
+        uint256,
+        address
     ) external {
         depositCount++;
     }

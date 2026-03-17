@@ -40,14 +40,12 @@ contract BridgeCallerMock {
         bridge.bridgeInternal(targetToken, amount, destinationAddr);
     }
 
-    // 调用 bridgeInternalNoEvent，不抛出事件
+    // Calls bridgeInternalNoEvent — emits no event
     function callBridgeNoEvent(
         address targetToken,
         uint256 amount,
         address destinationAddr
     ) external {
-        // 需要 BridgeContractMock 新增 bridgeInternalNoEvent
-        // 这里直接调用
         // solhint-disable-next-line avoid-low-level-calls
         (bool success, ) = address(bridge).call(
             abi.encodeWithSignature(
