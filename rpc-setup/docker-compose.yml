@@ -48,6 +48,7 @@ services:
           $$([ -n "${L2_FOLLOW_SOURCE}" ] && echo "--l2.follow.source=${L2_FOLLOW_SOURCE}") \
           $$([ "${L2_FOLLOW_SOURCE_SKIP_L1_CHECK}" = "true" ] && echo "--l2.follow.source.skip-l1-check") \
           2>&1 | tee /logs/op-node.log
+    stop_grace_period: 60s
     restart: unless-stopped
     # Note: Service startup order is controlled by Makefile
 
@@ -78,6 +79,7 @@ services:
       - --rollup.enabletxpooladmission
       - --rollup.sequencerhttp=${SEQUENCER_HTTP_URL}
       - --log.file=/logs/geth.log
+    stop_grace_period: 300s
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
@@ -142,6 +144,7 @@ services:
           --log.file.directory=/logs/ \
           --log.file.filter=info \
           $${FLASHBLOCKS_FLAG}
+    stop_grace_period: 300s
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "--data", "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}", "http://localhost:8545"]
