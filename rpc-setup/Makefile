@@ -2,55 +2,52 @@
 
 # Default target
 help:
-	@echo "--------------------------------------------------"
-	@echo "  X Layer RPC Node - Makefile Commands"
-	@echo "--------------------------------------------------"
+	@printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"
+	@printf "\033[0;36m  |      \033[1mX Layer RPC Node - Makefile Commands\033[0m\033[0;36m          |\033[0m\n"
+	@printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"
 	@echo ""
-	@echo "  make run          - Start RPC node services"
-	@echo "  make stop         - Stop RPC node services (based on .env)"
-	@echo "  make stop TARGET=<network>-<rpc>  - Stop specific instance"
-	@echo "  make status       - Check service status"
+	@printf "\033[0;32m    make run     \033[0m - Start RPC node services\n"
+	@printf "\033[0;32m    make stop    \033[0m - Stop RPC node services\n"
+	@printf "\033[0;32m    make status  \033[0m - Check service status\n"
 	@echo ""
-	@echo "  Note: Run ./one-click-setup.sh for first-time setup"
-	@echo "  Note: To delete data, manually run: rm -rf <network>-<rpc>/ .env"
-	@echo "  Logs: Use 'docker compose logs' or 'docker compose logs -f'"
+	@printf "\033[2m    Note: Run ./one-click-setup.sh for first-time setup\033[0m\n"
+	@printf "\033[2m    Logs: docker compose logs -f\033[0m\n"
 	@echo ""
-	@echo "--------------------------------------------------"
 
 # Start services based on RPC_TYPE from .env
 run:
 	@if [ ! -f .env ]; then \
-		echo "[-] Error: .env file not found. Please run ./one-click-setup.sh first"; \
+		printf "\033[0;31m  [-] Error: .env not found. Run ./one-click-setup.sh first\033[0m\n"; \
 		exit 1; \
 	fi
-	@echo "[*] Starting X Layer RPC node..."
+	@printf "\033[0;36m  [*] Starting X Layer RPC node...\033[0m\n"
 	@RPC_TYPE=$$(grep '^RPC_TYPE=' .env | cut -d'=' -f2); \
 	NETWORK_TYPE=$$(grep '^NETWORK_TYPE=' .env | cut -d'=' -f2); \
 	PROJECT_NAME="xlayer-$$NETWORK_TYPE-$$RPC_TYPE"; \
 	if [ "$$RPC_TYPE" = "reth" ]; then \
-		echo "  Starting op-reth..."; \
+		printf "\033[0;36m  [*] Starting op-reth...\033[0m\n"; \
 		docker compose -p $$PROJECT_NAME up -d op-reth; \
-		echo "[*] Waiting for op-reth to be ready (fast startup mode enabled)..."; \
+		printf "\033[0;36m  [*] Waiting for op-reth to be ready...\033[0m"; \
 		while [ "$$(docker compose -p $$PROJECT_NAME ps op-reth --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d':' -f2 | tr -d '"')" != "healthy" ]; do \
 			sleep 5; \
 			printf "."; \
 		done; \
 		echo ""; \
-		echo "  Starting op-node..."; \
+		printf "\033[0;36m  [*] Starting op-node...\033[0m\n"; \
 		docker compose -p $$PROJECT_NAME up -d op-node; \
 	else \
-		echo "  Starting op-geth..."; \
+		printf "\033[0;36m  [*] Starting op-geth...\033[0m\n"; \
 		docker compose -p $$PROJECT_NAME up -d op-geth; \
-		echo "[*] Waiting for op-geth to be ready (this may take several minutes for first start)..."; \
+		printf "\033[0;36m  [*] Waiting for op-geth to be ready...\033[0m"; \
 		while [ "$$(docker compose -p $$PROJECT_NAME ps op-geth --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d':' -f2 | tr -d '"')" != "healthy" ]; do \
 			sleep 10; \
 			printf "."; \
 		done; \
 		echo ""; \
-		echo "  Starting op-node..."; \
+		printf "\033[0;36m  [*] Starting op-node...\033[0m\n"; \
 		docker compose -p $$PROJECT_NAME up -d op-node; \
 	fi
-	@echo "[+] Services started"
+	@printf "\033[0;32m  [+] Services started\033[0m\n"
 	@echo ""
 	@$(MAKE) status
 
@@ -61,29 +58,27 @@ run:
 # Note: docker compose down does NOT remove volumes, so data is preserved
 stop:
 	@if [ -n "$(TARGET)" ]; then \
-		echo "[*] Stopping X Layer RPC node: $(TARGET)..."; \
+		printf "\033[0;36m  [*] Stopping X Layer RPC node: $(TARGET)...\033[0m\n"; \
 		NETWORK_TYPE=$$(echo "$(TARGET)" | cut -d'-' -f1); \
 		RPC_TYPE=$$(echo "$(TARGET)" | cut -d'-' -f2); \
 		if [ -z "$$NETWORK_TYPE" ] || [ -z "$$RPC_TYPE" ]; then \
-			echo "[-] Error: Invalid TARGET format. Expected: <network>-<rpc> (e.g., testnet-geth)"; \
+			printf "\033[0;31m  [-] Invalid TARGET format. Expected: <network>-<rpc>\033[0m\n"; \
 			exit 1; \
 		fi; \
 		PROJECT_NAME="xlayer-$$NETWORK_TYPE-$$RPC_TYPE"; \
-		echo "  Stopping containers for $$NETWORK_TYPE-$$RPC_TYPE (project: $$PROJECT_NAME)..."; \
 		docker compose -p $$PROJECT_NAME down; \
-		echo "[+] Services stopped for $(TARGET) (data preserved)"; \
+		printf "\033[0;32m  [+] Services stopped for $(TARGET) (data preserved)\033[0m\n"; \
 	else \
 		if [ ! -f .env ]; then \
-			echo "[-] Error: .env file not found. Please run ./one-click-setup.sh first or specify TARGET parameter"; \
-			echo "  Usage: make stop TARGET=<network>-<rpc>"; \
+			printf "\033[0;31m  [-] .env not found. Run ./one-click-setup.sh or use TARGET=<network>-<rpc>\033[0m\n"; \
 			exit 1; \
 		fi; \
 		RPC_TYPE=$$(grep '^RPC_TYPE=' .env | cut -d'=' -f2); \
 		NETWORK_TYPE=$$(grep '^NETWORK_TYPE=' .env | cut -d'=' -f2); \
 		PROJECT_NAME="xlayer-$$NETWORK_TYPE-$$RPC_TYPE"; \
-		echo "[*] Stopping X Layer RPC node (based on .env, project: $$PROJECT_NAME)..."; \
+		printf "\033[0;36m  [*] Stopping X Layer RPC node ($$PROJECT_NAME)...\033[0m\n"; \
 		docker compose -p $$PROJECT_NAME down; \
-		echo "[+] Services stopped (data preserved)"; \
+		printf "\033[0;32m  [+] Services stopped (data preserved)\033[0m\n"; \
 	fi
 
 # Check service status
@@ -92,10 +87,10 @@ status:
 		RPC_TYPE=$$(grep '^RPC_TYPE=' .env | cut -d'=' -f2); \
 		NETWORK_TYPE=$$(grep '^NETWORK_TYPE=' .env | cut -d'=' -f2); \
 		PROJECT_NAME="xlayer-$$NETWORK_TYPE-$$RPC_TYPE"; \
-		echo "[*] Service Status (project: $$PROJECT_NAME):"; \
+		printf "\033[0;36m  [*] Service Status ($$PROJECT_NAME):\033[0m\n"; \
 		docker compose -p $$PROJECT_NAME ps; \
 	else \
-		echo "[*] Service Status:"; \
+		printf "\033[0;36m  [*] Service Status:\033[0m\n"; \
 		docker compose ps; \
 	fi
 	@echo ""
@@ -105,13 +100,12 @@ status:
 		HTTP_PORT=$$(grep '^HTTP_RPC_PORT=' .env | cut -d'=' -f2); \
 		WS_PORT=$$(grep '^WEBSOCKET_PORT=' .env | cut -d'=' -f2); \
 		NODE_PORT=$$(grep '^NODE_RPC_PORT=' .env | cut -d'=' -f2); \
-		echo "--------------------------------------------------"; \
-		echo "[*] Connection Info"; \
-		echo "--------------------------------------------------"; \
-		echo "  Network:  $$NETWORK_TYPE"; \
-		echo "  RPC Type: $$RPC_TYPE"; \
-		echo "  HTTP:     http://localhost:$$HTTP_PORT"; \
-		echo "  WS:       ws://localhost:$$WS_PORT"; \
-		echo "  Op-Node:  http://localhost:$$NODE_PORT"; \
-		echo "--------------------------------------------------"; \
+		printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"; \
+		printf "\033[0;36m  |         \033[1mConnection Info\033[0m\033[0;36m                             |\033[0m\n"; \
+		printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"; \
+		printf "\033[2m    Network:  $$NETWORK_TYPE\033[0m\n"; \
+		printf "\033[2m    RPC Type: $$RPC_TYPE\033[0m\n"; \
+		printf "\033[0;32m    HTTP:     http://localhost:$$HTTP_PORT\033[0m\n"; \
+		printf "\033[0;32m    WS:       ws://localhost:$$WS_PORT\033[0m\n"; \
+		printf "\033[0;32m    Op-Node:  http://localhost:$$NODE_PORT\033[0m\n"; \
 	fi
