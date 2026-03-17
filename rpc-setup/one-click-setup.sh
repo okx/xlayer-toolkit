@@ -402,6 +402,7 @@ countdown_prompt() {
     local prompt_text=$1
     local var_name=$2
     local timeout=${3:-5}
+    local input_label=${4:-$1}
     local input=""
 
     # Countdown animation on current line, then clear and show input prompt below
@@ -414,7 +415,7 @@ countdown_prompt() {
             # Check if user pressed a key (non-blocking)
             if read -r -t 0.25 -n 1 input </dev/tty 2>/dev/null; then
                 # User started typing, move to input mode
-                printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}%s" "$prompt_text" "$input"
+                printf "\r\033[K${C_CYAN}  > %s: ${C_RESET}%s" "$input_label" "$input"
                 # Read the rest of the line
                 local rest=""
                 read -r rest </dev/tty 2>/dev/null || read -r rest
@@ -661,11 +662,11 @@ get_user_input() {
 
     if [ "$QUICK_START" = true ]; then
         echo ""
-        countdown_prompt "L1 RPC URL(recommended)... Press any key to input" L1_RPC_URL 5
+        countdown_prompt "L1 RPC URL(recommended)... Press any key to input" L1_RPC_URL 5 "L1 RPC URL"
         print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
 
         if [ -n "$L1_RPC_URL" ]; then
-            countdown_prompt "L1 Beacon URL(recommended)... Press any key to input" L1_BEACON_URL 5
+            countdown_prompt "L1 Beacon URL(recommended)... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL"
             print_success "L1 Beacon URL: ${L1_BEACON_URL:-(empty)}"
         else
             L1_BEACON_URL=""
@@ -673,14 +674,14 @@ get_user_input() {
     else
         print_section "L1 Endpoints"
         echo ""
-        countdown_prompt "Enter your L1 RPC URL... Press any key to input" L1_RPC_URL 5
+        countdown_prompt "L1 RPC URL... Press any key to input" L1_RPC_URL 5 "L1 RPC URL"
         if [ -n "$L1_RPC_URL" ] && ! validate_url "$L1_RPC_URL"; then
             L1_RPC_URL=""
         fi
         print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
 
         if [ -n "$L1_RPC_URL" ]; then
-            countdown_prompt "Enter your L1 Beacon URL... Press any key to input" L1_BEACON_URL 5
+            countdown_prompt "L1 Beacon URL... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL"
             if [ -n "$L1_BEACON_URL" ] && ! validate_url "$L1_BEACON_URL"; then
                 L1_BEACON_URL=""
             fi
