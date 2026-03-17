@@ -177,6 +177,18 @@ OP_RETH_DATADIR2="$(pwd)/data/op-reth-seq2"
 
 rm -rf "$OP_RETH_DATADIR"
 mkdir -p "$OP_RETH_DATADIR"
+
+# Build storage flags for op-reth init so the DB is initialized with the
+# correct storage_v2 setting (it is written at genesis time and cannot be
+# changed later without a full re-sync).
+RETH_INIT_STORAGE_FLAGS=""
+if [ "${RETH_STORAGE_V2:-false}" = "true" ]; then
+    RETH_INIT_STORAGE_FLAGS="--storage.v2"
+    if [ -n "${RETH_ROCKSDB_PATH:-}" ]; then
+        RETH_INIT_STORAGE_FLAGS="$RETH_INIT_STORAGE_FLAGS --datadir.rocksdb=$RETH_ROCKSDB_PATH"
+    fi
+fi
+
 INIT_LOG=$(docker compose run --no-deps --rm \
   -v "$(pwd)/$CONFIG_DIR/genesis-reth.json:/genesis.json" \
   --entrypoint op-reth \
@@ -184,6 +196,7 @@ INIT_LOG=$(docker compose run --no-deps --rm \
   init \
   --datadir="/datadir" \
   --chain=/genesis.json \
+  $RETH_INIT_STORAGE_FLAGS \
   --log.stdout.format=json | tee init.log)
 
 NEW_BLOCK_HASH=$(tail -n 1 init.log | jq -r .fields.hash)
