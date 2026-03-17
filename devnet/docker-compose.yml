@@ -222,6 +222,7 @@ services:
       - ./config-op/genesis-reth.json:/genesis.json
       - ./entrypoint:/entrypoint
       - ./.env:/.env
+      - ./config-op/test.reth.seq.config.toml:/config.toml
       - ./logs/op-reth-seq:/logs/reth
       # Profiling data directory
       - ./profiling/op-reth-seq:/profiling
