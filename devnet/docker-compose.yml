@@ -418,8 +418,9 @@ services:
       - --p2p.static=/dns4/op-seq/tcp/9223/p2p/16Uiu2HAkzHdkbmS2VrCsccLibsu7MvGHpmFUMJnMTkKifrtS5m65
       - --p2p.no-discovery
       - --rpc.enable-admin=true
-      - --l1=${L1_RPC_URL_IN_DOCKER}
-      - --l1.beacon=${L1_BEACON_URL_IN_DOCKER}
+      - --l1.beacon.ignore
+      - --l2.follow.source=http://op-rpc:9545
+      - --l2.follow.source.skip-l1-check
       - --l1.rpckind=standard
       - --rollup.l1-chain-config=/l1-genesis.json
       - --safedb.path=/data/safedb
