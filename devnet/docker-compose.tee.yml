@@ -1,0 +1,48 @@
+# docker-compose.tee.yml — TEE Dispute Game E2E Test Services
+#
+# 使用方式:
+#   docker compose --env-file .tee.env -f docker-compose.yml -f docker-compose.tee.yml \
+#     up -d tee-op-proposer tee-op-challenger
+#
+# Mock 组件（mockteerpc、mock-tee-prover）在宿主机运行，容器通过 host.docker.internal 访问。
+
+services:
+  tee-op-proposer:
+    image: "${TEE_OP_STACK_IMAGE_TAG}"
+    container_name: tee-op-proposer
+    env_file:
+      - .tee.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - /app/op-proposer/bin/op-proposer
+      - --log.level=debug
+      - --poll-interval=12s
+      - --proposal-interval=12s
+      - --rpc.port=7302
+      - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
+      - --private-key=${TEE_PROPOSER_PRIVATE_KEY}
+      - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
+      - --game-type=${TEE_GAME_TYPE:-1960}
+      - --tee-rollup-rpc=http://host.docker.internal:8090
+    depends_on:
+      - op-batcher
+
+  tee-op-challenger:
+    image: "${TEE_OP_STACK_IMAGE_TAG}"
+    container_name: tee-op-challenger
+    env_file:
+      - .tee.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - /app/op-challenger/bin/op-challenger
+      - --log.level=debug
+      - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
+      - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
+      - --private-key=${TEE_CHALLENGER_PRIVATE_KEY}
+      - --game-allowlist=${TEE_GAME_TYPE:-1960}
+      - --tee-prover-rpc=http://host.docker.internal:8690
+      - --tee-prove-poll-interval=2s
+      - --tee-prove-timeout=120s
+      - --game-window=${GAME_WINDOW:-600}s
