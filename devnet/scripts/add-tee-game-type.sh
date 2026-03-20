@@ -367,7 +367,7 @@ if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
     # 4. Verify
     echo "=== Verifying TeeDisputeGame type was registered ==="
     REGISTERED_IMPL=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDR 'gameImpls(uint32)(address)' $TEE_GAME_TYPE)
-    REGISTERED_BOND=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDR 'initBonds(uint32)(uint256)' $TEE_GAME_TYPE)
+    REGISTERED_BOND=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDR 'initBonds(uint32)(uint256)' $TEE_GAME_TYPE | awk '{print $1}')
 
     if [ "$REGISTERED_IMPL" != "0x0000000000000000000000000000000000000000" ]; then
         echo " ✅ Success! TeeDisputeGame type $TEE_GAME_TYPE registered."
