@@ -35,7 +35,6 @@ load_configuration() {
         config_file="$WORK_DIR/network-presets.env"
         if [ ! -f "$config_file" ]; then
             if ! command -v wget &> /dev/null; then
-                print_warning "wget is not installed, attempting auto-install..."
                 install_missing_tools wget
             fi
             print_info "Downloading configuration file..."
@@ -377,35 +376,25 @@ check_docker() {
     print_step_ok "Docker ready (docker $docker_version, compose $compose_version)"
 }
     
-# Auto-install missing tools
+# Auto-install missing tools (output hidden behind spinner)
 install_missing_tools() {
     local tools=("$@")
     local os
     os="$(uname -s)"
 
-    print_info "Auto-installing missing tools: ${tools[*]}"
-
+    local install_cmd=""
     if [[ "$os" == "Darwin" ]]; then
         if ! command_exists brew; then
             print_error "Homebrew is required to install missing tools on macOS."
             echo -e "  ${C_DIM}Install: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"${C_RESET}"
             exit 1
         fi
-        if ! brew install "${tools[@]}"; then
-            print_error "Failed to install: ${tools[*]}"
-            exit 1
-        fi
+        install_cmd="brew install ${tools[*]}"
     elif [[ "$os" == "Linux" ]]; then
         if command_exists apt-get; then
-            if ! sudo apt-get update -qq && sudo apt-get install -y -qq "${tools[@]}"; then
-                print_error "Failed to install: ${tools[*]}"
-                exit 1
-            fi
+            install_cmd="sudo apt-get update -qq && sudo apt-get install -y -qq ${tools[*]}"
         elif command_exists yum; then
-            if ! sudo yum install -y "${tools[@]}"; then
-                print_error "Failed to install: ${tools[*]}"
-                exit 1
-            fi
+            install_cmd="sudo yum install -y -q ${tools[*]}"
         else
             print_error "No supported package manager found (apt-get or yum)."
             exit 1
@@ -414,6 +403,24 @@ install_missing_tools() {
         print_error "Unsupported OS for auto-install: $os"
         exit 1
     fi
+
+    eval "$install_cmd" &>/dev/null &
+    local pid=$!
+    local i=0
+    while kill -0 "$pid" 2>/dev/null; do
+        i=$(( (i + 1) % ${#SPINNER_FRAMES[@]} ))
+        printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} Installing ${tools[*]}...${C_RESET}"
+        sleep 0.25
+    done
+    wait "$pid"
+    local ret=$?
+    printf "\r\033[K"
+
+    if [ $ret -ne 0 ]; then
+        print_step_fail "Failed to install: ${tools[*]}"
+        exit 1
+    fi
+    print_step_ok "Installed: ${tools[*]}"
 }
 
 # Check required system tools
