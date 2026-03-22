@@ -1284,7 +1284,7 @@ format_bytes() {
 }
 
 # Check disk space before downloading
-# Requires 2x the download size (download + extraction)
+# Requires 3x the download size (compressed + extraction headroom)
 check_disk_space() {
     local download_url=$1
     local target_path=$2
@@ -1298,7 +1298,7 @@ check_disk_space() {
         return 0
     fi
 
-    local required_space=$((file_size * 2))
+    local required_space=$((file_size * 3))
     local available_space
     available_space=$(get_available_disk_space "$target_path")
 
@@ -1315,11 +1315,11 @@ check_disk_space() {
     available_hr=$(format_bytes "$available_space")
 
     if [ "$available_space" -lt "$required_space" ]; then
-        print_step_fail "Insufficient disk space: need ${required_hr} (2x ${file_size_hr}), available ${available_hr}"
+        print_step_fail "Insufficient disk space: need ${required_hr} (3x ${file_size_hr}), available ${available_hr}"
         exit 1
     fi
 
-    print_step_ok "Disk space OK: need ${required_hr} (2x ${file_size_hr}), available ${available_hr}"
+    print_step_ok "Disk space OK: need ${required_hr} (3x ${file_size_hr}), available ${available_hr}"
 }
 
 initialize_node() {
