@@ -35,10 +35,8 @@ load_configuration() {
         config_file="$WORK_DIR/network-presets.env"
         if [ ! -f "$config_file" ]; then
             if ! command -v wget &> /dev/null; then
-                print_error "wget is required but not installed."
-                echo -e "  ${C_DIM}macOS: brew install wget${C_RESET}"
-                echo -e "  ${C_DIM}Ubuntu: sudo apt-get install wget${C_RESET}"
-                exit 1
+                print_warning "wget is not installed, attempting auto-install..."
+                install_missing_tools wget
             fi
             print_info "Downloading configuration file..."
             local config_url="${REPO_URL}/presets/network-presets.env"
@@ -379,6 +377,45 @@ check_docker() {
     print_step_ok "Docker ready (docker $docker_version, compose $compose_version)"
 }
     
+# Auto-install missing tools
+install_missing_tools() {
+    local tools=("$@")
+    local os
+    os="$(uname -s)"
+
+    print_info "Auto-installing missing tools: ${tools[*]}"
+
+    if [[ "$os" == "Darwin" ]]; then
+        if ! command_exists brew; then
+            print_error "Homebrew is required to install missing tools on macOS."
+            echo -e "  ${C_DIM}Install: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"${C_RESET}"
+            exit 1
+        fi
+        if ! brew install "${tools[@]}"; then
+            print_error "Failed to install: ${tools[*]}"
+            exit 1
+        fi
+    elif [[ "$os" == "Linux" ]]; then
+        if command_exists apt-get; then
+            if ! sudo apt-get update -qq && sudo apt-get install -y -qq "${tools[@]}"; then
+                print_error "Failed to install: ${tools[*]}"
+                exit 1
+            fi
+        elif command_exists yum; then
+            if ! sudo yum install -y "${tools[@]}"; then
+                print_error "Failed to install: ${tools[*]}"
+                exit 1
+            fi
+        else
+            print_error "No supported package manager found (apt-get or yum)."
+            exit 1
+        fi
+    else
+        print_error "Unsupported OS for auto-install: $os"
+        exit 1
+    fi
+}
+
 # Check required system tools
 check_required_tools() {
     local missing_required=()
@@ -392,10 +429,8 @@ check_required_tools() {
     done
 
     if [ ${#missing_required[@]} -gt 0 ]; then
-        print_step_fail "Missing: ${missing_required[*]}"
-        echo -e "  ${C_DIM}macOS: brew install ${missing_required[*]}${C_RESET}"
-        echo -e "  ${C_DIM}Ubuntu: sudo apt-get install ${missing_required[*]}${C_RESET}"
-        exit 1
+        print_warning "Missing tools: ${missing_required[*]}"
+        install_missing_tools "${missing_required[@]}"
     fi
 
     print_step_ok "Tools ready (${required_tools[*]})"
