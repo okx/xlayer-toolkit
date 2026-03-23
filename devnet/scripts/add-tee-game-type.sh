@@ -2,11 +2,18 @@
 # add-tee-game-type.sh — Register TeeDisputeGame on an existing devnet
 #
 # Usage:
-#   ./scripts/add-tee-game-type.sh [--mock-verifier] [/path/to/tee-contracts]
+#   ./scripts/add-tee-game-type.sh [FLAGS] [/path/to/tee-contracts]
 #
 # Flags:
-#   --mock-verifier   Deploy MockTeeProofVerifier instead of TeeProofVerifier.
-#                     Use when you want a fully mock verifier (no ECDSA signing needed).
+#   --mock-verifier              Deploy MockTeeProofVerifier instead of TeeProofVerifier.
+#                                Must be combined with --enclave <address>.
+#   --enclave <addr>             Enclave address to register as a valid signer on the
+#                                MockTeeProofVerifier via setRegistered(). Required when
+#                                --mock-verifier is set.
+#   --max-challenge-duration <s> Override MAX_CHALLENGE_DURATION (seconds). Falls back to
+#                                MAX_CLOCK_DURATION env var, then default 20.
+#   --max-prove-duration <s>     Override MAX_PROVE_DURATION (seconds). Falls back to
+#                                MAX_CLOCK_DURATION env var, then default 20.
 #
 # If no path is given, defaults to <devnet-dir>/tee-contracts.
 # You can also set TEE_CONTRACTS_DIR explicitly:
@@ -16,12 +23,37 @@ set -e
 
 # ── Parse flags ───────────────────────────────────────────────────────────────
 USE_MOCK_VERIFIER=false
+MOCK_ENCLAVE_ADDRESS=""
+ARG_MAX_CHALLENGE_DURATION=""
+ARG_MAX_PROVE_DURATION=""
 POSITIONAL_ARGS=()
-for arg in "$@"; do
+i=1
+while [ $i -le $# ]; do
+    arg="${!i}"
     case "$arg" in
-        --mock-verifier) USE_MOCK_VERIFIER=true ;;
+        --mock-verifier)
+            USE_MOCK_VERIFIER=true
+            ;;
+        --enclave)
+            i=$((i + 1))
+            next="${!i}"
+            if [ -z "$next" ] || [[ "$next" == --* ]]; then
+                echo "❌ --enclave requires an address argument"
+                exit 1
+            fi
+            MOCK_ENCLAVE_ADDRESS="$next"
+            ;;
+        --max-challenge-duration)
+            i=$((i + 1))
+            ARG_MAX_CHALLENGE_DURATION="${!i}"
+            ;;
+        --max-prove-duration)
+            i=$((i + 1))
+            ARG_MAX_PROVE_DURATION="${!i}"
+            ;;
         *) POSITIONAL_ARGS+=("$arg") ;;
     esac
+    i=$((i + 1))
 done
 
 # Source environment variables
@@ -75,8 +107,8 @@ export SYSTEM_CONFIG_ADDRESS="$SYSTEM_CONFIG_PROXY_ADDRESS"
 export DISPUTE_GAME_FINALITY_DELAY_SECONDS="${DISPUTE_GAME_FINALITY_DELAY_SECONDS:-5}"
 
 # TEE game timing — reuse devnet values for fast iteration
-export MAX_CHALLENGE_DURATION="${MAX_CLOCK_DURATION:-20}"
-export MAX_PROVE_DURATION="${MAX_CLOCK_DURATION:-20}"
+export MAX_CHALLENGE_DURATION="${ARG_MAX_CHALLENGE_DURATION:-${MAX_CLOCK_DURATION:-20}}"
+export MAX_PROVE_DURATION="${ARG_MAX_PROVE_DURATION:-${MAX_CLOCK_DURATION:-20}}"
 
 # Bond defaults (0.01 ETH) and access-manager fallback timeout (1 hour)
 export CHALLENGER_BOND="${CHALLENGER_BOND:-10000000000000000}"
@@ -89,8 +121,13 @@ else
     unset PROPOSER_ADDRESS
 fi
 
+if [ "$USE_MOCK_VERIFIER" = "true" ] && [ -z "$MOCK_ENCLAVE_ADDRESS" ]; then
+    echo "❌ --mock-verifier requires --enclave <address> (e.g. --mock-verifier --enclave 0xABC...)"
+    exit 1
+fi
+
 export USE_MOCK_VERIFIER
-echo "=== Verifier mode: $([ "$USE_MOCK_VERIFIER" = "true" ] && echo "MockTeeProofVerifier (mock)" || echo "TeeProofVerifier + MockRiscZeroVerifier") ==="
+echo "=== Verifier mode: $([ "$USE_MOCK_VERIFIER" = "true" ] && echo "MockTeeProofVerifier (mock), enclave: $MOCK_ENCLAVE_ADDRESS" || echo "TeeProofVerifier + MockRiscZeroVerifier") ==="
 
 # ── Function: deploy TEE contracts via forge script ───────────────────────────
 deploy_tee_contracts() {
@@ -142,6 +179,41 @@ deploy_tee_contracts() {
         echo "❌ Failed to extract New AnchorStateRegistry address from forge log."
         exit 1
     fi
+}
+
+# ── Function: register enclave with MockTeeProofVerifier ──────────────────────
+register_enclave_with_mock_verifier() {
+    echo "=== Registering enclave address with MockTeeProofVerifier ==="
+
+    # Query the game impl to get the mock verifier address
+    MOCK_VERIFIER_ADDR=$(cast call --rpc-url "$L1_RPC_URL" "$TEE_GAME_IMPL" 'teeProofVerifier()(address)')
+    echo "  MockTeeProofVerifier:    $MOCK_VERIFIER_ADDR"
+    echo "  Enclave address:         $MOCK_ENCLAVE_ADDRESS"
+    echo ""
+
+    TX_OUTPUT=$(cast send \
+        --json \
+        --legacy \
+        --rpc-url "$L1_RPC_URL" \
+        --private-key "$DEPLOYER_PRIVATE_KEY" \
+        --from "$(cast wallet address --private-key "$DEPLOYER_PRIVATE_KEY")" \
+        "$MOCK_VERIFIER_ADDR" \
+        'setRegistered(address,bool)' \
+        "$MOCK_ENCLAVE_ADDRESS" \
+        true)
+
+    TX_HASH=$(echo "$TX_OUTPUT" | jq -r '.transactionHash // empty')
+    TX_STATUS=$(echo "$TX_OUTPUT" | jq -r '.status // empty')
+    echo "Transaction sent, TX_HASH: $TX_HASH"
+
+    if [ "$TX_STATUS" = "0x1" ] || [ "$TX_STATUS" = "1" ]; then
+        echo " ✅ setRegistered($MOCK_ENCLAVE_ADDRESS, true) completed successfully"
+    else
+        echo " ❌ Transaction failed with status: $TX_STATUS"
+        echo "Full output: $TX_OUTPUT"
+        exit 1
+    fi
+    echo ""
 }
 
 # ── Function: setRespectedGameType on new ASR ─────────────────────────────────
@@ -354,17 +426,22 @@ if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
     # 1. Deploy contracts via forge script
     deploy_tee_contracts
 
-    # 2. setRespectedGameType(1960) on new ASR (deployer is guardian on devnet)
+    # 2. If mock verifier, register the enclave address on the mock verifier
+    if [ "$USE_MOCK_VERIFIER" = "true" ]; then
+        register_enclave_with_mock_verifier
+    fi
+
+    # 3. setRespectedGameType(1960) on new ASR (deployer is guardian on devnet)
     set_respected_game_type
 
-    # 3. setImplementation + setInitBond on existing DGF via TRANSACTOR or Safe
+    # 4. setImplementation + setInitBond on existing DGF via TRANSACTOR or Safe
     if [ "$OWNER_TYPE" = "transactor" ]; then
         add_tee_game_type_via_transactor
     elif [ "$OWNER_TYPE" = "safe" ]; then
         add_tee_game_type_via_safe
     fi
 
-    # 4. Verify
+    # 5. Verify
     echo "=== Verifying TeeDisputeGame type was registered ==="
     REGISTERED_IMPL=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDR 'gameImpls(uint32)(address)' $TEE_GAME_TYPE)
     REGISTERED_BOND=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDR 'initBonds(uint32)(uint256)' $TEE_GAME_TYPE | awk '{print $1}')
@@ -390,6 +467,10 @@ if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
     echo "  TeeDisputeGame impl:     $TEE_GAME_IMPL"
     echo "  New AnchorStateRegistry: $NEW_ASR_ADDR"
     echo "  Existing DGF:            $DISPUTE_GAME_FACTORY_ADDR"
+    if [ "$USE_MOCK_VERIFIER" = "true" ]; then
+        echo "  Mock Verifier:           $MOCK_VERIFIER_ADDR"
+        echo "  Enclave address:         $MOCK_ENCLAVE_ADDRESS"
+    fi
     echo "========================================"
     echo ""
     echo "Verify:"
