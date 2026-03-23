@@ -119,10 +119,30 @@ for (( i=0; i<TOTAL; i++ )); do
     BLK_HASH=$(cast call --rpc-url "$L1_RPC" "$PROXY" "blockHash()(bytes32)" 2>/dev/null || echo "?")
     ST_HASH=$(cast call --rpc-url "$L1_RPC" "$PROXY" "stateHash()(bytes32)" 2>/dev/null || echo "?")
 
+    # 查 bondDistributionMode (0=UNDECIDED, 1=REFUND, 2=NORMAL)
+    BOND_MODE=$(cast call --rpc-url "$L1_RPC" "$PROXY" "bondDistributionMode()(uint8)" 2>/dev/null | awk '{print $1}')
+    [ -z "$BOND_MODE" ] && BOND_MODE="?"
+    case "$BOND_MODE" in
+        0) BOND_MODE_NAME="UNDECIDED (not closed)" ;;
+        1) BOND_MODE_NAME="REFUND (closed, improper)" ;;
+        2) BOND_MODE_NAME="NORMAL (closed, proper)" ;;
+        *) BOND_MODE_NAME="UNKNOWN($BOND_MODE)" ;;
+    esac
+
+    # 查 proposer 和 credit 余额
+    PROPOSER=$(cast call --rpc-url "$L1_RPC" "$PROXY" "proposer()(address)" 2>/dev/null || echo "?")
+    CHALLENGER=$(echo "$CLAIM_DATA" | sed -n '2p')
+    PROPOSER_CREDIT=$(cast call --rpc-url "$L1_RPC" "$PROXY" "credit(address)(uint256)" "$PROPOSER" 2>/dev/null | awk '{print $1}')
+    [ -z "$PROPOSER_CREDIT" ] && PROPOSER_CREDIT="0"
+    GAME_BALANCE=$(cast balance --rpc-url "$L1_RPC" "$PROXY" 2>/dev/null | awk '{print $1}')
+    [ -z "$GAME_BALANCE" ] && GAME_BALANCE="?"
+
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Game #$i  |  $PROXY"
     echo "  status:          $STATUS ($STATUS_NAME)"
     echo "  proposalStatus:  $PSTATUS ($PSTATUS_NAME)"
+    echo "  bondMode:        $BOND_MODE ($BOND_MODE_NAME)"
+    echo "  balance:         $(cast from-wei "$GAME_BALANCE" 2>/dev/null || echo "$GAME_BALANCE") ETH"
     echo "  parentIndex:     $PARENT_INDEX"
     echo "  startHeight:     $START_BLK"
     echo "  endHeight:       $L2SEQ"
@@ -130,6 +150,8 @@ for (( i=0; i<TOTAL; i++ )); do
     echo "  rootClaim:       $ROOT_CLAIM"
     echo "  blockHash:       $BLK_HASH"
     echo "  stateHash:       $ST_HASH"
+    echo "  proposer:        $PROPOSER"
+    echo "  challenger:      $CHALLENGER"
     echo "  prover:          $PROVER"
     echo "  deadline:        $DEADLINE"
     echo "  created:         $TIMESTAMP"
