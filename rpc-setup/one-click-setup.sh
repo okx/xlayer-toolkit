@@ -369,8 +369,25 @@ check_docker() {
     fi
 
     if ! run_with_spinner "Checking docker daemon..." docker info; then
-        print_step_fail "Docker daemon is not running."
-        exit 1
+        print_warning "Docker daemon is not running. Attempting to start..."
+        local os
+        os="$(uname -s)"
+        if [[ "$os" == "Darwin" ]]; then
+            open -a Docker 2>/dev/null
+        elif [[ "$os" == "Linux" ]]; then
+            sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null
+        fi
+        # Wait up to 30 seconds for Docker daemon to become ready
+        local waited=0
+        while ! docker info &>/dev/null; do
+            if [ "$waited" -ge 30 ]; then
+                print_step_fail "Docker daemon failed to start within 30 seconds."
+                exit 1
+            fi
+            sleep 1
+            waited=$((waited + 1))
+        done
+        print_step_ok "Docker daemon started"
     fi
 
     print_step_ok "Docker ready (docker $docker_version, compose $compose_version)"
