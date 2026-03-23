@@ -404,7 +404,9 @@ install_missing_tools() {
         exit 1
     fi
 
-    eval "$install_cmd" &>/dev/null &
+    local install_log
+    install_log=$(mktemp)
+    eval "$install_cmd" >"$install_log" 2>&1 &
     local pid=$!
     local i=0
     while kill -0 "$pid" 2>/dev/null; do
@@ -418,8 +420,12 @@ install_missing_tools() {
 
     if [ $ret -ne 0 ]; then
         print_step_fail "Failed to install: ${tools[*]}"
+        echo -e "  ${C_DIM}Install log:${C_RESET}"
+        sed 's/^/    /' "$install_log"
+        rm -f "$install_log"
         exit 1
     fi
+    rm -f "$install_log"
     print_step_ok "Installed: ${tools[*]}"
 }
 
@@ -1297,7 +1303,7 @@ init_reth() {
 get_remote_file_size() {
     local url=$1
     local size
-    size=$(curl -sI "$url" 2>/dev/null | grep -i '^content-length' | tail -1 | tr -d '\r' | awk '{print $2}')
+    size=$(curl -sIL "$url" 2>/dev/null | grep -i '^content-length' | tail -1 | tr -d '\r' | awk '{print $2}')
     echo "${size:-0}"
 }
 
