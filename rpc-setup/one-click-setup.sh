@@ -369,8 +369,25 @@ check_docker() {
     fi
 
     if ! run_with_spinner "Checking docker daemon..." docker info; then
-        print_step_fail "Docker daemon is not running."
-        exit 1
+        print_warning "Docker daemon is not running. Attempting to start..."
+        local os
+        os="$(uname -s)"
+        if [[ "$os" == "Darwin" ]]; then
+            open -a Docker 2>/dev/null
+        elif [[ "$os" == "Linux" ]]; then
+            sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null
+        fi
+        # Wait up to 30 seconds for Docker daemon to become ready
+        local waited=0
+        while ! docker info &>/dev/null; do
+            if [ "$waited" -ge 30 ]; then
+                print_step_fail "Docker daemon failed to start within 30 seconds."
+                exit 1
+            fi
+            sleep 1
+            waited=$((waited + 1))
+        done
+        print_step_ok "Docker daemon started"
     fi
 
     print_step_ok "Docker ready (docker $docker_version, compose $compose_version)"
@@ -1323,9 +1340,9 @@ get_available_disk_space() {
 format_bytes() {
     local bytes=$1
     if [ "$bytes" -ge 1073741824 ]; then
-        echo "$(awk "BEGIN {printf \"%.1f\", $bytes/1073741824}")GB"
+        echo "$(echo "$bytes" | awk '{printf "%.1f", $1/1073741824}')GB"
     elif [ "$bytes" -ge 1048576 ]; then
-        echo "$(awk "BEGIN {printf \"%.1f\", $bytes/1048576}")MB"
+        echo "$(echo "$bytes" | awk '{printf "%.1f", $1/1048576}')MB"
     else
         echo "${bytes}B"
     fi
