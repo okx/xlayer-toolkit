@@ -3,7 +3,20 @@
 set -e
 
 DEVNET_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$DEVNET_DIR/.tee.env"
+
+# 保存命令行传入的环境变量（优先级高于 .tee.env）
+_CLI_FACTORY=${DISPUTE_GAME_FACTORY_ADDRESS:-}
+_CLI_RPC=${L1_RPC_URL:-}
+_CLI_GAME_TYPE=${TEE_GAME_TYPE:-}
+_CLI_REGISTRY=${ANCHOR_STATE_REGISTRY_ADDRESS:-}
+
+[ -f "$DEVNET_DIR/.tee.env" ] && source "$DEVNET_DIR/.tee.env"
+
+# 命令行参数覆盖 .tee.env
+[ -n "$_CLI_FACTORY" ] && DISPUTE_GAME_FACTORY_ADDRESS="$_CLI_FACTORY"
+[ -n "$_CLI_RPC" ] && L1_RPC_URL="$_CLI_RPC"
+[ -n "$_CLI_GAME_TYPE" ] && TEE_GAME_TYPE="$_CLI_GAME_TYPE"
+[ -n "$_CLI_REGISTRY" ] && ANCHOR_STATE_REGISTRY_ADDRESS="$_CLI_REGISTRY"
 
 TEE_GAME_TYPE=${TEE_GAME_TYPE:-1960}
 L1_RPC=${L1_RPC_URL:-http://localhost:8545}
