@@ -1250,6 +1250,13 @@ extract_snapshot() {
         exit 1
     fi
 
+    # Remove stale discovery secret to avoid peer discovery issues
+    local discovery_secret="$target_dir/data/op-${rpc_type}/discovery-secret"
+    if [ -f "$discovery_secret" ]; then
+        rm -f "$discovery_secret"
+        print_step_ok "Removed stale discovery secret: $discovery_secret"
+    fi
+
     print_step_ok "Snapshot extracted to $target_dir"
 }
 
