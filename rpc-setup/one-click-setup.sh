@@ -1340,9 +1340,9 @@ get_available_disk_space() {
 format_bytes() {
     local bytes=$1
     if [ "$bytes" -ge 1073741824 ]; then
-        echo "$(awk "BEGIN {printf \"%.1f\", $bytes/1073741824}")GB"
+        echo "$(echo "$bytes" | awk '{printf "%.1f", $1/1073741824}')GB"
     elif [ "$bytes" -ge 1048576 ]; then
-        echo "$(awk "BEGIN {printf \"%.1f\", $bytes/1048576}")MB"
+        echo "$(echo "$bytes" | awk '{printf "%.1f", $1/1048576}')MB"
     else
         echo "${bytes}B"
     fi
