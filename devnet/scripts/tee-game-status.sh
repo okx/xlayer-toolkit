@@ -124,8 +124,8 @@ for (( i=0; i<TOTAL; i++ )); do
     [ -z "$BOND_MODE" ] && BOND_MODE="?"
     case "$BOND_MODE" in
         0) BOND_MODE_NAME="UNDECIDED (not closed)" ;;
-        1) BOND_MODE_NAME="REFUND (closed, improper)" ;;
-        2) BOND_MODE_NAME="NORMAL (closed, proper)" ;;
+        1) BOND_MODE_NAME="NORMAL (closed, proper)" ;;
+        2) BOND_MODE_NAME="REFUND (closed, improper)" ;;
         *) BOND_MODE_NAME="UNKNOWN($BOND_MODE)" ;;
     esac
 
