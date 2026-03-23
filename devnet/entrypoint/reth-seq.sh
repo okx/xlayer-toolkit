@@ -77,7 +77,6 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
 
     if [ "$FLASHBLOCK_P2P_ENABLED" = "true" ] && [ "$CONDUCTOR_ENABLED" = "true" ]; then
         CMD="$CMD \
-            --flashblocks.p2p_enabled \
             --flashblocks.p2p_port=9009 \
             --flashblocks.p2p_private_key_file=/datadir/fb-p2p-key"
 
