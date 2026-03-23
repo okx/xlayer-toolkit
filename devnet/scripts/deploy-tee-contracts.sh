@@ -4,7 +4,13 @@
 set -e
 
 DEVNET_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# 保存调用方 export 的值（source .tee.env 可能覆盖）
+_FACTORY_ADDR="${DISPUTE_GAME_FACTORY_ADDRESS:-}"
+_ANCHOR_ADDR="${ANCHOR_STATE_REGISTRY_ADDRESS:-}"
 source "$DEVNET_DIR/.tee.env"
+# 恢复调用方 export 的值（优先于 .tee.env 中的硬编码值）
+[ -n "$_FACTORY_ADDR" ] && DISPUTE_GAME_FACTORY_ADDRESS="$_FACTORY_ADDR"
+[ -n "$_ANCHOR_ADDR" ] && ANCHOR_STATE_REGISTRY_ADDRESS="$_ANCHOR_ADDR"
 
 echo "========================================"
 echo "  TEE Contract Deployment"
@@ -42,25 +48,31 @@ fund_account "External Challenger" "$TEE_EXTERNAL_CHALLENGER_ADDRESS"
 echo ""
 echo "=== Phase 1: Resolve AnchorStateRegistry ==="
 
-# 从现有 devnet 的 game implementation 中提取 AnchorStateRegistry 地址
-ANCHOR_STATE_REGISTRY_ADDR=""
-for gtype in 0 1 2; do
-    EXISTING_IMPL=$(cast call --rpc-url "$L1_RPC_URL" "$DISPUTE_GAME_FACTORY_ADDRESS" \
-        "gameImpls(uint32)(address)" "$gtype" 2>/dev/null || echo "")
-    if [ -n "$EXISTING_IMPL" ] && [ "$EXISTING_IMPL" != "0x0000000000000000000000000000000000000000" ]; then
-        ANCHOR_STATE_REGISTRY_ADDR=$(cast call --rpc-url "$L1_RPC_URL" "$EXISTING_IMPL" \
-            "anchorStateRegistry()(address)" 2>/dev/null || echo "")
-        if [ -n "$ANCHOR_STATE_REGISTRY_ADDR" ] && [ "$ANCHOR_STATE_REGISTRY_ADDR" != "0x0000000000000000000000000000000000000000" ]; then
-            echo "Found AnchorStateRegistry from game type $gtype: $ANCHOR_STATE_REGISTRY_ADDR"
-            break
+# 优先使用调用方传入的地址
+if [ -n "$ANCHOR_STATE_REGISTRY_ADDRESS" ] && [ "$ANCHOR_STATE_REGISTRY_ADDRESS" != "0x0000000000000000000000000000000000000000" ]; then
+    ANCHOR_STATE_REGISTRY_ADDR="$ANCHOR_STATE_REGISTRY_ADDRESS"
+    echo "  Using provided AnchorStateRegistry: $ANCHOR_STATE_REGISTRY_ADDR"
+else
+    # 从现有 devnet 的 game implementation 中提取 AnchorStateRegistry 地址
+    ANCHOR_STATE_REGISTRY_ADDR=""
+    for gtype in 0 1 2; do
+        EXISTING_IMPL=$(cast call --rpc-url "$L1_RPC_URL" "$DISPUTE_GAME_FACTORY_ADDRESS" \
+            "gameImpls(uint32)(address)" "$gtype" 2>/dev/null || echo "")
+        if [ -n "$EXISTING_IMPL" ] && [ "$EXISTING_IMPL" != "0x0000000000000000000000000000000000000000" ]; then
+            ANCHOR_STATE_REGISTRY_ADDR=$(cast call --rpc-url "$L1_RPC_URL" "$EXISTING_IMPL" \
+                "anchorStateRegistry()(address)" 2>/dev/null || echo "")
+            if [ -n "$ANCHOR_STATE_REGISTRY_ADDR" ] && [ "$ANCHOR_STATE_REGISTRY_ADDR" != "0x0000000000000000000000000000000000000000" ]; then
+                echo "  Found AnchorStateRegistry from game type $gtype: $ANCHOR_STATE_REGISTRY_ADDR"
+                break
+            fi
         fi
-    fi
-done
+    done
 
-if [ -z "$ANCHOR_STATE_REGISTRY_ADDR" ] || [ "$ANCHOR_STATE_REGISTRY_ADDR" = "0x0000000000000000000000000000000000000000" ]; then
-    echo "ERROR: Cannot find AnchorStateRegistry address."
-    echo "  Ensure base devnet has at least one game type registered in the factory."
-    exit 1
+    if [ -z "$ANCHOR_STATE_REGISTRY_ADDR" ] || [ "$ANCHOR_STATE_REGISTRY_ADDR" = "0x0000000000000000000000000000000000000000" ]; then
+        echo "ERROR: Cannot find AnchorStateRegistry address."
+        echo "  Ensure base devnet has at least one game type registered in the factory."
+        exit 1
+    fi
 fi
 
 # ============================================================
@@ -124,9 +136,133 @@ cast send --legacy --rpc-url "$L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY"
     "$ACCESS_MGR_ADDR" "setChallenger(address,bool)" "$TEE_EXTERNAL_CHALLENGER_ADDRESS" true > /dev/null
 echo "External Challenger $TEE_EXTERNAL_CHALLENGER_ADDRESS whitelisted"
 
-# 5. 部署 TeeDisputeGame implementation
+# 5. 部署 TeeDisputeGame implementation（短 duration 用于 bootstrap）
 echo ""
-echo "--- 5. Deploying TeeDisputeGame ---"
+echo "--- 5. Deploying TeeDisputeGame (bootstrap, short durations) ---"
+BOOTSTRAP_CHALLENGE_DURATION=10  # 10 秒，仅用于 bootstrap game
+BOOTSTRAP_PROVE_DURATION=10
+TEE_GAME_OUTPUT=$(docker run --rm \
+    --network "$DOCKER_NETWORK" \
+    -w /app/packages/contracts-bedrock \
+    "${TEE_CONTRACTS_IMAGE_TAG}" \
+    forge create --json --broadcast --legacy \
+        --rpc-url "$L1_RPC_URL_IN_DOCKER" \
+        --private-key "$DEPLOYER_PRIVATE_KEY" \
+        "src/dispute/tee/TeeDisputeGame.sol:TeeDisputeGame" \
+        --constructor-args \
+            "$BOOTSTRAP_CHALLENGE_DURATION" \
+            "$BOOTSTRAP_PROVE_DURATION" \
+            "$DISPUTE_GAME_FACTORY_ADDRESS" \
+            "$MOCK_VERIFIER_ADDR" \
+            "$TEE_CHALLENGER_BOND" \
+            "$ANCHOR_STATE_REGISTRY_ADDR" \
+            "$ACCESS_MGR_ADDR")
+BOOTSTRAP_GAME_IMPL=$(echo "$TEE_GAME_OUTPUT" | jq -r '.deployedTo')
+echo "TeeDisputeGame (bootstrap) deployed at: $BOOTSTRAP_GAME_IMPL"
+
+# ============================================================
+# Phase 3: 注册 bootstrap impl → 创建 bootstrap game → resolve → setAnchorState
+# ============================================================
+echo ""
+echo "=== Phase 3: Bootstrap anchor state ==="
+
+# 6. setImplementation（短 duration impl）
+echo "--- 6. Setting bootstrap implementation ---"
+cast send --legacy --rpc-url "$L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY" \
+    "$DISPUTE_GAME_FACTORY_ADDRESS" \
+    "setImplementation(uint32,address)" "$TEE_GAME_TYPE" "$BOOTSTRAP_GAME_IMPL" > /dev/null
+echo "factory.setImplementation($TEE_GAME_TYPE, $BOOTSTRAP_GAME_IMPL)"
+
+# 7. setInitBond
+echo "--- 7. Setting init bond ---"
+cast send --legacy --rpc-url "$L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY" \
+    "$DISPUTE_GAME_FACTORY_ADDRESS" \
+    "setInitBond(uint32,uint256)" "$TEE_GAME_TYPE" "$TEE_INIT_BOND" > /dev/null
+echo "factory.setInitBond($TEE_GAME_TYPE, $TEE_INIT_BOND)"
+
+# 8. 设置 respectedGameType 为 TEE game type
+# setAnchorState 要求 wasRespectedGameTypeWhenCreated == true，
+# 而 TeeDisputeGame.initialize() 在创建时检查 respectedGameType == GAME_TYPE。
+# 只有 Guardian（= deployer）可以调用 setRespectedGameType。
+echo "--- 8. Setting respectedGameType to $TEE_GAME_TYPE ---"
+cast send --legacy --rpc-url "$L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY" \
+    "$ANCHOR_STATE_REGISTRY_ADDR" \
+    "setRespectedGameType(uint32)" "$TEE_GAME_TYPE" > /dev/null
+echo "anchorStateRegistry.setRespectedGameType($TEE_GAME_TYPE)"
+
+# anchor state 默认是 0xdead... sentinel，prove() 无法通过校验。
+# 创建一个 bootstrap game，等 deadline 过期后 resolve，然后设为 anchor。
+
+ANCHOR_BLK_HASH=0x0000000000000000000000000000000000000000000000000000000000000001
+ANCHOR_ST_HASH=0x0000000000000000000000000000000000000000000000000000000000000001
+ANCHOR_ROOT=$(cast keccak "$(cast abi-encode "f(bytes32,bytes32)" "$ANCHOR_BLK_HASH" "$ANCHOR_ST_HASH")")
+
+# extraData: tightly packed (100 bytes)
+L2_SEQ_HEX=$(printf '%064x' 1)
+PARENT_IDX_HEX="ffffffff"
+BLK_HASH_HEX=$(echo "$ANCHOR_BLK_HASH" | sed 's/^0x//')
+ST_HASH_HEX=$(echo "$ANCHOR_ST_HASH" | sed 's/^0x//')
+BOOTSTRAP_EXTRA="${L2_SEQ_HEX}${PARENT_IDX_HEX}${BLK_HASH_HEX}${ST_HASH_HEX}"
+
+INIT_BOND=$(cast call --rpc-url "$L1_RPC_URL" "$DISPUTE_GAME_FACTORY_ADDRESS" \
+    "initBonds(uint32)(uint256)" "$TEE_GAME_TYPE" | awk '{print $1}')
+
+echo "  Creating bootstrap game (challengeDuration=${BOOTSTRAP_CHALLENGE_DURATION}s)..."
+echo "    rootClaim: $ANCHOR_ROOT"
+echo "    initBond: $INIT_BOND wei"
+
+cast send --legacy --rpc-url "$L1_RPC_URL" --private-key "$TEE_PROPOSER_PRIVATE_KEY" \
+    --value "$INIT_BOND" \
+    "$DISPUTE_GAME_FACTORY_ADDRESS" \
+    "create(uint32,bytes32,bytes)(address)" \
+    "$TEE_GAME_TYPE" "$ANCHOR_ROOT" "0x${BOOTSTRAP_EXTRA}" > /dev/null
+
+GAME_COUNT=$(cast call --rpc-url "$L1_RPC_URL" "$DISPUTE_GAME_FACTORY_ADDRESS" "gameCount()(uint256)" | awk '{print $1}')
+BOOTSTRAP_GAME=$(cast call --rpc-url "$L1_RPC_URL" "$DISPUTE_GAME_FACTORY_ADDRESS" \
+    "gameAtIndex(uint256)(uint32,uint64,address)" "$((GAME_COUNT - 1))" | tail -1)
+echo "  Bootstrap game: $BOOTSTRAP_GAME"
+
+# 等待短 challenge deadline 过期
+WAIT_SECS=$((BOOTSTRAP_CHALLENGE_DURATION + 15))
+echo "  Waiting ${WAIT_SECS}s for bootstrap challenge deadline..."
+sleep "$WAIT_SECS"
+
+# Resolve (no challenge → DEFENDER_WINS)
+echo "  Resolving bootstrap game..."
+cast send --legacy --rpc-url "$L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY" \
+    "$BOOTSTRAP_GAME" "resolve()" > /dev/null
+
+BOOT_STATUS=$(cast call --rpc-url "$L1_RPC_URL" "$BOOTSTRAP_GAME" "status()(uint8)" | awk '{print $1}')
+if [ "$BOOT_STATUS" != "2" ]; then
+    echo "  ERROR: Bootstrap game status=$BOOT_STATUS, expected 2 (DEFENDER_WINS)"
+    exit 1
+fi
+echo "  Bootstrap game resolved: DEFENDER_WINS"
+
+# 等待 finality delay（isGameFinalized 要求 block.timestamp - resolvedAt > FINALITY_DELAY）
+FINALITY_DELAY=${DISPUTE_GAME_FINALITY_DELAY_SECONDS:-5}
+echo "  Waiting $((FINALITY_DELAY + 5))s for finality delay..."
+sleep "$((FINALITY_DELAY + 5))"
+
+# setAnchorState
+echo "  Setting anchor state..."
+cast send --legacy --rpc-url "$L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY" \
+    "$ANCHOR_STATE_REGISTRY_ADDR" \
+    "setAnchorState(address)" "$BOOTSTRAP_GAME" > /dev/null
+
+NEW_ANCHOR=$(cast call --rpc-url "$L1_RPC_URL" "$ANCHOR_STATE_REGISTRY_ADDR" \
+    "anchors(uint32)(bytes32,uint256)" "$TEE_GAME_TYPE" | head -1)
+echo "  New anchor root: $NEW_ANCHOR"
+
+# ============================================================
+# Phase 4: 部署正式 TeeDisputeGame impl（正常 duration）并替换
+# ============================================================
+echo ""
+echo "=== Phase 4: Deploy production TeeDisputeGame ==="
+
+echo "--- 8. Deploying TeeDisputeGame (production durations) ---"
+echo "    maxChallengeDuration: $TEE_MAX_CHALLENGE_DURATION"
+echo "    maxProveDuration: $TEE_MAX_PROVE_DURATION"
 TEE_GAME_OUTPUT=$(docker run --rm \
     --network "$DOCKER_NETWORK" \
     -w /app/packages/contracts-bedrock \
@@ -144,33 +280,20 @@ TEE_GAME_OUTPUT=$(docker run --rm \
             "$ANCHOR_STATE_REGISTRY_ADDR" \
             "$ACCESS_MGR_ADDR")
 TEE_GAME_IMPL=$(echo "$TEE_GAME_OUTPUT" | jq -r '.deployedTo')
-echo "TeeDisputeGame deployed at: $TEE_GAME_IMPL"
+echo "TeeDisputeGame (production) deployed at: $TEE_GAME_IMPL"
 
-# ============================================================
-# Phase 3: 在 DisputeGameFactory 注册 TEE game type
-# ============================================================
-echo ""
-echo "=== Phase 2: Register TEE game type in factory ==="
-
-# 6. setImplementation
-echo "--- 6. Setting implementation ---"
+# 9. 替换 factory 的 implementation 为正式版
+echo "--- 9. Updating factory implementation to production ---"
 cast send --legacy --rpc-url "$L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY" \
     "$DISPUTE_GAME_FACTORY_ADDRESS" \
     "setImplementation(uint32,address)" "$TEE_GAME_TYPE" "$TEE_GAME_IMPL" > /dev/null
 echo "factory.setImplementation($TEE_GAME_TYPE, $TEE_GAME_IMPL)"
 
-# 7. setInitBond
-echo "--- 7. Setting init bond ---"
-cast send --legacy --rpc-url "$L1_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY" \
-    "$DISPUTE_GAME_FACTORY_ADDRESS" \
-    "setInitBond(uint32,uint256)" "$TEE_GAME_TYPE" "$TEE_INIT_BOND" > /dev/null
-echo "factory.setInitBond($TEE_GAME_TYPE, $TEE_INIT_BOND)"
-
 # ============================================================
-# Phase 4: 验证
+# Phase 5: 验证
 # ============================================================
 echo ""
-echo "=== Phase 4: Verification ==="
+echo "=== Phase 5: Verification ==="
 REGISTERED_IMPL=$(cast call --rpc-url "$L1_RPC_URL" "$DISPUTE_GAME_FACTORY_ADDRESS" \
     "gameImpls(uint32)(address)" "$TEE_GAME_TYPE")
 echo "Factory gameImpls($TEE_GAME_TYPE) = $REGISTERED_IMPL"

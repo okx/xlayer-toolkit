@@ -22,7 +22,7 @@ PROPOSAL_RESOLVED=4
 # 获取 factory 中 game 总数
 game_count() {
     cast call --rpc-url "$L1_RPC_URL" "$DISPUTE_GAME_FACTORY_ADDRESS" \
-        "gameCount()(uint256)"
+        "gameCount()(uint256)" | awk '{print $1}'
 }
 
 # 获取指定 index 的 game 信息 (gameType, timestamp, proxy)
@@ -45,19 +45,22 @@ game_addr_at_index() {
 # 获取 game 的 status (0=InProgress, 1=ChallengerWins, 2=DefenderWins)
 game_status() {
     local game_addr=$1
-    cast call --rpc-url "$L1_RPC_URL" "$game_addr" "status()(uint8)"
+    cast call --rpc-url "$L1_RPC_URL" "$game_addr" "status()(uint8)" | awk '{print $1}'
 }
 
-# 获取 game 的 proposalStatus
+# 获取 game 的 proposalStatus (claimData 的第5个返回值)
 proposal_status() {
     local game_addr=$1
-    cast call --rpc-url "$L1_RPC_URL" "$game_addr" "proposalStatus()(uint8)"
+    local result
+    result=$(cast call --rpc-url "$L1_RPC_URL" "$game_addr" \
+        "claimData()(uint32,address,address,bytes32,uint8,uint64)")
+    echo "$result" | sed -n '5p' | awk '{print $1}'
 }
 
 # 获取 game 的 gameType
 game_type() {
     local game_addr=$1
-    cast call --rpc-url "$L1_RPC_URL" "$game_addr" "gameType()(uint32)"
+    cast call --rpc-url "$L1_RPC_URL" "$game_addr" "gameType()(uint32)" | awk '{print $1}'
 }
 
 # 获取 game 的 rootClaim
@@ -76,7 +79,7 @@ extra_data() {
 get_credit() {
     local game_addr=$1
     local recipient=$2
-    cast call --rpc-url "$L1_RPC_URL" "$game_addr" "credit(address)(uint256)" "$recipient"
+    cast call --rpc-url "$L1_RPC_URL" "$game_addr" "credit(address)(uint256)" "$recipient" | awk '{print $1}'
 }
 
 # ====== 链上操作 ======
@@ -184,15 +187,12 @@ wait_for_proposal_status() {
 
 # ====== L1 时间控制 ======
 
-# L1 时间快进（仅适用于 dev L1 geth）
+# 等待真实时间流逝（Geth+Prysm devnet 不支持 evm_increaseTime）
 time_travel() {
     local seconds=$1
-    local hex_seconds
-    hex_seconds=$(printf "0x%x" "$seconds")
-    echo "  Time traveling ${seconds}s..."
-    cast rpc --rpc-url "$L1_RPC_URL" evm_increaseTime "$hex_seconds" > /dev/null
-    cast rpc --rpc-url "$L1_RPC_URL" evm_mine > /dev/null
-    echo "  Time traveled."
+    echo "  Waiting ${seconds}s for deadline to expire..."
+    sleep "$seconds"
+    echo "  Wait complete."
 }
 
 # ====== Mock 组件控制 ======

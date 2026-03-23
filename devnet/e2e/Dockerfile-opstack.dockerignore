@@ -1,0 +1,33 @@
+# Rust build artifacts (op-reth, kona etc.)
+**/target/
+
+# Git history
+.git
+
+# Geth
+op-geth/
+
+# Node modules
+**/node_modules/
+
+# Test data
+**/*_test.go
+tests/testdata
+
+# IDE / CI
+.github
+.vscode
+.idea
+
+# Env files
+.env
+.envrc
+**/.env
+
+# Docs / specs not needed for Go build
+docs/
+specs/
+
+# Devnet / kurtosis
+kurtosis-devnet/
+devnet-sdk/

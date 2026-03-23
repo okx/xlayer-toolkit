@@ -18,6 +18,11 @@ GAME_INDEX=$((NEW_COUNT - 1))
 GAME_ADDR=$(game_addr_at_index "$GAME_INDEX")
 echo "Game created at: $GAME_ADDR"
 
+# 2.5 暂停 proposer，防止 sleep 期间创建新 game chain off 当前 game
+# 当前 game 最终 CHALLENGER_WINS，如果 proposer 继续创建 child game 会导致级联 CHALLENGER_WINS
+echo "Pausing tee-op-proposer to prevent cascading CHALLENGER_WINS..."
+docker pause tee-op-proposer
+
 # 3. 外部挑战者 challenge
 echo ""
 echo "Challenging game..."
@@ -48,7 +53,11 @@ echo ""
 echo "Final state:"
 print_game_info "$GAME_ADDR"
 
-# 7. 重置 Mock 行为
+# 7. 恢复 proposer
+echo "Resuming tee-op-proposer..."
+docker unpause tee-op-proposer
+
+# 8. 重置 Mock 行为
 mock_prover_reset
 
 echo ""

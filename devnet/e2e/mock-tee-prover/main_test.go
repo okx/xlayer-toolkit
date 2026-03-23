@@ -88,8 +88,8 @@ func TestCreateAndPollTask(t *testing.T) {
 
 	// Immediately should be Running
 	data := getTask(t, server.URL, taskID)
-	if data["task_status"] != "Running" {
-		t.Errorf("expected Running, got %s", data["task_status"])
+	if data["status"] != "Running" {
+		t.Errorf("expected Running, got %s", data["status"])
 	}
 
 	// Wait for task delay to elapse
@@ -97,8 +97,8 @@ func TestCreateAndPollTask(t *testing.T) {
 
 	// Should be Finished now
 	data = getTask(t, server.URL, taskID)
-	if data["task_status"] != "Finished" {
-		t.Errorf("expected Finished, got %s", data["task_status"])
+	if data["status"] != "Finished" {
+		t.Errorf("expected Finished, got %s", data["status"])
 	}
 	if data["proofBytes"] == nil || data["proofBytes"] == "" {
 		t.Error("expected proofBytes to be set")
@@ -122,16 +122,16 @@ func TestFailNext(t *testing.T) {
 
 	taskID := postTask(t, server.URL, req)
 	data := getTask(t, server.URL, taskID)
-	if data["task_status"] != "Failed" {
-		t.Errorf("expected Failed, got %s", data["task_status"])
+	if data["status"] != "Failed" {
+		t.Errorf("expected Failed, got %s", data["status"])
 	}
 
 	// Next task should succeed (fail-next is one-shot)
 	taskID2 := postTask(t, server.URL, req)
 	time.Sleep(200 * time.Millisecond)
 	data2 := getTask(t, server.URL, taskID2)
-	if data2["task_status"] != "Finished" {
-		t.Errorf("expected Finished for second task, got %s", data2["task_status"])
+	if data2["status"] != "Finished" {
+		t.Errorf("expected Finished for second task, got %s", data2["status"])
 	}
 }
 
@@ -153,8 +153,8 @@ func TestNeverFinish(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 
 	data := getTask(t, server.URL, taskID)
-	if data["task_status"] != "Running" {
-		t.Errorf("expected Running (never-finish), got %s", data["task_status"])
+	if data["status"] != "Running" {
+		t.Errorf("expected Running (never-finish), got %s", data["status"])
 	}
 
 	// Reset and verify new tasks finish normally
@@ -162,8 +162,8 @@ func TestNeverFinish(t *testing.T) {
 	taskID2 := postTask(t, server.URL, req)
 	time.Sleep(200 * time.Millisecond)
 	data2 := getTask(t, server.URL, taskID2)
-	if data2["task_status"] != "Finished" {
-		t.Errorf("expected Finished after reset, got %s", data2["task_status"])
+	if data2["status"] != "Finished" {
+		t.Errorf("expected Finished after reset, got %s", data2["status"])
 	}
 }
 

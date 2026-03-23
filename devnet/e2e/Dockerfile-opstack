@@ -1,0 +1,38 @@
+# Dockerfile-opstack — Build op-proposer + op-challenger into a single image
+# Usage:
+#   docker build -f e2e/Dockerfile-opstack -t op-stack-tee:latest <optimism-repo-dir>
+
+FROM golang:1.24.10-alpine3.21 AS builder
+
+RUN apk add --no-cache make gcc musl-dev linux-headers git jq bash
+
+COPY go.mod go.sum /app/
+WORKDIR /app
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build go mod download
+
+COPY . /app
+
+ARG GIT_COMMIT
+ARG GIT_DATE
+
+# Build op-proposer
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -v \
+    -ldflags "-X main.GitCommit=$GIT_COMMIT -X main.GitDate=$GIT_DATE" \
+    -o /app/op-proposer/bin/op-proposer ./op-proposer/cmd
+
+# Build op-challenger
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -v \
+    -ldflags "-X main.GitCommit=$GIT_COMMIT -X main.GitDate=$GIT_DATE" \
+    -o /app/op-challenger/bin/op-challenger ./op-challenger/cmd
+
+# --- Final image ---
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates
+
+COPY --from=builder /app/op-proposer/bin/op-proposer /usr/local/bin/
+COPY --from=builder /app/op-challenger/bin/op-challenger /usr/local/bin/
+
+ENTRYPOINT ["sh", "-c"]

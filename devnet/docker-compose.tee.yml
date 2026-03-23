@@ -14,8 +14,8 @@ services:
       - .tee.env
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    entrypoint: ["op-proposer"]
     command:
-      - /app/op-proposer/bin/op-proposer
       - --log.level=debug
       - --poll-interval=12s
       - --proposal-interval=12s
@@ -25,8 +25,6 @@ services:
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --game-type=${TEE_GAME_TYPE:-1960}
       - --tee-rollup-rpc=http://host.docker.internal:8090
-    depends_on:
-      - op-batcher
 
   tee-op-challenger:
     image: "${TEE_OP_STACK_IMAGE_TAG}"
@@ -35,14 +33,18 @@ services:
       - .tee.env
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    volumes:
+      - ./challenger-data:/data
+    entrypoint: ["op-challenger"]
     command:
-      - /app/op-challenger/bin/op-challenger
       - --log.level=debug
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
+      - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
       - --private-key=${TEE_CHALLENGER_PRIVATE_KEY}
-      - --game-allowlist=${TEE_GAME_TYPE:-1960}
-      - --tee-prover-rpc=http://host.docker.internal:8690
-      - --tee-prove-poll-interval=2s
-      - --tee-prove-timeout=120s
-      - --game-window=${GAME_WINDOW:-600}s
+      - --game-types=tee
+      - --datadir=/data
+      - --tee-prover-rpc=http://mock-tee-prover:${MOCK_TEE_PROVER_PORT}
+      - --tee-prove-poll-interval=${TEE_PROVE_POLL_INTERVAL}
+      - --tee-prove-timeout=${TEE_PROVE_TIMEOUT}
+      - --game-window=${GAME_WINDOW}s

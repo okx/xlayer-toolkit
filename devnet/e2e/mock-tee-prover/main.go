@@ -146,8 +146,8 @@ func (m *MockTEEProver) handleGetTask(w http.ResponseWriter, r *http.Request) {
 
 	// Build response data
 	data := map[string]interface{}{
-		"task_id":     t.ID,
-		"task_status": t.Status,
+		"taskId": t.ID,
+		"status": t.Status,
 	}
 	if t.Status == "Finished" {
 		data["proofBytes"] = hexutil.Encode(t.ProofBytes)
