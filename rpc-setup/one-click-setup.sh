@@ -1250,6 +1250,13 @@ extract_snapshot() {
         exit 1
     fi
 
+    # Remove discovery-secret to avoid node identity conflicts
+    local discovery_secret="$target_dir/data/op-reth/discovery-secret"
+    if [ -f "$discovery_secret" ]; then
+        rm -f "$discovery_secret"
+        print_step_ok "Removed stale discovery-secret"
+    fi
+
     print_step_ok "Snapshot extracted to $target_dir"
 }
 
