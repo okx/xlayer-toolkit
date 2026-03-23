@@ -34,6 +34,9 @@ load_configuration() {
         # For standalone mode, download to work directory
         config_file="$WORK_DIR/network-presets.env"
         if [ ! -f "$config_file" ]; then
+            if ! command -v wget &> /dev/null; then
+                install_missing_tools wget
+            fi
             print_info "Downloading configuration file..."
             local config_url="${REPO_URL}/presets/network-presets.env"
             if ! wget -q "$config_url" -O "$config_file" 2>/dev/null; then
@@ -373,6 +376,59 @@ check_docker() {
     print_step_ok "Docker ready (docker $docker_version, compose $compose_version)"
 }
     
+# Auto-install missing tools (output hidden behind spinner)
+install_missing_tools() {
+    local tools=("$@")
+    local os
+    os="$(uname -s)"
+
+    local install_cmd=""
+    if [[ "$os" == "Darwin" ]]; then
+        if ! command_exists brew; then
+            print_error "Homebrew is required to install missing tools on macOS."
+            echo -e "  ${C_DIM}Install: /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"${C_RESET}"
+            exit 1
+        fi
+        install_cmd="brew install ${tools[*]}"
+    elif [[ "$os" == "Linux" ]]; then
+        if command_exists apt-get; then
+            install_cmd="sudo apt-get update -qq && sudo apt-get install -y -qq ${tools[*]}"
+        elif command_exists yum; then
+            install_cmd="sudo yum install -y -q ${tools[*]}"
+        else
+            print_error "No supported package manager found (apt-get or yum)."
+            exit 1
+        fi
+    else
+        print_error "Unsupported OS for auto-install: $os"
+        exit 1
+    fi
+
+    local install_log
+    install_log=$(mktemp)
+    eval "$install_cmd" >"$install_log" 2>&1 &
+    local pid=$!
+    local i=0
+    while kill -0 "$pid" 2>/dev/null; do
+        i=$(( (i + 1) % ${#SPINNER_FRAMES[@]} ))
+        printf "\r\033[K${C_CYAN}  ${SPINNER_FRAMES[$i]} Installing ${tools[*]}...${C_RESET}"
+        sleep 0.25
+    done
+    wait "$pid"
+    local ret=$?
+    printf "\r\033[K"
+
+    if [ $ret -ne 0 ]; then
+        print_step_fail "Failed to install: ${tools[*]}"
+        echo -e "  ${C_DIM}Install log:${C_RESET}"
+        sed 's/^/    /' "$install_log"
+        rm -f "$install_log"
+        exit 1
+    fi
+    rm -f "$install_log"
+    print_step_ok "Installed: ${tools[*]}"
+}
+
 # Check required system tools
 check_required_tools() {
     local missing_required=()
@@ -386,10 +442,8 @@ check_required_tools() {
     done
 
     if [ ${#missing_required[@]} -gt 0 ]; then
-        print_step_fail "Missing: ${missing_required[*]}"
-        echo -e "  ${C_DIM}macOS: brew install ${missing_required[*]}${C_RESET}"
-        echo -e "  ${C_DIM}Ubuntu: sudo apt-get install ${missing_required[*]}${C_RESET}"
-        exit 1
+        print_warning "Missing tools: ${missing_required[*]}"
+        install_missing_tools "${missing_required[@]}"
     fi
 
     print_step_ok "Tools ready (${required_tools[*]})"
@@ -450,7 +504,91 @@ prompt_quick_start() {
     fi
 }
 
+check_platform() {
+    local os arch
+    os="$(uname -s)"
+    arch="$(uname -m)"
+
+    run_with_spinner "Checking platform..." sleep 0.3
+
+    case "${os}-${arch}" in
+        Linux-x86_64)
+            print_step_ok "Platform: linux/amd64"
+            ;;
+        Darwin-arm64)
+            print_step_ok "Platform: macos/arm64"
+            ;;
+        *)
+            print_step_fail "Unsupported platform: ${os}/${arch}. Only linux/amd64 and macos/arm64 are supported."
+            exit 1
+            ;;
+    esac
+}
+
+# Check if a port is in use; returns 0 if in use, 1 if free
+is_port_in_use() {
+    local port=$1
+    if command_exists lsof; then
+        lsof -iTCP:"$port" -sTCP:LISTEN -t &>/dev/null
+    elif command_exists ss; then
+        ss -tlnH "sport = :$port" 2>/dev/null | grep -q .
+    elif command_exists netstat; then
+        netstat -tln 2>/dev/null | grep -q ":$port "
+    else
+        return 1
+    fi
+}
+
+# Find next available port starting from the given port
+find_available_port() {
+    local port=$1
+    local max_attempts=100
+    local attempt=0
+    while [ $attempt -lt $max_attempts ]; do
+        if ! is_port_in_use "$port"; then
+            echo "$port"
+            return 0
+        fi
+        port=$((port + 1))
+        attempt=$((attempt + 1))
+    done
+    return 1
+}
+
+# Check all configured ports and auto-resolve conflicts
+check_and_resolve_ports() {
+    local port_names=("RPC_PORT" "WS_PORT" "NODE_RPC_PORT" "GETH_P2P_PORT" "NODE_P2P_PORT" "ENGINE_API_PORT")
+    local port_labels=("RPC" "WebSocket" "Node RPC" "EL P2P" "Node P2P" "Engine API")
+    local changed=false
+
+    for i in "${!port_names[@]}"; do
+        local var_name="${port_names[$i]}"
+        local label="${port_labels[$i]}"
+        local current_port="${!var_name}"
+
+        if is_port_in_use "$current_port"; then
+            local new_port
+            new_port=$(find_available_port "$((current_port + 1))")
+            if [ -n "$new_port" ]; then
+                print_info "$label port $current_port is in use, switching to $new_port"
+                eval "$var_name=$new_port"
+                changed=true
+            else
+                print_step_fail "Cannot find available port for $label (tried from $current_port)"
+                exit 1
+            fi
+        fi
+    done
+
+    if [ "$changed" = true ]; then
+        print_step_ok "Ports (adjusted): RPC=$RPC_PORT WS=$WS_PORT Node=$NODE_RPC_PORT Engine=$ENGINE_API_PORT"
+    else
+        print_step_ok "All ports available"
+    fi
+}
+
 check_system_requirements() {
+    check_platform
     check_docker
     check_required_tools
 }
@@ -741,6 +879,9 @@ get_user_input() {
         print_step_ok "Ports: RPC=$RPC_PORT WS=$WS_PORT Node=$NODE_RPC_PORT Engine=$ENGINE_API_PORT"
     fi
 
+    # Check port availability and auto-resolve conflicts
+    check_and_resolve_ports
+
     # Apply constraints after all variables are set
     # Constraint 1: L1_BEACON_URL requires L1_RPC_URL
     if [ -n "$L1_BEACON_URL" ] && [ -z "$L1_RPC_URL" ]; then
@@ -891,9 +1032,22 @@ download_genesis() {
     local network=$2
     local genesis_file="genesis-${network}.tar.gz"
 
-    if [ "$IN_REPO" = true ] && [ -f "$genesis_file" ]; then
+    # Skip download if genesis tarball already exists locally
+    if [ -f "$genesis_file" ]; then
+        print_step_ok "Genesis file exists: $genesis_file"
         return 0
     fi
+
+    # Skip download if genesis JSON already extracted in config dir
+    if [ -n "$CONFIG_DIR" ]; then
+        local target_json="$CONFIG_DIR/$GENESIS_FILE"
+        if [ -f "$target_json" ]; then
+            print_step_ok "Genesis already extracted: $target_json"
+            return 0
+        fi
+    fi
+
+    check_disk_space "$genesis_url" "$WORK_DIR"
 
     if ! download_with_progress "Downloading genesis..." "$genesis_url" "$genesis_file"; then
         print_step_fail "Failed to download genesis file"
@@ -1019,6 +1173,8 @@ download_snapshot() {
         fi
     fi
 
+    check_disk_space "$snapshot_url" "$WORK_DIR"
+
     if ! download_with_progress "Downloading snapshot..." "$snapshot_url" "$snapshot_file"; then
         print_step_fail "Failed to download snapshot"
         rm -f "$snapshot_file"
@@ -1141,6 +1297,77 @@ init_reth() {
     [ -f "$auto_config" ] && rm -f "$auto_config"
 
     print_step_ok "op-reth initialized"
+}
+
+# Get remote file size in bytes via HTTP HEAD request
+get_remote_file_size() {
+    local url=$1
+    local size
+    size=$(curl -sIL "$url" 2>/dev/null | grep -i '^content-length' | tail -1 | tr -d '\r' | awk '{print $2}')
+    echo "${size:-0}"
+}
+
+# Get available disk space in bytes for a given path
+get_available_disk_space() {
+    local path=$1
+    # Ensure path exists, fall back to current directory
+    [ -d "$path" ] || path="."
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        df -k "$path" | tail -1 | awk '{print $4 * 1024}'
+    else
+        df -B1 --output=avail "$path" 2>/dev/null | tail -1 | tr -d ' '
+    fi
+}
+
+# Format bytes to human-readable string
+format_bytes() {
+    local bytes=$1
+    if [ "$bytes" -ge 1073741824 ]; then
+        echo "$(awk "BEGIN {printf \"%.1f\", $bytes/1073741824}")GB"
+    elif [ "$bytes" -ge 1048576 ]; then
+        echo "$(awk "BEGIN {printf \"%.1f\", $bytes/1048576}")MB"
+    else
+        echo "${bytes}B"
+    fi
+}
+
+# Check disk space before downloading
+# Requires 3x the download size (compressed + extraction headroom)
+check_disk_space() {
+    local download_url=$1
+    local target_path=$2
+
+    run_with_spinner "Checking remote file size..." sleep 0.3
+    local file_size
+    file_size=$(get_remote_file_size "$download_url")
+
+    if [ -z "$file_size" ] || [ "$file_size" -eq 0 ] 2>/dev/null; then
+        print_info "Cannot determine remote file size, skipping disk space check"
+        return 0
+    fi
+
+    local required_space=$((file_size * 3))
+    local available_space
+    available_space=$(get_available_disk_space "$target_path")
+
+    if [ -z "$available_space" ] || [ "$available_space" -eq 0 ] 2>/dev/null; then
+        print_info "Cannot determine available disk space, skipping check"
+        return 0
+    fi
+
+    local file_size_hr
+    file_size_hr=$(format_bytes "$file_size")
+    local required_hr
+    required_hr=$(format_bytes "$required_space")
+    local available_hr
+    available_hr=$(format_bytes "$available_space")
+
+    if [ "$available_space" -lt "$required_space" ]; then
+        print_step_fail "Insufficient disk space: need ${required_hr} (3x ${file_size_hr}), available ${available_hr}"
+        exit 1
+    fi
+
+    print_step_ok "Disk space OK: need ${required_hr} (3x ${file_size_hr}), available ${available_hr}"
 }
 
 initialize_node() {
