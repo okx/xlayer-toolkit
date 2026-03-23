@@ -1,5 +1,11 @@
 #!/bin/bash
 # tee-game-status.sh — 查询所有 TEE Dispute Game 的状态
+#
+# 过滤用法:
+#   FILTER=progress  bash scripts/tee-game-status.sh   # 只看 IN_PROGRESS
+#   FILTER=defender  bash scripts/tee-game-status.sh   # 只看 DEFENDER_WINS
+#   FILTER=challenger bash scripts/tee-game-status.sh  # 只看 CHALLENGER_WINS
+#   FILTER=resolved  bash scripts/tee-game-status.sh   # 只看已 resolve 的 (DEFENDER_WINS + CHALLENGER_WINS)
 set -e
 
 DEVNET_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,6 +26,19 @@ _CLI_REGISTRY=${ANCHOR_STATE_REGISTRY_ADDRESS:-}
 
 TEE_GAME_TYPE=${TEE_GAME_TYPE:-1960}
 L1_RPC=${L1_RPC_URL:-http://localhost:8545}
+FILTER=$(echo "${FILTER:-}" | tr '[:upper:]' '[:lower:]')
+
+# 状态过滤: 返回 0 表示显示，1 表示跳过
+should_show() {
+    local status=$1
+    case "$FILTER" in
+        progress)   [ "$status" = "0" ] ;;
+        challenger) [ "$status" = "1" ] ;;
+        defender)   [ "$status" = "2" ] ;;
+        resolved)   [ "$status" = "1" ] || [ "$status" = "2" ] ;;
+        *)          true ;;
+    esac
+}
 
 # 状态映射
 game_status_name() {
@@ -49,6 +68,7 @@ echo "Total games in factory: $TOTAL"
 echo ""
 
 TEE_COUNT=0
+SHOWN_COUNT=0
 
 for (( i=0; i<TOTAL; i++ )); do
     INFO=$(cast call --rpc-url "$L1_RPC" "$DISPUTE_GAME_FACTORY_ADDRESS" \
@@ -68,6 +88,13 @@ for (( i=0; i<TOTAL; i++ )); do
     STATUS=$(cast call --rpc-url "$L1_RPC" "$PROXY" "status()(uint8)" 2>/dev/null | awk '{print $1}')
     [ -z "$STATUS" ] && STATUS="?"
     STATUS_NAME=$(game_status_name "$STATUS")
+
+    # 过滤
+    if ! should_show "$STATUS"; then
+        TEE_COUNT=$((TEE_COUNT + 1))
+        continue
+    fi
+    SHOWN_COUNT=$((SHOWN_COUNT + 1))
 
     # 查 claimData → proposalStatus (第5个字段)
     CLAIM_DATA=$(cast call --rpc-url "$L1_RPC" "$PROXY" \
@@ -110,7 +137,11 @@ done
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "TEE games (type $TEE_GAME_TYPE): $TEE_COUNT / $TOTAL total"
+if [ -n "$FILTER" ]; then
+    echo "TEE games (type $TEE_GAME_TYPE): showing $SHOWN_COUNT ($FILTER) / $TEE_COUNT total"
+else
+    echo "TEE games (type $TEE_GAME_TYPE): $TEE_COUNT / $TOTAL total"
+fi
 
 # 查 anchor state
 ANCHOR=$(cast call --rpc-url "$L1_RPC" "$DISPUTE_GAME_FACTORY_ADDRESS" \
