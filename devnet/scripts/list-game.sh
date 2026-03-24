@@ -39,12 +39,10 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 BOLD='\033[1m'
 
-# Global arrays for caching game data
-declare -a GAME_INDICES
-declare -a GAME_ADDRS
-declare -a GAME_STARTS
-declare -a GAME_PARENTS
-declare -a GAME_TYPES
+# Maps indexed by game index, populated during list_games pass 1
+declare -A BLOCK_BY_INDEX   # index -> l2BlockNumber
+declare -A ADDR_BY_INDEX    # index -> contract address
+declare -A TYPE_BY_INDEX    # index -> game type
 
 # ════════════════════════════════════════════════════════════════
 # Requirement Checking
@@ -123,17 +121,18 @@ list_games() {
         echo -e "${BLUE}${BOLD}  Games (Type $type_label)${NC}"
     fi
     echo -e "${CYAN}Total games in factory: $total${NC}"
-    echo -e "${YELLOW}Loading games of type $type_label...${NC}"
     echo ""
 
-    # Clear and collect all matching games
-    GAME_INDICES=()
-    GAME_ADDRS=()
-    GAME_STARTS=()
-    GAME_PARENTS=()
-    GAME_TYPES=()
+    # Table header
+    printf "${BOLD}%-6s %-8s %-12s %-25s %-10s %-20s${NC}\n" \
+        "Index" "Type" "Parent" "Block Range" "Blocks" "Status"
+    echo "────────────────────────────────────────────────────────────────────────────────────────"
 
-    for ((i=0; i<total; i++)); do
+    BLOCK_BY_INDEX=()
+    local count=0
+
+    # Single reverse pass: newest game first, print immediately
+    for ((i=total-1; i>=0; i--)); do
         local game_data=$(cast call $FACTORY_ADDRESS "gameAtIndex(uint256)((uint32,uint64,address))" $i --rpc-url $L1_RPC 2>/dev/null)
         [ -z "$game_data" ] && continue
 
@@ -143,99 +142,45 @@ list_games() {
         local addr=$(echo "$game_data" | grep -oE '0x[a-fA-F0-9]{40}')
         local l2_block=$(cast call $addr "l2BlockNumber()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
         [ -z "$l2_block" ] && l2_block=0
+        BLOCK_BY_INDEX[$i]=$l2_block
+
+        if [ -n "$filter_start" ]; then
+            [ $i -lt $filter_start ] || [ $i -gt $filter_end ] && continue
+        fi
 
         local parent=$(cast call $addr "parentIndex()(uint32)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
         [ -z "$parent" ] && parent=$GENESIS_PARENT_INDEX
 
-        GAME_INDICES+=("$i")
-        GAME_ADDRS+=("$addr")
-        GAME_STARTS+=("$l2_block")
-        GAME_PARENTS+=("$parent")
-        GAME_TYPES+=("$type")
-    done
-
-    local count=${#GAME_INDICES[@]}
-
-    if [ $count -eq 0 ]; then
-        echo -e "${YELLOW}No games of type ${game_type:-any} found.${NC}"
-        return 1
-    fi
-
-    # Count filtered games
-    local filtered_count=0
-    if [ -n "$filter_start" ]; then
-        for idx in "${GAME_INDICES[@]}"; do
-            if [ $idx -ge $filter_start ] && [ $idx -le $filter_end ]; then
-                filtered_count=$((filtered_count + 1))
-            fi
-        done
-    else
-        filtered_count=$count
-    fi
-
-    if [ -n "$filter_start" ]; then
-        echo -e "${CYAN}Showing $filtered_count games (filtered from $count total games of type $type_label)${NC}"
-    else
-        echo -e "${CYAN}Total games of type $type_label: $count${NC}"
-    fi
-    echo ""
-
-    if [ $filtered_count -eq 0 ]; then
-        echo -e "${YELLOW}No games found in range $filter_start-$filter_end${NC}"
-        return 1
-    fi
-
-    # Table header
-    printf "${BOLD}%-6s %-8s %-12s %-25s %-10s %-20s${NC}\n" \
-        "Index" "Type" "Parent" "Block Range" "Blocks" "Status"
-    echo "────────────────────────────────────────────────────────────────────────────────────────"
-
-    for ((j=count-1; j>=0; j--)); do
-        local idx=${GAME_INDICES[j]}
-
-        # Apply filter if specified
-        if [ -n "$filter_start" ]; then
-            if [ $idx -lt $filter_start ] || [ $idx -gt $filter_end ]; then
-                continue
-            fi
-        fi
-
-        local addr=${GAME_ADDRS[j]}
-        local end=${GAME_STARTS[j]}
-        local parent_idx=${GAME_PARENTS[j]}
-
-        # Calculate proof range
         local start blocks parent_display
-        if [ "$parent_idx" = "$GENESIS_PARENT_INDEX" ]; then
-            start="?"
-            blocks="?"
-            parent_display="genesis"
+        if [ "$parent" = "$GENESIS_PARENT_INDEX" ]; then
+            start="?"; blocks="?"; parent_display="genesis"
         else
-            parent_display="$parent_idx"
-            local parent_found=false
-            for ((k=0; k<count; k++)); do
-                if [ "${GAME_INDICES[k]}" = "$parent_idx" ]; then
-                    start=${GAME_STARTS[k]}
-                    blocks=$((end - start))
-                    parent_found=true
-                    break
-                fi
-            done
-            if [ "$parent_found" = false ]; then
-                start="?"
-                blocks="?"
+            parent_display="$parent"
+            if [ -z "${BLOCK_BY_INDEX[$parent]+x}" ]; then
+                # Parent not yet visited (lower index) — fetch its l2Block on demand
+                local pd=$(cast call $FACTORY_ADDRESS "gameAtIndex(uint256)((uint32,uint64,address))" $parent --rpc-url $L1_RPC 2>/dev/null)
+                local pa=$(echo "$pd" | grep -oE '0x[a-fA-F0-9]{40}')
+                local pb=$(cast call $pa "l2BlockNumber()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
+                BLOCK_BY_INDEX[$parent]=${pb:-0}
             fi
+            start=${BLOCK_BY_INDEX[$parent]}
+            blocks=$((l2_block - start))
         fi
 
-        # Get status
         local status_info=$(get_game_status $addr)
         local status_text=$(echo "$status_info" | cut -d'|' -f1)
 
         printf "%-6s %-8s %-12s %-25s %-10s %-20s\n" \
-            "$idx" "${GAME_TYPES[j]}" "$parent_display" "$start-$end" "$blocks" "$status_text"
+            "$i" "$type" "$parent_display" "$start-$l2_block" "$blocks" "$status_text"
+        count=$((count + 1))
     done
 
     echo ""
+    if [ $count -eq 0 ]; then
+        echo -e "${YELLOW}No games of type ${game_type:-any} found.${NC}"
+        return 1
+    fi
+    echo -e "${CYAN}Total: $count games${NC}"
     return 0
 }
 
