@@ -4,6 +4,12 @@ set -e
 BRANCH="main"
 REPO_URL="https://raw.githubusercontent.com/okx/xlayer-toolkit/${BRANCH}/rpc-setup"
 
+# Determine if sudo is needed for docker commands (only on Linux when not root)
+SUDO=""
+if [ "$(uname -s)" = "Linux" ] && [ "$(id -u)" -ne 0 ]; then
+    SUDO="sudo"
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK_DIR="$(pwd)"  # Working directory is where the user runs the script
 
@@ -361,14 +367,14 @@ check_docker() {
     run_with_spinner "Checking docker compose..." sleep 0.3
     if command_exists docker-compose; then
         compose_version=$(docker-compose --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-    elif docker compose version &> /dev/null; then
-        compose_version=$(docker compose version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+    elif $SUDO docker compose version &> /dev/null; then
+        compose_version=$($SUDO docker compose version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     else
         print_step_fail "Docker Compose is not installed."
         exit 1
     fi
 
-    if ! run_with_spinner "Checking docker daemon..." docker info; then
+    if ! run_with_spinner "Checking docker daemon..." $SUDO docker info; then
         print_warning "Docker daemon is not running. Attempting to start..."
         local os
         os="$(uname -s)"
@@ -379,7 +385,7 @@ check_docker() {
         fi
         # Wait up to 30 seconds for Docker daemon to become ready
         local waited=0
-        while ! docker info &>/dev/null; do
+        while ! $SUDO docker info &>/dev/null; do
             if [ "$waited" -ge 30 ]; then
                 print_step_fail "Docker daemon failed to start within 30 seconds."
                 exit 1
@@ -1274,7 +1280,7 @@ init_geth() {
     
     print_step "Initializing op-geth..."
 
-    if ! docker run --rm \
+    if ! $SUDO docker run --rm \
         -v "$data_dir:/data" \
         -v "$genesis_file:/genesis.json" \
         "${OP_GETH_IMAGE_TAG}" \
@@ -1306,7 +1312,7 @@ init_reth() {
     
     print_step "Initializing op-reth..."
 
-    if ! docker run --rm \
+    if ! $SUDO docker run --rm \
         -v "$data_dir:/datadir" \
         -v "$genesis_file:/genesis.json" \
         "${OP_RETH_IMAGE_TAG}" \
@@ -1440,7 +1446,7 @@ start_services() {
     fi
 
     print_step "Starting Docker services..."
-    if ! make --no-print-directory run; then
+    if ! make --no-print-directory SUDO="$SUDO" run; then
         print_step_fail "Failed to start services"
         exit 1
     fi

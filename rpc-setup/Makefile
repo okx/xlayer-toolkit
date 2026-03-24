@@ -1,5 +1,8 @@
 .PHONY: help run stop status
 
+# sudo prefix for docker commands (auto-detect on Linux when not root)
+SUDO ?= $(shell if [ "$$(uname -s)" = "Linux" ] && [ "$$(id -u)" -ne 0 ]; then echo sudo; fi)
+
 # Default target
 help:
 	@printf "\033[0;36m  +--------------------------------------------------+\033[0m\n"
@@ -26,26 +29,26 @@ run:
 	PROJECT_NAME="xlayer-$$NETWORK_TYPE-$$RPC_TYPE"; \
 	if [ "$$RPC_TYPE" = "reth" ]; then \
 		printf "\033[0;36m  [*] Starting op-reth...\033[0m\n"; \
-		docker compose -p $$PROJECT_NAME up -d op-reth; \
+		$(SUDO) docker compose -p $$PROJECT_NAME up -d op-reth; \
 		printf "\033[0;36m  [*] Waiting for op-reth to be ready...\033[0m"; \
-		while [ "$$(docker compose -p $$PROJECT_NAME ps op-reth --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d':' -f2 | tr -d '"')" != "healthy" ]; do \
+		while [ "$$($(SUDO) docker compose -p $$PROJECT_NAME ps op-reth --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d':' -f2 | tr -d '"')" != "healthy" ]; do \
 			sleep 5; \
 			printf "."; \
 		done; \
 		echo ""; \
 		printf "\033[0;36m  [*] Starting op-node...\033[0m\n"; \
-		docker compose -p $$PROJECT_NAME up -d op-node; \
+		$(SUDO) docker compose -p $$PROJECT_NAME up -d op-node; \
 	else \
 		printf "\033[0;36m  [*] Starting op-geth...\033[0m\n"; \
-		docker compose -p $$PROJECT_NAME up -d op-geth; \
+		$(SUDO) docker compose -p $$PROJECT_NAME up -d op-geth; \
 		printf "\033[0;36m  [*] Waiting for op-geth to be ready...\033[0m"; \
-		while [ "$$(docker compose -p $$PROJECT_NAME ps op-geth --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d':' -f2 | tr -d '"')" != "healthy" ]; do \
+		while [ "$$($(SUDO) docker compose -p $$PROJECT_NAME ps op-geth --format json 2>/dev/null | grep -o '"Health":"[^"]*"' | cut -d':' -f2 | tr -d '"')" != "healthy" ]; do \
 			sleep 10; \
 			printf "."; \
 		done; \
 		echo ""; \
 		printf "\033[0;36m  [*] Starting op-node...\033[0m\n"; \
-		docker compose -p $$PROJECT_NAME up -d op-node; \
+		$(SUDO) docker compose -p $$PROJECT_NAME up -d op-node; \
 	fi
 	@printf "\033[0;32m  [+] Services started\033[0m\n"
 	@echo ""
@@ -80,7 +83,7 @@ stop:
 			exit 1; \
 		fi; \
 		PROJECT_NAME="xlayer-$$NETWORK_TYPE-$$RPC_TYPE"; \
-		docker compose -p $$PROJECT_NAME down; \
+		$(SUDO) docker compose -p $$PROJECT_NAME down; \
 		printf "\033[0;32m  [+] Services stopped for $(TARGET) (data preserved)\033[0m\n"; \
 	else \
 		if [ ! -f .env ]; then \
@@ -91,7 +94,7 @@ stop:
 		NETWORK_TYPE=$$(grep '^NETWORK_TYPE=' .env | cut -d'=' -f2); \
 		PROJECT_NAME="xlayer-$$NETWORK_TYPE-$$RPC_TYPE"; \
 		printf "\033[0;36m  [*] Stopping X Layer RPC node ($$PROJECT_NAME)...\033[0m\n"; \
-		docker compose -p $$PROJECT_NAME down; \
+		$(SUDO) docker compose -p $$PROJECT_NAME down; \
 		printf "\033[0;32m  [+] Services stopped (data preserved)\033[0m\n"; \
 	fi
 
@@ -102,10 +105,10 @@ status:
 		NETWORK_TYPE=$$(grep '^NETWORK_TYPE=' .env | cut -d'=' -f2); \
 		PROJECT_NAME="xlayer-$$NETWORK_TYPE-$$RPC_TYPE"; \
 		printf "\033[0;36m  [*] Service Status ($$PROJECT_NAME):\033[0m\n"; \
-		docker compose -p $$PROJECT_NAME ps; \
+		$(SUDO) docker compose -p $$PROJECT_NAME ps; \
 	else \
 		printf "\033[0;36m  [*] Service Status:\033[0m\n"; \
-		docker compose ps; \
+		$(SUDO) docker compose ps; \
 	fi
 	@echo ""
 	@if [ -f .env ]; then \
