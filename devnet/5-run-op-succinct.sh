@@ -74,11 +74,20 @@ sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$PROOF_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.en
 sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
 sed_inplace "s|^L2_RPC=.*|L2_RPC=$L2_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
 sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.challenger
+grep -q "^RUST_LOG=" "$OP_SUCCINCT_DIR"/.env.challenger || echo "RUST_LOG=info" >> "$OP_SUCCINCT_DIR"/.env.challenger
 
 docker compose up op-succinct-fetch-config
 OP_DEPLOYER_ADDR=$(cast wallet a "$DEPLOYER_PRIVATE_KEY")
 cast send --private-key "$RICH_L1_PRIVATE_KEY" --value 1ether "$OP_DEPLOYER_ADDR" --legacy --rpc-url "$L1_RPC_URL"
 docker compose up op-succinct-contracts
+
+# Update ANCHOR_STATE_REGISTRY_ADDRESS in .env.proposer with the address from the newly deployed game implementation
+NEW_GAME_IMPL=$(cast call "$DISPUTE_GAME_FACTORY_ADDRESS" 'gameImpls(uint32)(address)' 42 -r "$L1_RPC_URL")
+NEW_ANCHOR_STATE_REGISTRY=$(cast call "$NEW_GAME_IMPL" 'anchorStateRegistry()(address)' -r "$L1_RPC_URL")
+sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.proposer
+grep -q "^ANCHOR_STATE_REGISTRY_ADDRESS=" "$OP_SUCCINCT_DIR"/.env.challenger \
+    && sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.challenger \
+    || echo "ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY" >> "$OP_SUCCINCT_DIR"/.env.challenger
 
 cast send "$ANCHOR_STATE_REGISTRY" "setRespectedGameType(uint32)" 42 --private-key="$DEPLOYER_PRIVATE_KEY"
 
