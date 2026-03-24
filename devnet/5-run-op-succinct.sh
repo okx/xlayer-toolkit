@@ -110,8 +110,8 @@ docker compose up -d op-succinct-proposer
 echo "   ✓ Proposer started"
 
 if [ "$MIN_RUN" = "false" ]; then
-    docker-compose down op-proposer
-    docker-compose down op-challenger
+    docker compose down op-proposer
+    docker compose down op-challenger
     echo "   ✓ Older proposer and challenger stopped"
 fi
 
