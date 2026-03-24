@@ -66,16 +66,6 @@ check_basic_requirements() {
 # Helper Functions
 # ════════════════════════════════════════════════════════════════
 
-# Count transactions in block range [start, end)
-count_transactions() {
-    local start=$1 end=$2 total=0
-    for ((block=start; block<end; block++)); do
-        local count=$(cast block $block --rpc-url $L2_RPC --json 2>/dev/null | jq '.transactions | length' 2>/dev/null || echo "0")
-        total=$((total + count))
-    done
-    echo "$total"
-}
-
 # Get game status
 get_game_status() {
     local addr=$1
@@ -196,9 +186,9 @@ list_games() {
     fi
 
     # Table header
-    printf "${BOLD}%-6s %-8s %-12s %-25s %-10s %-10s %-20s${NC}\n" \
-        "Index" "Type" "Parent" "Block Range" "Blocks" "Txs" "Status"
-    echo "────────────────────────────────────────────────────────────────────────────────────────────────"
+    printf "${BOLD}%-6s %-8s %-12s %-25s %-10s %-20s${NC}\n" \
+        "Index" "Type" "Parent" "Block Range" "Blocks" "Status"
+    echo "────────────────────────────────────────────────────────────────────────────────────────"
 
     for ((j=count-1; j>=0; j--)); do
         local idx=${GAME_INDICES[j]}
@@ -237,20 +227,12 @@ list_games() {
             fi
         fi
 
-        # Count transactions
-        local txs
-        if [ "$start" = "?" ] || [ "$end" = "?" ]; then
-            txs="?"
-        else
-            txs=$(count_transactions $start $end)
-        fi
-
         # Get status
         local status_info=$(get_game_status $addr)
         local status_text=$(echo "$status_info" | cut -d'|' -f1)
 
-        printf "%-6s %-8s %-12s %-25s %-10s %-10s %-20s\n" \
-            "$idx" "${GAME_TYPES[j]}" "$parent_display" "$start-$end" "$blocks" "$txs" "$status_text"
+        printf "%-6s %-8s %-12s %-25s %-10s %-20s\n" \
+            "$idx" "${GAME_TYPES[j]}" "$parent_display" "$start-$end" "$blocks" "$status_text"
     done
 
     echo ""
