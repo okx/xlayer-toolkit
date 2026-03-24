@@ -84,7 +84,9 @@ docker compose up op-succinct-contracts
 # Update ANCHOR_STATE_REGISTRY_ADDRESS in .env.proposer with the address from the newly deployed game implementation
 NEW_GAME_IMPL=$(cast call "$DISPUTE_GAME_FACTORY_ADDRESS" 'gameImpls(uint32)(address)' 42 -r "$L1_RPC_URL")
 NEW_ANCHOR_STATE_REGISTRY=$(cast call "$NEW_GAME_IMPL" 'anchorStateRegistry()(address)' -r "$L1_RPC_URL")
-sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.proposer
+grep -q "^ANCHOR_STATE_REGISTRY_ADDRESS=" "$OP_SUCCINCT_DIR"/.env.proposer \
+    && sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.proposer \
+    || echo "ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY" >> "$OP_SUCCINCT_DIR"/.env.proposer
 grep -q "^ANCHOR_STATE_REGISTRY_ADDRESS=" "$OP_SUCCINCT_DIR"/.env.challenger \
     && sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.challenger \
     || echo "ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY" >> "$OP_SUCCINCT_DIR"/.env.challenger
