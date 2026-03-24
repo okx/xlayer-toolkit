@@ -365,7 +365,6 @@ To run e2e tests for reth, first build op-stack using reth as the sequencer and 
 SEQ_TYPE=reth
 RPC_TYPE=reth
 FLASHBLOCK_ENABLED=true
-FLASHBLOCK_P2P_ENABLED=true
 ```
 
 After devnet is started, run the reth e2e test without benchmark and comparison tests (non-flashblock node not started):
