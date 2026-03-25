@@ -2,7 +2,7 @@ BINARY  := mockteerpc
 IMAGE   := mockteerpc
 TAG     ?= latest
 
-.PHONY: build install run test docker-build docker-run clean
+.PHONY: build install run test docker docker-build docker-run clean
 
 build:
 	go build -o bin/$(BINARY) ./cmd/mockteerpc
@@ -15,6 +15,9 @@ run:
 
 test:
 	go test ./...
+
+docker:
+	docker build -t $(IMAGE):latest .
 
 docker-build:
 	docker build -t $(IMAGE):$(TAG) .

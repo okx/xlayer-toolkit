@@ -44,8 +44,8 @@ make build
 ```bash
 cd tools/mockteerpc
 
-# Build image
-make docker-build
+# Build image (mockteerpc:latest)
+make docker
 
 # Run container (exposes :8090)
 make docker-run
@@ -129,11 +129,13 @@ func TestMyFeature(t *testing.T) {
 
 ## Makefile targets
 
-| Target         | Description                        |
-|----------------|------------------------------------|
-| `make build`   | Build binary to `bin/mockteerpc`   |
-| `make run`     | Run via `go run`                   |
-| `make test`    | Run all tests                      |
-| `make docker-build` | Build Docker image            |
-| `make docker-run`   | Run Docker container on :8090 |
-| `make clean`   | Remove `bin/` directory            |
+| Target              | Description                              |
+|---------------------|------------------------------------------|
+| `make build`        | Build binary to `bin/mockteerpc`         |
+| `make install`      | Install binary to `$GOPATH/bin`          |
+| `make run`          | Run via `go run`                         |
+| `make test`         | Run all tests                            |
+| `make docker`       | Build Docker image `mockteerpc:latest`   |
+| `make docker-build` | Build Docker image with custom `TAG`     |
+| `make docker-run`   | Run Docker container on :8090            |
+| `make clean`        | Remove `bin/` directory                  |
