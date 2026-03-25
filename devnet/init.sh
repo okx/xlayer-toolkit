@@ -24,6 +24,19 @@ function build_and_tag_image() {
   cd -
 }
 
+function git_switch_branch() {
+  local dir=$1
+  local branch=$2
+  local remote
+  cd "$dir"
+  remote=$(git remote | head -1)
+  echo "🔄 Switching to branch: $branch (remote: $remote)"
+  git fetch "$remote"
+  git checkout "$branch"
+  git pull "$remote" "$branch"
+  cd -
+}
+
 # Build OP_STACK image
 if [ "$SKIP_OP_STACK_BUILD" = "true" ]; then
   echo "⏭️  Skipping op-stack build"
@@ -32,11 +45,51 @@ else
     echo "❌ Please set OP_STACK_LOCAL_DIRECTORY in .env"
     exit 1
   else
+    if [ -n "$OP_STACK_BRANCH" ]; then
+      git_switch_branch "$OP_STACK_LOCAL_DIRECTORY" "$OP_STACK_BRANCH"
+    else
+      echo "📍 Using op-stack branch: $(cd "$OP_STACK_LOCAL_DIRECTORY" && git branch --show-current)"
+    fi
+
     echo "🔨 Building op-stack"
     cd "$OP_STACK_LOCAL_DIRECTORY"
     git submodule update --init --recursive
     cd -
     build_and_tag_image "op-stack" "$OP_STACK_IMAGE_TAG" "$OP_STACK_LOCAL_DIRECTORY" "Dockerfile-opstack"
+  fi
+fi
+
+# Build OP_STACK_TEE and OP_CONTRACTS_TEE images
+if [ "$SKIP_OP_STACK_TEE_BUILD" = "true" ] && [ "$SKIP_OP_CONTRACTS_TEE_BUILD" = "true" ]; then
+  echo "⏭️  Skipping op-stack-tee and op-contracts-tee build"
+else
+  # Use dedicated directory if set, otherwise fall back to OP_STACK_LOCAL_DIRECTORY
+  if [ -n "$OP_STACK_TEE_LOCAL_DIRECTORY" ]; then
+    OP_STACK_TEE_DIR="$OP_STACK_TEE_LOCAL_DIRECTORY"
+  elif [ -n "$OP_STACK_LOCAL_DIRECTORY" ]; then
+    OP_STACK_TEE_DIR="$OP_STACK_LOCAL_DIRECTORY"
+  else
+    echo "❌ Please set OP_STACK_TEE_LOCAL_DIRECTORY or OP_STACK_LOCAL_DIRECTORY in .env"
+    exit 1
+  fi
+
+  git_switch_branch "$OP_STACK_TEE_DIR" "$OP_STACK_TEE_BRANCH"
+  cd "$OP_STACK_TEE_DIR"
+  git submodule update --init --recursive
+  cd -
+
+  if [ "$SKIP_OP_STACK_TEE_BUILD" = "true" ]; then
+    echo "⏭️  Skipping op-stack-tee build"
+  else
+    echo "🔨 Building $OP_STACK_TEE_IMAGE_TAG"
+    build_and_tag_image "op-stack-tee" "$OP_STACK_TEE_IMAGE_TAG" "$OP_STACK_TEE_DIR" "Dockerfile-opstack"
+  fi
+
+  if [ "$SKIP_OP_CONTRACTS_TEE_BUILD" = "true" ]; then
+    echo "⏭️  Skipping op-contracts-tee build"
+  else
+    echo "🔨 Building $OP_CONTRACTS_TEE_IMAGE_TAG"
+    build_and_tag_image "op-contracts-tee" "$OP_CONTRACTS_TEE_IMAGE_TAG" "$OP_STACK_TEE_DIR" "Dockerfile-contracts"
   fi
 fi
 
@@ -58,12 +111,7 @@ else
 
   # Switch to specified branch if provided
   if [ -n "$OP_GETH_BRANCH" ]; then
-    echo "🔄 Switching op-geth to branch: $OP_GETH_BRANCH"
-    cd "$OP_GETH_DIR"
-    git fetch origin
-    git checkout "$OP_GETH_BRANCH"
-    git pull origin "$OP_GETH_BRANCH"
-    cd -
+    git_switch_branch "$OP_GETH_DIR" "$OP_GETH_BRANCH"
   else
     echo "📍 Using op-geth default branch"
   fi
@@ -97,16 +145,11 @@ else
     exit 1
   else
     echo "🔨 Building $OP_RETH_IMAGE_TAG"
-    cd "$OP_RETH_LOCAL_DIRECTORY"
     if [ -n "$OP_RETH_BRANCH" ]; then
-      echo "🔄 Switching op-reth to branch: $OP_RETH_BRANCH"
-      git fetch origin
-      git checkout "$OP_RETH_BRANCH"
-      git pull origin "$OP_RETH_BRANCH"
+      git_switch_branch "$OP_RETH_LOCAL_DIRECTORY" "$OP_RETH_BRANCH"
     else
-      echo "📍 Using op-reth branch: $(git branch --show-current)"
+      echo "📍 Using op-reth branch: $(cd "$OP_RETH_LOCAL_DIRECTORY" && git branch --show-current)"
     fi
-    cd -
 
     # Check if profiling is enabled and build accordingly
     if [ "$RETH_PROFILING_ENABLED" = "true" ]; then
@@ -147,8 +190,17 @@ else
     exit 1
   else
     echo "🔨 Building kailua image"
-    
+
     cd "$KAILUA_LOCAL_DIRECTORY"
     build_and_tag_image "kailua" "$KAILUA_IMAGE_TAG" "$KAILUA_LOCAL_DIRECTORY" "Dockerfile.local"
   fi
+fi
+
+# Build MockTeeRPC image
+if [ "$SKIP_MOCKTEERPC_BUILD" = "true" ]; then
+  echo "⏭️  Skipping mockteerpc build"
+else
+  echo "🔨 Building $MOCKTEERPC_IMAGE_TAG"
+  MOCKTEERPC_DIR="$PWD_DIR/../tools/mockteerpc"
+  build_and_tag_image "mockteerpc" "$MOCKTEERPC_IMAGE_TAG" "$MOCKTEERPC_DIR" "Dockerfile"
 fi
