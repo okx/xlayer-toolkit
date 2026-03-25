@@ -55,8 +55,8 @@ docker run --rm \
   -v "$TEMP_ENV:/devnet/.env" \
   "$OP_CONTRACTS_TEE_IMAGE_TAG" \
   bash /devnet/scripts/add-tee-game-type.sh \
-    --max-challenge-duration 120 \
-    --max-prove-duration 60 \
+    --max-challenge-duration "$GAME_WINDOW" \
+    --max-prove-duration "$GAME_WINDOW" \
     --mock-verifier \
     --enclave "$ENCLAVE_ADDRESS" \
     /app/packages/contracts-bedrock
