@@ -558,7 +558,7 @@ services:
       - --rpc.port=8560
       - --rollup-rpc=http://op-seq:9545
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
-      - --proposal-interval=30s
+      - --proposal-interval=300s
       - --private-key=${OP_PROPOSER_PRIVATE_KEY}
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --game-type=${GAME_TYPE:-0}
