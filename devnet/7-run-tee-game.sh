@@ -6,6 +6,37 @@ source .env
 PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR=$PWD_DIR/scripts
 
+# Check required images exist
+MISSING_IMAGES=()
+for IMG_VAR in OP_CONTRACTS_TEE_IMAGE_TAG OP_STACK_TEE_IMAGE_TAG MOCKTEERPC_IMAGE_TAG; do
+  IMG="${!IMG_VAR}"
+  if ! docker image inspect "$IMG" > /dev/null 2>&1; then
+    MISSING_IMAGES+=("$IMG_VAR=$IMG")
+  fi
+done
+
+if [ ${#MISSING_IMAGES[@]} -gt 0 ]; then
+  echo "❌ The following required Docker images are missing:"
+  for ENTRY in "${MISSING_IMAGES[@]}"; do
+    echo "   - $ENTRY"
+  done
+  echo ""
+  echo "To build them, set the corresponding SKIP flags to 'false' in .env:"
+  for ENTRY in "${MISSING_IMAGES[@]}"; do
+    VAR_NAME="${ENTRY%%=*}"
+    case "$VAR_NAME" in
+      OP_CONTRACTS_TEE_IMAGE_TAG) echo "   SKIP_OP_CONTRACTS_TEE_BUILD=false" ;;
+      OP_STACK_TEE_IMAGE_TAG)     echo "   SKIP_OP_STACK_TEE_BUILD=false" ;;
+      MOCKTEERPC_IMAGE_TAG)       echo "   SKIP_MOCKTEERPC_BUILD=false" ;;
+    esac
+  done
+  echo ""
+  echo "Then run:  bash init.sh"
+  echo ""
+  echo "After init.sh completes, re-run this script:  bash 7-run-tee-game.sh"
+  exit 1
+fi
+
 ENCLAVE_ADDRESS=$(cast wallet address --private-key "$OP_CHALLENGER_PRIVATE_KEY")
 
 echo "🔧 Adding TEE game type..."
@@ -40,3 +71,6 @@ echo "🚀 Starting tee-challenger..."
 docker compose up -d tee-challenger
 
 echo "✅ TEE game setup complete!"
+echo ""
+echo "To list all games, run:"
+echo "   bash scripts/list-game.sh"
