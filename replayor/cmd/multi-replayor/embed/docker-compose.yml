@@ -15,9 +15,6 @@ services:
 #    env_file: "test-configs/base-mainnet-replay.env"
   node-unwind: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
     image: "op-reth:latest"
-    ports:
-      - 9123:9123
-      - 8553:8553
     environment:
       - ENV_FILE=reth.docker.env
     working_dir: /app
@@ -30,9 +27,6 @@ services:
       - ${RETH_DATA_PATH:-./reth-data}:/app/reth-data
   node-init: # this is Optimism's geth client w/ a patch to not reject txns as part of FCU
     image: "op-reth:latest"
-    ports:
-      - 9123:9123
-      - 8553:8553
     environment:
       - ENV_FILE=reth.docker.env
     working_dir: /app

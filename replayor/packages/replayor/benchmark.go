@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	concurrency        = 8000
-	fetchGoroutinePool = 8000
+	concurrency        = 100
+	fetchGoroutinePool = 100
 )
 
 type Benchmark struct {
@@ -575,8 +575,8 @@ func NewBenchmark(
 		clients:                   c,
 		rollupCfg:                 rollupCfg,
 		log:                       logger,
-		incomingBlocks:            make(chan *types.Block, 20000),
-		processBlocks:             make(chan strategies.BlockCreationParams, 20000),
+		incomingBlocks:            make(chan *types.Block, 1000),
+		processBlocks:             make(chan strategies.BlockCreationParams, 1000),
 		strategy:                  strategy,
 		s:                         s,
 		currentBlock:              currentBlock,
@@ -592,4 +592,3 @@ func NewBenchmark(
 
 	return r
 }
-

@@ -78,6 +78,7 @@ func (s *StoredStats) Write(ctx context.Context) {
 	if len(s.stats) > 0 {
 		s.lastBlockWritten = s.stats[len(s.stats)-1].BlockNumber
 	}
+	s.stats = []BlockCreationStats{}
 	s.log.Info("successfully wrote block stats to storage", "lastBlockWritten", s.lastBlockWritten)
 }
 
