@@ -841,7 +841,16 @@ get_user_input() {
 
     # Set target directory and setup directory
     TARGET_DIR="${NETWORK_TYPE}-${RPC_TYPE}"
-    SETUP_DIR="${WORK_DIR}/xlayer-${NETWORK_TYPE}-${RPC_TYPE}"
+    local default_setup_dir="${WORK_DIR}/xlayer-${NETWORK_TYPE}-${RPC_TYPE}"
+
+    if [ "$QUICK_START" = true ]; then
+        local custom_dir=""
+        countdown_prompt "Data folder [$default_setup_dir]... Press any key to change" custom_dir 5 "Data folder path" || true
+        SETUP_DIR="${custom_dir:-$default_setup_dir}"
+        print_success "Data folder: $SETUP_DIR"
+    else
+        SETUP_DIR="$default_setup_dir"
+    fi
 
     # testnet only supports snapshot mode (both geth and reth)
     if [ "$NETWORK_TYPE" = "testnet" ] && [ "$SYNC_MODE" = "genesis" ]; then
