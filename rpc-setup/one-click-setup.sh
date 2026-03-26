@@ -1531,6 +1531,8 @@ main() {
     echo -e "${C_DIM}    RPC: http://localhost:${RPC_PORT:-8545} | WS: ws://localhost:${WS_PORT:-8546}${C_RESET}"
     echo -e "${C_DIM}    Working directory: $WORK_DIR${C_RESET}"
     echo ""
+    echo -e "  ${C_BOLD}Run:${C_RESET} cd $WORK_DIR"
+    echo ""
 }
 
 # Clean up downloaded files in standalone mode
