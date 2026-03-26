@@ -834,8 +834,18 @@ get_user_input() {
     else
         print_section "Network Configuration"
         echo ""
-        NETWORK_TYPE=$(prompt_input "Network type (testnet/mainnet) [${DEFAULT_NETWORK}]: " "$DEFAULT_NETWORK" "validate_network")
-        SYNC_MODE=$(prompt_input "Sync mode (genesis/snapshot) [${DEFAULT_SYNC_MODE}]: " "$DEFAULT_SYNC_MODE" "validate_sync_mode")
+        countdown_prompt "Network type [${DEFAULT_NETWORK}]... Press any key to change" NETWORK_TYPE 5 "Network type (testnet/mainnet)" || true
+        NETWORK_TYPE="${NETWORK_TYPE:-$DEFAULT_NETWORK}"
+        if ! validate_network "$NETWORK_TYPE"; then
+            exit 1
+        fi
+        print_success "Network type: $NETWORK_TYPE"
+
+        countdown_prompt "Sync mode [${DEFAULT_SYNC_MODE}]... Press any key to change" SYNC_MODE 5 "Sync mode (genesis/snapshot)" || true
+        SYNC_MODE="${SYNC_MODE:-$DEFAULT_SYNC_MODE}"
+        if ! validate_sync_mode "$SYNC_MODE"; then
+            exit 1
+        fi
         print_step_ok "Network: $NETWORK_TYPE | Sync: $SYNC_MODE | RPC: $RPC_TYPE"
     fi
 
