@@ -64,7 +64,7 @@ QUICK_START=false
 
 # User input variables (runtime values, not in config file)
 NETWORK_TYPE=""
-RPC_TYPE=""
+RPC_TYPE="reth"
 SYNC_MODE=""  # Sync mode: genesis or snapshot
 L1_RPC_URL=""
 L1_BEACON_URL=""
@@ -267,23 +267,18 @@ show_usage() {
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  --rpc_type=<geth|reth>   RPC client type (default: reth)"
     echo "  --help                   Show this help message"
     echo ""
     echo "Note: Network type (mainnet/testnet) will be prompted during setup"
     echo ""
     echo "Examples:"
-    echo "  $0                  # Use default reth (network type will be prompted)"
-    echo "  $0 --rpc_type=reth  # Use reth (network type will be prompted)"
+    echo "  $0                  # Launch setup (network type will be prompted)"
 }
 
 # Parse command line arguments
 parse_arguments() {
     for arg in "$@"; do
         case $arg in
-            --rpc_type=*)
-                RPC_TYPE="${arg#*=}"
-                ;;
             --help)
                 show_usage
                 exit 0
@@ -295,14 +290,6 @@ parse_arguments() {
                 ;;
         esac
     done
-    
-    # Set default for RPC_TYPE only
-    RPC_TYPE="${RPC_TYPE:-reth}"
-    
-    # Validate RPC_TYPE if provided
-    if ! validate_rpc_type "$RPC_TYPE"; then
-        exit 1
-    fi
 }
 
 # Check and display existing configurations
