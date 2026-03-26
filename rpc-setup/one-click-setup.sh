@@ -1516,6 +1516,44 @@ main() {
     # Quick start prompt with 5s countdown
     prompt_quick_start
 
+    # In quick start mode, check if services are already running
+    if [ "$QUICK_START" = true ]; then
+        local project_name="xlayer-${NETWORK_TYPE}-${RPC_TYPE}"
+        local running_containers
+        running_containers=$($SUDO docker compose -p "$project_name" ps --format json 2>/dev/null | grep -c '"running"' || true)
+        if [ "$running_containers" -gt 0 ]; then
+            SETUP_DIR="${WORK_DIR}/xlayer-${NETWORK_TYPE}-${RPC_TYPE}"
+            print_success "Services already running ($project_name)"
+            echo ""
+            if [ -f "$SETUP_DIR/.env" ]; then
+                local http_port ws_port node_port
+                http_port=$(grep '^HTTP_RPC_PORT=' "$SETUP_DIR/.env" | cut -d'=' -f2)
+                ws_port=$(grep '^WEBSOCKET_PORT=' "$SETUP_DIR/.env" | cut -d'=' -f2)
+                node_port=$(grep '^NODE_RPC_PORT=' "$SETUP_DIR/.env" | cut -d'=' -f2)
+                local sline=$(printf '%*s' 50 '' | tr ' ' '-')
+                echo -e "${C_CYAN}  +${sline}+${C_RESET}"
+                echo -e "${C_CYAN}  |$(printf '%*s' 17 '')${C_BOLD}Connection Info${C_RESET}${C_CYAN}$(printf '%*s' 19 '')|\033[0m"
+                echo -e "${C_CYAN}  +${sline}+${C_RESET}"
+                echo -e "${C_DIM}    Network:  $NETWORK_TYPE${C_RESET}"
+                echo -e "${C_DIM}    RPC Type: $RPC_TYPE${C_RESET}"
+                echo -e "${C_GREEN}    HTTP:     http://localhost:${http_port:-8545}${C_RESET}"
+                echo -e "${C_GREEN}    WS:       ws://localhost:${ws_port:-8546}${C_RESET}"
+                echo -e "${C_GREEN}    Op-Node:  http://localhost:${node_port:-9545}${C_RESET}"
+            fi
+            echo ""
+            echo -e "  ${C_BOLD}Directory:${C_RESET} $SETUP_DIR"
+            echo ""
+            echo -e "  ${C_BOLD}Common commands:${C_RESET}"
+            echo -e "    ${C_GREEN}cd${C_RESET} $SETUP_DIR"
+            echo -e "    ${C_GREEN}make status${C_RESET}              Check service status"
+            echo -e "    ${C_GREEN}make stop${C_RESET}                Stop services"
+            echo -e "    ${C_GREEN}make run${C_RESET}                 Start services"
+            echo -e "    ${C_GREEN}docker compose logs -f${C_RESET}   View logs"
+            echo ""
+            exit 0
+        fi
+    fi
+
     # System checks
     check_system_requirements
 
