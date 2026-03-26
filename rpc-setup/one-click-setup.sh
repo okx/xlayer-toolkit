@@ -843,14 +843,10 @@ get_user_input() {
     TARGET_DIR="${NETWORK_TYPE}-${RPC_TYPE}"
     local default_setup_dir="${WORK_DIR}/xlayer-${NETWORK_TYPE}-${RPC_TYPE}"
 
-    if [ "$QUICK_START" = true ]; then
-        local custom_dir=""
-        countdown_prompt "Data folder [$default_setup_dir]... Press any key to change" custom_dir 5 "Data folder path" || true
-        SETUP_DIR="${custom_dir:-$default_setup_dir}"
-        print_success "Data folder: $SETUP_DIR"
-    else
-        SETUP_DIR="$default_setup_dir"
-    fi
+    local custom_dir=""
+    countdown_prompt "Data folder [$default_setup_dir]... Press any key to change" custom_dir 5 "Data folder path" || true
+    SETUP_DIR="${custom_dir:-$default_setup_dir}"
+    print_success "Data folder: $SETUP_DIR"
 
     # testnet only supports snapshot mode (both geth and reth)
     if [ "$NETWORK_TYPE" = "testnet" ] && [ "$SYNC_MODE" = "genesis" ]; then
@@ -866,35 +862,24 @@ get_user_input() {
         fi
     fi
 
-    if [ "$QUICK_START" = true ]; then
-        echo ""
-        countdown_prompt "L1 RPC URL(recommended)... Press any key to input" L1_RPC_URL 5 "L1 RPC URL" || true
-        print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
-
-        if [ -n "$L1_RPC_URL" ]; then
-            countdown_prompt "L1 Beacon URL(recommended)... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL" || true
-            print_success "L1 Beacon URL: ${L1_BEACON_URL:-(empty)}"
-        else
-            L1_BEACON_URL=""
-        fi
-    else
+    if [ "$QUICK_START" != true ]; then
         print_section "L1 Endpoints"
-        echo ""
-        countdown_prompt "L1 RPC URL... Press any key to input" L1_RPC_URL 5 "L1 RPC URL" || true
-        if [ -n "$L1_RPC_URL" ] && ! validate_url "$L1_RPC_URL"; then
-            L1_RPC_URL=""
-        fi
-        print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
+    fi
+    echo ""
+    countdown_prompt "L1 RPC URL(recommended)... Press any key to input" L1_RPC_URL 5 "L1 RPC URL" || true
+    if [ -n "$L1_RPC_URL" ] && ! validate_url "$L1_RPC_URL"; then
+        L1_RPC_URL=""
+    fi
+    print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
 
-        if [ -n "$L1_RPC_URL" ]; then
-            countdown_prompt "L1 Beacon URL... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL" || true
-            if [ -n "$L1_BEACON_URL" ] && ! validate_url "$L1_BEACON_URL"; then
-                L1_BEACON_URL=""
-            fi
-            print_success "L1 Beacon URL: ${L1_BEACON_URL:-(skip)}"
-        else
+    if [ -n "$L1_RPC_URL" ]; then
+        countdown_prompt "L1 Beacon URL(recommended)... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL" || true
+        if [ -n "$L1_BEACON_URL" ] && ! validate_url "$L1_BEACON_URL"; then
             L1_BEACON_URL=""
         fi
+        print_success "L1 Beacon URL: ${L1_BEACON_URL:-(skip)}"
+    else
+        L1_BEACON_URL=""
     fi
 
     # Check existing data directory
@@ -1489,6 +1474,22 @@ generate_docker_compose() {
     print_step_ok "docker-compose.yml ready ($SYNC_MODE mode)"
 }
 
+# Print common commands help block
+# Usage: print_common_commands <directory>
+print_common_commands() {
+    local dir=$1
+    echo ""
+    echo -e "  ${C_BOLD}Getting started:${C_RESET}"
+    echo -e "    ${C_GREEN}cd${C_RESET} $dir"
+    echo ""
+    echo -e "  ${C_BOLD}Common commands:${C_RESET}"
+    echo -e "    ${C_GREEN}make status${C_RESET}              Check service status"
+    echo -e "    ${C_GREEN}make stop${C_RESET}                Stop services"
+    echo -e "    ${C_GREEN}make run${C_RESET}                 Start services"
+    echo -e "    ${C_GREEN}docker compose logs -f${C_RESET}   View logs"
+    echo ""
+}
+
 start_services() {
     cd "$WORK_DIR" || exit 1
 
@@ -1549,16 +1550,7 @@ main() {
                 echo -e "${C_GREEN}    WS:       ws://localhost:${ws_port:-8546}${C_RESET}"
                 echo -e "${C_GREEN}    Op-Node:  http://localhost:${node_port:-9545}${C_RESET}"
             fi
-            echo ""
-            echo -e "  ${C_BOLD}Directory:${C_RESET} $SETUP_DIR"
-            echo ""
-            echo -e "  ${C_BOLD}Common commands:${C_RESET}"
-            echo -e "    ${C_GREEN}cd${C_RESET} $SETUP_DIR"
-            echo -e "    ${C_GREEN}make status${C_RESET}              Check service status"
-            echo -e "    ${C_GREEN}make stop${C_RESET}                Stop services"
-            echo -e "    ${C_GREEN}make run${C_RESET}                 Start services"
-            echo -e "    ${C_GREEN}docker compose logs -f${C_RESET}   View logs"
-            echo ""
+            print_common_commands "$SETUP_DIR"
             exit 0
         fi
     fi
@@ -1616,16 +1608,7 @@ main() {
     echo -e "${C_GREEN}  +${sline}+${C_RESET}"
     echo -e "${C_GREEN}  |${C_BOLD}$(printf '%*s' "$spad_left" '')${summary_text}$(printf '%*s' "$spad_right" '')${C_RESET}${C_GREEN}|${C_RESET}"
     echo -e "${C_GREEN}  +${sline}+${C_RESET}"
-    echo ""
-    echo -e "  ${C_BOLD}Getting started:${C_RESET}"
-    echo -e "    ${C_GREEN}cd${C_RESET} $WORK_DIR"
-    echo ""
-    echo -e "  ${C_BOLD}Common commands:${C_RESET}"
-    echo -e "    ${C_GREEN}make status${C_RESET}              Check service status"
-    echo -e "    ${C_GREEN}make stop${C_RESET}                Stop services"
-    echo -e "    ${C_GREEN}make run${C_RESET}                 Start services"
-    echo -e "    ${C_GREEN}docker compose logs -f${C_RESET}   View logs"
-    echo ""
+    print_common_commands "$WORK_DIR"
 }
 
 # Clean up downloaded files in standalone mode
