@@ -64,7 +64,7 @@ QUICK_START=false
 
 # User input variables (runtime values, not in config file)
 NETWORK_TYPE=""
-RPC_TYPE=""
+RPC_TYPE="reth"
 SYNC_MODE=""  # Sync mode: genesis or snapshot
 L1_RPC_URL=""
 L1_BEACON_URL=""
@@ -267,23 +267,18 @@ show_usage() {
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  --rpc_type=<geth|reth>   RPC client type (default: reth)"
     echo "  --help                   Show this help message"
     echo ""
     echo "Note: Network type (mainnet/testnet) will be prompted during setup"
     echo ""
     echo "Examples:"
-    echo "  $0                  # Use default reth (network type will be prompted)"
-    echo "  $0 --rpc_type=reth  # Use reth (network type will be prompted)"
+    echo "  $0                  # Launch setup (network type will be prompted)"
 }
 
 # Parse command line arguments
 parse_arguments() {
     for arg in "$@"; do
         case $arg in
-            --rpc_type=*)
-                RPC_TYPE="${arg#*=}"
-                ;;
             --help)
                 show_usage
                 exit 0
@@ -295,14 +290,6 @@ parse_arguments() {
                 ;;
         esac
     done
-    
-    # Set default for RPC_TYPE only
-    RPC_TYPE="${RPC_TYPE:-reth}"
-    
-    # Validate RPC_TYPE if provided
-    if ! validate_rpc_type "$RPC_TYPE"; then
-        exit 1
-    fi
 }
 
 # Check and display existing configurations
@@ -339,6 +326,7 @@ load_network_config() {
     eval "RETH_CONFIG=\${${prefix}_RETH_CONFIG}"
     eval "LEGACY_RPC_URL=\${${prefix}_LEGACY_RPC_URL}"
     eval "LEGACY_RPC_TIMEOUT=\${${prefix}_LEGACY_RPC_TIMEOUT}"
+    eval "RETH_TRUSTED_PEERS=\${${prefix}_RETH_TRUSTED_PEERS}"
     
     # Validate that configuration was loaded
     if [ -z "$OP_STACK_IMAGE_TAG" ]; then
@@ -491,11 +479,10 @@ countdown_prompt() {
         if read -r -t 1 -n 1 input </dev/tty 2>/dev/null; then
             printf "\r\033[K"
             if [ "$need_input" = "true" ]; then
-                # Show input prompt, read full line
+                # Show input prompt, read full line (discard the keypress that triggered the prompt)
                 printf "${C_CYAN}  > %s: ${C_RESET}" "$input_label"
-                local rest=""
-                read -r rest </dev/tty 2>/dev/null || read -r rest
-                input="${input}${rest}"
+                input=""
+                read -r input </dev/tty 2>/dev/null || read -r input
                 printf "\r\033[K"
             fi
             eval "$var_name=\"\$input\""
@@ -578,29 +565,82 @@ find_available_port() {
     return 1
 }
 
+# Prompt a port with countdown, ensuring the default and user input are available
+# Usage: prompt_port "label" VAR_NAME default_port
+prompt_port() {
+    local label=$1
+    local var_name=$2
+    local default_port=$3
+
+    # Find an available default port
+    local effective_default="$default_port"
+    if is_port_in_use "$default_port"; then
+        effective_default=$(find_available_port "$((default_port + 1))")
+        if [ -z "$effective_default" ]; then
+            print_error "Cannot find available port for $label starting from $default_port"
+            exit 1
+        fi
+        print_warning "$label default port $default_port is in use, suggesting $effective_default"
+    fi
+
+    local input=""
+    countdown_prompt "$label [$effective_default]... Press any key to change" input 5 "$label" || true
+    local port="${input:-$effective_default}"
+
+    # Validate user input port
+    if [ -n "$input" ] && is_port_in_use "$port"; then
+        print_warning "Port $port is in use"
+        local alt
+        alt=$(find_available_port "$((port + 1))")
+        if [ -n "$alt" ]; then
+            print_info "Suggested available port: $alt"
+            countdown_prompt "Use $alt? Press any key to enter another" input 5 "$label" || true
+            port="${input:-$alt}"
+        fi
+    fi
+
+    eval "$var_name=\"\$port\""
+    print_success "$label: $port"
+}
+
 # Check all configured ports and auto-resolve conflicts
 check_and_resolve_ports() {
     local port_names=("RPC_PORT" "WS_PORT" "NODE_RPC_PORT" "GETH_P2P_PORT" "NODE_P2P_PORT" "ENGINE_API_PORT")
     local port_labels=("RPC" "WebSocket" "Node RPC" "EL P2P" "Node P2P" "Engine API")
     local changed=false
+    local assigned_ports=()
 
     for i in "${!port_names[@]}"; do
         local var_name="${port_names[$i]}"
         local label="${port_labels[$i]}"
         local current_port="${!var_name}"
 
-        if is_port_in_use "$current_port"; then
+        # Check system usage and conflicts with already assigned ports
+        while is_port_in_use "$current_port" || [[ " ${assigned_ports[*]} " == *" $current_port "* ]]; do
             local new_port
             new_port=$(find_available_port "$((current_port + 1))")
-            if [ -n "$new_port" ]; then
-                print_info "$label port $current_port is in use, switching to $new_port"
-                eval "$var_name=$new_port"
-                changed=true
-            else
-                print_step_fail "Cannot find available port for $label (tried from $current_port)"
+            if [ -z "$new_port" ]; then
+                print_step_fail "Cannot find available port for $label (tried from ${!var_name})"
                 exit 1
             fi
-        fi
+            # Ensure new_port doesn't conflict with already assigned ports
+            while [[ " ${assigned_ports[*]} " == *" $new_port "* ]]; do
+                new_port=$(find_available_port "$((new_port + 1))")
+                if [ -z "$new_port" ]; then
+                    print_step_fail "Cannot find available port for $label"
+                    exit 1
+                fi
+            done
+            if [ "$new_port" != "${!var_name}" ]; then
+                print_info "$label port ${!var_name} is in use, switching to $new_port"
+                changed=true
+            fi
+            current_port=$new_port
+            break
+        done
+
+        eval "$var_name=$current_port"
+        assigned_ports+=("$current_port")
     done
 
     if [ "$changed" = true ]; then
@@ -757,37 +797,30 @@ check_existing_data() {
     print_section "Existing data found"
     echo -e "${C_DIM}    Path: $target_dir | Size: $size | Status: $status${C_RESET}"
     echo ""
-    echo -e "${C_CYAN}    [1] Keep existing data (recommended)${C_RESET}"
-    echo -e "${C_CYAN}    [2] Delete and re-initialize${C_RESET}"
-    echo -e "${C_CYAN}    [3] Cancel${C_RESET}"
-    echo ""
 
-    while true; do
-        printf "${C_CYAN}  > Choose [1/2/3, default: 1]: ${C_RESET}"
-        if ! read -r choice </dev/tty 2>/dev/null && ! read -r choice; then
-            choice="1"
-        fi
-        choice="${choice:-1}"
+    local choice=""
+    countdown_prompt "Keeping existing data... Press any key to change" choice 5 "Action (1=keep, 2=delete, 3=cancel)" || true
+    choice="${choice:-1}"
 
-        case $choice in
-            1)
-                print_step_ok "Keeping existing data"
-                return 1
-                ;;
-            2)
-                run_with_spinner "Removing $target_dir..." rm -rf "$target_dir"
-                print_step_ok "Directory removed"
-                return 0
-                ;;
-            3)
-                print_info "Cancelled"
-                exit 0
-                ;;
-            *)
-                print_error "Invalid choice"
-                ;;
-        esac
-    done
+    case $choice in
+        1)
+            print_step_ok "Keeping existing data"
+            return 1
+            ;;
+        2)
+            run_with_spinner "Removing $target_dir..." rm -rf "$target_dir"
+            print_step_ok "Directory removed"
+            return 0
+            ;;
+        3)
+            print_info "Cancelled"
+            exit 0
+            ;;
+        *)
+            print_error "Invalid choice: $choice"
+            exit 1
+            ;;
+    esac
 }
 
 get_user_input() {
@@ -796,19 +829,49 @@ get_user_input() {
     else
         print_section "Network Configuration"
         echo ""
-        NETWORK_TYPE=$(prompt_input "Network type (testnet/mainnet) [${DEFAULT_NETWORK}]: " "$DEFAULT_NETWORK" "validate_network")
-        SYNC_MODE=$(prompt_input "Sync mode (genesis/snapshot) [${DEFAULT_SYNC_MODE}]: " "$DEFAULT_SYNC_MODE" "validate_sync_mode")
+        countdown_prompt "Network type [${DEFAULT_NETWORK}]... Press any key to change" NETWORK_TYPE 5 "Network type (testnet/mainnet)" || true
+        NETWORK_TYPE="${NETWORK_TYPE:-$DEFAULT_NETWORK}"
+        if ! validate_network "$NETWORK_TYPE"; then
+            exit 1
+        fi
+        print_success "Network type: $NETWORK_TYPE"
+
+        if [ "$NETWORK_TYPE" = "testnet" ]; then
+            SYNC_MODE="snapshot"
+            print_info "Testnet only supports snapshot mode"
+        else
+            countdown_prompt "Sync mode [${DEFAULT_SYNC_MODE}]... Press any key to change" SYNC_MODE 5 "Sync mode (genesis/snapshot)" || true
+            SYNC_MODE="${SYNC_MODE:-$DEFAULT_SYNC_MODE}"
+            if ! validate_sync_mode "$SYNC_MODE"; then
+                exit 1
+            fi
+        fi
         print_step_ok "Network: $NETWORK_TYPE | Sync: $SYNC_MODE | RPC: $RPC_TYPE"
     fi
 
-    # Set target directory
+    # Set target directory and setup directory
     TARGET_DIR="${NETWORK_TYPE}-${RPC_TYPE}"
+    local default_setup_dir="${WORK_DIR}/xlayer-${NETWORK_TYPE}-${RPC_TYPE}"
 
-    # testnet only supports snapshot mode (both geth and reth)
-    if [ "$NETWORK_TYPE" = "testnet" ] && [ "$SYNC_MODE" = "genesis" ]; then
-        print_error "Testnet does not support genesis mode"
-        print_info "Please use 'snapshot' sync mode for testnet"
-        exit 1
+    if [ "$QUICK_START" = true ]; then
+        SETUP_DIR="$default_setup_dir"
+    else
+        local custom_dir=""
+        countdown_prompt "Data folder [$default_setup_dir]... Press any key to change" custom_dir 5 "Data folder name or path" || true
+        if [ -n "$custom_dir" ]; then
+            # If not an absolute path, treat as folder name under WORK_DIR
+            if [[ "$custom_dir" != /* ]]; then
+                custom_dir="${WORK_DIR}/${custom_dir}"
+            fi
+            SETUP_DIR="$custom_dir"
+            if [ ! -d "$SETUP_DIR" ]; then
+                mkdir -p "$SETUP_DIR"
+                print_info "Created directory: $SETUP_DIR"
+            fi
+        else
+            SETUP_DIR="$default_setup_dir"
+        fi
+        print_success "Data folder: $SETUP_DIR"
     fi
 
     # Validate snapshot support
@@ -818,46 +881,35 @@ get_user_input() {
         fi
     fi
 
-    if [ "$QUICK_START" = true ]; then
-        echo ""
-        countdown_prompt "L1 RPC URL(recommended)... Press any key to input" L1_RPC_URL 5 "L1 RPC URL" || true
-        print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
-
-        if [ -n "$L1_RPC_URL" ]; then
-            countdown_prompt "L1 Beacon URL(recommended)... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL" || true
-            print_success "L1 Beacon URL: ${L1_BEACON_URL:-(empty)}"
-        else
-            L1_BEACON_URL=""
-        fi
-    else
+    if [ "$QUICK_START" != true ]; then
         print_section "L1 Endpoints"
-        echo ""
-        countdown_prompt "L1 RPC URL... Press any key to input" L1_RPC_URL 5 "L1 RPC URL" || true
-        if [ -n "$L1_RPC_URL" ] && ! validate_url "$L1_RPC_URL"; then
-            L1_RPC_URL=""
-        fi
-        print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
+    fi
+    echo ""
+    countdown_prompt "L1 RPC URL(recommended)... Press any key to input" L1_RPC_URL 5 "L1 RPC URL" || true
+    if [ -n "$L1_RPC_URL" ] && ! validate_url "$L1_RPC_URL"; then
+        L1_RPC_URL=""
+    fi
+    print_success "L1 RPC URL: ${L1_RPC_URL:-(skip)}"
 
-        if [ -n "$L1_RPC_URL" ]; then
-            countdown_prompt "L1 Beacon URL... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL" || true
-            if [ -n "$L1_BEACON_URL" ] && ! validate_url "$L1_BEACON_URL"; then
-                L1_BEACON_URL=""
-            fi
-            print_success "L1 Beacon URL: ${L1_BEACON_URL:-(skip)}"
-        else
+    if [ -n "$L1_RPC_URL" ]; then
+        countdown_prompt "L1 Beacon URL(recommended)... Press any key to input" L1_BEACON_URL 5 "L1 Beacon URL" || true
+        if [ -n "$L1_BEACON_URL" ] && ! validate_url "$L1_BEACON_URL"; then
             L1_BEACON_URL=""
         fi
+        print_success "L1 Beacon URL: ${L1_BEACON_URL:-(skip)}"
+    else
+        L1_BEACON_URL=""
     fi
 
     # Check existing data directory
     echo ""
-    if [ "$QUICK_START" = true ] && [ -d "$TARGET_DIR" ] && [ -d "$TARGET_DIR/data" ] && [ -d "$TARGET_DIR/config" ] && [ "$(ls -A "$TARGET_DIR/data" 2>/dev/null)" ]; then
-        print_success "Quick start: keeping existing data in $TARGET_DIR"
+    if [ "$QUICK_START" = true ] && [ -d "$SETUP_DIR/$TARGET_DIR" ] && [ -d "$SETUP_DIR/$TARGET_DIR/data" ] && [ -d "$SETUP_DIR/$TARGET_DIR/config" ] && [ "$(ls -A "$SETUP_DIR/$TARGET_DIR/data" 2>/dev/null)" ]; then
+        print_success "Quick start: keeping existing data in $SETUP_DIR/$TARGET_DIR"
         SKIP_INIT=1
     else
         # Temporarily disable set -e to capture return value safely
         set +e
-        check_existing_data "$TARGET_DIR"
+        check_existing_data "$SETUP_DIR/$TARGET_DIR"
         SKIP_INIT=$?  # Save return value: 0=initialize, 1=skip
         set -e
     fi
@@ -878,26 +930,43 @@ get_user_input() {
         print_info "Using default ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
     else
         print_section "Port Configuration"
-        echo -e "${C_DIM}    Press Enter to use defaults${C_RESET}"
+        echo -e "${C_DIM}    Auto-using defaults in 5s, press any key to customize${C_RESET}"
         echo ""
 
-        RPC_PORT=$(prompt_input "RPC port [${DEFAULT_RPC_PORT}]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
-        WS_PORT=$(prompt_input "WebSocket port [${DEFAULT_WS_PORT}]: " "$DEFAULT_WS_PORT" "") || WS_PORT="$DEFAULT_WS_PORT"
-        NODE_RPC_PORT=$(prompt_input "Node RPC port [${DEFAULT_NODE_RPC_PORT}]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
-        GETH_P2P_PORT=$(prompt_input "EL P2P port [${DEFAULT_GETH_P2P_PORT}]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
-        NODE_P2P_PORT=$(prompt_input "Node P2P port [${DEFAULT_NODE_P2P_PORT}]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
-        ENGINE_API_PORT=$(prompt_input "Engine API port [${DEFAULT_ENGINE_API_PORT}]: " "$DEFAULT_ENGINE_API_PORT" "") || ENGINE_API_PORT="$DEFAULT_ENGINE_API_PORT"
+        prompt_port "RPC port" RPC_PORT "$DEFAULT_RPC_PORT"
+        prompt_port "WebSocket port" WS_PORT "$DEFAULT_WS_PORT"
+        prompt_port "Node RPC port" NODE_RPC_PORT "$DEFAULT_NODE_RPC_PORT"
+        prompt_port "EL P2P port" GETH_P2P_PORT "$DEFAULT_GETH_P2P_PORT"
+        prompt_port "Node P2P port" NODE_P2P_PORT "$DEFAULT_NODE_P2P_PORT"
+        prompt_port "Engine API port" ENGINE_API_PORT "$DEFAULT_ENGINE_API_PORT"
 
-        FLASHBLOCKS_ENABLED=$(prompt_input "Flashblocks enabled [${DEFAULT_FLASHBLOCKS_ENABLED}]: " "$DEFAULT_FLASHBLOCKS_ENABLED" "") || FLASHBLOCKS_ENABLED="$DEFAULT_FLASHBLOCKS_ENABLED"
+        countdown_prompt "Flashblocks enabled [${DEFAULT_FLASHBLOCKS_ENABLED}]... Press any key to change" FLASHBLOCKS_ENABLED 5 "Flashblocks enabled (true/false)" || true
+        FLASHBLOCKS_ENABLED="${FLASHBLOCKS_ENABLED:-$DEFAULT_FLASHBLOCKS_ENABLED}"
+        print_success "Flashblocks enabled: $FLASHBLOCKS_ENABLED"
 
         if [ "$FLASHBLOCKS_ENABLED" = "true" ]; then
-            FLASHBLOCKS_URL=$(prompt_input "Flashblocks URL [${DEFAULT_FLASHBLOCKS_URL}]: " "$DEFAULT_FLASHBLOCKS_URL" "validate_ws_url") || FLASHBLOCKS_URL="$DEFAULT_FLASHBLOCKS_URL"
+            countdown_prompt "Flashblocks URL [${DEFAULT_FLASHBLOCKS_URL}]... Press any key to change" FLASHBLOCKS_URL 5 "Flashblocks URL" || true
+            FLASHBLOCKS_URL="${FLASHBLOCKS_URL:-$DEFAULT_FLASHBLOCKS_URL}"
+            print_success "Flashblocks URL: $FLASHBLOCKS_URL"
         fi
 
-        # Custom mode: initialize op-node extra args based on L1 input
-        L1_BEACON_IGNORE="false"
-        L2_FOLLOW_SOURCE=""
-        L2_FOLLOW_SOURCE_SKIP_L1_CHECK="false"
+        # Custom mode: derive op-node extra args from L1 input
+        if [ -z "$L1_BEACON_URL" ]; then
+            L1_BEACON_IGNORE="true"
+            if [ "$NETWORK_TYPE" = "mainnet" ]; then
+                L2_FOLLOW_SOURCE="https://xlayerrpc.okx.com"
+            else
+                L2_FOLLOW_SOURCE="https://xlayertestrpc.okx.com"
+            fi
+        else
+            L1_BEACON_IGNORE="false"
+            L2_FOLLOW_SOURCE=""
+        fi
+        if [ -z "$L1_RPC_URL" ]; then
+            L2_FOLLOW_SOURCE_SKIP_L1_CHECK="true"
+        else
+            L2_FOLLOW_SOURCE_SKIP_L1_CHECK="false"
+        fi
 
         print_step_ok "Ports: RPC=$RPC_PORT WS=$WS_PORT Node=$NODE_RPC_PORT Engine=$ENGINE_API_PORT"
     fi
@@ -1033,6 +1102,9 @@ SEQUENCER_HTTP_URL=$SEQUENCER_HTTP
 # Legacy RPC Configuration
 LEGACY_RPC_URL=$LEGACY_RPC_URL
 LEGACY_RPC_TIMEOUT=$LEGACY_RPC_TIMEOUT
+
+# Reth Trusted Peers
+RETH_TRUSTED_PEERS=$RETH_TRUSTED_PEERS
 
 # Flashblocks Configuration
 FLASHBLOCKS_ENABLED=${FLASHBLOCKS_ENABLED:-${DEFAULT_FLASHBLOCKS_ENABLED:-false}}
@@ -1437,6 +1509,22 @@ generate_docker_compose() {
     print_step_ok "docker-compose.yml ready ($SYNC_MODE mode)"
 }
 
+# Print common commands help block
+# Usage: print_common_commands <directory>
+print_common_commands() {
+    local dir=$1
+    echo ""
+    echo -e "  ${C_BOLD}Getting started:${C_RESET}"
+    echo -e "    ${C_GREEN}cd${C_RESET} $dir"
+    echo ""
+    echo -e "  ${C_BOLD}Common commands:${C_RESET}"
+    echo -e "    ${C_GREEN}make status${C_RESET}              Check service status"
+    echo -e "    ${C_GREEN}make stop${C_RESET}                Stop services"
+    echo -e "    ${C_GREEN}make run${C_RESET}                 Start services"
+    echo -e "    ${C_GREEN}docker compose logs -f${C_RESET}   View logs"
+    echo ""
+}
+
 start_services() {
     cd "$WORK_DIR" || exit 1
 
@@ -1473,14 +1561,49 @@ main() {
     # Quick start prompt with 5s countdown
     prompt_quick_start
 
+    # In quick start mode, check if services are already running
+    if [ "$QUICK_START" = true ]; then
+        local project_name="xlayer-${NETWORK_TYPE}-${RPC_TYPE}"
+        local running_containers
+        running_containers=$($SUDO docker compose -p "$project_name" ps --format json 2>/dev/null | grep -c '"running"' || true)
+        if [ "$running_containers" -gt 0 ]; then
+            SETUP_DIR="${WORK_DIR}/xlayer-${NETWORK_TYPE}-${RPC_TYPE}"
+            print_success "Services already running ($project_name)"
+            echo ""
+            if [ -f "$SETUP_DIR/.env" ]; then
+                local http_port ws_port node_port
+                http_port=$(grep '^HTTP_RPC_PORT=' "$SETUP_DIR/.env" | cut -d'=' -f2)
+                ws_port=$(grep '^WEBSOCKET_PORT=' "$SETUP_DIR/.env" | cut -d'=' -f2)
+                node_port=$(grep '^NODE_RPC_PORT=' "$SETUP_DIR/.env" | cut -d'=' -f2)
+                local sline=$(printf '%*s' 50 '' | tr ' ' '-')
+                echo -e "${C_CYAN}  +${sline}+${C_RESET}"
+                echo -e "${C_CYAN}  |$(printf '%*s' 17 '')${C_BOLD}Connection Info${C_RESET}${C_CYAN}$(printf '%*s' 19 '')|\033[0m"
+                echo -e "${C_CYAN}  +${sline}+${C_RESET}"
+                echo -e "${C_DIM}    Network:  $NETWORK_TYPE${C_RESET}"
+                echo -e "${C_DIM}    RPC Type: $RPC_TYPE${C_RESET}"
+                echo -e "${C_GREEN}    HTTP:     http://localhost:${http_port:-8545}${C_RESET}"
+                echo -e "${C_GREEN}    WS:       ws://localhost:${ws_port:-8546}${C_RESET}"
+                echo -e "${C_GREEN}    Op-Node:  http://localhost:${node_port:-9545}${C_RESET}"
+            fi
+            print_common_commands "$SETUP_DIR"
+            exit 0
+        fi
+    fi
+
     # System checks
     check_system_requirements
-    check_required_files
-    
+
     # User interaction (network type, L1 URLs and ports)
     # This also calls check_existing_data and sets SKIP_INIT
     get_user_input
-    
+
+    # Create dedicated setup directory and work inside it
+    mkdir -p "$SETUP_DIR"
+    WORK_DIR="$SETUP_DIR"
+    cd "$WORK_DIR"
+    print_info "Setup directory: $SETUP_DIR"
+
+    check_required_files
     check_existing_configurations
 
     generate_docker_compose
@@ -1520,9 +1643,7 @@ main() {
     echo -e "${C_GREEN}  +${sline}+${C_RESET}"
     echo -e "${C_GREEN}  |${C_BOLD}$(printf '%*s' "$spad_left" '')${summary_text}$(printf '%*s' "$spad_right" '')${C_RESET}${C_GREEN}|${C_RESET}"
     echo -e "${C_GREEN}  +${sline}+${C_RESET}"
-    echo -e "${C_DIM}    Network: $NETWORK_TYPE | Client: $RPC_TYPE | Mode: $SYNC_MODE${C_RESET}"
-    echo -e "${C_DIM}    RPC: http://localhost:${RPC_PORT:-8545} | WS: ws://localhost:${WS_PORT:-8546}${C_RESET}"
-    echo ""
+    print_common_commands "$WORK_DIR"
 }
 
 # Clean up downloaded files in standalone mode
