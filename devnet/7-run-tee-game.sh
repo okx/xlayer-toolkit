@@ -8,7 +8,7 @@ SCRIPTS_DIR=$PWD_DIR/scripts
 
 # Check required images exist
 MISSING_IMAGES=()
-for IMG_VAR in OP_CONTRACTS_TEE_IMAGE_TAG OP_STACK_TEE_IMAGE_TAG MOCKTEERPC_IMAGE_TAG; do
+for IMG_VAR in OP_CONTRACTS_TEE_IMAGE_TAG OP_STACK_TEE_IMAGE_TAG MOCKTEERPC_IMAGE_TAG MOCKTEEPROVER_IMAGE_TAG; do
   IMG="${!IMG_VAR}"
   if ! docker image inspect "$IMG" > /dev/null 2>&1; then
     MISSING_IMAGES+=("$IMG_VAR=$IMG")
@@ -28,6 +28,7 @@ if [ ${#MISSING_IMAGES[@]} -gt 0 ]; then
       OP_CONTRACTS_TEE_IMAGE_TAG) echo "   SKIP_OP_CONTRACTS_TEE_BUILD=false" ;;
       OP_STACK_TEE_IMAGE_TAG)     echo "   SKIP_OP_STACK_TEE_BUILD=false" ;;
       MOCKTEERPC_IMAGE_TAG)       echo "   SKIP_MOCKTEERPC_BUILD=false" ;;
+      MOCKTEEPROVER_IMAGE_TAG)    echo "   SKIP_MOCKTEEPROVER_BUILD=false" ;;
     esac
   done
   echo ""
@@ -61,14 +62,8 @@ docker run --rm \
     --enclave "$ENCLAVE_ADDRESS" \
     /app/packages/contracts-bedrock
 
-echo "🚀 Starting mockteerpc..."
-docker compose up -d mockteerpc
-
-echo "🚀 Starting tee-proposer..."
-docker compose up -d tee-proposer
-
-echo "🚀 Starting tee-challenger..."
-docker compose up -d tee-challenger
+echo "🚀 Starting TEE services..."
+docker compose -f docker-compose.yml -f docker-compose-tee.yml up -d mockteerpc mockteeprover tee-proposer tee-challenger
 
 echo "✅ TEE game setup complete!"
 echo ""

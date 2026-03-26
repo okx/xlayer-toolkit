@@ -1,0 +1,72 @@
+networks:
+  default:
+    name: ${DOCKER_NETWORK:-dev-op}
+
+services:
+  mockteerpc:
+    image: "${MOCKTEERPC_IMAGE_TAG}"
+    container_name: mockteerpc
+    command:
+      - --delay
+      - 1000ms
+      - --init-height
+      - "500000000"
+    ports:
+      - "8090:8090"
+
+  mockteeprover:
+    image: "${MOCKTEEPROVER_IMAGE_TAG}"
+    container_name: mockteeprover
+    environment:
+      - SIGNER_PRIVATE_KEY=${TEE_SIGNER_PRIVATE_KEY}
+      - TASK_DELAY=${TEE_TASK_DELAY:-2s}
+    ports:
+      - "8690:8690"
+
+  tee-proposer:
+    image: "${OP_STACK_TEE_IMAGE_TAG}"
+    container_name: tee-proposer
+    environment:
+      - DISPUTE_GAME_FACTORY_ADDRESS=${DISPUTE_GAME_FACTORY_ADDRESS}
+      - OP_PROPOSER_PRIVATE_KEY=${OP_PROPOSER_PRIVATE_KEY}
+    command:
+      - /app/op-proposer/bin/op-proposer
+      - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
+      - --tee-rollup-rpc=http://mockteerpc:8090
+      - --game-type=${TEE_GAME_TYPE:-1960}
+      - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
+      - --private-key=${OP_PROPOSER_PRIVATE_KEY}
+      - --poll-interval=2s
+      - --proposal-interval=35s
+      - --rpc.port=7302
+      - --log.level=info
+    depends_on:
+      - mockteerpc
+      - op-batcher
+
+  tee-challenger:
+    image: "${OP_STACK_TEE_IMAGE_TAG}"
+    container_name: tee-challenger
+    environment:
+      - DISPUTE_GAME_FACTORY_ADDRESS=${DISPUTE_GAME_FACTORY_ADDRESS}
+      - OP_CHALLENGER_PRIVATE_KEY=${OP_CHALLENGER_PRIVATE_KEY}
+    volumes:
+      - ./data/tee-challenger-data:/data
+    command:
+      - /app/op-challenger/bin/op-challenger
+      - --log.level=debug
+      - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
+      - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
+      - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
+      - --private-key=${OP_CHALLENGER_PRIVATE_KEY}
+      - --game-types=tee
+      - --datadir=/data
+      - --http-poll-interval=2s
+      - --additional-bond-claimants=${PROPOSER_ADDRESS}
+      - --tee-prover-rpc=http://mockteeprover:8690
+      - --tee-prove-poll-interval=2s
+      - --tee-prove-timeout=120s
+      - --game-window=${GAME_WINDOW}s
+    depends_on:
+      - mockteeprover
+      - tee-proposer
