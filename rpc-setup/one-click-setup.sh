@@ -578,6 +578,44 @@ find_available_port() {
     return 1
 }
 
+# Prompt a port with countdown, ensuring the default and user input are available
+# Usage: prompt_port "label" VAR_NAME default_port
+prompt_port() {
+    local label=$1
+    local var_name=$2
+    local default_port=$3
+
+    # Find an available default port
+    local effective_default="$default_port"
+    if is_port_in_use "$default_port"; then
+        effective_default=$(find_available_port "$((default_port + 1))")
+        if [ -z "$effective_default" ]; then
+            print_error "Cannot find available port for $label starting from $default_port"
+            exit 1
+        fi
+        print_warning "$label default port $default_port is in use, suggesting $effective_default"
+    fi
+
+    local input=""
+    countdown_prompt "$label [$effective_default]... Press any key to change" input 5 "$label" || true
+    local port="${input:-$effective_default}"
+
+    # Validate user input port
+    if [ -n "$input" ] && is_port_in_use "$port"; then
+        print_warning "Port $port is in use"
+        local alt
+        alt=$(find_available_port "$((port + 1))")
+        if [ -n "$alt" ]; then
+            print_info "Suggested available port: $alt"
+            countdown_prompt "Use $alt? Press any key to enter another" input 5 "$label" || true
+            port="${input:-$alt}"
+        fi
+    fi
+
+    eval "$var_name=\"\$port\""
+    print_success "$label: $port"
+}
+
 # Check all configured ports and auto-resolve conflicts
 check_and_resolve_ports() {
     local port_names=("RPC_PORT" "WS_PORT" "NODE_RPC_PORT" "GETH_P2P_PORT" "NODE_P2P_PORT" "ENGINE_API_PORT")
@@ -882,29 +920,12 @@ get_user_input() {
         echo -e "${C_DIM}    Auto-using defaults in 5s, press any key to customize${C_RESET}"
         echo ""
 
-        countdown_prompt "RPC port [${DEFAULT_RPC_PORT}]... Press any key to change" RPC_PORT 5 "RPC port" || true
-        RPC_PORT="${RPC_PORT:-$DEFAULT_RPC_PORT}"
-        print_success "RPC port: $RPC_PORT"
-
-        countdown_prompt "WebSocket port [${DEFAULT_WS_PORT}]... Press any key to change" WS_PORT 5 "WebSocket port" || true
-        WS_PORT="${WS_PORT:-$DEFAULT_WS_PORT}"
-        print_success "WebSocket port: $WS_PORT"
-
-        countdown_prompt "Node RPC port [${DEFAULT_NODE_RPC_PORT}]... Press any key to change" NODE_RPC_PORT 5 "Node RPC port" || true
-        NODE_RPC_PORT="${NODE_RPC_PORT:-$DEFAULT_NODE_RPC_PORT}"
-        print_success "Node RPC port: $NODE_RPC_PORT"
-
-        countdown_prompt "EL P2P port [${DEFAULT_GETH_P2P_PORT}]... Press any key to change" GETH_P2P_PORT 5 "EL P2P port" || true
-        GETH_P2P_PORT="${GETH_P2P_PORT:-$DEFAULT_GETH_P2P_PORT}"
-        print_success "EL P2P port: $GETH_P2P_PORT"
-
-        countdown_prompt "Node P2P port [${DEFAULT_NODE_P2P_PORT}]... Press any key to change" NODE_P2P_PORT 5 "Node P2P port" || true
-        NODE_P2P_PORT="${NODE_P2P_PORT:-$DEFAULT_NODE_P2P_PORT}"
-        print_success "Node P2P port: $NODE_P2P_PORT"
-
-        countdown_prompt "Engine API port [${DEFAULT_ENGINE_API_PORT}]... Press any key to change" ENGINE_API_PORT 5 "Engine API port" || true
-        ENGINE_API_PORT="${ENGINE_API_PORT:-$DEFAULT_ENGINE_API_PORT}"
-        print_success "Engine API port: $ENGINE_API_PORT"
+        prompt_port "RPC port" RPC_PORT "$DEFAULT_RPC_PORT"
+        prompt_port "WebSocket port" WS_PORT "$DEFAULT_WS_PORT"
+        prompt_port "Node RPC port" NODE_RPC_PORT "$DEFAULT_NODE_RPC_PORT"
+        prompt_port "EL P2P port" GETH_P2P_PORT "$DEFAULT_GETH_P2P_PORT"
+        prompt_port "Node P2P port" NODE_P2P_PORT "$DEFAULT_NODE_P2P_PORT"
+        prompt_port "Engine API port" ENGINE_API_PORT "$DEFAULT_ENGINE_API_PORT"
 
         countdown_prompt "Flashblocks enabled [${DEFAULT_FLASHBLOCKS_ENABLED}]... Press any key to change" FLASHBLOCKS_ENABLED 5 "Flashblocks enabled (true/false)" || true
         FLASHBLOCKS_ENABLED="${FLASHBLOCKS_ENABLED:-$DEFAULT_FLASHBLOCKS_ENABLED}"
