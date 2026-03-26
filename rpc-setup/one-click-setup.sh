@@ -801,8 +801,9 @@ get_user_input() {
         print_step_ok "Network: $NETWORK_TYPE | Sync: $SYNC_MODE | RPC: $RPC_TYPE"
     fi
 
-    # Set target directory
+    # Set target directory and setup directory
     TARGET_DIR="${NETWORK_TYPE}-${RPC_TYPE}"
+    SETUP_DIR="${WORK_DIR}/xlayer-${NETWORK_TYPE}-${RPC_TYPE}"
 
     # testnet only supports snapshot mode (both geth and reth)
     if [ "$NETWORK_TYPE" = "testnet" ] && [ "$SYNC_MODE" = "genesis" ]; then
@@ -851,13 +852,13 @@ get_user_input() {
 
     # Check existing data directory
     echo ""
-    if [ "$QUICK_START" = true ] && [ -d "$TARGET_DIR" ] && [ -d "$TARGET_DIR/data" ] && [ -d "$TARGET_DIR/config" ] && [ "$(ls -A "$TARGET_DIR/data" 2>/dev/null)" ]; then
-        print_success "Quick start: keeping existing data in $TARGET_DIR"
+    if [ "$QUICK_START" = true ] && [ -d "$SETUP_DIR/$TARGET_DIR" ] && [ -d "$SETUP_DIR/$TARGET_DIR/data" ] && [ -d "$SETUP_DIR/$TARGET_DIR/config" ] && [ "$(ls -A "$SETUP_DIR/$TARGET_DIR/data" 2>/dev/null)" ]; then
+        print_success "Quick start: keeping existing data in $SETUP_DIR/$TARGET_DIR"
         SKIP_INIT=1
     else
         # Temporarily disable set -e to capture return value safely
         set +e
-        check_existing_data "$TARGET_DIR"
+        check_existing_data "$SETUP_DIR/$TARGET_DIR"
         SKIP_INIT=$?  # Save return value: 0=initialize, 1=skip
         set -e
     fi
@@ -1475,12 +1476,18 @@ main() {
 
     # System checks
     check_system_requirements
-    check_required_files
-    
+
     # User interaction (network type, L1 URLs and ports)
     # This also calls check_existing_data and sets SKIP_INIT
     get_user_input
-    
+
+    # Create dedicated setup directory and work inside it
+    mkdir -p "$SETUP_DIR"
+    WORK_DIR="$SETUP_DIR"
+    cd "$WORK_DIR"
+    print_info "Setup directory: $SETUP_DIR"
+
+    check_required_files
     check_existing_configurations
 
     generate_docker_compose
