@@ -479,11 +479,10 @@ countdown_prompt() {
         if read -r -t 1 -n 1 input </dev/tty 2>/dev/null; then
             printf "\r\033[K"
             if [ "$need_input" = "true" ]; then
-                # Show input prompt, read full line
+                # Show input prompt, read full line (discard the keypress that triggered the prompt)
                 printf "${C_CYAN}  > %s: ${C_RESET}" "$input_label"
-                local rest=""
-                read -r rest </dev/tty 2>/dev/null || read -r rest
-                input="${input}${rest}"
+                input=""
+                read -r input </dev/tty 2>/dev/null || read -r input
                 printf "\r\033[K"
             fi
             eval "$var_name=\"\$input\""
