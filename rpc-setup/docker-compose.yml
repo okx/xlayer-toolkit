@@ -137,7 +137,7 @@ services:
           --disable-discovery \
           --max-outbound-peers=10 \
           --max-inbound-peers=10 \
-          --trusted-peers=enode://64bdad0cf19d06744a371bd35eb6a6468db5407f1811ced1483a7f80ddc544f330ccc5c6574bd9c1a6fb6223693ef42fa00353804829d6730c3cd28e24193f2c@47.242.37.143:30303,enode://162cacbb3e102633735cecd24abe92db03b196e70fa6c098e9e59c53049272da8da92cee487edb9de673f433912db14e26c50495f569f083f4e3e0c1574c29df@47.242.38.0:30303 \
+          --trusted-peers=${RETH_TRUSTED_PEERS} \
           --rpc.legacy-url=${LEGACY_RPC_URL} \
           --rpc.legacy-timeout=${LEGACY_RPC_TIMEOUT} \
           --log.stdout.filter=info \

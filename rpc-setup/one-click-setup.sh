@@ -339,6 +339,7 @@ load_network_config() {
     eval "RETH_CONFIG=\${${prefix}_RETH_CONFIG}"
     eval "LEGACY_RPC_URL=\${${prefix}_LEGACY_RPC_URL}"
     eval "LEGACY_RPC_TIMEOUT=\${${prefix}_LEGACY_RPC_TIMEOUT}"
+    eval "RETH_TRUSTED_PEERS=\${${prefix}_RETH_TRUSTED_PEERS}"
     
     # Validate that configuration was loaded
     if [ -z "$OP_STACK_IMAGE_TAG" ]; then
@@ -1096,6 +1097,9 @@ SEQUENCER_HTTP_URL=$SEQUENCER_HTTP
 # Legacy RPC Configuration
 LEGACY_RPC_URL=$LEGACY_RPC_URL
 LEGACY_RPC_TIMEOUT=$LEGACY_RPC_TIMEOUT
+
+# Reth Trusted Peers
+RETH_TRUSTED_PEERS=$RETH_TRUSTED_PEERS
 
 # Flashblocks Configuration
 FLASHBLOCKS_ENABLED=${FLASHBLOCKS_ENABLED:-${DEFAULT_FLASHBLOCKS_ENABLED:-false}}
