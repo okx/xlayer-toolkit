@@ -608,24 +608,39 @@ check_and_resolve_ports() {
     local port_names=("RPC_PORT" "WS_PORT" "NODE_RPC_PORT" "GETH_P2P_PORT" "NODE_P2P_PORT" "ENGINE_API_PORT")
     local port_labels=("RPC" "WebSocket" "Node RPC" "EL P2P" "Node P2P" "Engine API")
     local changed=false
+    local assigned_ports=()
 
     for i in "${!port_names[@]}"; do
         local var_name="${port_names[$i]}"
         local label="${port_labels[$i]}"
         local current_port="${!var_name}"
 
-        if is_port_in_use "$current_port"; then
+        # Check system usage and conflicts with already assigned ports
+        while is_port_in_use "$current_port" || [[ " ${assigned_ports[*]} " == *" $current_port "* ]]; do
             local new_port
             new_port=$(find_available_port "$((current_port + 1))")
-            if [ -n "$new_port" ]; then
-                print_info "$label port $current_port is in use, switching to $new_port"
-                eval "$var_name=$new_port"
-                changed=true
-            else
-                print_step_fail "Cannot find available port for $label (tried from $current_port)"
+            if [ -z "$new_port" ]; then
+                print_step_fail "Cannot find available port for $label (tried from ${!var_name})"
                 exit 1
             fi
-        fi
+            # Ensure new_port doesn't conflict with already assigned ports
+            while [[ " ${assigned_ports[*]} " == *" $new_port "* ]]; do
+                new_port=$(find_available_port "$((new_port + 1))")
+                if [ -z "$new_port" ]; then
+                    print_step_fail "Cannot find available port for $label"
+                    exit 1
+                fi
+            done
+            if [ "$new_port" != "${!var_name}" ]; then
+                print_info "$label port ${!var_name} is in use, switching to $new_port"
+                changed=true
+            fi
+            current_port=$new_port
+            break
+        done
+
+        eval "$var_name=$current_port"
+        assigned_ports+=("$current_port")
     done
 
     if [ "$changed" = true ]; then
