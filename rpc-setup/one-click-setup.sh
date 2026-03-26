@@ -942,10 +942,23 @@ get_user_input() {
             print_success "Flashblocks URL: $FLASHBLOCKS_URL"
         fi
 
-        # Custom mode: initialize op-node extra args based on L1 input
-        L1_BEACON_IGNORE="false"
-        L2_FOLLOW_SOURCE=""
-        L2_FOLLOW_SOURCE_SKIP_L1_CHECK="false"
+        # Custom mode: derive op-node extra args from L1 input
+        if [ -z "$L1_BEACON_URL" ]; then
+            L1_BEACON_IGNORE="true"
+            if [ "$NETWORK_TYPE" = "mainnet" ]; then
+                L2_FOLLOW_SOURCE="https://xlayerrpc.okx.com"
+            else
+                L2_FOLLOW_SOURCE="https://xlayertestrpc.okx.com"
+            fi
+        else
+            L1_BEACON_IGNORE="false"
+            L2_FOLLOW_SOURCE=""
+        fi
+        if [ -z "$L1_RPC_URL" ]; then
+            L2_FOLLOW_SOURCE_SKIP_L1_CHECK="true"
+        else
+            L2_FOLLOW_SOURCE_SKIP_L1_CHECK="false"
+        fi
 
         print_step_ok "Ports: RPC=$RPC_PORT WS=$WS_PORT Node=$NODE_RPC_PORT Engine=$ENGINE_API_PORT"
     fi
