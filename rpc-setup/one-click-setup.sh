@@ -797,37 +797,30 @@ check_existing_data() {
     print_section "Existing data found"
     echo -e "${C_DIM}    Path: $target_dir | Size: $size | Status: $status${C_RESET}"
     echo ""
-    echo -e "${C_CYAN}    [1] Keep existing data (recommended)${C_RESET}"
-    echo -e "${C_CYAN}    [2] Delete and re-initialize${C_RESET}"
-    echo -e "${C_CYAN}    [3] Cancel${C_RESET}"
-    echo ""
 
-    while true; do
-        printf "${C_CYAN}  > Choose [1/2/3, default: 1]: ${C_RESET}"
-        if ! read -r choice </dev/tty 2>/dev/null && ! read -r choice; then
-            choice="1"
-        fi
-        choice="${choice:-1}"
+    local choice=""
+    countdown_prompt "Keeping existing data... Press any key to change" choice 5 "Action (1=keep, 2=delete, 3=cancel)" || true
+    choice="${choice:-1}"
 
-        case $choice in
-            1)
-                print_step_ok "Keeping existing data"
-                return 1
-                ;;
-            2)
-                run_with_spinner "Removing $target_dir..." rm -rf "$target_dir"
-                print_step_ok "Directory removed"
-                return 0
-                ;;
-            3)
-                print_info "Cancelled"
-                exit 0
-                ;;
-            *)
-                print_error "Invalid choice"
-                ;;
-        esac
-    done
+    case $choice in
+        1)
+            print_step_ok "Keeping existing data"
+            return 1
+            ;;
+        2)
+            run_with_spinner "Removing $target_dir..." rm -rf "$target_dir"
+            print_step_ok "Directory removed"
+            return 0
+            ;;
+        3)
+            print_info "Cancelled"
+            exit 0
+            ;;
+        *)
+            print_error "Invalid choice: $choice"
+            exit 1
+            ;;
+    esac
 }
 
 get_user_input() {
