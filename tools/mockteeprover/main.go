@@ -215,9 +215,9 @@ func (m *MockTEEProver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case path == "/health":
 		m.handleHealth(w, r)
-	case path == "/task/" && r.Method == http.MethodPost:
+	case path == "/tee/task/" && r.Method == http.MethodPost:
 		m.handleCreateTask(w, r)
-	case strings.HasPrefix(path, "/task/") && r.Method == http.MethodGet:
+	case strings.HasPrefix(path, "/tee/task/") && r.Method == http.MethodGet:
 		m.handleGetTask(w, r)
 	case path == "/admin/fail-next":
 		m.handleFailNext(w, r)
@@ -234,7 +234,7 @@ func (m *MockTEEProver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func extractTaskID(path string) string {
 	// /task/{taskId} or /task/{taskId}/
-	path = strings.TrimPrefix(path, "/task/")
+	path = strings.TrimPrefix(path, "/tee/task/")
 	path = strings.TrimSuffix(path, "/")
 	if path == "" {
 		return ""
