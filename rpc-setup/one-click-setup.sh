@@ -1533,6 +1533,12 @@ main() {
     echo ""
     echo -e "  ${C_BOLD}Run:${C_RESET} cd $WORK_DIR"
     echo ""
+    echo -e "${C_CYAN}  Common commands:${C_RESET}"
+    echo -e "${C_DIM}    make status                    - Check service status${C_RESET}"
+    echo -e "${C_DIM}    make stop                      - Stop services${C_RESET}"
+    echo -e "${C_DIM}    make run                       - Start services${C_RESET}"
+    echo -e "${C_DIM}    docker compose logs -f          - View logs${C_RESET}"
+    echo ""
 }
 
 # Clean up downloaded files in standalone mode
