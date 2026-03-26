@@ -828,10 +828,15 @@ get_user_input() {
         fi
         print_success "Network type: $NETWORK_TYPE"
 
-        countdown_prompt "Sync mode [${DEFAULT_SYNC_MODE}]... Press any key to change" SYNC_MODE 5 "Sync mode (genesis/snapshot)" || true
-        SYNC_MODE="${SYNC_MODE:-$DEFAULT_SYNC_MODE}"
-        if ! validate_sync_mode "$SYNC_MODE"; then
-            exit 1
+        if [ "$NETWORK_TYPE" = "testnet" ]; then
+            SYNC_MODE="snapshot"
+            print_info "Testnet only supports snapshot mode"
+        else
+            countdown_prompt "Sync mode [${DEFAULT_SYNC_MODE}]... Press any key to change" SYNC_MODE 5 "Sync mode (genesis/snapshot)" || true
+            SYNC_MODE="${SYNC_MODE:-$DEFAULT_SYNC_MODE}"
+            if ! validate_sync_mode "$SYNC_MODE"; then
+                exit 1
+            fi
         fi
         print_step_ok "Network: $NETWORK_TYPE | Sync: $SYNC_MODE | RPC: $RPC_TYPE"
     fi
@@ -859,13 +864,6 @@ get_user_input() {
             SETUP_DIR="$default_setup_dir"
         fi
         print_success "Data folder: $SETUP_DIR"
-    fi
-
-    # testnet only supports snapshot mode (both geth and reth)
-    if [ "$NETWORK_TYPE" = "testnet" ] && [ "$SYNC_MODE" = "genesis" ]; then
-        print_error "Testnet does not support genesis mode"
-        print_info "Please use 'snapshot' sync mode for testnet"
-        exit 1
     fi
 
     # Validate snapshot support
