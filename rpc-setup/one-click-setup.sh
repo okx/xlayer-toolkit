@@ -879,20 +879,41 @@ get_user_input() {
         print_info "Using default ports: RPC=$RPC_PORT, WS=$WS_PORT, Node=$NODE_RPC_PORT, Engine=$ENGINE_API_PORT"
     else
         print_section "Port Configuration"
-        echo -e "${C_DIM}    Press Enter to use defaults${C_RESET}"
+        echo -e "${C_DIM}    Auto-using defaults in 5s, press any key to customize${C_RESET}"
         echo ""
 
-        RPC_PORT=$(prompt_input "RPC port [${DEFAULT_RPC_PORT}]: " "$DEFAULT_RPC_PORT" "") || RPC_PORT="$DEFAULT_RPC_PORT"
-        WS_PORT=$(prompt_input "WebSocket port [${DEFAULT_WS_PORT}]: " "$DEFAULT_WS_PORT" "") || WS_PORT="$DEFAULT_WS_PORT"
-        NODE_RPC_PORT=$(prompt_input "Node RPC port [${DEFAULT_NODE_RPC_PORT}]: " "$DEFAULT_NODE_RPC_PORT" "") || NODE_RPC_PORT="$DEFAULT_NODE_RPC_PORT"
-        GETH_P2P_PORT=$(prompt_input "EL P2P port [${DEFAULT_GETH_P2P_PORT}]: " "$DEFAULT_GETH_P2P_PORT" "") || GETH_P2P_PORT="$DEFAULT_GETH_P2P_PORT"
-        NODE_P2P_PORT=$(prompt_input "Node P2P port [${DEFAULT_NODE_P2P_PORT}]: " "$DEFAULT_NODE_P2P_PORT" "") || NODE_P2P_PORT="$DEFAULT_NODE_P2P_PORT"
-        ENGINE_API_PORT=$(prompt_input "Engine API port [${DEFAULT_ENGINE_API_PORT}]: " "$DEFAULT_ENGINE_API_PORT" "") || ENGINE_API_PORT="$DEFAULT_ENGINE_API_PORT"
+        countdown_prompt "RPC port [${DEFAULT_RPC_PORT}]... Press any key to change" RPC_PORT 5 "RPC port" || true
+        RPC_PORT="${RPC_PORT:-$DEFAULT_RPC_PORT}"
+        print_success "RPC port: $RPC_PORT"
 
-        FLASHBLOCKS_ENABLED=$(prompt_input "Flashblocks enabled [${DEFAULT_FLASHBLOCKS_ENABLED}]: " "$DEFAULT_FLASHBLOCKS_ENABLED" "") || FLASHBLOCKS_ENABLED="$DEFAULT_FLASHBLOCKS_ENABLED"
+        countdown_prompt "WebSocket port [${DEFAULT_WS_PORT}]... Press any key to change" WS_PORT 5 "WebSocket port" || true
+        WS_PORT="${WS_PORT:-$DEFAULT_WS_PORT}"
+        print_success "WebSocket port: $WS_PORT"
+
+        countdown_prompt "Node RPC port [${DEFAULT_NODE_RPC_PORT}]... Press any key to change" NODE_RPC_PORT 5 "Node RPC port" || true
+        NODE_RPC_PORT="${NODE_RPC_PORT:-$DEFAULT_NODE_RPC_PORT}"
+        print_success "Node RPC port: $NODE_RPC_PORT"
+
+        countdown_prompt "EL P2P port [${DEFAULT_GETH_P2P_PORT}]... Press any key to change" GETH_P2P_PORT 5 "EL P2P port" || true
+        GETH_P2P_PORT="${GETH_P2P_PORT:-$DEFAULT_GETH_P2P_PORT}"
+        print_success "EL P2P port: $GETH_P2P_PORT"
+
+        countdown_prompt "Node P2P port [${DEFAULT_NODE_P2P_PORT}]... Press any key to change" NODE_P2P_PORT 5 "Node P2P port" || true
+        NODE_P2P_PORT="${NODE_P2P_PORT:-$DEFAULT_NODE_P2P_PORT}"
+        print_success "Node P2P port: $NODE_P2P_PORT"
+
+        countdown_prompt "Engine API port [${DEFAULT_ENGINE_API_PORT}]... Press any key to change" ENGINE_API_PORT 5 "Engine API port" || true
+        ENGINE_API_PORT="${ENGINE_API_PORT:-$DEFAULT_ENGINE_API_PORT}"
+        print_success "Engine API port: $ENGINE_API_PORT"
+
+        countdown_prompt "Flashblocks enabled [${DEFAULT_FLASHBLOCKS_ENABLED}]... Press any key to change" FLASHBLOCKS_ENABLED 5 "Flashblocks enabled (true/false)" || true
+        FLASHBLOCKS_ENABLED="${FLASHBLOCKS_ENABLED:-$DEFAULT_FLASHBLOCKS_ENABLED}"
+        print_success "Flashblocks enabled: $FLASHBLOCKS_ENABLED"
 
         if [ "$FLASHBLOCKS_ENABLED" = "true" ]; then
-            FLASHBLOCKS_URL=$(prompt_input "Flashblocks URL [${DEFAULT_FLASHBLOCKS_URL}]: " "$DEFAULT_FLASHBLOCKS_URL" "validate_ws_url") || FLASHBLOCKS_URL="$DEFAULT_FLASHBLOCKS_URL"
+            countdown_prompt "Flashblocks URL [${DEFAULT_FLASHBLOCKS_URL}]... Press any key to change" FLASHBLOCKS_URL 5 "Flashblocks URL" || true
+            FLASHBLOCKS_URL="${FLASHBLOCKS_URL:-$DEFAULT_FLASHBLOCKS_URL}"
+            print_success "Flashblocks URL: $FLASHBLOCKS_URL"
         fi
 
         # Custom mode: initialize op-node extra args based on L1 input
