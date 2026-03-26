@@ -847,8 +847,20 @@ get_user_input() {
         SETUP_DIR="$default_setup_dir"
     else
         local custom_dir=""
-        countdown_prompt "Data folder [$default_setup_dir]... Press any key to change" custom_dir 5 "Data folder path" || true
-        SETUP_DIR="${custom_dir:-$default_setup_dir}"
+        countdown_prompt "Data folder [$default_setup_dir]... Press any key to change" custom_dir 5 "Data folder name or path" || true
+        if [ -n "$custom_dir" ]; then
+            # If not an absolute path, treat as folder name under WORK_DIR
+            if [[ "$custom_dir" != /* ]]; then
+                custom_dir="${WORK_DIR}/${custom_dir}"
+            fi
+            SETUP_DIR="$custom_dir"
+            if [ ! -d "$SETUP_DIR" ]; then
+                mkdir -p "$SETUP_DIR"
+                print_info "Created directory: $SETUP_DIR"
+            fi
+        else
+            SETUP_DIR="$default_setup_dir"
+        fi
         print_success "Data folder: $SETUP_DIR"
     fi
 
