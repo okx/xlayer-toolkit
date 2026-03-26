@@ -66,7 +66,7 @@ services:
       - --tee-prover-rpc=http://mockteeprover:8690
       - --tee-prove-poll-interval=2s
       - --tee-prove-timeout=120s
-      - --game-window=${GAME_WINDOW}s
+      - --game-window=86400s
     depends_on:
       - mockteeprover
       - tee-proposer
