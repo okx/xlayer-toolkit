@@ -204,3 +204,14 @@ else
   MOCKTEERPC_DIR="$PWD_DIR/../tools/mockteerpc"
   build_and_tag_image "mockteerpc" "$MOCKTEERPC_IMAGE_TAG" "$MOCKTEERPC_DIR" "Dockerfile"
 fi
+
+# Build MockTeeProver image
+if [ "$SKIP_MOCKTEEPROVER_BUILD" = "true" ]; then
+  echo "⏭️  Skipping mockteeprover build"
+else
+  echo "🔨 Building $MOCKTEEPROVER_IMAGE_TAG"
+  MOCKTEEPROVER_DIR="$PWD_DIR/../tools/mockteeprover"
+  build_and_tag_image "mockteeprover" "$MOCKTEEPROVER_IMAGE_TAG" "$MOCKTEEPROVER_DIR" "Dockerfile"
+fi
+
+
