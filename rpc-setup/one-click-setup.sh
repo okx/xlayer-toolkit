@@ -1529,6 +1529,7 @@ main() {
     echo -e "${C_GREEN}  +${sline}+${C_RESET}"
     echo -e "${C_DIM}    Network: $NETWORK_TYPE | Client: $RPC_TYPE | Mode: $SYNC_MODE${C_RESET}"
     echo -e "${C_DIM}    RPC: http://localhost:${RPC_PORT:-8545} | WS: ws://localhost:${WS_PORT:-8546}${C_RESET}"
+    echo -e "${C_DIM}    Working directory: $WORK_DIR${C_RESET}"
     echo ""
 }
 
