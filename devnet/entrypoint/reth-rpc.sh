@@ -68,6 +68,13 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
         --flashblocks.port=1111 \
         --xlayer.flashblocks-url=ws://op-reth-seq:1111 \
         --xlayer.flashblocks-subscription"
+
+    # Enable flashblocks state comparison debug mode
+    if [ "$FLASHBLOCKS_DEBUG_STATE_COMPARISON" = "true" ]; then
+        CMD="$CMD \
+            --xlayer.flashblocks-debug-state-comparison \
+            --xlayer.flashblocks-disable-pre-warming"
+    fi
 fi
 
 # Bridge intercept configuration
