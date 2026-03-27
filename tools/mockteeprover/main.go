@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
@@ -46,6 +49,7 @@ type MockTEEProver struct {
 	mu        sync.Mutex
 	tasks     map[string]*task
 	signerKey *ecdsa.PrivateKey
+	domainSep common.Hash
 	taskDelay time.Duration
 
 	// control flags
@@ -56,10 +60,11 @@ type MockTEEProver struct {
 	submittedRequests []ProveRequest
 }
 
-func NewMockTEEProver(signerKey *ecdsa.PrivateKey, taskDelay time.Duration) *MockTEEProver {
+func NewMockTEEProver(signerKey *ecdsa.PrivateKey, domainSep common.Hash, taskDelay time.Duration) *MockTEEProver {
 	return &MockTEEProver{
 		tasks:     make(map[string]*task),
 		signerKey: signerKey,
+		domainSep: domainSep,
 		taskDelay: taskDelay,
 	}
 }
@@ -133,7 +138,7 @@ func (m *MockTEEProver) handleGetTask(w http.ResponseWriter, r *http.Request) {
 
 	// Transition Running → Finished if delay has elapsed
 	if t.Status == "Running" && time.Now().After(t.FinishAt) {
-		proofBytes, err := generateProofBytes(t.Request, m.signerKey)
+		proofBytes, err := generateProofBytes(t.Request, m.signerKey, m.domainSep)
 		if err != nil {
 			log.Printf("[GET /task/%s] ERROR generating proof: %v", taskID, err)
 			t.Status = "Failed"
@@ -264,6 +269,29 @@ func main() {
 	signerAddr := crypto.PubkeyToAddress(signerKey.PublicKey)
 	log.Printf("Mock TEE Prover starting, signer address: %s", signerAddr.Hex())
 
+	// EIP-712 domain config
+	chainIDStr := os.Getenv("CHAIN_ID")
+	if chainIDStr == "" {
+		log.Fatal("CHAIN_ID environment variable is required")
+	}
+	chainID, err := strconv.ParseInt(chainIDStr, 10, 64)
+	if err != nil {
+		log.Fatalf("invalid CHAIN_ID: %v", err)
+	}
+
+	verifyingContractHex := os.Getenv("VERIFYING_CONTRACT")
+	if verifyingContractHex == "" {
+		log.Fatal("VERIFYING_CONTRACT environment variable is required")
+	}
+	verifyingContract := common.HexToAddress(verifyingContractHex)
+
+	domainCfg := EIP712DomainConfig{
+		ChainID:           big.NewInt(chainID),
+		VerifyingContract: verifyingContract,
+	}
+	domainSep := computeDomainSeparator(domainCfg)
+	log.Printf("EIP-712 domain separator: %s (chainId=%d, verifyingContract=%s)", domainSep.Hex(), chainID, verifyingContract.Hex())
+
 	listenAddr := os.Getenv("LISTEN_ADDR")
 	if listenAddr == "" {
 		listenAddr = ":8690"
@@ -278,7 +306,7 @@ func main() {
 		taskDelay = parsed
 	}
 
-	prover := NewMockTEEProver(signerKey, taskDelay)
+	prover := NewMockTEEProver(signerKey, domainSep, taskDelay)
 
 	log.Printf("Listening on %s (task_delay=%s)", listenAddr, taskDelay)
 	if err := http.ListenAndServe(listenAddr, prover); err != nil {

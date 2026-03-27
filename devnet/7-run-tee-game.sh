@@ -62,6 +62,13 @@ docker run --rm \
     --enclave "$ENCLAVE_ADDRESS" \
     /app/packages/contracts-bedrock
 
+# Query L1 chain ID and TEE proof verifier address for EIP-712 domain separator
+export L1_CHAIN_ID=$(cast chain-id --rpc-url "$L1_RPC_URL")
+TEE_GAME_IMPL=$(cast call --rpc-url "$L1_RPC_URL" "$DISPUTE_GAME_FACTORY_ADDRESS" 'gameImpls(uint32)(address)' "$TEE_GAME_TYPE")
+export TEE_PROOF_VERIFIER_ADDRESS=$(cast call --rpc-url "$L1_RPC_URL" "$TEE_GAME_IMPL" 'teeProofVerifier()(address)')
+echo "   L1 Chain ID:        $L1_CHAIN_ID"
+echo "   TEE Proof Verifier: $TEE_PROOF_VERIFIER_ADDRESS"
+
 echo "🚀 Starting TEE services..."
 docker compose -f docker-compose.yml -f docker-compose-tee.yml up -d mockteerpc mockteeprover tee-proposer tee-challenger
 

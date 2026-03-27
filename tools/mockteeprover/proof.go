@@ -10,6 +10,24 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// EIP-712 constants matching TeeDisputeGame.sol
+var (
+	// keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
+	domainTypehash = crypto.Keccak256Hash([]byte("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"))
+	// keccak256("TeeDisputeGame")
+	domainNameHash = crypto.Keccak256Hash([]byte("TeeDisputeGame"))
+	// keccak256("1")
+	domainVersionHash = crypto.Keccak256Hash([]byte("1"))
+	// keccak256("BatchProof(bytes32 startBlockHash,bytes32 startStateHash,bytes32 endBlockHash,bytes32 endStateHash,uint256 l2Block)")
+	batchProofTypehash = crypto.Keccak256Hash([]byte("BatchProof(bytes32 startBlockHash,bytes32 startStateHash,bytes32 endBlockHash,bytes32 endStateHash,uint256 l2Block)"))
+)
+
+// EIP712DomainConfig holds the chain-specific EIP-712 domain parameters.
+type EIP712DomainConfig struct {
+	ChainID            *big.Int
+	VerifyingContract  common.Address
+}
+
 // BatchProof mirrors the Solidity struct in TeeDisputeGame.sol:
 //
 //	struct BatchProof {
@@ -47,28 +65,78 @@ func init() {
 	batchProofABIType = abi.Arguments{{Type: tupleType}}
 }
 
-// digestABIArgs is used to compute keccak256(abi.encode(startBlockHash, startStateHash, endBlockHash, endStateHash, l2Block)).
-var digestABIArgs abi.Arguments
+// structHashABIArgs is used to compute keccak256(abi.encode(BATCH_PROOF_TYPEHASH, ...fields...)).
+var structHashABIArgs abi.Arguments
 
 func init() {
 	bytes32Ty, _ := abi.NewType("bytes32", "", nil)
 	uint256Ty, _ := abi.NewType("uint256", "", nil)
-	digestABIArgs = abi.Arguments{
-		{Type: bytes32Ty},
-		{Type: bytes32Ty},
-		{Type: bytes32Ty},
-		{Type: bytes32Ty},
-		{Type: uint256Ty},
+	structHashABIArgs = abi.Arguments{
+		{Type: bytes32Ty}, // BATCH_PROOF_TYPEHASH
+		{Type: bytes32Ty}, // startBlockHash
+		{Type: bytes32Ty}, // startStateHash
+		{Type: bytes32Ty}, // endBlockHash
+		{Type: bytes32Ty}, // endStateHash
+		{Type: uint256Ty}, // l2Block
 	}
 }
 
-// computeBatchDigest computes keccak256(abi.encode(startBlockHash, startStateHash, endBlockHash, endStateHash, l2Block)).
-func computeBatchDigest(startBlockHash, startStateHash, endBlockHash, endStateHash [32]byte, l2Block *big.Int) common.Hash {
-	packed, err := digestABIArgs.Pack(startBlockHash, startStateHash, endBlockHash, endStateHash, l2Block)
+// domainSeparatorABIArgs is used to compute the EIP-712 domain separator.
+var domainSeparatorABIArgs abi.Arguments
+
+func init() {
+	bytes32Ty, _ := abi.NewType("bytes32", "", nil)
+	uint256Ty, _ := abi.NewType("uint256", "", nil)
+	addressTy, _ := abi.NewType("address", "", nil)
+	domainSeparatorABIArgs = abi.Arguments{
+		{Type: bytes32Ty}, // DOMAIN_TYPEHASH
+		{Type: bytes32Ty}, // nameHash
+		{Type: bytes32Ty}, // versionHash
+		{Type: uint256Ty}, // chainId
+		{Type: addressTy}, // verifyingContract
+	}
+}
+
+// computeDomainSeparator computes the EIP-712 domain separator matching TeeDisputeGame._domainSeparator().
+func computeDomainSeparator(cfg EIP712DomainConfig) common.Hash {
+	packed, err := domainSeparatorABIArgs.Pack(
+		[32]byte(domainTypehash),
+		[32]byte(domainNameHash),
+		[32]byte(domainVersionHash),
+		cfg.ChainID,
+		cfg.VerifyingContract,
+	)
 	if err != nil {
-		panic(fmt.Sprintf("failed to pack batch digest: %v", err))
+		panic(fmt.Sprintf("failed to pack domain separator: %v", err))
 	}
 	return crypto.Keccak256Hash(packed)
+}
+
+// computeEIP712Digest computes the full EIP-712 digest:
+// keccak256("\x19\x01" || domainSeparator || structHash)
+// where structHash = keccak256(abi.encode(BATCH_PROOF_TYPEHASH, startBlockHash, startStateHash, endBlockHash, endStateHash, l2Block))
+func computeEIP712Digest(domainSep common.Hash, startBlockHash, startStateHash, endBlockHash, endStateHash [32]byte, l2Block *big.Int) common.Hash {
+	// structHash = keccak256(abi.encode(BATCH_PROOF_TYPEHASH, ...))
+	packed, err := structHashABIArgs.Pack(
+		[32]byte(batchProofTypehash),
+		startBlockHash,
+		startStateHash,
+		endBlockHash,
+		endStateHash,
+		l2Block,
+	)
+	if err != nil {
+		panic(fmt.Sprintf("failed to pack struct hash: %v", err))
+	}
+	structHash := crypto.Keccak256Hash(packed)
+
+	// EIP-712: keccak256("\x19\x01" || domainSeparator || structHash)
+	raw := make([]byte, 2+32+32)
+	raw[0] = 0x19
+	raw[1] = 0x01
+	copy(raw[2:34], domainSep.Bytes())
+	copy(raw[34:66], structHash.Bytes())
+	return crypto.Keccak256Hash(raw)
 }
 
 // signBatchDigest signs a batch digest with the given ECDSA private key.
@@ -84,15 +152,16 @@ func signBatchDigest(digest common.Hash, key *ecdsa.PrivateKey) ([]byte, error) 
 }
 
 // generateProofBytes constructs an ABI-encoded BatchProof[] from a ProveRequest.
-// It creates a single BatchProof covering the full range, signs it, and encodes.
-func generateProofBytes(req ProveRequest, signerKey *ecdsa.PrivateKey) ([]byte, error) {
+// It creates a single BatchProof covering the full range, signs it with EIP-712, and encodes.
+func generateProofBytes(req ProveRequest, signerKey *ecdsa.PrivateKey, domainSep common.Hash) ([]byte, error) {
 	startBlockHash := common.HexToHash(req.StartBlkHash)
 	startStateHash := common.HexToHash(req.StartBlkStateHash)
 	endBlockHash := common.HexToHash(req.EndBlkHash)
 	endStateHash := common.HexToHash(req.EndBlkStateHash)
 	l2Block := new(big.Int).SetUint64(req.EndBlkHeight)
 
-	digest := computeBatchDigest(
+	digest := computeEIP712Digest(
+		domainSep,
 		[32]byte(startBlockHash),
 		[32]byte(startStateHash),
 		[32]byte(endBlockHash),

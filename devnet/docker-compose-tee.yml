@@ -19,6 +19,8 @@ services:
     container_name: mockteeprover
     environment:
       - SIGNER_PRIVATE_KEY=${TEE_SIGNER_PRIVATE_KEY}
+      - CHAIN_ID=${L1_CHAIN_ID:-1337}
+      - VERIFYING_CONTRACT=${TEE_PROOF_VERIFIER_ADDRESS}
       - TASK_DELAY=${TEE_TASK_DELAY:-2s}
     ports:
       - "8690:8690"
