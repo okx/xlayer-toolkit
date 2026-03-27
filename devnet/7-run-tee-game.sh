@@ -38,7 +38,7 @@ if [ ${#MISSING_IMAGES[@]} -gt 0 ]; then
   exit 1
 fi
 
-ENCLAVE_ADDRESS=$(cast wallet address --private-key "$OP_CHALLENGER_PRIVATE_KEY")
+ENCLAVE_ADDRESS=$(cast wallet address --private-key "$TEE_SIGNER_PRIVATE_KEY")
 
 echo "🔧 Adding TEE game type..."
 echo "   Image:           $OP_CONTRACTS_TEE_IMAGE_TAG"
