@@ -58,7 +58,7 @@ sed_inplace "s|^STARTING_L2_BLOCK_NUMBER=.*|STARTING_L2_BLOCK_NUMBER=$((FORK_BLO
 
 sed_inplace "s|^OP_SUCCINCT_MOCK=.*|OP_SUCCINCT_MOCK=$PROOF_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.deploy
 
-STARTING_L2_BLOCK_NUMBER=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json | jq -r '.[1]')
+STARTING_L2_BLOCK_NUMBER=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json -r "$L1_RPC_URL" | jq -r '.[1]')
 sed_inplace "s|^STARTING_L2_BLOCK_NUMBER=.*|STARTING_L2_BLOCK_NUMBER=$STARTING_L2_BLOCK_NUMBER|" "$OP_SUCCINCT_DIR"/.env.deploy
 
 # update .env.proposer
@@ -91,9 +91,9 @@ grep -q "^ANCHOR_STATE_REGISTRY_ADDRESS=" "$OP_SUCCINCT_DIR"/.env.challenger \
     && sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.challenger \
     || echo "ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY" >> "$OP_SUCCINCT_DIR"/.env.challenger
 
-cast send "$ANCHOR_STATE_REGISTRY" "setRespectedGameType(uint32)" 42 --private-key="$DEPLOYER_PRIVATE_KEY"
+cast send "$ANCHOR_STATE_REGISTRY" "setRespectedGameType(uint32)" 42 --private-key="$DEPLOYER_PRIVATE_KEY" --rpc-url "$L1_RPC_URL"
 
-TARGET_HEIGHT=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json | jq -r '.[1]')
+TARGET_HEIGHT=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json -r "$L1_RPC_URL" | jq -r '.[1]')
 
 while true; do
     CURRENT_HEIGHT=$(cast bn -r "$L2_RPC_URL" finalized 2>/dev/null || echo "0")
