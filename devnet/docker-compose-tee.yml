@@ -49,7 +49,7 @@ services:
     container_name: tee-challenger
     environment:
       - DISPUTE_GAME_FACTORY_ADDRESS=${DISPUTE_GAME_FACTORY_ADDRESS}
-      - OP_CHALLENGER_PRIVATE_KEY=${OP_CHALLENGER_PRIVATE_KEY}
+      - OP_PROPOSER_PRIVATE_KEY=${OP_PROPOSER_PRIVATE_KEY}
     volumes:
       - ./data/tee-challenger-data:/data
     command:
@@ -58,14 +58,14 @@ services:
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
-      - --private-key=${OP_CHALLENGER_PRIVATE_KEY}
+      - --private-key=${OP_PROPOSER_PRIVATE_KEY}
       - --game-types=tee
       - --datadir=/data
       - --http-poll-interval=2s
-      - --additional-bond-claimants=${PROPOSER_ADDRESS}
       - --tee-prover-rpc=http://mockteeprover:8690
       - --tee-prove-poll-interval=2s
       - --tee-prove-timeout=120s
+      - --selective-claim-resolution
       - --game-window=86400s
     depends_on:
       - mockteeprover
