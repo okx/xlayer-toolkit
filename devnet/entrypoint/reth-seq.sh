@@ -73,11 +73,13 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
         --flashblocks.addr=0.0.0.0 \
         --flashblocks.port=1111 \
         --flashblocks.block-time=150 \
-        --flashblocks.replay-from-persistence-file \
-        --flashblocks.p2p_port=9009 \
-        --flashblocks.p2p_private_key_file=/datadir/fb-p2p-key"
+        --flashblocks.replay-from-persistence-file"
 
     if [ "$CONDUCTOR_ENABLED" = "true" ]; then
+        CMD="$CMD \
+            --flashblocks.p2p_port=9009 \
+            --flashblocks.p2p_private_key_file=/datadir/fb-p2p-key"
+
         INDEX="${1:-}"
         if [ -z "$INDEX" ]; then
             # op-reth-seq connects to op-reth-seq2
