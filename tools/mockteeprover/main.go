@@ -27,6 +27,10 @@ type ProveRequest struct {
 	EndBlkHash        string `json:"endBlkHash"`
 	StartBlkStateHash string `json:"startBlkStateHash"`
 	EndBlkStateHash   string `json:"endBlkStateHash"`
+
+	// Optional EIP-712 domain hints. If present, override system defaults.
+	ChainID              *uint64 `json:"chainId,omitempty"`
+	TeeProofVerifierAddr *string `json:"teeProofVerifierAddr,omitempty"`
 }
 
 type task struct {
@@ -46,11 +50,12 @@ type response struct {
 }
 
 type MockTEEProver struct {
-	mu        sync.Mutex
-	tasks     map[string]*task
-	signerKey *ecdsa.PrivateKey
-	domainSep common.Hash
-	taskDelay time.Duration
+	mu               sync.Mutex
+	tasks            map[string]*task
+	signerKey        *ecdsa.PrivateKey
+	defaultDomainCfg EIP712DomainConfig
+	defaultDomainSep common.Hash
+	taskDelay        time.Duration
 
 	// control flags
 	failNext    bool
@@ -60,13 +65,29 @@ type MockTEEProver struct {
 	submittedRequests []ProveRequest
 }
 
-func NewMockTEEProver(signerKey *ecdsa.PrivateKey, domainSep common.Hash, taskDelay time.Duration) *MockTEEProver {
+func NewMockTEEProver(signerKey *ecdsa.PrivateKey, domainCfg EIP712DomainConfig, taskDelay time.Duration) *MockTEEProver {
 	return &MockTEEProver{
-		tasks:     make(map[string]*task),
-		signerKey: signerKey,
-		domainSep: domainSep,
-		taskDelay: taskDelay,
+		tasks:            make(map[string]*task),
+		signerKey:        signerKey,
+		defaultDomainCfg: domainCfg,
+		defaultDomainSep: computeDomainSeparator(domainCfg),
+		taskDelay:        taskDelay,
 	}
+}
+
+// resolveDomainSep returns a domain separator based on request overrides or defaults.
+func (m *MockTEEProver) resolveDomainSep(req ProveRequest) common.Hash {
+	if req.ChainID == nil && req.TeeProofVerifierAddr == nil {
+		return m.defaultDomainSep
+	}
+	cfg := m.defaultDomainCfg
+	if req.ChainID != nil {
+		cfg.ChainID = new(big.Int).SetUint64(*req.ChainID)
+	}
+	if req.TeeProofVerifierAddr != nil {
+		cfg.VerifyingContract = common.HexToAddress(*req.TeeProofVerifierAddr)
+	}
+	return computeDomainSeparator(cfg)
 }
 
 // POST /task/
@@ -138,7 +159,8 @@ func (m *MockTEEProver) handleGetTask(w http.ResponseWriter, r *http.Request) {
 
 	// Transition Running → Finished if delay has elapsed
 	if t.Status == "Running" && time.Now().After(t.FinishAt) {
-		proofBytes, err := generateProofBytes(t.Request, m.signerKey, m.domainSep)
+		domainSep := m.resolveDomainSep(t.Request)
+		proofBytes, err := generateProofBytes(t.Request, m.signerKey, domainSep)
 		if err != nil {
 			log.Printf("[GET /task/%s] ERROR generating proof: %v", taskID, err)
 			t.Status = "Failed"
@@ -289,8 +311,8 @@ func main() {
 		ChainID:           big.NewInt(chainID),
 		VerifyingContract: verifyingContract,
 	}
-	domainSep := computeDomainSeparator(domainCfg)
-	log.Printf("EIP-712 domain separator: %s (chainId=%d, verifyingContract=%s)", domainSep.Hex(), chainID, verifyingContract.Hex())
+	log.Printf("EIP-712 default domain: chainId=%d, verifyingContract=%s, separator=%s",
+		chainID, verifyingContract.Hex(), computeDomainSeparator(domainCfg).Hex())
 
 	listenAddr := os.Getenv("LISTEN_ADDR")
 	if listenAddr == "" {
@@ -306,7 +328,7 @@ func main() {
 		taskDelay = parsed
 	}
 
-	prover := NewMockTEEProver(signerKey, domainSep, taskDelay)
+	prover := NewMockTEEProver(signerKey, domainCfg, taskDelay)
 
 	log.Printf("Listening on %s (task_delay=%s)", listenAddr, taskDelay)
 	if err := http.ListenAndServe(listenAddr, prover); err != nil {
