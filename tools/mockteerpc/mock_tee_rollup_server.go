@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// TeeRollupResponse is the normal JSON shape returned by GET /v1/chain/confirmed_block_info.
+// TeeRollupResponse is the normal JSON shape returned by GET /chain/confirmed_block_info.
 type TeeRollupResponse struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -77,7 +77,7 @@ func NewTeeRollupServer(t *testing.T, opts ...Option) *TeeRollupServer {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/chain/confirmed_block_info", m.handleConfirmedBlockInfo)
+	mux.HandleFunc("/chain/confirmed_block_info", m.handleConfirmedBlockInfo)
 
 	m.server = httptest.NewServer(mux)
 
@@ -134,7 +134,7 @@ func (m *TeeRollupServer) tick() {
 	}
 }
 
-// handleConfirmedBlockInfo serves GET /v1/chain/confirmed_block_info.
+// handleConfirmedBlockInfo serves GET /chain/confirmed_block_info.
 func (m *TeeRollupServer) handleConfirmedBlockInfo(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	log.Printf("[mockteerpc] received %s %s from %s", r.Method, r.URL.Path, r.RemoteAddr)

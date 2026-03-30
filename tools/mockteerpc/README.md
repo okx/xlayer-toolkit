@@ -6,7 +6,7 @@ Standalone mock TeeRollup HTTP server for local development and testing.
 
 ## Mock TeeRollup Server
 
-Simulates the `GET /v1/chain/confirmed_block_info` REST endpoint provided by a real TeeRollup service.
+Simulates the `GET /chain/confirmed_block_info` REST endpoint provided by a real TeeRollup service.
 
 **Behavior:**
 - Starts at block height 1000 (configurable)
@@ -60,7 +60,7 @@ mock TeeRollup server listening on :8090
 initial height: 1000
 error rate:     0.0%
 max delay:      1s
-endpoint: GET /v1/chain/confirmed_block_info
+endpoint: GET /chain/confirmed_block_info
 
 tick: height=1023 delta=23
 tick: height=1058 delta=35
@@ -73,7 +73,7 @@ tick: height=1058 delta=35
 
 ```bash
 # Query current confirmed block info
-curl -s http://localhost:8090/v1/chain/confirmed_block_info | jq .
+curl -s http://localhost:8090/chain/confirmed_block_info | jq .
 ```
 
 Example response:
@@ -92,7 +92,7 @@ Example response:
 ### Observe height growth continuously
 
 ```bash
-watch -n 0.5 'curl -s http://localhost:8090/v1/chain/confirmed_block_info | jq .data'
+watch -n 0.5 'curl -s http://localhost:8090/chain/confirmed_block_info | jq .data'
 ```
 
 ---

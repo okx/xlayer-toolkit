@@ -15,7 +15,7 @@ func TestTeeRollupServer_Basic(t *testing.T) {
 	srv := mockteerpc.NewTeeRollupServer(t)
 
 	// --- first request ---
-	resp, err := http.Get(srv.Addr() + "/v1/chain/confirmed_block_info") //nolint:noctx
+	resp, err := http.Get(srv.Addr() + "/chain/confirmed_block_info") //nolint:noctx
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -34,7 +34,7 @@ func TestTeeRollupServer_Basic(t *testing.T) {
 	// --- wait for at least one tick ---
 	time.Sleep(1500 * time.Millisecond)
 
-	resp2, err := http.Get(srv.Addr() + "/v1/chain/confirmed_block_info") //nolint:noctx
+	resp2, err := http.Get(srv.Addr() + "/chain/confirmed_block_info") //nolint:noctx
 	require.NoError(t, err)
 	defer resp2.Body.Close()
 

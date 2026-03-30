@@ -148,13 +148,13 @@ func main() {
 	go s.tick()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/chain/confirmed_block_info", s.handleConfirmedBlockInfo)
+	mux.HandleFunc("/chain/confirmed_block_info", s.handleConfirmedBlockInfo)
 
 	fmt.Printf("mock TeeRollup server listening on %s\n", *addr)
 	fmt.Printf("initial height: %d\n", *initHeight)
 	fmt.Printf("error rate:     %.1f%%\n", *errorRate*100)
 	fmt.Printf("max delay:      %s\n", *maxDelay)
-	fmt.Println("endpoint: GET /v1/chain/confirmed_block_info")
+	fmt.Println("endpoint: GET /chain/confirmed_block_info")
 	fmt.Println()
 
 	if err := http.ListenAndServe(*addr, mux); err != nil {
