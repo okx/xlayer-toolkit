@@ -242,7 +242,7 @@ func (m *MockTEEProver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case path == "/health":
 		m.handleHealth(w, r)
-	case path == "/tee/task/" && r.Method == http.MethodPost:
+	case (path == "/tee/task" || path == "/tee/task/") && r.Method == http.MethodPost:
 		m.handleCreateTask(w, r)
 	case strings.HasPrefix(path, "/tee/task/") && r.Method == http.MethodGet:
 		m.handleGetTask(w, r)
