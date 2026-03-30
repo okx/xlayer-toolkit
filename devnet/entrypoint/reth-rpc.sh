@@ -71,9 +71,7 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
 
     # Enable flashblocks state comparison debug mode
     if [ "$FLASHBLOCKS_DEBUG_STATE_COMPARISON" = "true" ]; then
-        CMD="$CMD \
-            --xlayer.flashblocks-debug-state-comparison \
-            --xlayer.flashblocks-disable-pre-warming"
+        CMD="$CMD --xlayer.flashblocks-debug-state-comparison"
     fi
 fi
 
