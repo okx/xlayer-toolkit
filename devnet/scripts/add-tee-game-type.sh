@@ -1,23 +1,6 @@
 #!/bin/bash
 # add-tee-game-type.sh — Register TeeDisputeGame on an existing devnet
-#
-# Usage:
-#   ./scripts/add-tee-game-type.sh [FLAGS] [/path/to/tee-contracts]
-#
-# Flags:
-#   --mock-verifier              Deploy MockTeeProofVerifier instead of TeeProofVerifier.
-#                                Must be combined with --enclave <address>.
-#   --enclave <addr>             Enclave address to register as a valid signer on the
-#                                MockTeeProofVerifier via setRegistered(). Required when
-#                                --mock-verifier is set.
-#   --max-challenge-duration <s> Override MAX_CHALLENGE_DURATION (seconds). Falls back to
-#                                MAX_CLOCK_DURATION env var, then default 20.
-#   --max-prove-duration <s>     Override MAX_PROVE_DURATION (seconds). Falls back to
-#                                MAX_CLOCK_DURATION env var, then default 20.
-#
-# If no path is given, defaults to <devnet-dir>/tee-contracts.
-# You can also set TEE_CONTRACTS_DIR explicitly:
-#   TEE_CONTRACTS_DIR=/path/to/tee-contracts ./scripts/add-tee-game-type.sh
+# Run with --help for usage.
 
 set -e
 
@@ -26,6 +9,7 @@ USE_MOCK_VERIFIER=false
 MOCK_ENCLAVE_ADDRESS=""
 ARG_MAX_CHALLENGE_DURATION=""
 ARG_MAX_PROVE_DURATION=""
+ARG_INIT_BOND=""
 POSITIONAL_ARGS=()
 i=1
 while [ $i -le $# ]; do
@@ -50,6 +34,43 @@ while [ $i -le $# ]; do
         --max-prove-duration)
             i=$((i + 1))
             ARG_MAX_PROVE_DURATION="${!i}"
+            ;;
+        --init-bond)
+            i=$((i + 1))
+            ARG_INIT_BOND="${!i}"
+            ;;
+        --help|-h)
+            cat <<'EOF'
+Usage:
+  ./scripts/add-tee-game-type.sh [FLAGS] [/path/to/tee-contracts]
+
+Flags:
+  --mock-verifier              Deploy MockTeeProofVerifier instead of TeeProofVerifier.
+                               Must be combined with --enclave <address>.
+  --enclave <addr>             Enclave address to register as a valid signer on the
+                               MockTeeProofVerifier via setRegistered(). Required when
+                               --mock-verifier is set.
+  --max-challenge-duration <s> Override MAX_CHALLENGE_DURATION (seconds). Falls back to
+                               MAX_CLOCK_DURATION env var, then default 20.
+  --max-prove-duration <s>     Override MAX_PROVE_DURATION (seconds). Falls back to
+                               MAX_CLOCK_DURATION env var, then default 20.
+  --init-bond <wei>            Override INIT_BOND (in wei). Falls back to INIT_BOND env var,
+                               then default 10000000000000000 (0.01 ETH).
+  --help, -h                   Show this help message and exit.
+
+Arguments:
+  /path/to/tee-contracts       Path to the tee-contracts directory (optional).
+                               Falls back to TEE_CONTRACTS_DIR env var, then
+                               <devnet-dir>/tee-contracts.
+
+Examples:
+  ./scripts/add-tee-game-type.sh
+  ./scripts/add-tee-game-type.sh --mock-verifier --enclave 0xABC...
+  ./scripts/add-tee-game-type.sh --init-bond 5000000000000000
+  ./scripts/add-tee-game-type.sh --max-challenge-duration 60 --max-prove-duration 60
+  TEE_CONTRACTS_DIR=/path/to/tee-contracts ./scripts/add-tee-game-type.sh
+EOF
+            exit 0
             ;;
         *) POSITIONAL_ARGS+=("$arg") ;;
     esac
@@ -111,10 +132,10 @@ export DISPUTE_GAME_FINALITY_DELAY_SECONDS="${DISPUTE_GAME_FINALITY_DELAY_SECOND
 export MAX_CHALLENGE_DURATION="${ARG_MAX_CHALLENGE_DURATION:-${MAX_CLOCK_DURATION:-20}}"
 export MAX_PROVE_DURATION="${ARG_MAX_PROVE_DURATION:-${MAX_CLOCK_DURATION:-20}}"
 
-# Bond defaults (0.01 ETH) and access-manager fallback timeout (1 hour)
-export CHALLENGER_BOND="${CHALLENGER_BOND:-10000000000000000}"
+# Bond defaults (0.0001 ETH) and access-manager fallback timeout (1 hour)
+export CHALLENGER_BOND="${CHALLENGER_BOND:-100000000000000}"
 export FALLBACK_TIMEOUT="${FALLBACK_TIMEOUT:-3600}"
-export INIT_BOND="${INIT_BOND:-10000000000000000}"
+export INIT_BOND="${ARG_INIT_BOND:-${INIT_BOND:-100000000000000}}"
 
 if [ -n "$PROPOSER_ADDRESS" ]; then
     export PROPOSER_ADDRESS
@@ -448,10 +469,11 @@ if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
         add_tee_game_type_via_safe
     fi
 
-    # 5. Verify
+    # 5. Verify — fetch all on-chain state first, then print
     echo "=== Verifying TeeDisputeGame type was registered ==="
     REGISTERED_IMPL=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDR 'gameImpls(uint32)(address)' $TEE_GAME_TYPE)
     REGISTERED_BOND=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDR 'initBonds(uint32)(uint256)' $TEE_GAME_TYPE | awk '{print $1}')
+    VERIFIER_ADDR=$(cast call --rpc-url "$L1_RPC_URL" "$TEE_GAME_IMPL" 'teeProofVerifier()(address)' 2>/dev/null || echo "")
 
     if [ "$REGISTERED_IMPL" != "0x0000000000000000000000000000000000000000" ]; then
         echo " ✅ Success! TeeDisputeGame type $TEE_GAME_TYPE registered."
@@ -475,8 +497,10 @@ if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
     echo "  New AnchorStateRegistry: $NEW_ASR_ADDR"
     echo "  Existing DGF:            $DISPUTE_GAME_FACTORY_ADDR"
     if [ "$USE_MOCK_VERIFIER" = "true" ]; then
-        echo "  Mock Verifier:           $MOCK_VERIFIER_ADDR"
+        echo "  Mock Verifier:           $VERIFIER_ADDR"
         echo "  Enclave address:         $MOCK_ENCLAVE_ADDRESS"
+    else
+        echo "  TeeProofVerifier:        $VERIFIER_ADDR"
     fi
     echo "========================================"
     echo ""
