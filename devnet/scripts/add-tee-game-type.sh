@@ -55,7 +55,7 @@ Flags:
   --max-prove-duration <s>     Override MAX_PROVE_DURATION (seconds). Falls back to
                                MAX_CLOCK_DURATION env var, then default 20.
   --init-bond <wei>            Override INIT_BOND (in wei). Falls back to INIT_BOND env var,
-                               then default 10000000000000000 (0.01 ETH).
+                               then default 100000000000000 (0.0001 ETH).
   --help, -h                   Show this help message and exit.
 
 Arguments:
