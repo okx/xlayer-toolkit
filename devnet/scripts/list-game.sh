@@ -73,32 +73,35 @@ format_ts() {
     echo "$ts"
 }
 
-# Fetch claimData(), createdAt(), resolvedAt() in one JSON-RPC batch (requires jq).
+# Fetch claimData(), createdAt(), resolvedAt(), status() in one JSON-RPC batch (requires jq).
 # Falls back to sequential cast calls if jq is unavailable.
 # Returns: "status_text|deadline_ts|created_ts|resolved_ts"
 get_game_data() {
     local addr=$1
-    local claim_hex created_hex resolved_hex
+    local claim_hex created_hex resolved_hex game_status_hex
 
     if command -v jq &> /dev/null; then
-        # ── JSON-RPC batch: one HTTP round-trip for all 3 calls ──────
+        # ── JSON-RPC batch: one HTTP round-trip for all 4 calls ──────
         local sig_claim=$(cast sig "claimData()")
         local sig_created=$(cast sig "createdAt()")
         local sig_resolved=$(cast sig "resolvedAt()")
+        local sig_status=$(cast sig "status()")
         local body
         printf -v body \
-            '[{"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"to":"%s","data":"%s"},"latest"]},{"jsonrpc":"2.0","id":2,"method":"eth_call","params":[{"to":"%s","data":"%s"},"latest"]},{"jsonrpc":"2.0","id":3,"method":"eth_call","params":[{"to":"%s","data":"%s"},"latest"]}]' \
-            "$addr" "$sig_claim" "$addr" "$sig_created" "$addr" "$sig_resolved"
+            '[{"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"to":"%s","data":"%s"},"latest"]},{"jsonrpc":"2.0","id":2,"method":"eth_call","params":[{"to":"%s","data":"%s"},"latest"]},{"jsonrpc":"2.0","id":3,"method":"eth_call","params":[{"to":"%s","data":"%s"},"latest"]},{"jsonrpc":"2.0","id":4,"method":"eth_call","params":[{"to":"%s","data":"%s"},"latest"]}]' \
+            "$addr" "$sig_claim" "$addr" "$sig_created" "$addr" "$sig_resolved" "$addr" "$sig_status"
         local resp
         resp=$(curl -s -X POST -H "Content-Type: application/json" --data "$body" "$L1_RPC")
         claim_hex=$(echo "$resp" | jq -r '.[] | select(.id==1) | .result // ""')
         created_hex=$(echo "$resp" | jq -r '.[] | select(.id==2) | .result // ""')
         resolved_hex=$(echo "$resp" | jq -r '.[] | select(.id==3) | .result // ""')
+        game_status_hex=$(echo "$resp" | jq -r '.[] | select(.id==4) | .result // ""')
     else
         # ── Fallback: sequential cast calls ─────────────────────────
         claim_hex=$(cast call "$addr" "claimData()"   --rpc-url "$L1_RPC" 2>/dev/null)
         created_hex=$(cast call "$addr" "createdAt()"  --rpc-url "$L1_RPC" 2>/dev/null)
         resolved_hex=$(cast call "$addr" "resolvedAt()" --rpc-url "$L1_RPC" 2>/dev/null)
+        game_status_hex=$(cast call "$addr" "status()" --rpc-url "$L1_RPC" 2>/dev/null)
     fi
 
     # Parse claimData struct (each field occupies one 32-byte ABI word; 0x prefix = 2 chars):
@@ -113,13 +116,21 @@ get_game_data() {
     local created_ts=$(cast --to-dec "$created_hex"  2>/dev/null || echo "0")
     local resolved_ts=$(cast --to-dec "$resolved_hex" 2>/dev/null || echo "0")
 
+    # GameStatus from status(): 0=IN_PROGRESS, 1=CHALLENGER_WINS, 2=DEFENDER_WINS
+    local game_status=$(cast --to-dec "$game_status_hex" 2>/dev/null || echo "0")
+
     local status_text
     case $status in
         0) status_text="Unchallenged" ;;
         1) status_text="Challenged" ;;
         2) status_text="Unchal+Proof" ;;
         3) status_text="Chal+Proof" ;;
-        4) status_text="Resolved" ;;
+        4) # Resolved: show winner from GameStatus
+           case $game_status in
+               1) status_text="Challenger Win" ;;
+               2) status_text="Defender Win" ;;
+               *) status_text="Resolved" ;;
+           esac ;;
         *) status_text="Unknown($status)" ;;
     esac
 
