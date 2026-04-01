@@ -64,21 +64,66 @@ check_basic_requirements() {
 # Helper Functions
 # ════════════════════════════════════════════════════════════════
 
-# Get game status
-get_game_status() {
-    local addr=$1
-    local claim_hex=$(cast call $addr "claimData()" --rpc-url $L1_RPC 2>/dev/null)
-    local status_hex="0x$(echo "$claim_hex" | cut -c259-322)"
-    local status=$(cast --to-dec "$status_hex" 2>/dev/null || echo "0")
+# Format unix timestamp to human-readable date (cross-platform)
+format_ts() {
+    local ts=$1
+    [ -z "$ts" ] || [ "$ts" = "0" ] && echo "-" && return
+    date -r "$ts" "+%m-%d %H:%M" 2>/dev/null || \
+    date -d "@$ts" "+%m-%d %H:%M" 2>/dev/null || \
+    echo "$ts"
+}
 
+# Fetch claimData(), createdAt(), resolvedAt() in one JSON-RPC batch (requires jq).
+# Falls back to sequential cast calls if jq is unavailable.
+# Returns: "status_text|deadline_ts|created_ts|resolved_ts"
+get_game_data() {
+    local addr=$1
+    local claim_hex created_hex resolved_hex
+
+    if command -v jq &> /dev/null; then
+        # ── JSON-RPC batch: one HTTP round-trip for all 3 calls ──────
+        local sig_claim=$(cast sig "claimData()")
+        local sig_created=$(cast sig "createdAt()")
+        local sig_resolved=$(cast sig "resolvedAt()")
+        local body
+        printf -v body \
+            '[{"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"to":"%s","data":"%s"},"latest"]},{"jsonrpc":"2.0","id":2,"method":"eth_call","params":[{"to":"%s","data":"%s"},"latest"]},{"jsonrpc":"2.0","id":3,"method":"eth_call","params":[{"to":"%s","data":"%s"},"latest"]}]' \
+            "$addr" "$sig_claim" "$addr" "$sig_created" "$addr" "$sig_resolved"
+        local resp
+        resp=$(curl -s -X POST -H "Content-Type: application/json" --data "$body" "$L1_RPC")
+        claim_hex=$(echo "$resp" | jq -r '.[] | select(.id==1) | .result // ""')
+        created_hex=$(echo "$resp" | jq -r '.[] | select(.id==2) | .result // ""')
+        resolved_hex=$(echo "$resp" | jq -r '.[] | select(.id==3) | .result // ""')
+    else
+        # ── Fallback: sequential cast calls ─────────────────────────
+        claim_hex=$(cast call "$addr" "claimData()"   --rpc-url "$L1_RPC" 2>/dev/null)
+        created_hex=$(cast call "$addr" "createdAt()"  --rpc-url "$L1_RPC" 2>/dev/null)
+        resolved_hex=$(cast call "$addr" "resolvedAt()" --rpc-url "$L1_RPC" 2>/dev/null)
+    fi
+
+    # Parse claimData struct (each field occupies one 32-byte ABI word; 0x prefix = 2 chars):
+    #   slot 4 (status,   uint8 ) : chars 259-322
+    #   slot 5 (deadline, uint64) : chars 323-386
+    local status_hex="0x$(echo "$claim_hex"   | cut -c259-322)"
+    local deadline_hex="0x$(echo "$claim_hex" | cut -c323-386)"
+    local status=$(cast --to-dec "$status_hex"   2>/dev/null || echo "0")
+    local deadline=$(cast --to-dec "$deadline_hex" 2>/dev/null || echo "0")
+
+    # createdAt / resolvedAt are uint64 ABI-encoded into 32-byte words
+    local created_ts=$(cast --to-dec "$created_hex"  2>/dev/null || echo "0")
+    local resolved_ts=$(cast --to-dec "$resolved_hex" 2>/dev/null || echo "0")
+
+    local status_text
     case $status in
-        0) echo "Unchallenged|0" ;;
-        1) echo "Challenged|1" ;;
-        2) echo "Unchal+Proof|2" ;;
-        3) echo "Chal+Proof|3" ;;
-        4) echo "Resolved|4" ;;
-        *) echo "Unknown|$status" ;;
+        0) status_text="Unchallenged" ;;
+        1) status_text="Challenged" ;;
+        2) status_text="Unchal+Proof" ;;
+        3) status_text="Chal+Proof" ;;
+        4) status_text="Resolved" ;;
+        *) status_text="Unknown($status)" ;;
     esac
+
+    echo "$status_text|$deadline|$created_ts|$resolved_ts"
 }
 
 # ════════════════════════════════════════════════════════════════
@@ -124,22 +169,22 @@ list_games() {
     echo ""
 
     # Table header
-    printf "${BOLD}%-6s %-8s %-12s %-25s %-10s %-20s${NC}\n" \
-        "Index" "Type" "Parent" "Block Range" "Blocks" "Status"
-    echo "────────────────────────────────────────────────────────────────────────────────────────"
+    printf "${BOLD}%-6s %-8s %-12s %-22s %-7s %-14s %-13s %-13s %-13s${NC}\n" \
+        "Index" "Type" "Parent" "Block Range" "Blocks" "Status" "CreatedAt" "Deadline" "ResolvedAt"
+    echo "──────────────────────────────────────────────────────────────────────────────────────────────────────────────────"
 
     BLOCK_BY_INDEX=()
     local count=0
 
     # Single reverse pass: newest game first, print immediately
     for ((i=total-1; i>=0; i--)); do
-        local game_data=$(cast call $FACTORY_ADDRESS "gameAtIndex(uint256)((uint32,uint64,address))" $i --rpc-url $L1_RPC 2>/dev/null)
-        [ -z "$game_data" ] && continue
+        local factory_data=$(cast call $FACTORY_ADDRESS "gameAtIndex(uint256)((uint32,uint64,address))" $i --rpc-url $L1_RPC 2>/dev/null)
+        [ -z "$factory_data" ] && continue
 
-        local type=$(echo "$game_data" | grep -oE '\([0-9]+' | head -1 | tr -d '(')
+        local type=$(echo "$factory_data" | grep -oE '\([0-9]+' | head -1 | tr -d '(')
         [ -n "$game_type" ] && [ "$type" != "$game_type" ] && continue
 
-        local addr=$(echo "$game_data" | grep -oE '0x[a-fA-F0-9]{40}')
+        local addr=$(echo "$factory_data" | grep -oE '0x[a-fA-F0-9]{40}')
         local l2_block=$(cast call $addr "l2BlockNumber()(uint256)" --rpc-url $L1_RPC 2>/dev/null | awk '{print $1}')
         [ -z "$l2_block" ] && l2_block=0
         BLOCK_BY_INDEX[$i]=$l2_block
@@ -167,11 +212,18 @@ list_games() {
             blocks=$((l2_block - start))
         fi
 
-        local status_info=$(get_game_status $addr)
-        local status_text=$(echo "$status_info" | cut -d'|' -f1)
+        local game_data
+        game_data=$(get_game_data "$addr")
+        local status_text deadline_ts created_ts resolved_ts
+        IFS='|' read -r status_text deadline_ts created_ts resolved_ts <<< "$game_data"
+        local created_fmt deadline_fmt resolved_fmt
+        created_fmt=$(format_ts "$created_ts")
+        deadline_fmt=$(format_ts "$deadline_ts")
+        resolved_fmt=$(format_ts "$resolved_ts")
 
-        printf "%-6s %-8s %-12s %-25s %-10s %-20s\n" \
-            "$i" "$type" "$parent_display" "$start-$l2_block" "$blocks" "$status_text"
+        printf "%-6s %-8s %-12s %-22s %-7s %-14s %-13s %-13s %-13s\n" \
+            "$i" "$type" "$parent_display" "$start-$l2_block" "$blocks" \
+            "$status_text" "$created_fmt" "$deadline_fmt" "$resolved_fmt"
         count=$((count + 1))
     done
 
