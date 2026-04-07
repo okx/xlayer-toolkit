@@ -94,6 +94,7 @@ The upstream OP Stack removed the `msg.value == _value` check, which would allow
 │   ├── foundry.toml
 │   └── src/Counter.sol        # Solidity source
 ├── src/
+│   ├── env.ts                 # Load .env with devnet fallback
 │   ├── config.ts              # Chain definitions from rollup.json
 │   ├── clients.ts             # L1/L2 viem clients
 │   ├── artifacts.ts           # Load ABI + bytecode from forge output
