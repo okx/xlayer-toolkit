@@ -1,0 +1,20 @@
+{
+  "name": "force-inclusion",
+  "version": "0.1.0",
+  "description": "Send L2 force inclusion transactions from L1 via OP Stack deposit mechanism",
+  "type": "module",
+  "scripts": {
+    "build": "cd contracts && forge build",
+    "force:call": "tsx src/force-contract-call.ts",
+    "force:transfer": "tsx src/force-transfer-demo.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "viem": "^2.30.4"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
