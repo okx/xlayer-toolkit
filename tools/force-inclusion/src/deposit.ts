@@ -3,7 +3,6 @@ import { getL2TransactionHashes } from "viem/op-stack";
 import { l1PublicClient, l1WalletClient, l2PublicClient } from "./clients.js";
 import { portalAddress } from "./config.js";
 
-// OptimismPortal.depositTransaction — subset needed for force inclusion
 export const portalAbi = [
   {
     type: "function",
@@ -27,14 +26,7 @@ interface DepositParams {
   data: `0x${string}`;
 }
 
-/**
- * Submit a deposit transaction on L1 and wait for L2 confirmation.
- * Returns the L2 transaction receipt.
- *
- * Calls Portal.depositTransaction directly (method B) because viem's
- * buildDepositTransaction doesn't support isCreation=true.
- * Using the same approach for all deposits keeps the code consistent.
- */
+// Calls Portal directly because viem's buildDepositTransaction doesn't support isCreation=true.
 export async function submitDeposit(params: DepositParams) {
   const l1Hash = await l1WalletClient.writeContract({
     address: portalAddress,

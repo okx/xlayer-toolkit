@@ -36,7 +36,6 @@ function loadRollupConfig(): RollupConfig {
 }
 
 const rollup = loadRollupConfig();
-// getAddress validates and checksums — will throw on malformed addresses
 const portalAddress = getAddress(rollup.deposit_contract_address);
 
 export const xlayerDevnetL1 = defineChain({
