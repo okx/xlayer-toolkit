@@ -41,19 +41,23 @@ npm install
 
 # Compile contracts
 npm run build
-
-# Configure (defaults work for standard devnet)
-cp .env.example .env
 ```
 
-### Environment Variables
+No `.env` file needed — all config defaults to reading from the devnet:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PRIVATE_KEY` | devnet rich account | L1 account private key (needs ETH for L1 gas) |
-| `L1_RPC_URL` | `http://localhost:8545` | L1 RPC endpoint |
-| `L2_RPC_URL` | `http://localhost:8123` | L2 RPC endpoint |
-| `ROLLUP_JSON_PATH` | `../../devnet/config-op/rollup.json` (relative) | Path to devnet rollup config (portal address read from here) |
+- `PRIVATE_KEY` ← `RICH_L1_PRIVATE_KEY` from `devnet/.env`
+- `L1_RPC_URL` ← `L1_RPC_URL` from `devnet/.env`
+- `L2_RPC_URL` ← `L2_RPC_URL` from `devnet/.env`
+- Portal address ← `deposit_contract_address` from `devnet/config-op/rollup.json`
+
+To override any value, create a `.env` file (see `.env.example`):
+
+| Variable | Default source | Description |
+|----------|---------------|-------------|
+| `PRIVATE_KEY` | `devnet/.env` → `RICH_L1_PRIVATE_KEY` | L1 account private key (needs ETH for L1 gas) |
+| `L1_RPC_URL` | `devnet/.env` | L1 RPC endpoint |
+| `L2_RPC_URL` | `devnet/.env` | L2 RPC endpoint |
+| `ROLLUP_JSON_PATH` | `../../devnet/config-op/rollup.json` | Path to devnet rollup config |
 
 ## Usage
 

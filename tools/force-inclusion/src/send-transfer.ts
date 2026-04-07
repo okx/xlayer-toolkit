@@ -12,7 +12,7 @@
  *
  * Run: npx tsx src/send-transfer.ts
  */
-import "dotenv/config";
+import "./env.js";
 import { formatEther, parseEther } from "viem";
 import { l1Account, l1PublicClient, l1WalletClient, l2PublicClient } from "./clients.js";
 import { portalAddress } from "./config.js";

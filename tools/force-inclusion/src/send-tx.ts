@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./env.js";
 import { encodeFunctionData, formatEther } from "viem";
 import {
   l1Account,
