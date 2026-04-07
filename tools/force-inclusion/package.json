@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "cd contracts && forge build",
-    "send": "tsx src/send-tx.ts",
-    "send:transfer": "tsx src/send-transfer.ts"
+    "force:call": "tsx src/force-contract-call.ts",
+    "force:transfer": "tsx src/force-transfer-demo.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.7",

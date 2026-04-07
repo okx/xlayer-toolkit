@@ -63,20 +63,20 @@ To override any value, create a `.env` file (see `.env.example`):
 
 ```bash
 # Deploy Counter + force include increment()
-npm run send
+npm run force:call
 
 # Attempt OKB transfer (demonstrates CGT mode revert)
-npm run send:transfer
+npm run force:transfer
 ```
 
-### `npm run send`
+### `npm run force:call`
 
 1. Read portal address from `rollup.json`
 2. Deploy a Counter contract to L2 via L1 deposit (isCreation)
 3. Call `Counter.increment()` on L2 via L1 deposit
 4. Verify count changed from 0 to 1
 
-### `npm run send:transfer`
+### `npm run force:transfer`
 
 Attempts to force include an OKB transfer on L2. Both attempts revert, demonstrating the CGT mode limitation:
 
@@ -99,8 +99,8 @@ The upstream OP Stack removed the `msg.value == _value` check, which would allow
 │   ├── artifacts.ts           # Load ABI + bytecode from forge output
 │   ├── deposit.ts             # submitDeposit() — shared L1→L2 deposit pipeline
 │   ├── counter.ts             # Counter deploy + read helpers
-│   ├── send-tx.ts             # Entry point: deploy + increment
-│   └── send-transfer.ts      # OKB transfer attempt (CGT revert demo)
+│   ├── force-contract-call.ts # Entry point: deploy + increment
+│   └── force-transfer-demo.ts # OKB transfer attempt (CGT revert demo)
 └── package.json
 ```
 
