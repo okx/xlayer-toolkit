@@ -52,6 +52,7 @@ setup_cgt() {
       --rpc-url "$L1_RPC_URL" \
       --private-key "$DEPLOYER_PRIVATE_KEY" \
       --legacy \
+      --jobs 1 \
       --broadcast 2>&1 | tee $MOCK_OKB_OUTPUT_FILE
     MOCK_OKB_EXIT_CODE=$?
     set -e
@@ -108,6 +109,7 @@ setup_cgt() {
     --rpc-url "$L1_RPC_URL" \
     --private-key "$DEPLOYER_PRIVATE_KEY" \
     --legacy \
+    --jobs 1 \
     --broadcast 2>&1 | tee $FORGE_OUTPUT_FILE
   FORGE_EXIT_CODE=$?
   set -e
