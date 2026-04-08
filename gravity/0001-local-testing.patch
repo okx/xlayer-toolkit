@@ -1,0 +1,199 @@
+From 09fb76e151165ce3ebc1a2db820d0e9ed5237e9f Mon Sep 17 00:00:00 2001
+From: "xingqiang.yuan" <xingqiang.yuan@okg.com>
+Date: Thu, 22 Jan 2026 17:29:02 +0800
+Subject: [PATCH] local testing
+
+---
+ .../pipe-exec-layer-ext-v2/execute/src/lib.rs | 54 ++++++++++++-------
+ .../execute/src/onchain_config/epoch.rs       |  6 +--
+ .../src/onchain_config/metadata_txn.rs        | 10 ++--
+ 3 files changed, 42 insertions(+), 28 deletions(-)
+
+diff --git a/crates/pipe-exec-layer-ext-v2/execute/src/lib.rs b/crates/pipe-exec-layer-ext-v2/execute/src/lib.rs
+index 747b4192a..17b6a8f36 100644
+--- a/crates/pipe-exec-layer-ext-v2/execute/src/lib.rs
++++ b/crates/pipe-exec-layer-ext-v2/execute/src/lib.rs
+@@ -361,10 +361,12 @@ impl<Storage: GravityStorage> Core<Storage> {
+             HashedPostState::from_bundle_state::<KeccakKeyHasher>(&execution_output.state.state);
+         self.metrics.cache_account_state.record(write_start.elapsed());
+         let elapsed = start_time.elapsed();
++        let tx_count = block.body.transactions.len();
+         info!(target: "PipeExecService.process",
+             block_number=?block_number,
+             block_id=?block_id,
+             gas_used=execution_output.gas_used,
++            tx_count=tx_count,
+             elapsed=?elapsed,
+             epoch=?epoch,
+             "block executed"
+@@ -558,7 +560,7 @@ impl<Storage: GravityStorage> Core<Storage> {
+     ) -> (Vec<GravityEvent>, Option<(u64, Bytes)>) {
+         let mut gravity_events = vec![];
+         let mut epoch_change_result = None;
+-        
++
+         for receipt in receipts {
+             debug!(target: "execute_ordered_block",
+                 number=?block_number,
+@@ -577,7 +579,7 @@ impl<Storage: GravityStorage> Core<Storage> {
+                     let validator_bytes = crate::onchain_config::types::convert_validator_set_to_bcs(solidity_validator_set);
+                     epoch_change_result = Some((event.newEpoch.to::<u64>(), validator_bytes));
+                 }
+-                
++
+                 if let Ok(event) = ObservedJWKsUpdated::decode_log(&log) {
+                     info!(target: "execute_ordered_block",
+                         number=?block_number,
+@@ -738,7 +740,7 @@ impl<Storage: GravityStorage> Core<Storage> {
+             &result.execution_output.receipts,
+             result.block.number,
+         );
+-        
++
+         // Check if any transaction (including JWK transactions) triggered a new epoch
+         // TODO(gravity_lightman): We need further more tests to test this branch
+         if let Some((new_epoch, validators)) = epoch_change_result {
+@@ -755,7 +757,7 @@ impl<Storage: GravityStorage> Core<Storage> {
+             gravity_events.push(GravityEvent::NewEpoch(new_epoch, validators.into()));
+             result.epoch = new_epoch;
+         }
+-        
++
+         result.gravity_events.extend(gravity_events);
+         result
+     }
+@@ -858,8 +860,29 @@ impl<Storage: GravityStorage> Core<Storage> {
+         base_fee_per_gas: u64,
+         gas_limit: u64,
+     ) -> (Vec<TransactionSigned>, Vec<Address>, Vec<TxInfo>) {
+-        let invalid_idxs = filter_invalid_txs(db, &txs, &senders, base_fee_per_gas, gas_limit);
+-        if invalid_idxs.is_empty() {
++        // Find transactions that exceed gas limit (should be excluded from current block but remain in txpool)
++        let mut gas_limit_exceeded_tx_idx = txs.len();
++        let mut tx_gas_limit_sum = 0;
++        for (idx, tx) in txs.iter().enumerate() {
++            let tx_gas_limit = tx.gas_limit();
++            if tx_gas_limit_sum + tx_gas_limit > gas_limit {
++                warn!(target: "filter_invalid_txs",
++                    tx_hash=?txs[idx].hash(),
++                    sender=?senders[idx],
++                    block_gas_limit=?gas_limit,
++                    "gas limit exceeded, truncated to {}",
++                    idx,
++                );
++                gas_limit_exceeded_tx_idx = idx;
++                break;
++            } else {
++                tx_gas_limit_sum += tx_gas_limit;
++            }
++        }
++
++        // Filter transactions: exclude gas limit exceeded ones from current block
++        // Don't send to discard_txs_tx - these transactions should remain in txpool for the next block
++        if gas_limit_exceeded_tx_idx == txs.len() {
+             let mut txs_info = Vec::with_capacity(txs.len());
+             for (tx, sender) in txs.iter().zip(senders.iter()) {
+                 txs_info.push(TxInfo {
+@@ -871,30 +894,21 @@ impl<Storage: GravityStorage> Core<Storage> {
+             }
+             (txs, senders, txs_info)
+         } else {
+-            let _ = self
+-                .discard_txs_tx
+-                .send(invalid_idxs.iter().map(|&idx| txs[idx].hash()).copied().collect::<Vec<_>>());
+-
+-            let mut filtered_txs = Vec::with_capacity(txs.len() - invalid_idxs.len());
+-            let mut filtered_senders = Vec::with_capacity(filtered_txs.capacity());
++            let mut filtered_txs = Vec::with_capacity(gas_limit_exceeded_tx_idx);
++            let mut filtered_senders = Vec::with_capacity(gas_limit_exceeded_tx_idx);
+             let mut txs_info = Vec::with_capacity(txs.len());
+             for (i, (tx, sender)) in txs.into_iter().zip(senders.into_iter()).enumerate() {
+-                if invalid_idxs.contains(&i) {
+-                    txs_info.push(TxInfo {
+-                        tx_hash: *tx.hash(),
+-                        sender,
+-                        nonce: tx.nonce(),
+-                        is_discarded: true,
+-                    });
++                if i >= gas_limit_exceeded_tx_idx {
++                    // Gas limit exceeded transactions are excluded from current block but not discarded
+                     continue;
+                 }
+-
+                 txs_info.push(TxInfo {
+                     tx_hash: *tx.hash(),
+                     sender,
+                     nonce: tx.nonce(),
+                     is_discarded: false,
+                 });
++
+                 filtered_txs.push(tx);
+                 filtered_senders.push(sender);
+             }
+diff --git a/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/epoch.rs b/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/epoch.rs
+index f73d6eaf2..c0dbf0932 100644
+--- a/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/epoch.rs
++++ b/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/epoch.rs
+@@ -38,13 +38,13 @@ where
+     EthApi::NetworkTypes: RpcTypes<TransactionRequest = TransactionRequest>,
+ {
+     fn fetch(&self, block_number: u64) -> Bytes {
+-        #[cfg(feature = "pipe_test")]
++        #[cfg(not(feature = "pipe_test"))]
+         {
+             // For testing, return epoch 0
+-            Bytes::from(0u64.to_le_bytes().to_vec())
++            Bytes::from(1u64.to_le_bytes().to_vec())
+         }
+ 
+-        #[cfg(not(feature = "pipe_test"))]
++        #[cfg(feature = "pipe_test")]
+         {
+             let call = EpochManager::getCurrentEpochInfoCall {};
+             let input: Bytes = call.abi_encode().into();
+diff --git a/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/metadata_txn.rs b/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/metadata_txn.rs
+index a6ae59ba4..bd6c8dc0e 100644
+--- a/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/metadata_txn.rs
++++ b/crates/pipe-exec-layer-ext-v2/execute/src/onchain_config/metadata_txn.rs
+@@ -156,7 +156,7 @@ fn new_system_call_txn(
+             chain_id: None,
+             nonce,
+             gas_price,
+-            gas_limit: 30_000_000,
++            gas_limit: 15_000_000,
+             to: TxKind::Call(contract),
+             value: U256::ZERO,
+             input,
+@@ -166,10 +166,10 @@ fn new_system_call_txn(
+ }
+ 
+ /// Execute a metadata contract call (blockPrologue or blockPrologueExt)
+-/// 
++///
+ /// If `enable_randomness` is true, calls blockPrologueExt.
+ /// Otherwise, calls the legacy blockPrologue function.
+-/// 
++///
+ /// Note: blockPrologueExt retrieves randomness from block.difficulty (set before this call),
+ /// so it doesn't need to be passed as a parameter.
+ pub fn transact_metadata_contract_call(
+@@ -206,7 +206,7 @@ pub fn transact_metadata_contract_call(
+     );
+     let tx_env = Recovered::new_unchecked(txn.clone(), SYSTEM_CALLER).into_tx_env();
+     let result = evm.transact_raw(tx_env).unwrap();
+-    
++
+     let function_name = if enable_randomness { "blockPrologueExt" } else { "blockPrologue" };
+     assert!(
+         result.result.is_success(),
+@@ -214,6 +214,6 @@ pub fn transact_metadata_contract_call(
+         function_name,
+         result.result
+     );
+-    
++
+     (MetadataTxnResult { result: result.result, txn }, result.state)
+ }
+-- 
+2.50.1 (Apple Git-155)
+
