@@ -14,6 +14,10 @@ scripts/dev-utils/genesis/
 scripts/dev-utils/*.tar.gz
 scripts/dev-utils/*.genesis.json
 scripts/dev-utils/*.processing
+
+# Solidity compiler cache
+devnet/.svm-cache/
+
 # Ignore test files
 devnet/.env
 devnet/*/.env*
