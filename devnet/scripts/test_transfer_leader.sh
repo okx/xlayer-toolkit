@@ -98,7 +98,7 @@ while true; do
 
     # --- Wait before next iteration ---
     random_ms=$((RANDOM % 501))
-    sleep_time=$(printf '30.%03d' "$random_ms")
+    sleep_time=$(printf '120.%03d' "$random_ms")
     echo "  Waiting ${sleep_time}s before next iteration..."
     echo ""
     sleep "$sleep_time"
