@@ -625,22 +625,21 @@ class FlashblockReorgTester:
         print()
 
         # Create tasks - one subscriber per WebSocket URL
-        tasks = [
+        self._tasks = [
             asyncio.create_task(self.subscribe_flashblocks_single(url))
             for url in self.ws_urls
         ]
-        tasks.append(asyncio.create_task(self.poll_canonical_blocks()))
+        self._tasks.append(asyncio.create_task(self.poll_canonical_blocks()))
 
         # Add duration limit if specified
         if self.duration:
             async def duration_limit():
                 await asyncio.sleep(self.duration)
-                self.running = False
-                self.log_always(f"Duration limit ({self.duration}s) reached, stopping...")
-            tasks.append(asyncio.create_task(duration_limit()))
+                self.stop()
+            self._tasks.append(asyncio.create_task(duration_limit()))
 
         try:
-            await asyncio.gather(*tasks)
+            await asyncio.gather(*self._tasks)
         except ReorgDetectedException as e:
             self.log_always(f"\nStopping due to reorg detection: {e}")
         except asyncio.CancelledError:
@@ -648,6 +647,13 @@ class FlashblockReorgTester:
         finally:
             self.running = False
             self.print_summary()
+
+    def stop(self):
+        """Stop the test and cancel all tasks."""
+        self.running = False
+        for task in getattr(self, '_tasks', []):
+            if not task.done():
+                task.cancel()
 
 
 def main():
@@ -690,7 +696,7 @@ def main():
     # Handle graceful shutdown
     def signal_handler(sig, frame):
         print("\n\nReceived interrupt signal, shutting down...")
-        tester.running = False
+        tester.stop()
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)

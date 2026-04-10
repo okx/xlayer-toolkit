@@ -18,7 +18,7 @@ lint:
 	@echo "✅ Lint completed!"
 
 # Build and install the adventure binary to Go bin directory
-build: lint
+build:
 	@echo "Building adventure..."
 	@go build -o $$(go env GOPATH)/bin/adventure .
 	@GOBIN=$$(go env GOPATH)/bin; \

@@ -99,61 +99,47 @@ func Erc20Init(amountStr, configPath string) error {
 		os.Exit(1)
 	}
 
-	// 2. Transfer Native Token
-	if err := transfersNative(cli, privateKey, nonce+1, nativeAddr, amount, hexAddrs); err != nil {
+	// 2. Transfer Native Token (track nonce locally to avoid stale pending nonce queries)
+	nonce++
+	txCount, err := transfersNative(cli, privateKey, nonce, nativeAddr, amount, hexAddrs)
+	if err != nil {
 		log.Printf("Failed to transfer Native Token: %v\n", err)
 		os.Exit(1)
 	}
+	nonce += uint64(txCount)
+
+	// Wait for native transfers to be mined before deploying next contract
+	log.Println("Waiting for native transfers to be mined...")
+	time.Sleep(time.Second * 5)
 
 	// 3. Deploy BatchTransfer for ERC20
-	nonce, err = cli.QueryNonce(utils.GetEthAddressFromPK(privateKey).String())
-	if err != nil {
-		log.Printf("Failed to query nonce: %v\n", err)
-		os.Exit(1)
-	}
-
 	bterc20Addr, err := deployBTERC20(cli, privateKey, nonce)
 	if err != nil {
 		log.Printf("Failed to deploy BatchTransfer for ERC20: %v\n", err)
 		os.Exit(1)
 	}
+	nonce++
 	time.Sleep(time.Second * 5)
 
 	// 4. Deploy ERC20
-	nonce, err = cli.QueryNonce(utils.GetEthAddressFromPK(privateKey).String())
-	if err != nil {
-		log.Printf("Failed to query nonce: %v\n", err)
-		os.Exit(1)
-	}
-
 	erc20Addr, err := deployERC20(cli, privateKey, nonce)
 	if err != nil {
 		log.Printf("Failed to deploy ERC20: %v\n", err)
 		os.Exit(1)
 	}
+	nonce++
 	time.Sleep(time.Second * 5)
 
 	// 5. Approve ERC20
-	nonce, err = cli.QueryNonce(utils.GetEthAddressFromPK(privateKey).String())
-	if err != nil {
-		log.Printf("Failed to query nonce: %v\n", err)
-		os.Exit(1)
-	}
-
 	err = sendApprove(cli, privateKey, nonce, erc20Addr, TotalSupplyAmount, bterc20Addr)
 	if err != nil {
 		log.Printf("Failed to approve ERC20: %v\n", err)
 		os.Exit(1)
 	}
+	nonce++
 	time.Sleep(time.Second * 5)
 
 	// 6. Transfer ERC20
-	nonce, err = cli.QueryNonce(utils.GetEthAddressFromPK(privateKey).String())
-	if err != nil {
-		log.Printf("Failed to query nonce: %v\n", err)
-		os.Exit(1)
-	}
-
 	accBalance := TotalSupplyAmount.Int64() / int64(len(hexAddrs))
 	if err := transferERC20(cli, privateKey, nonce, bterc20Addr, erc20Addr, big.NewInt(accBalance), hexAddrs); err != nil {
 		log.Printf("Failed to transfer ERC20: %v\n", err)
@@ -325,16 +311,17 @@ func sendApprove(cli utils.Client, privateKey *ecdsa.PrivateKey, nonce uint64, t
 	return nil
 }
 
-func transfersNative(cli utils.Client, privateKey *ecdsa.PrivateKey, nonce uint64, to ethcmn.Address, amount *big.Int, addrs []ethcmn.Address) error {
+func transfersNative(cli utils.Client, privateKey *ecdsa.PrivateKey, nonce uint64, to ethcmn.Address, amount *big.Int, addrs []ethcmn.Address) (int, error) {
 	tABI, err := abi.JSON(strings.NewReader(BatchTransferNativeABI))
 	if err != nil {
-		return fmt.Errorf("failed to initialize BatchTransfer ABI: %s", err)
+		return 0, fmt.Errorf("failed to initialize BatchTransfer ABI: %s", err)
 	}
 
 	totalAmount := big.NewInt(1).Mul(amount, big.NewInt(int64(BatchSize)))
 
 	gasPrice := utils.ParseGasPriceToBigInt(utils.TransferCfg.GasPriceGwei, 9)
 
+	txCount := 0
 	for i := 0; i <= len(addrs)/BatchSize && i*BatchSize < len(addrs); i++ {
 		start, end := i*BatchSize, (i+1)*BatchSize
 		if end > len(addrs) {
@@ -342,22 +329,23 @@ func transfersNative(cli utils.Client, privateKey *ecdsa.PrivateKey, nonce uint6
 		}
 		txdata, err := tABI.Pack("transfers", addrs[start:end], amount)
 		if err != nil {
-			return fmt.Errorf("failed to pack BatchTransfer parameters: %s", err)
+			return txCount, fmt.Errorf("failed to pack BatchTransfer parameters: %s", err)
 		}
 		if end-start < BatchSize {
 			totalAmount = big.NewInt(1).Mul(amount, big.NewInt(int64(end-start)))
 		}
 		txhash, err := cli.SendEthereumTx(privateKey, nonce, to, totalAmount, uint64(41000*BatchSize), gasPrice, txdata)
 		if err != nil {
-			return err
+			return txCount, err
 		}
 		log.Printf("[BatchTransfer Native] caller=%s, nonce=%d, to[%d:%d], txhash=%s\n",
 			utils.GetEthAddressFromPK(privateKey), nonce, start, end-1, txhash)
 
 		nonce++
+		txCount++
 	}
 
-	return nil
+	return txCount, nil
 }
 
 func transferERC20(cli utils.Client, privateKey *ecdsa.PrivateKey, nonce uint64, bterc20Addr, tokenAddr ethcmn.Address, amount *big.Int, addrs []ethcmn.Address) error {
