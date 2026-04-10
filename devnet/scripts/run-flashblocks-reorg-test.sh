@@ -189,7 +189,20 @@ if [ -z "$PYTHON_BIN" ]; then
 fi
 
 VENV_DIR="$SCRIPT_DIR/.venv"
+# Recreate venv if it doesn't exist or was built with a different Python version
+NEED_VENV=false
 if [ ! -d "$VENV_DIR" ]; then
+    NEED_VENV=true
+elif [ -f "$VENV_DIR/bin/python" ]; then
+    VENV_PY_VERSION=$("$VENV_DIR/bin/python" --version 2>&1 || echo "unknown")
+    EXPECTED_PY_VERSION=$("$PYTHON_BIN" --version 2>&1)
+    if [ "$VENV_PY_VERSION" != "$EXPECTED_PY_VERSION" ]; then
+        echo "  Venv Python ($VENV_PY_VERSION) differs from system ($EXPECTED_PY_VERSION), recreating..."
+        rm -rf "$VENV_DIR"
+        NEED_VENV=true
+    fi
+fi
+if [ "$NEED_VENV" = true ]; then
     "$PYTHON_BIN" -m venv "$VENV_DIR"
     echo "  Created venv at $VENV_DIR"
 fi
