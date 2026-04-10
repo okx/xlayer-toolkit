@@ -47,11 +47,23 @@ cleanup() {
         wait "$TRANSFER_LEADER_PID" 2>/dev/null
     fi
 
-    # Stop flashblock reorg test (SIGINT for graceful shutdown / summary)
+    # Stop flashblock reorg test
     if [ -n "$REORG_TEST_PID" ] && kill -0 "$REORG_TEST_PID" 2>/dev/null; then
         echo "  Stopping test_flashblock_reorg.py (PID $REORG_TEST_PID)..."
         kill -SIGINT "$REORG_TEST_PID" 2>/dev/null
-        wait "$REORG_TEST_PID" 2>/dev/null
+        # Wait up to 5 seconds for graceful shutdown
+        for i in $(seq 1 10); do
+            if ! kill -0 "$REORG_TEST_PID" 2>/dev/null; then
+                break
+            fi
+            sleep 0.5
+        done
+        # Force kill if still running
+        if kill -0 "$REORG_TEST_PID" 2>/dev/null; then
+            echo "  Force killing test_flashblock_reorg.py..."
+            kill -9 "$REORG_TEST_PID" 2>/dev/null
+            wait "$REORG_TEST_PID" 2>/dev/null
+        fi
     fi
 
     echo "  All background processes stopped."
@@ -209,7 +221,7 @@ fi
 "$VENV_DIR/bin/pip" install --quiet websockets pycryptodome
 echo "  Python dependencies installed."
 
-"$VENV_DIR/bin/python" "$SCRIPT_DIR/test_flashblock_reorg.py" --ws-url ws://localhost:11113 --rpc-url http://localhost:8124 --verbose &
+"$VENV_DIR/bin/python" "$SCRIPT_DIR/test_flashblock_reorg.py" --verbose &
 REORG_TEST_PID=$!
 launch_and_verify "test_flashblock_reorg.py" "$REORG_TEST_PID" 5
 echo ""
@@ -217,9 +229,9 @@ echo ""
 # --- Step 5: Run transfer leader test (background) ---
 echo ">>> Step 5: Starting transfer leader test (background)..."
 cd "$DEVNET_DIR"
-bash "$SCRIPT_DIR/test_transfer_leader.sh" 3 &
+bash "$SCRIPT_DIR/test_transfer_leader.sh" &
 TRANSFER_LEADER_PID=$!
-launch_and_verify "test_transfer_leader.sh" "$TRANSFER_LEADER_PID" 3
+launch_and_verify "test_transfer_leader.sh" "$TRANSFER_LEADER_PID"
 echo ""
 
 # --- Wait for all background processes ---
