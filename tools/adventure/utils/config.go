@@ -6,7 +6,7 @@ var (
 
 type TransferConfig struct {
 	Rpc                   []string `json:"rpc"`
-	AccountsFilePath      string   `json:"accountsFilePath"`
+	Accounts              int      `json:"accounts"`
 	SenderPrivateKey      string   `json:"senderPrivateKey"`
 	Concurrency           int      `json:"concurrency"`
 	MempoolPauseThreshold int      `json:"mempoolPauseThreshold"`
