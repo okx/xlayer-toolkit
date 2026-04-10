@@ -225,6 +225,7 @@ echo "  Python dependencies installed."
 REORG_TEST_PID=$!
 launch_and_verify "test_flashblock_reorg.py" "$REORG_TEST_PID" 5
 echo ""
+sleep 5
 
 # --- Step 5: Run transfer leader test (background) ---
 echo ">>> Step 5: Starting transfer leader test (background)..."
