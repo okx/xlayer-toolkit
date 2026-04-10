@@ -132,32 +132,60 @@ echo ""
 # --- Step 4: Run flashblock reorg test in the background ---
 echo ">>> Step 4: Setting up Python venv and starting flashblock reorg monitoring test..."
 
-# Find a suitable Python (>= 3.8). Prefer pyenv, then python3, then python.
+# Find Python >= 3.12, or install it via pyenv if not available.
 PYTHON_BIN=""
-MIN_PYTHON_VERSION=8  # 3.8+
+MIN_PYTHON_MINOR=12  # 3.12+
 
-for candidate in \
-    "$HOME/.pyenv/versions"/3.*/bin/python3 \
-    "$HOME/.pyenv/shims/python3" \
-    python3 \
-    python; do
-    if command -v "$candidate" &>/dev/null || [ -x "$candidate" ]; then
-        py_minor=$("$candidate" -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo "0")
-        py_major=$("$candidate" -c "import sys; print(sys.version_info.major)" 2>/dev/null || echo "0")
-        if [ "$py_major" = "3" ] && [ "$py_minor" -ge "$MIN_PYTHON_VERSION" ]; then
-            PYTHON_BIN="$candidate"
-            echo "  Using Python: $("$PYTHON_BIN" --version 2>&1)"
-            break
-        fi
+# Check system python3 first
+if command -v python3 &>/dev/null; then
+    py_major=$(python3 -c "import sys; print(sys.version_info.major)" 2>/dev/null || echo "0")
+    py_minor=$(python3 -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo "0")
+    if [ "$py_major" = "3" ] && [ "$py_minor" -ge "$MIN_PYTHON_MINOR" ]; then
+        PYTHON_BIN="python3"
+        echo "  Using system Python: $(python3 --version 2>&1)"
     fi
-done
+fi
 
+# If system python is not sufficient, use or install pyenv
 if [ -z "$PYTHON_BIN" ]; then
-    echo "  ERROR: Python >= 3.8 not found."
-    echo "  Install via pyenv:"
-    echo "    curl https://pyenv.run | bash"
-    echo "    pyenv install 3.12.0 && pyenv global 3.12.0"
-    exit 1
+    echo "  System Python is too old (need >= 3.12). Setting up via pyenv..."
+
+    # Initialize pyenv if already installed
+    export PYENV_ROOT="$HOME/.pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    if command -v pyenv &>/dev/null; then
+        eval "$(pyenv init -)"
+    fi
+
+    # Install pyenv if not present
+    if ! command -v pyenv &>/dev/null; then
+        echo "  Installing pyenv dependencies..."
+        if command -v yum &>/dev/null; then
+            sudo yum install -y gcc zlib-devel bzip2 bzip2-devel readline-devel \
+                sqlite sqlite-devel openssl-devel xz xz-devel libffi-devel
+        elif command -v apt-get &>/dev/null; then
+            sudo apt-get update && sudo apt-get install -y build-essential libssl-dev \
+                zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev libffi-dev \
+                liblzma-dev
+        fi
+
+        echo "  Installing pyenv..."
+        curl -s https://pyenv.run | bash
+
+        export PYENV_ROOT="$HOME/.pyenv"
+        export PATH="$PYENV_ROOT/bin:$PATH"
+        eval "$(pyenv init -)"
+    fi
+
+    # Install Python 3.12.0 if not already installed
+    if ! pyenv versions --bare 2>/dev/null | grep -q "^3\.12\.0$"; then
+        echo "  Installing Python 3.12.0 via pyenv (this may take a few minutes)..."
+        pyenv install 3.12.0
+    fi
+
+    pyenv global 3.12.0
+    PYTHON_BIN="$(pyenv which python3 2>/dev/null || pyenv which python)"
+    echo "  Using pyenv Python: $("$PYTHON_BIN" --version 2>&1)"
 fi
 
 VENV_DIR="$SCRIPT_DIR/.venv"
