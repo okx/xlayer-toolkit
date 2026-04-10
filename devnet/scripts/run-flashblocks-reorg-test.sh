@@ -131,9 +131,38 @@ echo ""
 
 # --- Step 4: Run flashblock reorg test in the background ---
 echo ">>> Step 4: Setting up Python venv and starting flashblock reorg monitoring test..."
+
+# Find a suitable Python (>= 3.8). Prefer pyenv, then python3, then python.
+PYTHON_BIN=""
+MIN_PYTHON_VERSION=8  # 3.8+
+
+for candidate in \
+    "$HOME/.pyenv/versions"/3.*/bin/python3 \
+    "$HOME/.pyenv/shims/python3" \
+    python3 \
+    python; do
+    if command -v "$candidate" &>/dev/null || [ -x "$candidate" ]; then
+        py_minor=$("$candidate" -c "import sys; print(sys.version_info.minor)" 2>/dev/null || echo "0")
+        py_major=$("$candidate" -c "import sys; print(sys.version_info.major)" 2>/dev/null || echo "0")
+        if [ "$py_major" = "3" ] && [ "$py_minor" -ge "$MIN_PYTHON_VERSION" ]; then
+            PYTHON_BIN="$candidate"
+            echo "  Using Python: $("$PYTHON_BIN" --version 2>&1)"
+            break
+        fi
+    fi
+done
+
+if [ -z "$PYTHON_BIN" ]; then
+    echo "  ERROR: Python >= 3.8 not found."
+    echo "  Install via pyenv:"
+    echo "    curl https://pyenv.run | bash"
+    echo "    pyenv install 3.12.0 && pyenv global 3.12.0"
+    exit 1
+fi
+
 VENV_DIR="$SCRIPT_DIR/.venv"
 if [ ! -d "$VENV_DIR" ]; then
-    python3 -m venv "$VENV_DIR"
+    "$PYTHON_BIN" -m venv "$VENV_DIR"
     echo "  Created venv at $VENV_DIR"
 fi
 "$VENV_DIR/bin/pip" install --quiet websockets pycryptodome
