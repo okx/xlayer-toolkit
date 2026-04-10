@@ -61,8 +61,8 @@ CMD="op-reth node \
       --engine.persistence-threshold=${ENGINE_PERSISTENCE_THRESHOLD:-2} \
       --log.file.directory=/logs/reth \
       --log.file.filter=info \
-      --metrics=0.0.0.0:9001"
-
+      --metrics=0.0.0.0:9001 \
+      --xlayer.sequencer-mode"
 
 # For flashblocks architecture
 if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
