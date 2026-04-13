@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -93,7 +94,7 @@ func (t *TPSTracker) RecordFCU(txCount int) {
 		}
 	}
 	if validIdx > 0 {
-		t.window = t.window[validIdx:]
+		t.window = slices.Clone(t.window[validIdx:])
 	}
 
 	// Calculate current TPS and BPS

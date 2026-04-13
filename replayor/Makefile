@@ -17,6 +17,10 @@ build:
 	go build ./cmd/replayor/main.go
 .PHONY: build
 
+build-multi-replayor:
+	go build -o multi-replayor ./cmd/multi-replayor/main.go
+.PHONY: build-multi-replayor
+
 test:
 	go test ./...
 .PHONY: test

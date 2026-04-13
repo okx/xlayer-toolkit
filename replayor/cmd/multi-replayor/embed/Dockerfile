@@ -1,18 +1,16 @@
 FROM okexchain/go-builder:v1  AS builder
 
-#RUN apt-get install -y wget \
-#    && wget -qO- https://get.docker.com | sh \
-#    && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN apt-get install -y wget \
+    && wget -qO- https://get.docker.com | sh \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY go.mod go.sum ./
-#RUN go mod download
+RUN go mod download
 
-COPY ./cmd  ./cmd
-COPY ./packages  ./packages
-COPY ./vendor  ./vendor
-RUN go build -mod=vendor -o bin/replayor ./cmd/replayor/main.go
+COPY . .
+RUN go build -o bin/replayor ./cmd/replayor/main.go
 
 WORKDIR /app
 
