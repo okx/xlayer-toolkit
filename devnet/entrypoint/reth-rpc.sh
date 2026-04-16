@@ -29,7 +29,11 @@ if [ "${RETH_STORAGE_V2:-false}" = "true" ]; then
     fi
 fi
 
-# Build the command with common arguments
+# Build the command with common arguments.
+# Note that we mock enable legacy RPC by pointing to the sequencer RPC endpoint.
+# Since gnesis block is 8593921, we set the override cutoff block height to height
+# 8593925, which is aligned on our e2e test coverage constants for forwarding
+# RPC calls to the legacy RPC endpoint.
 CMD="op-reth node \
       --datadir=/datadir \
       --chain=$CHAIN \
@@ -59,17 +63,9 @@ CMD="op-reth node \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
-      --rpc.eth-proof-window=10000"
-
-# If conductor enabled, enable legacy RPC.
-# Note that gnesis block is 8593921, we set the override cutoff block height
-# to 8593925, which will be used on e2e test constants for testing forwarding
-# RPC calls to the legacy RPC endpoint.
-if [ "$CONDUCTOR_ENABLED" = "true" ]; then
-    CMD="$CMD \
-    --rpc.legacy-url=http://op-reth-seq2:8545 \
-    --rpc.legacy-cutoff-override=8593925"
-fi
+      --rpc.eth-proof-window=10000 \
+      --rpc.legacy-url=http://op-reth-seq:8545 \
+      --rpc.legacy-cutoff-override=8593925"
 
 # For flashblocks architecture. Enable flashblocks RPC
 if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
