@@ -1,0 +1,40 @@
+{
+  "chainId": 1337,
+  "homesteadBlock": 0,
+  "daoForkSupport": true,
+  "eip150Block": 0,
+  "eip155Block": 0,
+  "eip158Block": 0,
+  "byzantiumBlock": 0,
+  "constantinopleBlock": 0,
+  "petersburgBlock": 0,
+  "istanbulBlock": 0,
+  "muirGlacierBlock": 0,
+  "berlinBlock": 0,
+  "londonBlock": 0,
+  "arrowGlacierBlock": 0,
+  "grayGlacierBlock": 0,
+  "shanghaiTime": 0,
+  "cancunTime": 0,
+  "pragueTime": 0,
+  "osakaTime": 0,
+  "terminalTotalDifficulty": 0,
+  "depositContractAddress": "0x0000000000000000000000000000000000000000",
+  "blobSchedule": {
+    "cancun": {
+      "target": 3,
+      "max": 6,
+      "baseFeeUpdateFraction": 3338477
+    },
+    "prague": {
+      "target": 6,
+      "max": 9,
+      "baseFeeUpdateFraction": 5007716
+    },
+    "osaka": {
+      "target": 6,
+      "max": 9,
+      "baseFeeUpdateFraction": 5007716
+    }
+  }
+}

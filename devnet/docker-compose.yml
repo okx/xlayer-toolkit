@@ -18,7 +18,7 @@ services:
       - ./l1-geth/consensus:/consensus
 
   l1-create-beacon-chain-genesis:
-    image: "gcr.io/prysmaticlabs/prysm/cmd/prysmctl:v7.1.2" # upgrade to v7.1.2 to support osakaTime
+    image: "gcr.io/prysmaticlabs/prysm/cmd/prysmctl:v7.0.0"
     container_name: l1-create-beacon-chain-genesis
     command:
       - testnet
@@ -37,16 +37,27 @@ services:
       l1-beacon-remove-db:
         condition: service_completed_successfully
 
-  l1-add-bpo-config:
-    image: "alpine-jq:local"
-    container_name: l1-add-bpo-config
+  l1-fix-genesis-fork-times:
+    image: "alpine:3.19.0"
+    container_name: l1-fix-genesis-fork-times
     command:
       - /bin/sh
       - -c
-      - /scripts/add-bpo-config.sh
+      - |
+        apk add --no-cache jq
+        echo "Fixing genesis.json fork times..."
+        sed -i 's/"shanghaiTime": [0-9]*/"shanghaiTime": 0/g' /execution/genesis.json
+        sed -i 's/"cancunTime": [0-9]*/"cancunTime": 0/g' /execution/genesis.json
+        echo "Adding pragueTime for Pectra support..."
+        jq '.config.pragueTime = 0' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
+        echo "Adding osakaTime for Fusaka support..."
+        jq '.config.osakaTime = 0' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
+        echo "Removing terminalTotalDifficultyPassed for op-node compatibility..."
+        jq 'del(.config.terminalTotalDifficultyPassed)' /execution/genesis.json > /tmp/genesis.json && mv /tmp/genesis.json /execution/genesis.json
+        echo "Genesis.json: shanghai=0, cancun=0, osaka=0 (Fusaka enabled), blobSchedule added, terminalTotalDifficultyPassed removed"
+        cat /execution/genesis.json | jq '.config | {shanghaiTime, cancunTime, osakaTime, terminalTotalDifficulty, blobSchedule}'
     volumes:
       - ./l1-geth/execution:/execution
-      - ./scripts:/scripts
     depends_on:
       l1-create-beacon-chain-genesis:
         condition: service_completed_successfully
@@ -59,7 +70,7 @@ services:
       - ./l1-geth/execution:/execution
       - ./l1-geth/execution/genesis.json:/execution/genesis.json
     depends_on:
-      l1-add-bpo-config:
+      l1-fix-genesis-fork-times:
         condition: service_completed_successfully
       l1-geth-remove-db:
         condition: service_completed_successfully
@@ -112,7 +123,7 @@ services:
       retries: 5
 
   l1-beacon-chain:
-    image: "gcr.io/prysmaticlabs/prysm/beacon-chain:v7.0.0" # seems not work with v7.1.2, so keeps v7.0.0
+    image: "gcr.io/prysmaticlabs/prysm/beacon-chain:v7.0.0"
     container_name: l1-beacon-chain
     command:
       - --datadir=/consensus/beacondata
@@ -122,7 +133,7 @@ services:
       - --interop-eth1data-votes
       - --chain-config-file=/consensus/config.yml
       - --contract-deployment-block=0
-      - --chain-id=1337
+      - --chain-id=${CHAIN_ID:-1337}
       - --rpc-host=0.0.0.0
       - --grpc-gateway-host=0.0.0.0
       - --execution-endpoint=http://l1-geth:8551
@@ -179,7 +190,7 @@ services:
       - "8552:8552"
       - "30303:30303"
       - "30303:30303/udp"
-      - "9092:9092"  # pprof port
+      - "9090:9090"  # pprof port
     command:
       - --networkid=${CHAIN_ID}
       - --verbosity=3
@@ -189,9 +200,6 @@ services:
       - --gcmode=archive
       - --rollup.disabletxpoolgossip=false
       - --nodekeyhex=1aba031aeb5aa8aedadaf04159d20e7d58eeefb3280176c7d59040476c2ab21b
-      - --pprof=true
-      - --pprof.addr=0.0.0.0
-      - --pprof.port=9092
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8545"]
       interval: 3s
@@ -222,7 +230,6 @@ services:
       - ./config-op/genesis-reth.json:/genesis.json
       - ./entrypoint:/entrypoint
       - ./.env:/.env
-      - ./config-op/test.reth.seq.config.toml:/config.toml
       - ./logs/op-reth-seq:/logs/reth
       # Profiling data directory
       - ./profiling/op-reth-seq:/profiling
@@ -333,7 +340,7 @@ services:
       - --l1.rpckind=standard
       - --rollup.l1-chain-config=/l1-genesis.json
       - --safedb.path=/data/safedb
-      - --conductor.enabled=${CONDUCTOR_ENABLED:-false}
+      - --conductor.enabled=${CONDUCTOR_ENABLED:-false}    # 默认关闭
       - --conductor.rpc=http://op-conductor:8547
       - --pprof.enabled
       - --pprof.addr=0.0.0.0
@@ -347,6 +354,84 @@ services:
       timeout: 3s
       retries: 10
       start_period: 3s
+
+  # ── kona-node as CL sequencer (hypothesis test: kona CL vs op-geth CL) ────────
+  # Uses OKX op-reth-seq as EL via HTTP Engine API on port 8552.
+  # Start with: docker compose up -d op-reth-seq op-kona op-batcher
+  # Bench with: bash bench.sh kona-okx-optimised
+  op-kona:
+    image: "${KONA_IMAGE:-kona-node:okx-optimised}"
+    container_name: op-kona
+    entrypoint: kona-node
+    command:
+      - node
+      - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
+      - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
+      - --l2-engine-rpc=http://op-reth-seq:8552
+      - --l2.jwt-secret=/jwt.txt
+      - --rollup-cfg=/rollup.json
+      - --l1-config-file=/l1-chain-config.json
+      - --mode=Sequencer
+      - --sequencer.l1-confs=0
+      - --p2p.no-discovery
+      - --rpc.addr=0.0.0.0
+    volumes:
+      - ./config-op/rollup.json:/rollup.json
+      - ./config-op/l1-chain-config.json:/l1-chain-config.json
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./data/op-kona:/data
+    ports:
+      - "9545:9545"
+    depends_on:
+      op-reth-seq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json",
+             "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"optimism_syncStatus\",\"params\":[],\"id\":1}",
+             "http://localhost:9545"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # ── base-consensus as CL sequencer (hypothesis test: base CL vs op-geth CL) ───
+  # Uses OKX op-reth-seq as EL via HTTP Engine API on port 8552.
+  # Start with: docker compose up -d op-reth-seq op-base-cl op-batcher
+  # Bench with: bash bench.sh base-cl
+  op-base-cl:
+    image: "base-consensus:dev"
+    container_name: op-base-cl
+    command:
+      - --chain=195
+      - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
+      - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
+      - --l2-engine-rpc=http://op-reth-seq:8552
+      - --l2-engine-jwt-secret=/jwt.txt
+      - --l2-config-file=/rollup.json
+      - --l1-config-file=/l1-chain-config.json
+      - --mode=Sequencer
+      - --sequencer.l1-confs=0
+      - --p2p.no-discovery
+      - --rpc.addr=0.0.0.0
+      - -vvv
+    volumes:
+      - ./config-op/rollup.json:/rollup.json
+      - ./config-op/l1-chain-config.json:/l1-chain-config.json
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./data/op-base-cl:/data
+    ports:
+      - "9545:9545"
+    depends_on:
+      op-reth-seq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json",
+             "-d", "{\"jsonrpc\":\"2.0\",\"method\":\"optimism_syncStatus\",\"params\":[],\"id\":1}",
+             "http://localhost:9545"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   op-rpc:
     image: "${OP_STACK_IMAGE_TAG}"
@@ -418,9 +503,8 @@ services:
       - --p2p.static=/dns4/op-seq/tcp/9223/p2p/16Uiu2HAkzHdkbmS2VrCsccLibsu7MvGHpmFUMJnMTkKifrtS5m65
       - --p2p.no-discovery
       - --rpc.enable-admin=true
-      - --l1.beacon.ignore
-      - --l2.follow.source=http://op-rpc:9545
-      - --l2.follow.source.skip-l1-check
+      - --l1=${L1_RPC_URL_IN_DOCKER}
+      - --l1.beacon=${L1_BEACON_URL_IN_DOCKER}
       - --l1.rpckind=standard
       - --rollup.l1-chain-config=/l1-genesis.json
       - --safedb.path=/data/safedb
@@ -434,7 +518,7 @@ services:
     container_name: op-geth-rpc2-init
     entrypoint: >
       sh -c "
-      rm -rf /datadir/* &&
+      rm -rf /datadir/* && 
       geth init --datadir=/datadir /genesis.json
       "
     volumes:
@@ -496,7 +580,6 @@ services:
       - --raft.server.id=conductor-1
       - --raft.storage.dir=/data/raft
       - --raft.bootstrap=true
-      - --raft.snapshot-threshold=2048
       - --consensus.addr=0.0.0.0
       - --consensus.port=50050
       - --consensus.advertised=op-conductor:50050
@@ -523,10 +606,10 @@ services:
       - --l2-eth-rpc=${OP_BATCHER_L2_ETH_RPC:-http://op-${SEQ_TYPE}-seq:8545}
       - --rollup-rpc=${OP_BATCHER_ROLLUP_RPC:-http://op-seq:9545}
       - --private-key=${OP_BATCHER_PRIVATE_KEY}
-      - --poll-interval=1s
+      - --poll-interval=5s
       - --batch-type=1
       - --compression-algo=brotli-10
-      - --data-availability-type=blobs
+      - --data-availability-type=auto
       - --sub-safety-margin=6
       - --num-confirmations=4
       - --safe-abort-nonce-too-low-count=3
@@ -536,7 +619,7 @@ services:
       - --rpc.enable-admin
       - --max-channel-duration=150
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
-      - --max-pending-tx=20
+      - --max-pending-tx=10
       - --target-num-frames=6
       - --throttle.block-size-upper-limit=0
       - --throttle.block-size-lower-limit=0
@@ -744,7 +827,6 @@ services:
       - --raft.server.id=conductor-2
       - --raft.storage.dir=/data/raft
       - --raft.bootstrap=false
-      - --raft.snapshot-threshold=2048
       - --consensus.addr=0.0.0.0
       - --consensus.port=50050
       - --consensus.advertised=op-conductor2:50050
@@ -866,7 +948,6 @@ services:
       - --raft.server.id=conductor-3
       - --raft.storage.dir=/data/raft
       - --raft.bootstrap=false
-      - --raft.snapshot-threshold=2048
       - --consensus.addr=0.0.0.0
       - --consensus.port=50050
       - --consensus.advertised=op-conductor3:50050
@@ -938,7 +1019,7 @@ services:
     ports:
       - "9001:9001"
     command:
-      - challenger
+      - challenger 
       - --env-file=/app/.env
 
   kailua-contracts:
@@ -949,7 +1030,7 @@ services:
     env_file:
       - ./kailua/.env.deploy
     command:
-      - kailua-cli
+      - kailua-cli 
       - fast-track
 
   kailua-proposer:
@@ -962,7 +1043,7 @@ services:
     volumes:
       - ./data/kailua-proposer:/data
     command:
-      - kailua-cli
+      - kailua-cli 
       - propose
       - --data-dir=/data
 
