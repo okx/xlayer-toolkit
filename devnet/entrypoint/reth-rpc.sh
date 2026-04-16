@@ -61,6 +61,16 @@ CMD="op-reth node \
       --txpool.max-new-txns=100000 \
       --rpc.eth-proof-window=10000"
 
+# If conductor enabled, enable legacy RPC.
+# Note that gnesis block is 8593921, we set the override cutoff block height
+# to 8593925, which will be used on e2e test constants for testing forwarding
+# RPC calls to the legacy RPC endpoint.
+if [ "$CONDUCTOR_ENABLED" = "true" ]; then
+    CMD="$CMD \
+    --rpc.legacy-url=http://op-reth-seq2:8545 \
+    --rpc.legacy-cutoff-override=8593925"
+fi
+
 # For flashblocks architecture. Enable flashblocks RPC
 if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
     CMD="$CMD \
