@@ -29,7 +29,11 @@ if [ "${RETH_STORAGE_V2:-false}" = "true" ]; then
     fi
 fi
 
-# Build the command with common arguments
+# Build the command with common arguments.
+# Note that we enable the mock legacy RPC forwarding by pointing it to the L1
+# node. Since genesis block is 8593921, any height below this will be forwarded
+# to the L1 node using the legacy RPC layer. This is purely for testing purposes
+# for our e2e test coverage.
 CMD="op-reth node \
       --datadir=/datadir \
       --chain=$CHAIN \
@@ -59,7 +63,8 @@ CMD="op-reth node \
       --txpool.basefee-max-count=100000 \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
-      --rpc.eth-proof-window=10000"
+      --rpc.eth-proof-window=10000 \
+      --rpc.legacy-url=http://l1-geth:8545"
 
 # For flashblocks architecture. Enable flashblocks RPC
 if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
