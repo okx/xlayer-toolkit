@@ -332,8 +332,8 @@ func transfersNative(cli utils.Client, privateKey *ecdsa.PrivateKey, nonce uint6
 	}
 
 	totalAmount := big.NewInt(1).Mul(amount, big.NewInt(int64(BatchSize)))
-
 	gasPrice := utils.ParseGasPriceToBigInt(utils.TransferCfg.GasPriceGwei, 9)
+	deployerAddr := utils.GetEthAddressFromPK(privateKey).String()
 
 	for i := 0; i <= len(addrs)/BatchSize && i*BatchSize < len(addrs); i++ {
 		start, end := i*BatchSize, (i+1)*BatchSize
@@ -354,6 +354,19 @@ func transfersNative(cli utils.Client, privateKey *ecdsa.PrivateKey, nonce uint6
 		log.Printf("[BatchTransfer Native] caller=%s, nonce=%d, to[%d:%d], txhash=%s\n",
 			utils.GetEthAddressFromPK(privateKey), nonce, start, end-1, txhash)
 
+		// Wait for this tx to be mined before submitting the next one.
+		// reth places txs in its "queued" sub-pool when nonce N+1 arrives before N is
+		// committed, and the queued-promotion logic is broken — promoted txs never move
+		// to "pending". Waiting for confirmation guarantees the committed nonce advances
+		// before the next nonce is used, preventing any nonce gap.
+		for j := 0; j < 30; j++ {
+			time.Sleep(time.Second)
+			committed, err := cli.QueryCommittedNonce(deployerAddr)
+			if err == nil && committed > nonce {
+				break
+			}
+		}
+
 		nonce++
 	}
 
@@ -367,6 +380,7 @@ func transferERC20(cli utils.Client, privateKey *ecdsa.PrivateKey, nonce uint64,
 	}
 
 	gasPrice := utils.ParseGasPriceToBigInt(utils.TransferCfg.GasPriceGwei, 9)
+	deployerAddr := utils.GetEthAddressFromPK(privateKey).String()
 
 	for i := 0; i <= len(addrs)/BatchSize && i*BatchSize < len(addrs); i++ {
 		start, end := i*BatchSize, (i+1)*BatchSize
@@ -383,6 +397,15 @@ func transferERC20(cli utils.Client, privateKey *ecdsa.PrivateKey, nonce uint64,
 		}
 		log.Printf("[BatchTransfer ERC20] caller=%s, nonce=%d, to[%d:%d], txhash=%s\n",
 			utils.GetEthAddressFromPK(privateKey), nonce, start, end-1, txhash)
+
+		// Wait for confirmation before next nonce — same reth queued-promotion fix as transfersNative.
+		for j := 0; j < 30; j++ {
+			time.Sleep(time.Second)
+			committed, err := cli.QueryCommittedNonce(deployerAddr)
+			if err == nil && committed > nonce {
+				break
+			}
+		}
 
 		nonce++
 	}

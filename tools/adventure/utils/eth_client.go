@@ -25,6 +25,11 @@ type Client interface {
 	CreateContract(privatekey *ecdsa.PrivateKey, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) (ethcmn.Hash, error)
 	SendMultipleEthereumTx(signedTxs []*types.Transaction) ([]ethcmn.Hash, error)
 	CodeAt(ctx context.Context, contract ethcmn.Address, blockNumber *big.Int) ([]byte, error)
+	// QueryCommittedNonce returns the confirmed (mined) nonce for the given address.
+	QueryCommittedNonce(hexAddr string) (uint64, error)
+	// SignTx signs an unsigned transaction with the client's signer and the given private key.
+	// Used to pre-sign transactions for batch submission via SendMultipleEthereumTx.
+	SignTx(privateKey *ecdsa.PrivateKey, tx *types.Transaction) (*types.Transaction, error)
 }
 
 // EthClient wraps the ethereum client with additional functionality
@@ -81,6 +86,21 @@ func (e EthClient) QueryNonce(hexAddr string) (uint64, error) {
 		return 0, err
 	}
 	return nonce, nil
+}
+
+// QueryCommittedNonce queries the confirmed (latest-block) nonce for the given address.
+// Unlike QueryNonce (pending), this only counts transactions that have been mined.
+func (e EthClient) QueryCommittedNonce(hexAddr string) (uint64, error) {
+	nonce, err := e.NonceAt(context.Background(), ethcmn.HexToAddress(hexAddr), nil)
+	if err != nil {
+		return 0, err
+	}
+	return nonce, nil
+}
+
+// SignTx signs an unsigned transaction with the client's chain signer and the given key.
+func (e EthClient) SignTx(privateKey *ecdsa.PrivateKey, tx *types.Transaction) (*types.Transaction, error) {
+	return types.SignTx(tx, e.signer, privateKey)
 }
 
 // SendEthereumTx signs and sends an Ethereum transaction
