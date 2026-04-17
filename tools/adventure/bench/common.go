@@ -26,14 +26,14 @@ func EnsureAccountsFile(path string, nums int) error {
 		return errors.New("nums must be greater than 0")
 	}
 
-	// 如果文件已存在，直接返回
+	// if file exists, do nothing
 	if _, err := os.Stat(path); err == nil {
 		return nil
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 
-	// 创建目录
+	// create dir
 	dir := filepath.Dir(path)
 	if dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -41,7 +41,7 @@ func EnsureAccountsFile(path string, nums int) error {
 		}
 	}
 
-	// 创建文件（此时保证不存在）
+	// create file and write private keys
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
