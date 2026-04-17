@@ -2,6 +2,26 @@
 
 Gas-optimized Poseidon2 hash function implementations in **Solidity** and **Circom**, targeting **BN254 scalar field** with **x^5 S-box**. Compatible with Noir/Barretenberg.
 
+## Quick Start
+
+On a fresh checkout, no manual dependency setup is required — every `make` target auto-populates `lib/` and downloads `pot12.ptau` on first use.
+
+```shell
+make test          # correctness suite (forge test)
+make bench         # Solidity gas benchmark
+make cross-check   # Solidity <-> Circom output equality
+make bench-circom  # Circom R1CS + Groth16 proving benchmark
+make help          # list all targets
+```
+
+To populate dependencies manually (e.g. before running `forge` directly):
+
+```shell
+make setup         # or: bash scripts/setup-libs.sh
+```
+
+This clones `forge-std`, `zemse/poseidon2-evm` and `V-k-h/poseidon2-solidity` into `lib/` at pinned refs, and downloads the Powers-of-Tau file into `bench/circom/`. Both `lib/` and `pot12.ptau` are **gitignored** — they live locally only.
+
 ## Implementations
 
 | Contract / Circuit | t | Interface | Key Optimization |
@@ -38,44 +58,33 @@ bench/                     # Benchmark suite (Poseidon1 vs Poseidon2 vs third-pa
 test/
 ├── Correctness.t.sol      # Output correctness verification (test vectors + cross-impl)
 └── cross_check.sh         # Solidity <-> Circom automated cross-check
+
+scripts/
+└── setup-libs.sh          # Idempotent bootstrap: clones lib/* at pinned refs + fetches pot12.ptau
+
+Makefile                   # Wraps forge/cross-check/bench workflows with auto-setup
 ```
 
 ## Usage
 
-### Build
+The recommended entry points are the Makefile targets in [Quick Start](#quick-start). Each auto-runs `setup-libs.sh`, so a fresh clone works out of the box.
 
-```shell
-forge build
-```
+Under the hood they map to:
 
-### Correctness Tests
+| Make target         | Underlying command                                    |
+| ------------------- | ----------------------------------------------------- |
+| `make build`        | `forge build`                                         |
+| `make test`         | `forge test` (correctness suite, `test/` profile)     |
+| `make bench`        | `FOUNDRY_PROFILE=bench forge test -vv`                |
+| `make cross-check`  | `bash test/cross_check.sh`                            |
+| `make bench-circom` | `bash bench/circom/scripts/bench_full.sh`             |
+| `make clean`        | `forge clean && rm -rf bench/circom/build_*`          |
 
-```shell
-forge test
-```
+External prerequisites (must be installed on the host):
 
-### Solidity-Circom Cross-Check
-
-```shell
-bash test/cross_check.sh
-```
-
-Verifies all t-values (T2, T2FF, T3, T4, T4S, T8) produce identical outputs between Solidity and Circom. Requires `circom` + `snarkjs`.
-
-### Gas Benchmark
-
-```shell
-FOUNDRY_PROFILE=bench forge test -vv
-```
-
-### Circom Constraint Benchmark
-
-```shell
-cd bench/circom
-bash scripts/bench_full.sh
-```
-
-Prerequisites: `circom` compiler, `snarkjs` (npm), `pot12.ptau` (Powers of Tau).
+- [Foundry](https://book.getfoundry.sh/) — `forge build` / `forge test`
+- [`circom`](https://docs.circom.io/) + [`snarkjs`](https://github.com/iden3/snarkjs) + `node` — only for `cross-check` and `bench-circom`
+- `curl` or `wget` — used once by `setup-libs.sh` to fetch `pot12.ptau`
 
 ## Key Results
 
@@ -104,6 +113,12 @@ Gas benchmarks measure external calls to wrapper contracts. For implementations 
 
 ## Dependencies
 
-- [Foundry](https://book.getfoundry.sh/) (Solc 0.8.30, Cancun EVM)
-- [poseidon2-evm](https://github.com/zemse/poseidon2-evm) (zemse, benchmarked)
-- [poseidon2-solidity](https://github.com/V-k-h/poseidon2-solidity) (V-k-h, benchmarked)
+Build / toolchain:
+
+- [Foundry](https://book.getfoundry.sh/) — Solc 0.8.30, Cancun EVM
+- [forge-std](https://github.com/foundry-rs/forge-std) — pinned `v1.15.0`
+
+Benchmarked (cloned into `lib/` by `setup-libs.sh`; **not tracked**):
+
+- [poseidon2-evm](https://github.com/zemse/poseidon2-evm) — pinned `v1.0.0` (zemse)
+- [poseidon2-solidity](https://github.com/V-k-h/poseidon2-solidity) — pinned `f48a837` (V-k-h)
