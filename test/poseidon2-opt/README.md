@@ -51,9 +51,7 @@ src/
 
 bench/                     # Benchmark suite (Poseidon1 vs Poseidon2 vs third-party)
 ├── solidity/              # Gas benchmarks (wrappers, vendored, FullBenchmark.t.sol)
-├── circom/                # Constraint benchmarks (circuits, vendored, scripts)
-├── BENCHMARK_PLAN.md      # Full benchmark matrix specification
-└── PLAN.md                # Initial benchmark results
+└── circom/                # Constraint benchmarks (circuits, vendored, scripts)
 
 test/
 ├── Correctness.t.sol      # Output correctness verification (test vectors + cross-impl)
@@ -85,6 +83,28 @@ External prerequisites (must be installed on the host):
 - [Foundry](https://book.getfoundry.sh/) — `forge build` / `forge test`
 - [`circom`](https://docs.circom.io/) + [`snarkjs`](https://github.com/iden3/snarkjs) + `node` — only for `cross-check` and `bench-circom`
 - `curl` or `wget` — used once by `setup-libs.sh` to fetch `pot12.ptau`
+
+## Adding a New Implementation for Comparison
+
+To add a new Poseidon-family implementation to the benchmark matrix:
+
+### Solidity (gas benchmark)
+
+1. **Import or vendor the source** into `bench/solidity/vendored/<impl>.sol`, or add it as a git dependency in `scripts/setup-libs.sh`.
+2. **Write a thin wrapper** at `bench/solidity/wrappers/<Impl>Wrapper.sol` with one `external view` method per arity the impl supports. For `internal pure` libraries the wrapper inlines them; for standalone contracts (non-standard ABI like zemse-yul) staticcall them directly from `FullBenchmark` helpers instead.
+3. **Wire into `bench/solidity/FullBenchmark.t.sol`**: add the wrapper instance in `setUp()` and a `g = gasleft(); <wrapper>.hash_N(...); console.log(...)` line in the matching `test_gas_N_inputs()` function.
+4. Run `make bench` to see the number next to the others.
+
+### Circom (constraint benchmark)
+
+1. **Vendor the `.circom` source(s)** under `bench/circom/vendored/` (re-namespaced if needed to avoid `include` collisions).
+2. **Add a per-arity wrapper circuit** at `bench/circom/circuits/bench_<label>_<hashN>.circom` whose `component main = …(N)` instantiates the benchmark target. Keep it under 3 lines per circuit.
+3. **Add one `bench` line per arity** in `bench/circom/scripts/bench_full.sh` pointing at the new circuit and an input file from `mk_input`.
+4. Run `make bench-circom` to see R1CS constraint count and Groth16 proving time.
+
+### Correctness
+
+If the new implementation shares RCs with any `lib/` dependency or `src/` variant, add an `assertEq` against it in `test/Correctness.t.sol`. If it uses different RCs, cross-checking is not meaningful and you can skip this step.
 
 ## Key Results
 
