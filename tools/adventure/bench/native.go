@@ -37,7 +37,10 @@ func NativeInit(amountStr, configPath string) error {
 	}
 
 	rpcURL := utils.TransferCfg.Rpc[0]
-	accountsFile := utils.TransferCfg.AccountsFilePath
+	accountsFile, err := GetConfigFilePath(utils.TransferCfg.Accounts)
+	if err != nil {
+		return fmt.Errorf("failed to get accounts file path: %v", err)
+	}
 
 	if utils.TransferCfg.SenderPrivateKey == "" {
 		return errors.New("senderPrivateKey must be set in config file")
@@ -179,7 +182,12 @@ func loadNativeConfig(configPath string) error {
 		return err
 	}
 
-	privateKeys := utils.ReadDataFromFile(utils.TransferCfg.AccountsFilePath)
+	accountsFile, err := GetConfigFilePath(utils.TransferCfg.Accounts)
+	if err != nil {
+		return fmt.Errorf("failed to get accounts file path: %v", err)
+	}
+
+	privateKeys := utils.ReadDataFromFile(accountsFile)
 	utils.TransferCfg.BenchmarkAccounts = privateKeys
 
 	return nil
