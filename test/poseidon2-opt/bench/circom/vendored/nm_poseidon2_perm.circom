@@ -1,6 +1,6 @@
 pragma circom 2.2.2;
 
-include "poseidon2_const.circom";
+include "nm_poseidon2_const.circom";
 
 
 // The Poseidon2 permutation for BN128/BN254/BN256

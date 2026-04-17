@@ -1,6 +1,6 @@
 pragma circom 2.0.0;
 
-include "../vendored/poseidon2_hash.circom";
+include "../vendored/nm_poseidon2_hash.circom";
 
 // Benchmark: hash2 using t=3 (2 inputs + 1 capacity)
 // Noir-compatible style: no feed-forward

@@ -1,6 +1,6 @@
 pragma circom 2.2.2;
 
-include "poseidon2_perm.circom";
+include "nm_poseidon2_perm.circom";
 
 // Please note that we expose ONLY fixed-sized hashes.
 // As it is common for most ZK applications (e.g. the default implementation for Poseidon1 in circomlib)

@@ -1,6 +1,6 @@
 pragma circom 2.0.0;
 
-include "../vendored/poseidon2_compress.circom";
+include "../vendored/nm_poseidon2_compress.circom";
 
 // Benchmark: compress using t=2 (2 inputs, feed-forward: P(x)+x)
 // NethermindEth style Merkle compression

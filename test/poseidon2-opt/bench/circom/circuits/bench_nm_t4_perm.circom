@@ -1,6 +1,6 @@
 pragma circom 2.2.2;
 
-include "../vendored/poseidon2_perm.circom";
+include "../vendored/nm_poseidon2_perm.circom";
 
 // Benchmark: NethermindEth Poseidon2 raw permutation t=4
 // Direct permutation, no hash wrapper

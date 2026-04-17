@@ -1,6 +1,6 @@
 pragma circom 2.2.2;
 
-include "poseidon2_perm.circom";
+include "nm_poseidon2_perm.circom";
 
 // Poseidon Compression
 // An optimized version of Poseidon for 2 inputs as described in the paper on Section 3.1 (https://eprint.iacr.org/2023/323.pdf)
