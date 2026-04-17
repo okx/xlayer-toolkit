@@ -36,13 +36,17 @@ for entry in "${DEPS[@]}"; do
 done
 
 # ── 2. Powers-of-Tau file (Circom Groth16 benchmarks only) ──
+# The original hermez.s3 URL started returning 403 in early 2026; use the
+# storage.googleapis.com/zkevm mirror. sha256 is pinned to detect any silent
+# mirror drift in the future.
 PTAU_PATH="$ROOT_DIR/bench/circom/pot12.ptau"
-PTAU_URL="https://hermez.s3-eu-west-1.amazonaws.com/powersOfTau28_hez_final_12.ptau"
+PTAU_URL="https://storage.googleapis.com/zkevm/ptau/powersOfTau28_hez_final_12.ptau"
+PTAU_SHA256="dcf4ea473bf14b971ce5f7b7c1d6ce1c41a8ed042cdb75b65ca9178e3a3c7c17"
 
 if [ -f "$PTAU_PATH" ]; then
   echo "[setup-libs] pot12.ptau: present, skipping"
 else
-  echo "[setup-libs] pot12.ptau: downloading from hermez.s3 (~4.6 MB)"
+  echo "[setup-libs] pot12.ptau: downloading (~4.8 MB)"
   mkdir -p "$(dirname "$PTAU_PATH")"
   tmp="${PTAU_PATH}.tmp"
   if command -v curl >/dev/null 2>&1; then
@@ -51,6 +55,22 @@ else
     wget --quiet "$PTAU_URL" -O "$tmp"
   else
     echo "[setup-libs] ERROR: neither curl nor wget is available" >&2
+    exit 1
+  fi
+
+  if command -v shasum >/dev/null 2>&1; then
+    actual=$(shasum -a 256 "$tmp" | awk '{print $1}')
+  elif command -v sha256sum >/dev/null 2>&1; then
+    actual=$(sha256sum "$tmp" | awk '{print $1}')
+  else
+    echo "[setup-libs] WARNING: no sha256 tool available; skipping checksum verification" >&2
+    actual="$PTAU_SHA256"
+  fi
+  if [ "$actual" != "$PTAU_SHA256" ]; then
+    echo "[setup-libs] ERROR: pot12.ptau checksum mismatch" >&2
+    echo "  expected: $PTAU_SHA256" >&2
+    echo "  actual:   $actual" >&2
+    rm -f "$tmp"
     exit 1
   fi
   mv "$tmp" "$PTAU_PATH"
