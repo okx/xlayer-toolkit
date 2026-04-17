@@ -23,10 +23,10 @@ test: setup
 bench: setup
 	@FOUNDRY_PROFILE=bench forge test -vv
 
-cross-check:
+cross-check: setup
 	@bash test/cross_check.sh
 
-bench-circom:
+bench-circom: setup
 	@bash bench/circom/scripts/bench_full.sh
 
 clean:

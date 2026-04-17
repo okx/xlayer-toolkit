@@ -1,30 +1,33 @@
 #!/bin/bash
 set -e
 
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 bash "$REPO_ROOT/scripts/setup-libs.sh"
 
-cd "$(dirname "$0")/.."
+cd "$SCRIPT_DIR/.."
 CIRCOM=~/.cargo/bin/circom
 PTAU="pot12.ptau"
 
-# Compile + measure constraints + prove
+# Compile + measure constraints + prove. The r1cs / zkey guards make re-runs
+# essentially free for unchanged circuits; we only keep stdout silent so the
+# bench table stays clean — stderr passes through so failures are visible.
 bench() {
     local LABEL=$1 CIRCUIT=$2 DIR=$3 INPUT=$4
+    local NAME=$(basename "$CIRCUIT" .circom)
 
     mkdir -p "$DIR"
-    # Compile if needed
-    if [ ! -f "${DIR}/${DIR##*/}.r1cs" ]; then
-        $CIRCOM "$CIRCUIT" --r1cs --wasm -o "$DIR" 2>/dev/null
+    if [ ! -f "${DIR}/${NAME}.r1cs" ]; then
+        $CIRCOM "$CIRCUIT" --r1cs --wasm -o "$DIR" >/dev/null
     fi
 
-    local NAME=$(basename "$CIRCUIT" .circom)
     local CONSTRAINTS=$(snarkjs ri "${DIR}/${NAME}.r1cs" 2>&1 | grep "Constraints" | awk '{print $NF}')
 
-    # Setup + witness + prove
-    snarkjs groth16 setup "${DIR}/${NAME}.r1cs" "$PTAU" "${DIR}/${NAME}.zkey" 2>/dev/null
-    snarkjs zkey export verificationkey "${DIR}/${NAME}.zkey" "${DIR}/vkey.json" 2>/dev/null
-    node "${DIR}/${NAME}_js/generate_witness.js" "${DIR}/${NAME}_js/${NAME}.wasm" "$INPUT" "${DIR}/witness.wtns" 2>/dev/null
+    if [ ! -f "${DIR}/${NAME}.zkey" ]; then
+        snarkjs groth16 setup "${DIR}/${NAME}.r1cs" "$PTAU" "${DIR}/${NAME}.zkey" >/dev/null
+        snarkjs zkey export verificationkey "${DIR}/${NAME}.zkey" "${DIR}/vkey.json" >/dev/null
+    fi
+    node "${DIR}/${NAME}_js/generate_witness.js" "${DIR}/${NAME}_js/${NAME}.wasm" "$INPUT" "${DIR}/witness.wtns" >/dev/null
 
     local TOTAL=0
     for i in 1 2 3; do
