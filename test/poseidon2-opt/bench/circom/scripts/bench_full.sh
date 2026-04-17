@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+bash "$REPO_ROOT/scripts/setup-libs.sh"
+
 cd "$(dirname "$0")/.."
 CIRCOM=~/.cargo/bin/circom
 PTAU="pot12.ptau"

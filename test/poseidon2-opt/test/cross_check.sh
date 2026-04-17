@@ -6,6 +6,7 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+bash "$REPO_ROOT/scripts/setup-libs.sh"
 CIRCOM=~/.cargo/bin/circom
 BUILD="$REPO_ROOT/bench/circom/build_crosscheck"
 CIRCUITS="$REPO_ROOT/bench/circom/circuits"
