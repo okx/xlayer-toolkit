@@ -2,6 +2,7 @@
 pragma solidity ^0.8.21;
 
 import {Test, console} from "forge-std/Test.sol";
+import {Poseidon2Yul} from "poseidon2-evm/Poseidon2Yul.sol";
 import {Poseidon1Wrapper} from "./wrappers/Poseidon1Wrapper.sol";
 import {IP1Cljs1, IP1Cljs2, IP1Cljs3, IP1Cljs4, IP1Cljs5, IP1Cljs6} from "./wrappers/P1CljsDeployer.sol";
 import {T2Wrapper} from "./wrappers/T2Wrapper.sol";
@@ -10,7 +11,6 @@ import {T3Wrapper} from "./wrappers/T3Wrapper.sol";
 import {T4PermWrapper} from "./wrappers/T4PermWrapper.sol";
 import {OptimizedWrapper} from "./wrappers/OptimizedWrapper.sol";
 import {T8Wrapper} from "./wrappers/T8Wrapper.sol";
-import {ZemseYulWrapper} from "./wrappers/ZemseYulWrapper.sol";
 import {VkhWrapper} from "./wrappers/VkhWrapper.sol";
 import {ElHubWrapper} from "./wrappers/ElHubWrapper.sol";
 
@@ -32,7 +32,11 @@ contract FullBenchmark is Test {
     T4PermWrapper internal p2t4;
     OptimizedWrapper internal p2t4s;
     T8Wrapper internal p2t8;
-    ZemseYulWrapper internal p2yul;
+    // Poseidon2Yul is a standalone contract with non-standard calldata ABI
+    // (raw 32-byte words, no 4-byte selector). We staticcall it directly from
+    // the helpers below so gas measurements do not include an extra wrapper
+    // hop — matching how a real user's contract would invoke it.
+    Poseidon2Yul internal p2yul;
     VkhWrapper internal p2vkh;
     ElHubWrapper internal p2elhub;
 
@@ -55,7 +59,7 @@ contract FullBenchmark is Test {
         p2t4 = new T4PermWrapper();
         p2t4s = new OptimizedWrapper();
         p2t8 = new T8Wrapper();
-        p2yul = new ZemseYulWrapper();
+        p2yul = new Poseidon2Yul();
         p2vkh = new VkhWrapper();
         p2elhub = new ElHubWrapper();
 
@@ -108,6 +112,30 @@ contract FullBenchmark is Test {
         return g - gasleft();
     }
 
+    // Direct staticcall into Poseidon2Yul matches how a real user contract would
+    // invoke it (raw 32-byte words, no selector). This gives zemse-yul parity with
+    // circomlibjs, which is also measured as a single staticcall.
+    function _gasZemseYul1(uint256 a) internal view returns (uint256) {
+        uint256 g = gasleft();
+        (bool ok, ) = address(p2yul).staticcall(abi.encode(a));
+        require(ok, "Poseidon2Yul call failed");
+        return g - gasleft();
+    }
+
+    function _gasZemseYul2(uint256 a, uint256 b) internal view returns (uint256) {
+        uint256 g = gasleft();
+        (bool ok, ) = address(p2yul).staticcall(abi.encode(a, b));
+        require(ok, "Poseidon2Yul call failed");
+        return g - gasleft();
+    }
+
+    function _gasZemseYul3(uint256 a, uint256 b, uint256 c) internal view returns (uint256) {
+        uint256 g = gasleft();
+        (bool ok, ) = address(p2yul).staticcall(abi.encode(a, b, c));
+        require(ok, "Poseidon2Yul call failed");
+        return g - gasleft();
+    }
+
     // ================================================================
     //  Main benchmark
     // ================================================================
@@ -127,8 +155,7 @@ contract FullBenchmark is Test {
         g = gasleft(); p2t4s.hash_1(42);
         console.log("P2-T4S hash1:          ", g - gasleft());
 
-        g = gasleft(); p2yul.hash_1(42);
-        console.log("P2-zemse hash1:        ", g - gasleft());
+        console.log("P2-zemse hash1:        ", _gasZemseYul1(42));
 
         g = gasleft(); p2vkh.hash_1(42);
         console.log("P2-Vkh hash1:          ", g - gasleft());
@@ -152,8 +179,7 @@ contract FullBenchmark is Test {
         g = gasleft(); p2t4s.hash_2(1, 2);
         console.log("P2-T4S hash2:          ", g - gasleft());
 
-        g = gasleft(); p2yul.hash_2(1, 2);
-        console.log("P2-zemse hash2:        ", g - gasleft());
+        console.log("P2-zemse hash2:        ", _gasZemseYul2(1, 2));
 
         g = gasleft(); p2vkh.hash_2(1, 2);
         console.log("P2-Vkh hash2:          ", g - gasleft());
@@ -177,8 +203,7 @@ contract FullBenchmark is Test {
         g = gasleft(); p2t4s.hash_3(1, 2, 3);
         console.log("P2-T4S hash3:          ", g - gasleft());
 
-        g = gasleft(); p2yul.hash_3(1, 2, 3);
-        console.log("P2-zemse hash3:        ", g - gasleft());
+        console.log("P2-zemse hash3:        ", _gasZemseYul3(1, 2, 3));
 
         g = gasleft(); p2vkh.hash_3(1, 2, 3);
         console.log("P2-Vkh hash3:          ", g - gasleft());
@@ -293,7 +318,7 @@ contract FullBenchmark is Test {
         console.log("P2-T4:                 ", address(p2t4).code.length);
         console.log("P2-T4S:                ", address(p2t4s).code.length);
         console.log("P2-T8:                 ", address(p2t8).code.length);
-        console.log("P2-zemse:              ", address(p2yul.yul()).code.length);
+        console.log("P2-zemse:              ", address(p2yul).code.length);
         console.log("P2-Vkh:                ", address(p2vkh).code.length);
         console.log("P2-sserrano44:         ", address(p2elhub).code.length);
     }
