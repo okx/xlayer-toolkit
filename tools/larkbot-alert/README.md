@@ -1,6 +1,6 @@
 # Flashblocks Monitor
 
-Monitors XLayer testnet flashblocks behavior, verifying that flashblocks do not reorg.
+Monitors XLayer testnet flashblocks behavior, verifying that flashblocks do not reorg, and p2p static peers are not disconnected.
 
 ## Alerts
 
