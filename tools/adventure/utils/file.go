@@ -3,6 +3,7 @@ package utils
 import (
 	"bufio"
 	"crypto/ecdsa"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -60,4 +61,28 @@ func GetEthAddressFromPK(privateKey *ecdsa.PrivateKey) ethcmm.Address {
 		panic(fmt.Errorf("convert into pubkey failed"))
 	}
 	return crypto.PubkeyToAddress(*pubkeyECDSA)
+}
+
+func WriteJSONToFile(m interface{}, file string) error {
+	f, err := os.OpenFile(file, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return fmt.Errorf("failed to open file %s, error: %s\n", file, err.Error())
+	}
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			log.Println(fmt.Errorf("failed to close file %s, error: %s\n", file, err.Error()))
+		}
+	}(f)
+
+	jsonData, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal data to JSON, error: %s\n", err.Error())
+	}
+
+	if _, err := f.Write(jsonData); err != nil {
+		return fmt.Errorf("failed to write JSON data to file %s, error: %s\n", file, err.Error())
+	}
+
+	return nil
 }

@@ -22,7 +22,7 @@ import (
 )
 
 type TxParam struct {
-	to       ethcmn.Address
+	to       *ethcmn.Address
 	amount   *big.Int
 	gasLimit uint64
 	gasPrice *big.Int
@@ -140,7 +140,7 @@ func hasDecimal(num float64) bool {
 	return intPart != num
 }
 
-func NewTxParam(to ethcmn.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) TxParam {
+func NewTxParam(to *ethcmn.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) TxParam {
 	return TxParam{
 		to,
 		amount,
@@ -382,14 +382,25 @@ func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accou
 		if txTemplate.gasPrice != nil && txTemplate.gasPrice.Cmp(big.NewInt(0)) > 0 {
 			gasPrice = txTemplate.gasPrice
 		}
-		unsignedTx := types.NewTransaction(
-			acc.GetNonce(),
-			txTemplate.to,
-			txTemplate.amount,
-			txTemplate.gasLimit,
-			gasPrice,
-			txTemplate.data,
-		)
+		var unsignedTx *types.Transaction
+		if txTemplate.to != nil {
+			unsignedTx = types.NewTransaction(
+				acc.GetNonce(),
+				*txTemplate.to,
+				txTemplate.amount,
+				txTemplate.gasLimit,
+				gasPrice,
+				txTemplate.data,
+			)
+		} else {
+			unsignedTx = types.NewContractCreation(
+				acc.GetNonce(),
+				txTemplate.amount,
+				txTemplate.gasLimit,
+				gasPrice,
+				txTemplate.data,
+			)
+		}
 
 		// Sign transaction
 		signedTx, err := types.SignTx(unsignedTx, signer, acc.GetPrivateKey())
@@ -398,6 +409,9 @@ func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accou
 			acc.Unlock()
 			continue
 		}
+
+		// debug
+		// println("tx hash:", signedTx.Hash().Hex())
 
 		signedTxs = append(signedTxs, signedTx)
 		acc.Unlock()

@@ -96,6 +96,8 @@ func (e EthClient) SendEthereumTx(privatekey *ecdsa.PrivateKey, nonce uint64, to
 
 	// 3. Send transaction
 	err = e.SendTransaction(context.Background(), signedTx)
+	// debug
+	// println("tx hash:", signedTx.Hash().Hex())
 	if err != nil {
 		return ethcmn.Hash{}, err
 	}
@@ -135,6 +137,7 @@ func (e EthClient) SendMultipleEthereumTx(signedTxs []*types.Transaction) ([]eth
 
 	for i, signedTx := range signedTxs {
 		// Encode transaction to hex string
+		//println("tx hash:", signedTx.Hash().Hex())
 		txData, err := signedTx.MarshalBinary()
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal tx %d: %v", i, err)
@@ -155,6 +158,8 @@ func (e EthClient) SendMultipleEthereumTx(signedTxs []*types.Transaction) ([]eth
 		return nil, fmt.Errorf("batch call failed: %v", err)
 	}
 
+	//time.Sleep(10 * time.Second) // Simulate processing time
+	//log.Fatal("debug batch call completed, processing results...")
 	// Process results
 	var resultHashes []ethcmn.Hash
 	var errors []string

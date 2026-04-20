@@ -2,7 +2,7 @@
 
 # Configuration variables
 CONFIG_FILE := ./testdata/config.json
-INIT_AMOUNT := 100ETH
+INIT_AMOUNT := 10000ETH
 
 # Lint the code using golangci-lint
 lint:
@@ -42,3 +42,24 @@ native: build
 	@sleep 10
 	@adventure native-bench -f $(CONFIG_FILE)
 	@echo "✅ Native Token test completed!"
+
+io: build
+	@echo "🚀 Starting IO test..."
+	@adventure simulator-init $(INIT_AMOUNT) -f $(CONFIG_FILE)
+	@sleep 10
+	@adventure io-bench -f $(CONFIG_FILE)
+	@echo "✅ IO test completed!"
+
+fib: build
+	@echo "🚀 Starting Fibonacci test..."
+	@adventure simulator-init $(INIT_AMOUNT) -f $(CONFIG_FILE)
+	@sleep 10
+	@adventure fib-bench -f $(CONFIG_FILE)
+	@echo "✅ Fibonacci test completed!"
+
+create: build
+	@echo "🚀 Starting create contract test..."
+	@adventure native-init $(INIT_AMOUNT) -f $(CONFIG_FILE)
+	@sleep 10
+	@adventure create-bench -f $(CONFIG_FILE)
+	@echo "✅ create contract test completed!"

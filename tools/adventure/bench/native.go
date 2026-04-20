@@ -127,7 +127,7 @@ func NativeBench(configPath string) error {
 	utils.RunTxs(
 		func(addr ethcmn.Address) []utils.TxParam {
 			to := toAddrs[mathrand.Intn(len(toAddrs))]
-			return []utils.TxParam{utils.NewTxParam(to, amount, 21000, gasPrice, nil)}
+			return []utils.TxParam{utils.NewTxParam(&to, amount, 21000, gasPrice, nil)}
 		},
 	)
 
