@@ -160,6 +160,24 @@ else
         echo "📦 Using local SP1 params from $sp1_params_path"
         cuda_build_args+=(--build-context "sp1-params-cache=$sp1_params_path")
       fi
+      if [ -n "$OP_SUCCINCT_ICICLE_DIR" ]; then
+        icicle_path="$OP_SUCCINCT_ICICLE_DIR"
+        if [ ! -e "$icicle_path" ]; then
+          echo "❌ OP_SUCCINCT_ICICLE_DIR=$icicle_path does not exist"
+          exit 1
+        fi
+        if [ -f "$icicle_path" ]; then
+          icicle_parent=$(dirname "$icicle_path")
+          echo "⚠️  OP_SUCCINCT_ICICLE_DIR points to a file; using parent dir $icicle_parent"
+          icicle_path="$icicle_parent"
+        fi
+        if [ ! -d "$icicle_path" ]; then
+          echo "❌ OP_SUCCINCT_ICICLE_DIR=$OP_SUCCINCT_ICICLE_DIR must be a directory containing icicle_*-ubuntu22*.tar.gz"
+          exit 1
+        fi
+        echo "📦 Using local icicle tarballs from $icicle_path"
+        cuda_build_args+=(--build-context "icicle-cache=$icicle_path")
+      fi
       build_and_tag_image "op-succinct-cuda" "$OP_SUCCINCT_CUDA_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.cuda" "${cuda_build_args[@]}"
     fi
   fi
