@@ -19,7 +19,9 @@ const (
 	AlertWSDown         AlertType = "ws_down"         // WebSocket disconnected
 	AlertWSLongDown     AlertType = "ws_long_down"    // WebSocket long time unavailable
 	AlertSubscribeFail  AlertType = "subscribe_fail"  // eth_subscribe failed
-	AlertPeerDisconnect AlertType = "peer_disconnect" // Static peer disconnected
+	AlertPeerDisconnect   AlertType = "peer_disconnect"    // Static peer disconnected
+	AlertPeerStatusFail   AlertType = "peer_status_fail"   // Peer status RPC failed
+	AlertLeaderFindFail   AlertType = "leader_find_fail"   // Failed to find leader sequencer
 )
 
 // Alerter sends alerts to Lark via xmonitor format with rate limiting.

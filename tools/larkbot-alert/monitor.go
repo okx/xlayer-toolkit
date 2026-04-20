@@ -154,6 +154,11 @@ func NewMonitor(cfg *Config) *Monitor {
 // ──────────────────────────────────────────────
 
 func (m *Monitor) RunWSListener() {
+	if m.cfg.WSURL == "" {
+		log.Printf("[WS] WS_URL not configured, WebSocket listener disabled")
+		return
+	}
+
 	reconnectDelay := time.Second
 	maxReconnectDelay := 30 * time.Second
 	consecutiveFails := 0
@@ -639,7 +644,7 @@ func (m *Monitor) findLeaderSequencerRPC() (string, error) {
 		}
 		if isLeader {
 			// Replace the conductor port with 8123 to get the sequencer RPC URL
-			seqURL := strings.Replace(conductorURL, ":50050", ":8123", 1)
+			seqURL := strings.Replace(conductorURL, ":8547", ":8123", 1)
 			return seqURL, nil
 		}
 	}
@@ -688,6 +693,8 @@ func (m *Monitor) checkPeerStatus() {
 	leaderRPC, err := m.findLeaderSequencerRPC()
 	if err != nil {
 		log.Printf("[PEER] %v", err)
+		m.alerter.Send(AlertLeaderFindFail, "Failed to find leader sequencer",
+			fmt.Sprintf("Conductors: %v\nError: %v", m.cfg.ConductorURLs, err))
 		return
 	}
 
@@ -698,6 +705,8 @@ func (m *Monitor) checkPeerStatus() {
 	status, err := m.rpcGetPeerStatus(leaderRPC)
 	if err != nil {
 		log.Printf("[PEER] Failed to get peer status from %s: %v", leaderRPC, err)
+		m.alerter.Send(AlertPeerStatusFail, "Peer status RPC failed",
+			fmt.Sprintf("Leader Sequencer: %s\nError: %v", leaderRPC, err))
 		return
 	}
 
@@ -716,16 +725,23 @@ func (m *Monitor) checkPeerStatus() {
 	}
 
 	if len(disconnectedStatic) > 0 {
+		for _, p := range disconnectedStatic {
+			log.Printf("[PEER] Static peer disconnected: peerID=%s addr=%s disconnected_for=%.1fs connections=%d",
+				p.PeerID, p.Multiaddr, p.DisconnectedDurationSecs, p.ConnectionCount)
+		}
+
 		details := fmt.Sprintf("Leader Sequencer: %s\nLocal Peer: %s\nDisconnected static peers: %d / %d static\n",
 			leaderRPC, status.LocalPeerID,
 			len(disconnectedStatic), status.Summary.StaticPeers)
 		for _, p := range disconnectedStatic {
-			details += fmt.Sprintf("\n  Peer: %s\n  Addr: %s\n  Disconnected for: %.1fs\n  Connection count: %d\n",
+			details += fmt.Sprintf("\n  PeerID: %s\n  Addr: %s\n  Disconnected for: %.1fs\n  Connection count: %d\n",
 				p.PeerID, p.Multiaddr, p.DisconnectedDurationSecs, p.ConnectionCount)
 		}
 		m.alerter.Send(AlertPeerDisconnect,
 			fmt.Sprintf("%d static peer(s) disconnected", len(disconnectedStatic)),
 			details)
+	} else {
+		log.Printf("[PEER] All %d static peers connected", status.Summary.StaticPeers)
 	}
 }
 

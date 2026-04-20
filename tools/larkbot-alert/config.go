@@ -41,10 +41,10 @@ func LoadConfig(configPath string) *Config {
 	viper.AutomaticEnv()
 
 	// 设置默认值
-	viper.SetDefault("WS_URL", "ws://10.2.29.244:8546")
-	viper.SetDefault("RPC_URL", "http://10.2.29.244:8545")
-	viper.SetDefault("APM_BOT_URL", "https://apmapi.okg.com/alarm/channel/robot/send?receiveIdType=chat_id")
-	viper.SetDefault("LARK_GROUP_ID", "oc_16b2e6dbfde509708503a76cee8ae8e4")
+	viper.SetDefault("WS_URL", "ws://localhost:11111")
+	viper.SetDefault("RPC_URL", "http://localhost:8545")
+	viper.SetDefault("APM_BOT_URL", "")
+	viper.SetDefault("LARK_GROUP_ID", "")
 	viper.SetDefault("ALERT_ENABLED", true)
 	viper.SetDefault("MAX_FLASHBLOCK_DELAY_MS", 1000)
 	viper.SetDefault("TX_CHECK_DELAY_MS", 1000)

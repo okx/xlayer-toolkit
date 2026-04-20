@@ -5,8 +5,8 @@ WS_URL: "ws://localhost:11111"
 RPC_URL: "http://localhost:8545"
 
 # Lark 配置 (xmonitor 格式)
-APM_BOT_URL: "https://apm.okg.com/alarm/channel/robot/send?receiveIdType=chat_id"
-LARK_GROUP_ID: "oc_eb3619d214c582870024baedd428fe02"
+APM_BOT_URL: ""
+LARK_GROUP_ID: ""
 
 # 是否开启 Lark 告警 (false 时仅打日志不发消息)
 ALERT_ENABLED: false
