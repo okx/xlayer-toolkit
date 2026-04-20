@@ -41,7 +41,7 @@ func LoadConfig(configPath string) *Config {
 	viper.AutomaticEnv()
 
 	// 设置默认值
-	viper.SetDefault("WS_URL", "ws://localhost:7546")
+	viper.SetDefault("WS_URL", "ws://localhost:7547")
 	viper.SetDefault("RPC_URL", "http://localhost:8545")
 	viper.SetDefault("APM_BOT_URL", "")
 	viper.SetDefault("LARK_GROUP_ID", "")
