@@ -142,12 +142,23 @@ else
       echo "🔨 Building op-succinct CUDA image"
       cuda_build_args=()
       if [ -n "$OP_SUCCINCT_SP1_PARAMS_DIR" ]; then
-        if [ ! -d "$OP_SUCCINCT_SP1_PARAMS_DIR" ]; then
-          echo "❌ OP_SUCCINCT_SP1_PARAMS_DIR=$OP_SUCCINCT_SP1_PARAMS_DIR does not exist"
+        sp1_params_path="$OP_SUCCINCT_SP1_PARAMS_DIR"
+        if [ ! -e "$sp1_params_path" ]; then
+          echo "❌ OP_SUCCINCT_SP1_PARAMS_DIR=$sp1_params_path does not exist"
           exit 1
         fi
-        echo "📦 Using local SP1 params from $OP_SUCCINCT_SP1_PARAMS_DIR"
-        cuda_build_args+=(--build-context "sp1-params-cache=$OP_SUCCINCT_SP1_PARAMS_DIR")
+        if [ -f "$sp1_params_path" ]; then
+          # User pointed at the tarball itself; resolve to its parent directory.
+          sp1_params_parent=$(dirname "$sp1_params_path")
+          echo "⚠️  OP_SUCCINCT_SP1_PARAMS_DIR points to a file; using parent dir $sp1_params_parent"
+          sp1_params_path="$sp1_params_parent"
+        fi
+        if [ ! -d "$sp1_params_path" ]; then
+          echo "❌ OP_SUCCINCT_SP1_PARAMS_DIR=$OP_SUCCINCT_SP1_PARAMS_DIR must be a directory containing <ver>-<mode>.tar.gz"
+          exit 1
+        fi
+        echo "📦 Using local SP1 params from $sp1_params_path"
+        cuda_build_args+=(--build-context "sp1-params-cache=$sp1_params_path")
       fi
       build_and_tag_image "op-succinct-cuda" "$OP_SUCCINCT_CUDA_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.cuda" "${cuda_build_args[@]}"
     fi
