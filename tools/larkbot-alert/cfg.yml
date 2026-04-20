@@ -1,5 +1,5 @@
 # Flashblocks WebSocket 地址
-WS_URL: "ws://localhost:11111"
+WS_URL: "ws://localhost:7546"
 
 # XLayer RPC 地址
 RPC_URL: "http://localhost:8545"
