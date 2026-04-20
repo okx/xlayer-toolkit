@@ -1,39 +1,39 @@
-# Flashblocks WebSocket 地址
+# Flashblocks WebSocket address
 WS_URL: "ws://localhost:7547"
 
-# XLayer RPC 地址
+# XLayer RPC address
 RPC_URL: "http://localhost:8545"
 
-# Lark 配置 (xmonitor 格式)
+# Lark config (xmonitor format)
 APM_BOT_URL: ""
 LARK_GROUP_ID: ""
 
-# 是否开启 Lark 告警 (false 时仅打日志不发消息)
+# Enable Lark alerts (false = log only, no messages sent)
 ALERT_ENABLED: false
 
-# Alert 1: flashblock 接收延迟阈值（毫秒）
+# Alert 1: flashblock receive latency threshold (milliseconds)
 MAX_FLASHBLOCK_DELAY_MS: 1000
 
-# Alert 2: 收到 tx 后延迟多久反查区块（毫秒）
+# Alert 2: delay before verifying tx against block (milliseconds)
 TX_CHECK_DELAY_MS: 1000
 
-# Lark 告警限频间隔（秒）
+# Lark alert rate limit interval (seconds)
 ALERT_RATE_LIMIT_S: 30
 
-# WebSocket 长时间连不上告警阈值（秒）
+# WebSocket long downtime alert threshold (seconds)
 WS_LONG_DOWN_THRESHOLD_S: 60
 
-# Alert 2 批量验证超时兜底（秒），超过此时间未收到新 block header 则强制触发验证
+# Alert 2 batch verification fallback timeout (seconds), forces verification if no new block header received
 VERIFY_TIMEOUT_S: 5
 
-# RPC 请求超时（秒）
+# RPC request timeout (seconds)
 RPC_TIMEOUT_S: 10
 
-# 是否开启详细日志
+# Enable verbose logging
 VERBOSE: false
 
-# Conductor 地址 (逗号分隔)
+# Conductor addresses (comma-separated)
 CONDUCTOR_URL: "http://localhost:8547,http://localhost:8548"
 
-# Peer status 轮询间隔（秒）
+# Peer status poll interval (seconds)
 PEER_STATUS_POLL_INTERVAL_S: 30

@@ -1,221 +1,219 @@
 # Flashblocks Monitor
 
-监控 XLayer 测试网 flashblocks 行为，确认 flashblocks 不会 reorg。
+Monitors XLayer testnet flashblocks behavior, verifying that flashblocks do not reorg.
 
-- JIRA: https://okcoin.atlassian.net/browse/XLOP-858
-- GitLab: https://gitlab.okg.com/github/flashblocks-monitor
+## Alerts
 
-## 监控项
+### Alert 1: Latency Check (latency)
 
-### Alert 1: 延迟检查 (latency)
+The time a txHash is received via flashblocks WS should not be later than the block's `blocktime + 1s`.
 
-通过 flashblocks WS 收到 txHash 的时间不应晚于该 tx 所在区块的 `blocktime + 1s`。
+- Trigger: `receivedAt > blockTimestamp + MaxFlashblockDelay (default 1s)`
+- Timing: Checked **immediately** when a transaction event is received (each tx checked independently)
 
-- 触发条件: `receivedAt > blockTimestamp + MaxFlashblockDelay(默认1s)`
-- 时机: 收到 transaction 事件时**立刻**判断（每笔 tx 独立检查）
+### Alert 2: Transaction Existence Verification (missing)
 
-### Alert 2: 交易存在性验证 (missing)
+A txHash received via flashblocks WS must exist in the canonical block when verified after a 1s delay.
 
-不能出现 flashblocks WS 中收到了 txHash，但延迟 1s 后反查该 txHash 发现不存在于区块中。
+- Trigger: `eth_getBlockByNumber(blockNum, false)` returns a block whose tx list does not contain the flashblock tx
+- Timing: Txs from the same block are batch-collected; **verification is triggered when a new block header arrives** (one RPC call per block)
+- Fallback timeout: If no new block header is received within `VERIFY_TIMEOUT_S` (default 5s), verification is forced to avoid missed txs
+- If the block is not yet on-chain, retries up to 4 times (500ms apart)
+- Pending verification queue is cleared on WS reconnect to avoid false positives from incomplete data during disconnect
 
-- 触发条件: `eth_getBlockByNumber(blockNum, false)` 查区块 tx 列表，flashblock 中的 tx 不在其中
-- 时机: 同一区块的 tx 批量收集，**新 block header 到来时触发上一个 block 的验证**（一个 block 只发一次 RPC）
-- 超时兜底: 如果 `VERIFY_TIMEOUT_S`（默认 5s）内未收到新 block header，强制触发验证，不会漏交易
-- 如果区块尚未上链，会重试最多 4 次（每次间隔 500ms）
-- WS 重连时自动清空待验证队列，避免断连期间数据不完整导致误报
+### Alert 3: WS Disconnected (ws_down)
 
-### Alert 3: WS 断开 (ws_down)
+Alerts when the WebSocket connection is disconnected.
 
-WebSocket 连接断开时告警。
+### Alert 4: WS Long Downtime (ws_long_down)
 
-### Alert 4: WS 长时间不可用 (ws_long_down)
+Alerts when WebSocket has >= 3 consecutive failures and the first failure occurred more than `WS_LONG_DOWN_THRESHOLD_S` (default 60s) ago.
 
-WebSocket 连续失败 >= 3 次且首次失败超过 `WS_LONG_DOWN_THRESHOLD_S`（默认 60s）时告警。
+### Alert 5: Subscribe Failed (subscribe_fail)
 
-### Alert 5: 订阅失败 (subscribe_fail)
+Alerts when the `eth_subscribe` request fails (timeout, RPC error, or empty subscription ID).
 
-`eth_subscribe` 订阅请求失败时告警（超时、RPC 错误、空 subscription ID）。
+### Alert 6: Static Peer Disconnected (peer_disconnect)
 
-### Alert 6: 静态 Peer 断开 (peer_disconnect)
+Finds the leader sequencer via `conductor_leader`, then calls `eth_flashblocksPeerStatus` to check static peer connection status.
 
-通过 `conductor_leader` 找到 leader sequencer，再调用 `eth_flashblocksPeerStatus` 检查静态 peer 连接状态。
+- Trigger: Any peer with `isStatic == true` has `connectionState == "disconnected"`
+- Timing: Polled every `PEER_STATUS_POLL_INTERVAL_S` (default 30s)
+- Flow: Iterates all `CONDUCTOR_URL`s, calls `conductor_leader` to find leader → replaces conductor port with 8123 to get sequencer RPC → calls `eth_flashblocksPeerStatus` for peer status
+- Alerts and logs include PeerID and IP address for each disconnected peer
 
-- 触发条件: 任何 `isStatic == true` 的 peer 的 `connectionState == "disconnected"`
-- 时机: 每 `PEER_STATUS_POLL_INTERVAL_S`（默认 30s）轮询一次
-- 流程: 遍历所有 `CONDUCTOR_URL`，调用 `conductor_leader` 找到 leader → 将 conductor 端口替换为 8123 得到 sequencer RPC → 调用 `eth_flashblocksPeerStatus` 获取 peer 状态
-- 告警和日志包含每个断开 peer 的 PeerID 和 IP 地址
+### Alert 7: Leader Discovery Failed (leader_find_fail)
 
-### Alert 7: Leader 查找失败 (leader_find_fail)
+Alerts when all `CONDUCTOR_URL`s fail to respond or none is the leader.
 
-遍历所有 `CONDUCTOR_URL` 调用 `conductor_leader` 均失败或无 leader 时告警。
+- Trigger: All conductors are unreachable or none reports as leader
+- Timing: Each peer status poll cycle
 
-- 触发条件: 所有 conductor 均不可达或均非 leader
-- 时机: 每次 peer status 轮询时
+### Alert 8: Peer Status RPC Failed (peer_status_fail)
 
-### Alert 8: Peer Status RPC 失败 (peer_status_fail)
+Alerts when `eth_flashblocksPeerStatus` call fails after finding the leader sequencer.
 
-找到 leader sequencer 后，调用 `eth_flashblocksPeerStatus` 失败时告警。
+- Trigger: RPC request fails, times out, or returns an error
+- Timing: Each peer status poll cycle
 
-- 触发条件: RPC 请求失败、超时或返回错误
-- 时机: 每次 peer status 轮询时
+## WS Protocol
 
-## WS 协议
-
-使用 JSON-RPC `eth_subscribe` 协议（端口 8546）：
+Uses JSON-RPC `eth_subscribe` protocol (port 8546):
 
 ```
-1. WS 连接 ws://host:8546
-2. 发送订阅: {"jsonrpc":"2.0","id":1,"method":"eth_subscribe","params":["flashblocks",{"headerInfo":true,"subTxFilter":{"txInfo":true,"txReceipt":true}}]}
-3. 收到确认: {"jsonrpc":"2.0","id":1,"result":"<subscription_id>"}
-4. 持续接收两种事件:
-   - type: "header"      — 区块头（新 block 和每 200ms flashblock tick）
-   - type: "transaction"  — 单笔交易（txHash + txData + receipt）
+1. WS connect to ws://host:8546
+2. Send subscribe: {"jsonrpc":"2.0","id":1,"method":"eth_subscribe","params":["flashblocks",{"headerInfo":true,"subTxFilter":{"txInfo":true,"txReceipt":true}}]}
+3. Receive confirmation: {"jsonrpc":"2.0","id":1,"result":"<subscription_id>"}
+4. Continuously receive two event types:
+   - type: "header"      — block header (new block and every 200ms flashblock tick)
+   - type: "transaction"  — single transaction (txHash + txData + receipt)
 ```
 
-## 配置
+## Configuration
 
-支持 YAML 配置文件 + 环境变量覆盖。启动时通过 `-config` 指定配置文件路径（默认 `cfg.yml`）。
+Supports YAML config file + environment variable overrides. Specify config file path at startup with `-config` (default `cfg.yml`).
 
 ```yaml
-# Flashblocks WebSocket 地址 (JSON-RPC eth_subscribe)
-WS_URL: "ws://10.2.29.244:8546"
+# Flashblocks WebSocket address (JSON-RPC eth_subscribe)
+WS_URL: "ws://localhost:7547"
 
-# XLayer RPC 地址
-RPC_URL: "http://10.2.29.244:8545"
+# XLayer RPC address
+RPC_URL: "http://localhost:8545"
 
-# Lark 配置 (xmonitor 格式)
-APM_BOT_URL: "https://apm.okg.com/alarm/channel/robot/send?receiveIdType=chat_id"
+# Lark config (xmonitor format)
+APM_BOT_URL: ""
 LARK_GROUP_ID: ""
 
-# 是否开启 Lark 告警 (false 时仅打日志不发消息)
+# Enable Lark alerts (false = log only, no messages sent)
 ALERT_ENABLED: true
 
-# Alert 1: flashblock 接收延迟阈值（毫秒）
+# Alert 1: flashblock receive latency threshold (milliseconds)
 MAX_FLASHBLOCK_DELAY_MS: 1000
 
-# Alert 2: 触发验证后延迟多久再查区块（毫秒），等区块上链
+# Alert 2: delay before verifying tx against block (milliseconds), wait for block to be on-chain
 TX_CHECK_DELAY_MS: 1000
 
-# Lark 告警限频间隔（秒），同类型告警在此间隔内最多发 1 条
+# Lark alert rate limit interval (seconds), max 1 alert per type within this interval
 ALERT_RATE_LIMIT_S: 30
 
-# WebSocket 长时间连不上告警阈值（秒）
+# WebSocket long downtime alert threshold (seconds)
 WS_LONG_DOWN_THRESHOLD_S: 60
 
-# Alert 2 批量验证超时兜底（秒），超过此时间未收到新 block header 则强制触发验证
+# Alert 2 batch verification fallback timeout (seconds), forces verification if no new block header received
 VERIFY_TIMEOUT_S: 5
 
-# RPC 请求超时（秒）
+# RPC request timeout (seconds)
 RPC_TIMEOUT_S: 10
 
-# Conductor 地址 (逗号分隔)
+# Conductor addresses (comma-separated)
 CONDUCTOR_URL: "http://10.2.29.244:50050,http://10.2.27.29:50050"
 
-# Peer status 轮询间隔（秒）
+# Peer status poll interval (seconds)
 PEER_STATUS_POLL_INTERVAL_S: 30
 
-# 是否开启详细日志
+# Enable verbose logging
 VERBOSE: false
 ```
 
-所有配置项都可通过同名环境变量覆盖，例如 `WS_URL=ws://xxx ./flashbox-monitor`。
+All config options can be overridden with environment variables of the same name, e.g. `WS_URL=ws://xxx ./flashbox-monitor`.
 
-## 数据流
+## Data Flow
 
 ```
-WS 连接 --> eth_subscribe --> 持续接收事件
-                                  |
-                    +-------------+-------------+
-                    |                           |
-              type: header               type: transaction
-            更新 blockContext            过滤 deposit (0x7e)
-            blockNum 变化时                    |
-            触发上一 block             +-------+-------+
-            的批量验证                 |               |
-                                  Alert 1         Alert 2
-                               (立刻判断)     (收集到 batch)
-                             延迟 > 1s ?     等新 block 或超时
-                                  |           批量 RPC 验证
-                            告警 Lark        tx 不在区块中?
-                                                   |
-                                             告警 Lark
+WS connect --> eth_subscribe --> continuously receive events
+                                      |
+                        +-------------+-------------+
+                        |                           |
+                  type: header               type: transaction
+                update blockContext           filter deposit (0x7e)
+                on blockNum change                  |
+                trigger prev block           +------+-------+
+                batch verification           |              |
+                                         Alert 1        Alert 2
+                                      (immediate)    (collect to batch)
+                                      delay > 1s?    wait for new block
+                                           |          or timeout, then
+                                      alert Lark      batch RPC verify
+                                                     tx not in block?
+                                                          |
+                                                    alert Lark
 
-Peer Status Monitor (独立 goroutine，每 30s 轮询):
-  CONDUCTOR_URL 列表 --> conductor_leader --> 找到 leader
-        |                                      失败? --> Alert 7 (leader_find_fail)
-  替换端口为 8123 --> eth_flashblocksPeerStatus
-        |                                      失败? --> Alert 8 (peer_status_fail)
-  检查 isStatic && disconnected --> Alert 6 (peer_disconnect)
+Peer Status Monitor (separate goroutine, polls every 30s):
+  CONDUCTOR_URL list --> conductor_leader --> find leader
+        |                                      failure? --> Alert 7 (leader_find_fail)
+  replace port with 8123 --> eth_flashblocksPeerStatus
+        |                                      failure? --> Alert 8 (peer_status_fail)
+  check isStatic && disconnected --> Alert 6 (peer_disconnect)
 ```
 
-## 日志说明
+## Log Reference
 
-### 1. 启动配置
+### 1. Startup Config
 
 ```
 ========================================
   Flashblocks Monitor
 ========================================
-  WS URL:          ws://10.2.29.244:8546
-  RPC URL:         http://10.2.29.244:8545
-  Lark Bot URL:    https://apmapi.okg.com/alarm/...
-  Lark Group ID:   oc_16b2e6dbfde509708503a76cee8ae8e4
-  Alert Enabled:   true
+  WS URL:          ws://localhost:7547
+  RPC URL:         http://localhost:8545
+  Lark Bot URL:    
+  Lark Group ID:   
+  Alert Enabled:   false
   Max Delay:       1s
   TX Check Delay:  1s
   Alert Rate Limit:30s
   Verify Timeout:  5s
   RPC Timeout:     10s
-  Conductors:      [http://10.2.29.244:50050 http://10.2.27.29:50050]
+  Conductors:      [http://localhost:8547 http://localhost:8548]
   Peer Poll:       30s
   Verbose:         false
 ========================================
 ```
 
-### 2. WS 连接与订阅
+### 2. WS Connection & Subscription
 
 ```
-[WS] Connecting to ws://10.2.29.244:8546 ...
-[WS] Connected to ws://10.2.29.244:8546
+[WS] Connecting to ws://localhost:7547 ...
+[WS] Connected to ws://localhost:7547
 [WS] Sent eth_subscribe request
 [WS] Subscribed successfully, subscription ID: 0x863aa52cc1d8770170737deb785bc7cb
 ```
 
-连接、发送订阅、收到确认的完整流程。
+Full flow of connect, subscribe, and confirmation.
 
-### 3. 收到用户交易
+### 3. User Transaction Received
 
 ```
 [WS] Block #26488167: tx 0xabc123...def456 (type: 0x2, from: 0x1234abcd5678...)
 ```
 
-| 字段 | 含义 |
-|------|------|
-| `Block #26488167` | 交易所在区块号 |
-| `tx 0xabc123...` | 交易哈希 |
-| `type: 0x2` | 交易类型（0x2 = EIP-1559，0x0 = legacy 等，0x7e deposit 已过滤） |
-| `from: 0x1234...` | 发送者地址（截取前 16 字符） |
+| Field | Description |
+|-------|-------------|
+| `Block #26488167` | Block number containing the transaction |
+| `tx 0xabc123...` | Transaction hash |
+| `type: 0x2` | Transaction type (0x2 = EIP-1559, 0x0 = legacy, etc.; 0x7e deposit is filtered out) |
+| `from: 0x1234...` | Sender address (truncated to first 16 characters) |
 
-每笔用户交易都会打印此日志。deposit 系统交易（type 0x7e）自动跳过不打印。
+Logged for every user transaction. Deposit system transactions (type 0x7e) are automatically skipped.
 
-### 4. 定时统计（每 60 秒）
+### 4. Periodic Stats (every 60 seconds)
 
 ```
 [STATS] flashblocks=1440 tracked=4 confirmed=4 missing=0 latency_alerts=0 reconnects=0
 ```
 
-| 字段 | 含义 |
-|------|------|
-| `flashblocks` | 累计收到的 WS 事件总数（header + transaction，含 deposit） |
-| `tracked` | 累计跟踪的用户交易数（过滤 deposit 后） |
-| `confirmed` | Alert 2 验证通过的数量（tx 在链上） |
-| `missing` | Alert 2 验证失败的数量（tx 不在区块中，疑似 reorg） |
-| `latency_alerts` | Alert 1 触发的交易数（收到时间 > blocktime + 1s） |
-| `reconnects` | WS 断线重连次数 |
+| Field | Description |
+|-------|-------------|
+| `flashblocks` | Total WS events received (header + transaction, including deposit) |
+| `tracked` | Total user transactions tracked (after filtering deposit) |
+| `confirmed` | Alert 2 verifications passed (tx found on-chain) |
+| `missing` | Alert 2 verifications failed (tx not in block, possible reorg) |
+| `latency_alerts` | Alert 1 triggered count (received time > blocktime + 1s) |
+| `reconnects` | WS reconnection count |
 
-正常运行时 `tracked == confirmed + missing`，`missing` 和 `latency_alerts` 应该是 0。
+During normal operation `tracked == confirmed + missing`, and `missing` and `latency_alerts` should be 0.
 
-### 5. Alert 1 — 延迟告警
+### 5. Alert 1 — Latency Alert
 
 ```
 [ALERT][latency] Flashblock latency > 1s at block #26488167
@@ -227,22 +225,22 @@ Threshold: 1s
 Tx: 0xabc123...
 ```
 
-收到 transaction 事件时立刻判断 `receivedAt > blockTimestamp + 1s` 就触发。同类型告警 30s 内最多发一次 Lark。
+Triggered immediately when `receivedAt > blockTimestamp + 1s`. Same alert type is rate-limited to max 1 Lark message per 30s.
 
-### 6. Alert 2 — 交易缺失告警（疑似 reorg）
+### 6. Alert 2 — Missing Transaction Alert (possible reorg)
 
-正常触发（新 block 到来时）：
+Normal trigger (new block arrives):
 ```
 [REORG] Block #26488167: 3 confirmed, 1 MISSING
 ```
 
-超时兜底触发：
+Fallback timeout trigger:
 ```
 [CHECK] Block #26488167: verify timeout triggered (5s), forcing verification
 [REORG] Block #26488167: 3 confirmed, 1 MISSING
 ```
 
-Lark 告警内容：
+Lark alert content:
 ```
 [ALERT][missing] Tx missing from block #26488167 (1 txs)
 Block: #26488167
@@ -254,20 +252,20 @@ Missing tx hashes:
   0xabc123...
 ```
 
-同一区块的 tx 批量收集、一次 RPC 验证。验证由两种方式触发：
-- **正常**: 收到新 block header 时触发上一个 block 的验证
-- **兜底**: 超过 `VERIFY_TIMEOUT_S`（默认 5s）未收到新 block header，强制触发
+Txs from the same block are batch-collected and verified in a single RPC call. Verification is triggered by:
+- **Normal**: When a new block header arrives, triggers verification of the previous block
+- **Fallback**: When no new block header is received within `VERIFY_TIMEOUT_S` (default 5s), forces verification
 
-### 7. Alert 3 — WS 断开告警
+### 7. Alert 3 — WS Disconnected Alert
 
 ```
 [WS] Disconnected: read: websocket: close 1006: abnormal closure, reconnecting in 1s... (consecutive fails: 1)
 [ALERT][ws_down] WebSocket disconnected
 ```
 
-每次 WS 断开打印。Lark 告警受限频控制。
+Printed on every WS disconnect. Lark alerts are subject to rate limiting.
 
-### 8. Alert 4 — WS 长时间不可用告警
+### 8. Alert 4 — WS Long Downtime Alert
 
 ```
 [ALERT][ws_long_down] WebSocket unavailable for 65s
@@ -277,9 +275,9 @@ First failure: 2026-04-01 08:45:47
 Last error: dial: connection refused
 ```
 
-连续失败 >= 3 次且首次失败超过 `WS_LONG_DOWN_THRESHOLD_S`（默认 60s）时触发。
+Triggered when >= 3 consecutive failures and first failure was more than `WS_LONG_DOWN_THRESHOLD_S` (default 60s) ago.
 
-### 9. Alert 5 — 订阅失败告警
+### 9. Alert 5 — Subscribe Failed Alert
 
 ```
 [ALERT][subscribe_fail] Flashblocks subscribe failed
@@ -287,16 +285,16 @@ URL: ws://10.2.29.244:8546
 RPC Error: [-32601] method not found
 ```
 
-`eth_subscribe` 请求失败时触发（超时、RPC 错误、返回空 subscription ID）。
+Triggered when `eth_subscribe` request fails (timeout, RPC error, or empty subscription ID).
 
-### 10. Alert 6 — 静态 Peer 断开告警
+### 10. Alert 6 — Static Peer Disconnected Alert
 
-终端日志（每个断开的 peer 单独一行）：
+Terminal log (one line per disconnected peer):
 ```
 [PEER] Static peer disconnected: peerID=16Uiu2HAm... addr=/ip4/10.2.27.29/tcp/9222 disconnected_for=45.2s connections=12
 ```
 
-Lark 告警内容：
+Lark alert content:
 ```
 [ALERT][peer_disconnect] 1 static peer(s) disconnected
 Leader Sequencer: http://10.2.29.244:8123
@@ -309,43 +307,43 @@ Disconnected static peers: 1 / 3 static
   Connection count: 12
 ```
 
-Peer status monitor 每 30s 轮询一次，发现静态 peer 断开时触发。所有 peer 正常连接时打印：
+Peer status monitor polls every 30s, triggers when static peers are disconnected. When all peers are connected:
 ```
 [PEER] All 3 static peers connected
 ```
 
-### 11. Alert 7 — Leader 查找失败告警
+### 11. Alert 7 — Leader Discovery Failed Alert
 
 ```
-[PEER] no leader found among conductors [http://10.2.29.244:8547 http://10.2.27.29:8547]
+[PEER] no leader found among conductors [http://localhost:8547 http://localhost:8548]
 [ALERT][leader_find_fail] Failed to find leader sequencer
-Conductors: [http://10.2.29.244:8547 http://10.2.27.29:8547]
+Conductors: [http://localhost:8547 http://localhost:8548]
 Error: no leader found among conductors [...]
 ```
 
-所有 conductor 均不可达或均非 leader 时触发。
+Triggered when all conductors are unreachable or none reports as leader.
 
-### 12. Alert 8 — Peer Status RPC 失败告警
+### 12. Alert 8 — Peer Status RPC Failed Alert
 
 ```
-[PEER] Failed to get peer status from http://10.2.29.244:8123: rpc post: connection refused
+[PEER] Failed to get peer status from http://localhost:8123: rpc post: connection refused
 [ALERT][peer_status_fail] Peer status RPC failed
-Leader Sequencer: http://10.2.29.244:8123
+Leader Sequencer: http://localhost:8123
 Error: rpc post: connection refused
 ```
 
-找到 leader 后调用 `eth_flashblocksPeerStatus` 失败时触发。
+Triggered when `eth_flashblocksPeerStatus` call fails after finding the leader.
 
-### 13. 区块查询重试（Verbose 模式或最终失败时）
+### 13. Block Query Retries (verbose mode or final failure)
 
 ```
 [CHECK] Block #26488167 not available (attempt 1/4): block not found, retrying...
 [CHECK] Block #26488167 still unavailable after retries: block not found, skipping
 ```
 
-Alert 2 验证时区块尚未上链的重试日志。重试中的日志仅 `VERBOSE: true` 时打印，全部失败的日志始终打印。
+Retry logs during Alert 2 verification when the block is not yet on-chain. Retry attempt logs only print with `VERBOSE: true`; final failure logs always print.
 
-### 14. Verbose 模式额外日志（VERBOSE: true）
+### 14. Verbose Mode Extra Logs (VERBOSE: true)
 
 ```
 [WS] New block #26488167 (ts: 1775123456, hash: 0xbd83b4c392300...)
@@ -356,11 +354,11 @@ Alert 2 验证时区块尚未上链的重试日志。重试中的日志仅 `VERB
 [OK] Block #26488167: all 3 txs confirmed
 ```
 
-日常运行建议关闭 verbose，排查问题时打开。
+Recommended to keep verbose off during normal operation; enable when troubleshooting.
 
-## Lark 告警消息格式
+## Lark Alert Message Format
 
-所有告警发送到 Lark 时的消息格式：
+All alerts sent to Lark use this format:
 
 ```
 Flashblocks Monitor Alert
@@ -372,60 +370,60 @@ Flashblocks Monitor Alert
 Time: 2026-04-01 08:48:31
 ```
 
-其中 `alertType` 为 `latency` / `missing` / `ws_down` / `ws_long_down` / `subscribe_fail` / `peer_disconnect` / `leader_find_fail` / `peer_status_fail` 八种之一。
+Where `alertType` is one of: `latency` / `missing` / `ws_down` / `ws_long_down` / `subscribe_fail` / `peer_disconnect` / `leader_find_fail` / `peer_status_fail`.
 
-告警通过 xmonitor 格式发送到指定 Lark 群：
-- 8 种告警类型独立限频，互不影响
-- 同类型告警在 `ALERT_RATE_LIMIT_S`（默认 30s）内最多发 1 条
-- `ALERT_ENABLED: false` 时所有告警仅打日志，不发 Lark
+Alerts are sent to the specified Lark group via xmonitor format:
+- 8 alert types are rate-limited independently
+- Max 1 alert per type within `ALERT_RATE_LIMIT_S` (default 30s)
+- When `ALERT_ENABLED: false`, all alerts are logged only, no Lark messages sent
 
-## 重连机制
+## Reconnection
 
-WS 断开后自动重连，指数退避：
+WS reconnects automatically with exponential backoff:
 
 ```
-断开 -> sleep 1s -> 重连
-再断 -> sleep 2s -> 重连
-再断 -> sleep 4s -> 重连
-... 最大 30s
+disconnect -> sleep 1s -> reconnect
+again      -> sleep 2s -> reconnect
+again      -> sleep 4s -> reconnect
+... max 30s
 ```
 
-如果连接成功且持续超过 30s 后再断开，退避时间重置为 1s。
+If connection was stable for >30s before disconnecting, backoff resets to 1s.
 
-重连时自动清空 `pendingTxs`，因为断连期间可能错过了一些 tx 和 header，残留数据验证意义不大。
+`pendingTxs` are cleared on reconnect since data may be incomplete during the disconnect period, and stale data would produce unreliable verification results.
 
-## 构建与运行
+## Build & Run
 
 ```bash
-# 本地构建
+# Build locally
 go build -o flashbox-monitor .
 
-# 运行（默认读取 cfg.yml）
+# Run (reads cfg.yml by default)
 ./flashbox-monitor
 
-# 指定配置文件
+# Specify config file
 ./flashbox-monitor -config /path/to/config.yml
 
-# 环境变量覆盖
+# Override with environment variables
 WS_URL=ws://127.0.0.1:8546 VERBOSE=true ./flashbox-monitor
 
-# 仅运行 Peer Status Monitor（Alert 6/7/8），跳过 WS 相关监控（Alert 1-5）
+# Run Peer Status Monitor only (Alert 6/7/8), skip WS monitoring (Alert 1-5)
 WS_URL="" CONDUCTOR_URL="http://10.2.29.244:8547,http://10.2.27.29:8547" ./flashbox-monitor
 ```
 
 ## Docker
 
 ```bash
-# 构建（x86_64/amd64）
+# Build (x86_64/amd64)
 docker buildx build --platform linux/amd64 -t flashbox-monitor .
 
-# 运行
+# Run
 docker run flashbox-monitor
 
-# 环境变量覆盖
+# Override with environment variables
 docker run -e WS_URL=ws://host:8546 -e LARK_GROUP_ID=oc_xxx flashbox-monitor
 ```
 
-## Deposit 交易过滤
+## Deposit Transaction Filtering
 
-L1 deposit 交易（type 0x7e）是每个区块必有的系统交易，监控它没有意义。程序通过 `txData.type == "0x7e"` 自动过滤，不纳入跟踪和验证。
+L1 deposit transactions (type 0x7e) are system transactions present in every block — monitoring them is not useful. The program automatically filters them via `txData.type == "0x7e"`, excluding them from tracking and verification.

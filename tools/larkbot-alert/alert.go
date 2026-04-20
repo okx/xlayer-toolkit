@@ -62,13 +62,13 @@ func (a *Alerter) Send(alertType AlertType, title string, details string) {
 		return
 	}
 
-	// 构建 text 消息内容 (content 是 JSON 字符串)
+	// Build text message content (content is a JSON string)
 	textContent := map[string]string{
 		"text": text,
 	}
 	contentBytes, _ := json.Marshal(textContent)
 
-	// 构建 xmonitor 格式的请求体
+	// Build xmonitor format request body
 	request := map[string]interface{}{
 		"receiveId":  a.groupID,
 		"content":    string(contentBytes),

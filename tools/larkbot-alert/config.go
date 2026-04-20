@@ -37,10 +37,10 @@ func LoadConfig(configPath string) *Config {
 		log.Printf("Config file %s not found, using defaults + env", configPath)
 	}
 
-	// 环境变量覆盖
+	// Environment variables override config file values
 	viper.AutomaticEnv()
 
-	// 设置默认值
+	// Set default values
 	viper.SetDefault("WS_URL", "ws://localhost:7547")
 	viper.SetDefault("RPC_URL", "http://localhost:8545")
 	viper.SetDefault("APM_BOT_URL", "")

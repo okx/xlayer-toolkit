@@ -88,7 +88,7 @@ type FlashblockReceipt struct {
 type txBatch struct {
 	mu       sync.Mutex
 	txHashes []string
-	timer    *time.Timer // 超时兜底 timer
+	timer    *time.Timer // fallback timeout timer
 }
 
 // blockContext holds the current pending block info from flashblocks.
@@ -167,7 +167,7 @@ func (m *Monitor) RunWSListener() {
 	for {
 		connectedAt := time.Now()
 
-		// 重连时清空 pendingTxs，断连期间数据不完整，避免误报
+		// Clear pendingTxs on reconnect — data is incomplete during disconnect, avoid false positives
 		m.clearPendingTxs()
 
 		err := m.connectAndListen()
@@ -201,7 +201,7 @@ func (m *Monitor) RunWSListener() {
 	}
 }
 
-// clearPendingTxs 清空所有待验证的 tx batch，停止兜底 timer
+// clearPendingTxs clears all pending tx batches and stops their fallback timers
 func (m *Monitor) clearPendingTxs() {
 	m.pendingTxs.Range(func(key, value any) bool {
 		batch := value.(*txBatch)
@@ -228,7 +228,7 @@ func (m *Monitor) connectAndListen() error {
 	log.Printf("[WS] Connected to %s", m.cfg.WSURL)
 	conn.SetReadLimit(10 * 1024 * 1024)
 
-	// ── 发送 eth_subscribe 订阅请求 ──
+	// ── Send eth_subscribe request ──
 	subReq := WSSubscribeRequest{
 		JSONRPC: "2.0",
 		ID:      1,
@@ -249,7 +249,7 @@ func (m *Monitor) connectAndListen() error {
 	}
 	log.Printf("[WS] Sent eth_subscribe request")
 
-	// ── 等待订阅确认 ──
+	// ── Wait for subscription confirmation ──
 	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	_, subMsg, err := conn.ReadMessage()
 	if err != nil {
@@ -356,7 +356,7 @@ func (m *Monitor) handleHeader(header *FlashblockHeader) {
 		log.Printf("[WS] New block #%d (ts: %d, hash: %s...)", blockNum, ts, truncate(header.Hash, 16))
 	}
 
-	// 新 block 到来，触发上一个 block 的批量验证
+	// New block arrived, trigger batch verification for the previous block
 	if prevBlockNum > 0 {
 		m.triggerVerify(prevBlockNum)
 	}
@@ -373,7 +373,7 @@ func (m *Monitor) handleTransaction(tx *FlashblockTxEvent) {
 
 	now := time.Now()
 
-	// 跳过 deposit tx (type 0x7e)
+	// Skip deposit tx (type 0x7e)
 	if tx.TxData.Type == "0x7e" {
 		if m.cfg.Verbose {
 			log.Printf("[WS] Skipping deposit tx: %s", tx.TxHash)
@@ -419,7 +419,7 @@ func (m *Monitor) handleTransaction(tx *FlashblockTxEvent) {
 		}
 	}
 
-	// ── Alert 2: 收集 tx 到 batch，等新 block 到来或超时兜底时批量验证 ──
+	// ── Alert 2: collect tx into batch, verify when new block arrives or on timeout fallback ──
 	m.addToBatch(blockNum, tx.TxHash)
 }
 
@@ -427,14 +427,14 @@ func (m *Monitor) handleTransaction(tx *FlashblockTxEvent) {
 // Alert 2: batch collection + verification
 // ──────────────────────────────────────────────
 
-// addToBatch 将 txHash 加入对应 block 的 batch，首笔 tx 时启动超时兜底 timer
+// addToBatch adds a txHash to the corresponding block's batch, starts a fallback timeout timer on the first tx
 func (m *Monitor) addToBatch(blockNum int64, txHash string) {
 	val, loaded := m.pendingTxs.LoadOrStore(blockNum, &txBatch{})
 	batch := val.(*txBatch)
 
 	batch.mu.Lock()
 	batch.txHashes = append(batch.txHashes, txHash)
-	// 首笔 tx 加入时，启动超时兜底 timer
+	// Start fallback timeout timer when the first tx is added
 	if !loaded {
 		batch.timer = time.AfterFunc(m.cfg.VerifyTimeout, func() {
 			log.Printf("[CHECK] Block #%d: verify timeout triggered (%v), forcing verification",
@@ -445,7 +445,7 @@ func (m *Monitor) addToBatch(blockNum int64, txHash string) {
 	batch.mu.Unlock()
 }
 
-// triggerVerify 触发某个 block 的批量验证，取出 batch 后起 goroutine 执行
+// triggerVerify triggers batch verification for a block, extracts the batch and runs in a goroutine
 func (m *Monitor) triggerVerify(blockNum int64) {
 	val, ok := m.pendingTxs.LoadAndDelete(blockNum)
 	if !ok {
