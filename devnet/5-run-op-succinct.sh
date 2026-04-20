@@ -70,6 +70,31 @@ sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_NODE_RPC_URL_IN_DOCKER|" "$OP_SUC
 
 sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$PROOF_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.proposer
 
+# Local GPU proving: SP1_PROVER=local and MOCK_MODE=true are mutually exclusive
+# in op-succinct. When GPU is enabled, force MOCK_MODE=false and write SP1_PROVER /
+# CUDA_GPU_IDS into the proposer env (appending if the keys don't exist).
+COMPOSE_GPU_ARGS=()
+if [ "$OP_SUCCINCT_USE_GPU" = "true" ]; then
+    echo "🎮 Enabling local GPU proving (CUDA_GPU_IDS=${OP_SUCCINCT_CUDA_GPU_IDS})"
+    sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=false|" "$OP_SUCCINCT_DIR"/.env.proposer
+
+    upsert_env() {
+        local key=$1 value=$2 file=$3
+        if grep -qE "^${key}=" "$file"; then
+            sed_inplace "s|^${key}=.*|${key}=${value}|" "$file"
+        else
+            printf '\n%s=%s\n' "$key" "$value" >> "$file"
+        fi
+    }
+    upsert_env SP1_PROVER local "$OP_SUCCINCT_DIR"/.env.proposer
+    upsert_env CUDA_GPU_IDS "$OP_SUCCINCT_CUDA_GPU_IDS" "$OP_SUCCINCT_DIR"/.env.proposer
+    # The CUDA image pre-bakes groth16 trusted-setup params (SP1_BAKE_PARAMS=groth16).
+    # Align the proposer's agg-proof mode so it doesn't try to fetch plonk params at runtime.
+    upsert_env AGG_PROOF_MODE groth16 "$OP_SUCCINCT_DIR"/.env.proposer
+
+    COMPOSE_GPU_ARGS=(-f docker-compose.yml -f docker-compose-op-succinct-gpu.yml)
+fi
+
 # update .env.challenger
 sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
 sed_inplace "s|^L2_RPC=.*|L2_RPC=$L2_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
@@ -97,7 +122,7 @@ while true; do
 done
 
 
-docker compose up -d op-succinct-proposer
+docker compose "${COMPOSE_GPU_ARGS[@]}" up -d op-succinct-proposer
 echo "   ✓ Proposer started"
 
 if [ "$MIN_RUN" = "false" ]; then

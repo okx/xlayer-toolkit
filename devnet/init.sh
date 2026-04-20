@@ -15,10 +15,12 @@ function build_and_tag_image() {
   local image_tag=$2
   local build_dir=$3
   local dockerfile=$4
+  shift 4
+  local extra_args=("$@")
 
   cd "$build_dir"
   GITTAG=$(git rev-parse --short HEAD)
-  docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
+  docker build "${extra_args[@]}" -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
   docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
   echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
   cd -
@@ -135,6 +137,20 @@ else
     cd "$OP_SUCCINCT_LOCAL_DIRECTORY"
     build_and_tag_image "op-succinct" "$OP_SUCCINCT_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile"
     build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.contract"
+
+    if [ "$OP_SUCCINCT_USE_GPU" = "true" ]; then
+      echo "🔨 Building op-succinct CUDA image"
+      cuda_build_args=()
+      if [ -n "$OP_SUCCINCT_SP1_PARAMS_DIR" ]; then
+        if [ ! -d "$OP_SUCCINCT_SP1_PARAMS_DIR" ]; then
+          echo "❌ OP_SUCCINCT_SP1_PARAMS_DIR=$OP_SUCCINCT_SP1_PARAMS_DIR does not exist"
+          exit 1
+        fi
+        echo "📦 Using local SP1 params from $OP_SUCCINCT_SP1_PARAMS_DIR"
+        cuda_build_args+=(--build-context "sp1-params-cache=$OP_SUCCINCT_SP1_PARAMS_DIR")
+      fi
+      build_and_tag_image "op-succinct-cuda" "$OP_SUCCINCT_CUDA_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.cuda" "${cuda_build_args[@]}"
+    fi
   fi
 fi
 

@@ -1,0 +1,11 @@
+services:
+  op-succinct-proposer:
+    image: "${OP_SUCCINCT_CUDA_IMAGE_TAG}"
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
