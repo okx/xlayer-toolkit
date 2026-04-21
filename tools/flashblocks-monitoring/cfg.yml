@@ -32,8 +32,11 @@ RPC_TIMEOUT_S: 10
 # Enable verbose logging
 VERBOSE: false
 
-# Conductor addresses (comma-separated)
-CONDUCTOR_URL: "http://localhost:8547,http://localhost:8548"
+# Conductor to sequencer RPC pairs
+CONDUCTOR1_URL: "http://localhost:8547"
+SEQUENCER1_URL: "http://localhost:8123"
+CONDUCTOR2_URL: "http://localhost:8548"
+SEQUENCER2_URL: "http://localhost:8223"
 
 # Peer status poll interval (seconds)
 PEER_STATUS_POLL_INTERVAL_S: 30

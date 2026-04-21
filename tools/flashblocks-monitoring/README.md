@@ -39,12 +39,12 @@ Finds the leader sequencer via `conductor_leader`, then calls `eth_flashblocksPe
 
 - Trigger: Any peer with `isStatic == true` has `connectionState == "disconnected"`
 - Timing: Polled every `PEER_STATUS_POLL_INTERVAL_S` (default 30s)
-- Flow: Iterates all `CONDUCTOR_URL`s, calls `conductor_leader` to find leader → replaces conductor port with 8123 to get sequencer RPC → calls `eth_flashblocksPeerStatus` for peer status
+- Flow: Iterates all configured conductor-sequencer pairs, calls `conductor_leader` to find leader → uses the paired sequencer RPC URL → calls `eth_flashblocksPeerStatus` for peer status
 - Alerts and logs include PeerID and IP address for each disconnected peer
 
 ### Alert 7: Leader Discovery Failed (leader_find_fail)
 
-Alerts when all `CONDUCTOR_URL`s fail to respond or none is the leader.
+Alerts when all configured conductors fail to respond or none is the leader.
 
 - Trigger: All conductors are unreachable or none reports as leader
 - Timing: Each peer status poll cycle
@@ -105,8 +105,13 @@ VERIFY_TIMEOUT_S: 5
 # RPC request timeout (seconds)
 RPC_TIMEOUT_S: 10
 
-# Conductor addresses (comma-separated)
-CONDUCTOR_URL: "http://10.2.29.244:50050,http://10.2.27.29:50050"
+# Conductor to sequencer RPC pairs
+CONDUCTOR1_URL: "http://localhost:8547"
+SEQUENCER1_URL: "http://localhost:8123"
+CONDUCTOR2_URL: "http://localhost:8548"
+SEQUENCER2_URL: "http://localhost:8223"
+# CONDUCTOR3_URL: ""
+# SEQUENCER3_URL: ""
 
 # Peer status poll interval (seconds)
 PEER_STATUS_POLL_INTERVAL_S: 30
@@ -139,9 +144,9 @@ WS connect --> eth_subscribe --> continuously receive events
                                                     alert Lark
 
 Peer Status Monitor (separate goroutine, polls every 30s):
-  CONDUCTOR_URL list --> conductor_leader --> find leader
-        |                                      failure? --> Alert 7 (leader_find_fail)
-  replace port with 8123 --> eth_flashblocksPeerStatus
+  Conductor-Sequencer pairs --> conductor_leader --> find leader
+        |                                             failure? --> Alert 7 (leader_find_fail)
+  use paired sequencer URL --> eth_flashblocksPeerStatus
         |                                      failure? --> Alert 8 (peer_status_fail)
   check isStatic && disconnected --> Alert 6 (peer_disconnect)
 ```
@@ -164,7 +169,8 @@ Peer Status Monitor (separate goroutine, polls every 30s):
   Alert Rate Limit:30s
   Verify Timeout:  5s
   RPC Timeout:     10s
-  Conductors:      [http://localhost:8547 http://localhost:8548]
+  Conductor 1:     http://localhost:8547 -> http://localhost:8123
+  Conductor 2:     http://localhost:8548 -> http://localhost:8223
   Peer Poll:       30s
   Verbose:         false
 ========================================
@@ -269,7 +275,7 @@ Printed on every WS disconnect. Lark alerts are subject to rate limiting.
 
 ```
 [ALERT][ws_long_down] WebSocket unavailable for 65s
-URL: ws://10.2.29.244:8546
+URL: ws://localhost:8546
 Consecutive failures: 5
 First failure: 2026-04-01 08:45:47
 Last error: dial: connection refused
@@ -281,7 +287,7 @@ Triggered when >= 3 consecutive failures and first failure was more than `WS_LON
 
 ```
 [ALERT][subscribe_fail] Flashblocks subscribe failed
-URL: ws://10.2.29.244:8546
+URL: ws://localhost:8546
 RPC Error: [-32601] method not found
 ```
 
@@ -291,18 +297,18 @@ Triggered when `eth_subscribe` request fails (timeout, RPC error, or empty subsc
 
 Terminal log (one line per disconnected peer):
 ```
-[PEER] Static peer disconnected: peerID=16Uiu2HAm... addr=/ip4/10.2.27.29/tcp/9222 disconnected_for=45.2s connections=12
+[PEER] Static peer disconnected: peerID=16Uiu2HAm... addr=/ip4/localhost/tcp/9222 disconnected_for=45.2s connections=12
 ```
 
 Lark alert content:
 ```
 [ALERT][peer_disconnect] 1 static peer(s) disconnected
-Leader Sequencer: http://10.2.29.244:8123
+Leader Sequencer: http://localhost:8123
 Local Peer: 16Uiu2HAm...
 Disconnected static peers: 1 / 3 static
 
   PeerID: 16Uiu2HAm...
-  Addr: /ip4/10.2.27.29/tcp/9222
+  Addr: /ip4/localhost/tcp/9222
   Disconnected for: 45.2s
   Connection count: 12
 ```
@@ -317,7 +323,7 @@ Peer status monitor polls every 30s, triggers when static peers are disconnected
 ```
 [PEER] no leader found among conductors [http://localhost:8547 http://localhost:8548]
 [ALERT][leader_find_fail] Failed to find leader sequencer
-Conductors: [http://localhost:8547 http://localhost:8548]
+Conductors: [{http://localhost:8547 http://localhost:8123} {http://localhost:8548 http://localhost:8223}]
 Error: no leader found among conductors [...]
 ```
 
@@ -408,7 +414,7 @@ go build -o flashblocks-monitor .
 WS_URL=ws://127.0.0.1:8546 VERBOSE=true ./flashblocks-monitor
 
 # Run Peer Status Monitor only (Alert 6/7/8), skip WS monitoring (Alert 1-5)
-WS_URL="" CONDUCTOR_URL="http://10.2.29.244:8547,http://10.2.27.29:8547" ./flashblocks-monitor
+WS_URL="" CONDUCTOR1_URL="http://localhost:8547" SEQUENCER1_URL="http://localhost:8123" CONDUCTOR2_URL="http://localhost:8548" SEQUENCER2_URL="http://localhost:8223" ./flashblocks-monitor
 ```
 
 ## Docker

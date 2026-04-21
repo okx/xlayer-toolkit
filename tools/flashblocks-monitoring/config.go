@@ -1,13 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/spf13/viper"
 )
+
+type ConductorSequencerPair struct {
+	ConductorURL string
+	SequencerURL string
+}
 
 type Config struct {
 	WSURL                  string
@@ -22,7 +27,7 @@ type Config struct {
 	VerifyTimeout          time.Duration
 	RPCTimeout             time.Duration
 	PeerStatusPollInterval time.Duration
-	ConductorURLs          []string
+	ConductorSequencers    []ConductorSequencerPair
 	Verbose                bool
 }
 
@@ -53,7 +58,10 @@ func LoadConfig(configPath string) *Config {
 	viper.SetDefault("VERIFY_TIMEOUT_S", 5)
 	viper.SetDefault("RPC_TIMEOUT_S", 10)
 	viper.SetDefault("PEER_STATUS_POLL_INTERVAL_S", 30)
-	viper.SetDefault("CONDUCTOR_URL", "")
+	viper.SetDefault("CONDUCTOR1_URL", "http://localhost:8547")
+	viper.SetDefault("SEQUENCER1_URL", "http://localhost:8123")
+	viper.SetDefault("CONDUCTOR2_URL", "http://localhost:8548")
+	viper.SetDefault("SEQUENCER2_URL", "http://localhost:8223")
 	viper.SetDefault("VERBOSE", false)
 
 	return &Config{
@@ -69,21 +77,22 @@ func LoadConfig(configPath string) *Config {
 		VerifyTimeout:          time.Duration(viper.GetInt("VERIFY_TIMEOUT_S")) * time.Second,
 		RPCTimeout:             time.Duration(viper.GetInt("RPC_TIMEOUT_S")) * time.Second,
 		PeerStatusPollInterval: time.Duration(viper.GetInt("PEER_STATUS_POLL_INTERVAL_S")) * time.Second,
-		ConductorURLs:          parseConductorURLs(viper.GetString("CONDUCTOR_URL")),
+		ConductorSequencers:    parseConductorSequencers(),
 		Verbose:                viper.GetBool("VERBOSE"),
 	}
 }
 
-func parseConductorURLs(raw string) []string {
-	if raw == "" {
-		return nil
-	}
-	var urls []string
-	for _, u := range strings.Split(raw, ",") {
-		u = strings.TrimSpace(u)
-		if u != "" {
-			urls = append(urls, u)
+func parseConductorSequencers() []ConductorSequencerPair {
+	var pairs []ConductorSequencerPair
+	for i := 1; i <= 2; i++ {
+		conductor := viper.GetString(fmt.Sprintf("CONDUCTOR%d_URL", i))
+		sequencer := viper.GetString(fmt.Sprintf("SEQUENCER%d_URL", i))
+		if conductor != "" && sequencer != "" {
+			pairs = append(pairs, ConductorSequencerPair{
+				ConductorURL: conductor,
+				SequencerURL: sequencer,
+			})
 		}
 	}
-	return urls
+	return pairs
 }

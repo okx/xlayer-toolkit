@@ -15,6 +15,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	// maxWSMessageSize is the maximum allowed size for a single WebSocket message (10 MB).
+	maxWSMessageSize = 10 * 1024 * 1024
+)
+
 // ──────────────────────────────────────────────
 // JSON-RPC types for eth_subscribe flashblocks
 // ──────────────────────────────────────────────
@@ -142,7 +147,7 @@ func (s *Stats) add(field *int64, n int64) {
 func NewMonitor(cfg *Config) *Monitor {
 	return &Monitor{
 		cfg:     cfg,
-		alerter: NewAlerter(cfg.AlertEnabled, cfg.LarkBotURL, cfg.LarkGroupID, cfg.AlertRateLimit),
+		alerter: NewAlerter(cfg.AlertEnabled, cfg.LarkBotURL, cfg.LarkGroupID, cfg.AlertRateLimit, cfg.RPCTimeout),
 		rpcClient: &http.Client{
 			Timeout: cfg.RPCTimeout,
 		},
@@ -226,7 +231,7 @@ func (m *Monitor) connectAndListen() error {
 	defer conn.Close()
 
 	log.Printf("[WS] Connected to %s", m.cfg.WSURL)
-	conn.SetReadLimit(10 * 1024 * 1024)
+	conn.SetReadLimit(maxWSMessageSize)
 
 	// ── Send eth_subscribe request ──
 	subReq := WSSubscribeRequest{
@@ -381,11 +386,13 @@ func (m *Monitor) handleTransaction(tx *FlashblockTxEvent) {
 		return
 	}
 
+	m.ctxMu.Lock()
+	ctx := m.curCtx
+	m.ctxMu.Unlock()
+
 	blockNum := hexToInt64(tx.TxData.BlockNumber)
 	if blockNum == 0 {
-		m.ctxMu.Lock()
-		blockNum = m.curCtx.blockNum
-		m.ctxMu.Unlock()
+		blockNum = ctx.blockNum
 	}
 	if blockNum == 0 {
 		if m.cfg.Verbose {
@@ -394,9 +401,7 @@ func (m *Monitor) handleTransaction(tx *FlashblockTxEvent) {
 		return
 	}
 
-	m.ctxMu.Lock()
-	blockTS := m.curCtx.timestamp
-	m.ctxMu.Unlock()
+	blockTS := ctx.timestamp
 
 	m.stats.inc(&m.stats.TxsTracked)
 
@@ -613,13 +618,15 @@ type PeerInfo struct {
 // if any static peers are disconnected. It discovers the leader by calling conductor_leader
 // on each configured conductor URL, then queries the same IP on port 8123.
 func (m *Monitor) RunPeerStatusMonitor() {
-	if len(m.cfg.ConductorURLs) == 0 {
-		log.Printf("[PEER] CONDUCTOR_URL not configured, peer status monitor disabled")
+	if len(m.cfg.ConductorSequencers) == 0 {
+		log.Printf("[PEER] No conductor-sequencer pairs configured, peer status monitor disabled")
 		return
 	}
 
-	log.Printf("[PEER] Starting peer status monitor (poll every %v, conductors: %v)",
-		m.cfg.PeerStatusPollInterval, m.cfg.ConductorURLs)
+	for i, pair := range m.cfg.ConductorSequencers {
+		log.Printf("[PEER] Pair %d: conductor=%s -> sequencer=%s", i+1, pair.ConductorURL, pair.SequencerURL)
+	}
+	log.Printf("[PEER] Starting peer status monitor (poll every %v)", m.cfg.PeerStatusPollInterval)
 
 	ticker := time.NewTicker(m.cfg.PeerStatusPollInterval)
 	defer ticker.Stop()
@@ -632,23 +639,22 @@ func (m *Monitor) RunPeerStatusMonitor() {
 }
 
 // findLeaderSequencerRPC checks each conductor to find the leader, then returns
-// the sequencer RPC URL (same host, port 8123).
+// the paired sequencer RPC URL.
 func (m *Monitor) findLeaderSequencerRPC() (string, error) {
-	for _, conductorURL := range m.cfg.ConductorURLs {
-		isLeader, err := m.rpcConductorLeader(conductorURL)
+	for _, pair := range m.cfg.ConductorSequencers {
+		isLeader, err := m.rpcConductorLeader(pair.ConductorURL)
 		if err != nil {
 			if m.cfg.Verbose {
-				log.Printf("[PEER] Failed to check conductor %s: %v", conductorURL, err)
+				log.Printf("[PEER] Failed to check conductor %s: %v", pair.ConductorURL, err)
 			}
 			continue
 		}
 		if isLeader {
-			// Replace the conductor port with 8123 to get the sequencer RPC URL
-			seqURL := strings.Replace(conductorURL, ":8547", ":8123", 1)
-			return seqURL, nil
+			log.Printf("[PEER] Conductor %s reports as leader, using sequencer %s", pair.ConductorURL, pair.SequencerURL)
+			return pair.SequencerURL, nil
 		}
 	}
-	return "", fmt.Errorf("no leader found among conductors %v", m.cfg.ConductorURLs)
+	return "", fmt.Errorf("no leader found among configured conductors")
 }
 
 func (m *Monitor) rpcConductorLeader(conductorURL string) (bool, error) {
@@ -694,7 +700,7 @@ func (m *Monitor) checkPeerStatus() {
 	if err != nil {
 		log.Printf("[PEER] %v", err)
 		m.alerter.Send(AlertLeaderFindFail, "Failed to find leader sequencer",
-			fmt.Sprintf("Conductors: %v\nError: %v", m.cfg.ConductorURLs, err))
+			fmt.Sprintf("Conductors: %v\nError: %v", m.cfg.ConductorSequencers, err))
 		return
 	}
 
@@ -788,12 +794,14 @@ func (m *Monitor) rpcGetPeerStatus(seqRPCURL string) (*PeerStatusResponse, error
 // ──────────────────────────────────────────────
 
 func hexToInt64(hexStr string) int64 {
+	raw := hexStr
 	hexStr = strings.TrimPrefix(hexStr, "0x")
 	if hexStr == "" {
 		return 0
 	}
-	n, _ := new(big.Int).SetString(hexStr, 16)
-	if n == nil {
+	n, ok := new(big.Int).SetString(hexStr, 16)
+	if !ok || n == nil {
+		log.Printf("[WARN] Malformed hex value: %q", raw)
 		return 0
 	}
 	return n.Int64()

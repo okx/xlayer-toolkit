@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const statsLogInterval = 60 * time.Second
+
 func main() {
 	configPath := flag.String("config", "cfg.yml", "Path to config file")
 	flag.Parse()
@@ -30,7 +32,9 @@ func main() {
 	log.Printf("  Alert Rate Limit:%v", cfg.AlertRateLimit)
 	log.Printf("  Verify Timeout:  %v", cfg.VerifyTimeout)
 	log.Printf("  RPC Timeout:     %v", cfg.RPCTimeout)
-	log.Printf("  Conductors:      %v", cfg.ConductorURLs)
+	for i, pair := range cfg.ConductorSequencers {
+		log.Printf("  Conductor %d:     %s -> %s", i+1, pair.ConductorURL, pair.SequencerURL)
+	}
 	log.Printf("  Peer Poll:       %v", cfg.PeerStatusPollInterval)
 	log.Printf("  Verbose:         %v", cfg.Verbose)
 	log.Println("========================================")
@@ -45,7 +49,7 @@ func main() {
 
 	// Periodic stats logging
 	go func() {
-		ticker := time.NewTicker(60 * time.Second)
+		ticker := time.NewTicker(statsLogInterval)
 		defer ticker.Stop()
 		for range ticker.C {
 			monitor.PrintStats()

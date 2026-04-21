@@ -14,14 +14,14 @@ import (
 type AlertType string
 
 const (
-	AlertLatency        AlertType = "latency"         // Alert 1: flashblock received too late
-	AlertMissing        AlertType = "missing"         // Alert 2: tx missing from canonical block
-	AlertWSDown         AlertType = "ws_down"         // WebSocket disconnected
-	AlertWSLongDown     AlertType = "ws_long_down"    // WebSocket long time unavailable
-	AlertSubscribeFail  AlertType = "subscribe_fail"  // eth_subscribe failed
-	AlertPeerDisconnect   AlertType = "peer_disconnect"    // Static peer disconnected
-	AlertPeerStatusFail   AlertType = "peer_status_fail"   // Peer status RPC failed
-	AlertLeaderFindFail   AlertType = "leader_find_fail"   // Failed to find leader sequencer
+	AlertLatency        AlertType = "latency"          // Alert 1: flashblock received too late
+	AlertMissing        AlertType = "missing"          // Alert 2: tx missing from canonical block
+	AlertWSDown         AlertType = "ws_down"          // WebSocket disconnected
+	AlertWSLongDown     AlertType = "ws_long_down"     // WebSocket long time unavailable
+	AlertSubscribeFail  AlertType = "subscribe_fail"   // eth_subscribe failed
+	AlertPeerDisconnect AlertType = "peer_disconnect"  // Static peer disconnected
+	AlertPeerStatusFail AlertType = "peer_status_fail" // Peer status RPC failed
+	AlertLeaderFindFail AlertType = "leader_find_fail" // Failed to find leader sequencer
 )
 
 // Alerter sends alerts to Lark via xmonitor format with rate limiting.
@@ -36,22 +36,19 @@ type Alerter struct {
 	lastSent map[AlertType]time.Time
 }
 
-func NewAlerter(enabled bool, botURL, groupID string, rateLimit time.Duration) *Alerter {
+func NewAlerter(enabled bool, botURL, groupID string, rateLimit, httpTimeout time.Duration) *Alerter {
 	return &Alerter{
 		enabled:   enabled,
 		botURL:    botURL,
 		groupID:   groupID,
 		rateLimit: rateLimit,
-		client:    &http.Client{Timeout: 10 * time.Second},
+		client:    &http.Client{Timeout: httpTimeout},
 		lastSent:  make(map[AlertType]time.Time),
 	}
 }
 
 // Send sends an alert to Lark if rate limit allows.
 func (a *Alerter) Send(alertType AlertType, title string, details string) {
-	text := fmt.Sprintf("Flashblocks Monitor Alert\n\n[%s] %s\n\n%s\n\nTime: %s",
-		alertType, title, details, time.Now().Format("2006-01-02 15:04:05"))
-
 	if !a.enabled || a.botURL == "" || a.groupID == "" {
 		log.Printf("[ALERT][%s] %s\n%s", alertType, title, details)
 		return
@@ -61,6 +58,9 @@ func (a *Alerter) Send(alertType AlertType, title string, details string) {
 		log.Printf("[ALERT][%s][rate-limited] %s", alertType, title)
 		return
 	}
+
+	text := fmt.Sprintf("Flashblocks Monitor Alert\n\n[%s] %s\n\n%s\n\nTime: %s",
+		alertType, title, details, time.Now().Format("2006-01-02 15:04:05"))
 
 	// Build text message content (content is a JSON string)
 	textContent := map[string]string{
