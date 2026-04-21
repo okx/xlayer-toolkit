@@ -38,7 +38,7 @@ Alerts when the `eth_subscribe` request fails (timeout, RPC error, or empty subs
 Finds the leader sequencer via `conductor_leader`, then calls `eth_flashblocksPeerStatus` to check static peer connection status.
 
 - Trigger: Any peer with `isStatic == true` has `connectionState == "disconnected"`
-- Timing: Polled every `PEER_STATUS_POLL_INTERVAL_S` (default 30s)
+- Timing: Polled every `PEER_STATUS_POLL_INTERVAL_S` (default 5s)
 - Flow: Iterates all configured conductor-sequencer pairs, calls `conductor_leader` to find leader → uses the paired sequencer RPC URL → calls `eth_flashblocksPeerStatus` for peer status
 - Alerts and logs include PeerID and IP address for each disconnected peer
 
@@ -110,11 +110,9 @@ CONDUCTOR1_URL: "http://localhost:8547"
 SEQUENCER1_URL: "http://localhost:8123"
 CONDUCTOR2_URL: "http://localhost:8548"
 SEQUENCER2_URL: "http://localhost:8223"
-# CONDUCTOR3_URL: ""
-# SEQUENCER3_URL: ""
 
 # Peer status poll interval (seconds)
-PEER_STATUS_POLL_INTERVAL_S: 30
+PEER_STATUS_POLL_INTERVAL_S: 5
 
 # Enable verbose logging
 VERBOSE: false
@@ -143,7 +141,7 @@ WS connect --> eth_subscribe --> continuously receive events
                                                           |
                                                     alert Lark
 
-Peer Status Monitor (separate goroutine, polls every 30s):
+Peer Status Monitor (separate goroutine, polls every 5s):
   Conductor-Sequencer pairs --> conductor_leader --> find leader
         |                                             failure? --> Alert 7 (leader_find_fail)
   use paired sequencer URL --> eth_flashblocksPeerStatus
@@ -171,7 +169,7 @@ Peer Status Monitor (separate goroutine, polls every 30s):
   RPC Timeout:     10s
   Conductor 1:     http://localhost:8547 -> http://localhost:8123
   Conductor 2:     http://localhost:8548 -> http://localhost:8223
-  Peer Poll:       30s
+  Peer Poll:       5s
   Verbose:         false
 ========================================
 ```
@@ -313,7 +311,7 @@ Disconnected static peers: 1 / 3 static
   Connection count: 12
 ```
 
-Peer status monitor polls every 30s, triggers when static peers are disconnected. When all peers are connected:
+Peer status monitor polls every 5s, triggers when static peers are disconnected. When all peers are connected:
 ```
 [PEER] All 3 static peers connected
 ```

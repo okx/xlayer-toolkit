@@ -57,7 +57,7 @@ func LoadConfig(configPath string) *Config {
 	viper.SetDefault("WS_LONG_DOWN_THRESHOLD_S", 60)
 	viper.SetDefault("VERIFY_TIMEOUT_S", 5)
 	viper.SetDefault("RPC_TIMEOUT_S", 10)
-	viper.SetDefault("PEER_STATUS_POLL_INTERVAL_S", 30)
+	viper.SetDefault("PEER_STATUS_POLL_INTERVAL_S", 5)
 	viper.SetDefault("CONDUCTOR1_URL", "http://localhost:8547")
 	viper.SetDefault("SEQUENCER1_URL", "http://localhost:8123")
 	viper.SetDefault("CONDUCTOR2_URL", "http://localhost:8548")

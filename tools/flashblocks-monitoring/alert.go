@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -97,7 +98,8 @@ func (a *Alerter) Send(alertType AlertType, title string, details string) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		log.Printf("Lark webhook returned status %d", resp.StatusCode)
+		respBody, _ := io.ReadAll(resp.Body)
+		log.Printf("Lark webhook returned status %d: %s", resp.StatusCode, string(respBody))
 	} else {
 		log.Printf("[ALERT][%s] Sent to Lark group %s: %s", alertType, a.groupID, title)
 	}

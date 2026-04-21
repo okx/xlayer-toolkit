@@ -39,4 +39,4 @@ CONDUCTOR2_URL: "http://localhost:8548"
 SEQUENCER2_URL: "http://localhost:8223"
 
 # Peer status poll interval (seconds)
-PEER_STATUS_POLL_INTERVAL_S: 30
+PEER_STATUS_POLL_INTERVAL_S: 5

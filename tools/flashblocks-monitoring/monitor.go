@@ -18,6 +18,10 @@ import (
 const (
 	// maxWSMessageSize is the maximum allowed size for a single WebSocket message (10 MB).
 	maxWSMessageSize = 10 * 1024 * 1024
+	// wsHandshakeTimeout is the timeout for the WebSocket handshake and subscribe response.
+	wsHandshakeTimeout = 10 * time.Second
+	// blockFetchRetryDelay is the delay between retries when fetching a block that isn't available yet.
+	blockFetchRetryDelay = 500 * time.Millisecond
 )
 
 // ──────────────────────────────────────────────
@@ -223,7 +227,7 @@ func (m *Monitor) clearPendingTxs() {
 func (m *Monitor) connectAndListen() error {
 	log.Printf("[WS] Connecting to %s ...", m.cfg.WSURL)
 
-	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
+	dialer := websocket.Dialer{HandshakeTimeout: wsHandshakeTimeout}
 	conn, _, err := dialer.Dial(m.cfg.WSURL, nil)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
@@ -255,7 +259,7 @@ func (m *Monitor) connectAndListen() error {
 	log.Printf("[WS] Sent eth_subscribe request")
 
 	// ── Wait for subscription confirmation ──
-	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	conn.SetReadDeadline(time.Now().Add(wsHandshakeTimeout))
 	_, subMsg, err := conn.ReadMessage()
 	if err != nil {
 		m.alerter.Send(AlertSubscribeFail, "Flashblocks subscribe failed",
@@ -490,7 +494,7 @@ func (m *Monitor) verifyBatch(blockNum int64, txHashes []string) {
 			if m.cfg.Verbose {
 				log.Printf("[CHECK] Block #%d not available (attempt %d/4): %v, retrying...", blockNum, attempt+1, err)
 			}
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(blockFetchRetryDelay)
 		}
 	}
 	if err != nil {
@@ -616,7 +620,7 @@ type PeerInfo struct {
 
 // RunPeerStatusMonitor polls eth_flashblocksPeerStatus on the leader sequencer and alerts
 // if any static peers are disconnected. It discovers the leader by calling conductor_leader
-// on each configured conductor URL, then queries the same IP on port 8123.
+// on each configured conductor, then uses the paired sequencer RPC URL.
 func (m *Monitor) RunPeerStatusMonitor() {
 	if len(m.cfg.ConductorSequencers) == 0 {
 		log.Printf("[PEER] No conductor-sequencer pairs configured, peer status monitor disabled")

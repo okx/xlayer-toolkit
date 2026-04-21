@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -65,12 +67,13 @@ func main() {
 	monitor.PrintStats()
 }
 
-func maskURL(url string) string {
-	if url == "" {
+func maskURL(rawURL string) string {
+	if rawURL == "" {
 		return "(not configured)"
 	}
-	if len(url) > 30 {
-		return url[:30] + "..."
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "(invalid URL)"
 	}
-	return url
+	return fmt.Sprintf("%s://%s/...", u.Scheme, u.Host)
 }
