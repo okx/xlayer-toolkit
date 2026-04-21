@@ -936,7 +936,8 @@ services:
     volumes:
       - ./op-succinct/.env.challenger:/app/.env
     ports:
-      - "9001:9001"
+      # Host 9001 is already claimed by op-reth-seq metrics.
+      - "9011:9001"
     command:
       - challenger
       - --env-file=/app/.env
