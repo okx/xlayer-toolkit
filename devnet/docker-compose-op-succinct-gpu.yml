@@ -2,10 +2,10 @@ services:
   op-succinct-proposer:
     image: "${OP_SUCCINCT_CUDA_IMAGE_TAG}"
     runtime: nvidia
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # NVIDIA_VISIBLE_DEVICES=all works under plain `docker compose up` (the
+    # `deploy.resources.reservations.devices` API only applies in swarm mode
+    # or with `--compatibility`, which silently caps the container to 1 GPU
+    # otherwise). Keep `runtime: nvidia` so the nvidia OCI hook runs.
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
