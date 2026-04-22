@@ -38,7 +38,7 @@ if [ ! -f "$OP_SUCCINCT_DIR"/.env.challenger ]; then
 fi
 
 mkdir -p "$OP_SUCCINCT_DIR"/configs/L1
-cp ./l1-geth/execution/genesis-raw.json "$OP_SUCCINCT_DIR"/configs/L1/1337.json
+cp ./l1-geth/execution/genesis-raw.json "$OP_SUCCINCT_DIR"/configs/L1/11155111.json
 
 ANCHOR_STATE_REGISTRY=$(cast call "$OPTIMISM_PORTAL_PROXY_ADDRESS" 'anchorStateRegistry()(address)' -r "$L1_RPC_URL")
 if [ "$MIN_RUN" = "true" ]; then

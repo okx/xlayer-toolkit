@@ -19,7 +19,7 @@ services:
     container_name: mockteeprover
     environment:
       - SIGNER_PRIVATE_KEY=${TEE_SIGNER_PRIVATE_KEY}
-      - CHAIN_ID=${L1_CHAIN_ID:-1337}
+      - CHAIN_ID=${L1_CHAIN_ID:-11155111}
       - VERIFYING_CONTRACT=${TEE_PROOF_VERIFIER_ADDRESS}
       - TASK_DELAY=${TEE_TASK_DELAY:-2s}
     ports:
@@ -30,18 +30,22 @@ services:
     container_name: tee-proposer
     environment:
       - DISPUTE_GAME_FACTORY_ADDRESS=${DISPUTE_GAME_FACTORY_ADDRESS}
-      - OP_PROPOSER_PRIVATE_KEY=${OP_PROPOSER_PRIVATE_KEY}
     command:
       - /app/op-proposer/bin/op-proposer
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --tee-rollup-rpc=http://mockteerpc:8090
       - --game-type=${TEE_GAME_TYPE:-1960}
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
-      - --private-key=${OP_PROPOSER_PRIVATE_KEY}
+      - --xlayer-signer.enabled=true 
+      - --xlayer-signer.endpoint=http://asset-onchain.forked-tz-test.svc.test2.local:7001 
+      - --xlayer-signer.address=0x1a13bddcc02d363366e04d4aa588d3c125b0ff6f
+      - --xlayer-signer.symbol=2882 
+      - --xlayer-signer.project-symbol=3421 
+      - --xlayer-signer.operate-symbol=2882 
       - --poll-interval=2s
       - --proposal-interval=35s
       - --rpc.port=7302
-      - --log.level=info
+      - --log.level=trace
     depends_on:
       - mockteerpc
       - op-batcher
@@ -60,7 +64,12 @@ services:
       - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
       - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
       - --game-factory-address=${DISPUTE_GAME_FACTORY_ADDRESS}
-      - --private-key=${OP_PROPOSER_PRIVATE_KEY}
+      - --xlayer-signer.enabled=true 
+      - --xlayer-signer.endpoint=http://asset-onchain.forked-tz-test.svc.test2.local:7001 
+      - --xlayer-signer.address=0x1a13bddcc02d363366e04d4aa588d3c125b0ff6f
+      - --xlayer-signer.symbol=2882 
+      - --xlayer-signer.project-symbol=3421 
+      - --xlayer-signer.operate-symbol=2882 
       - --game-types=tee
       - --datadir=/data
       - --http-poll-interval=2s

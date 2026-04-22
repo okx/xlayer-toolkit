@@ -122,7 +122,7 @@ services:
       - --interop-eth1data-votes
       - --chain-config-file=/consensus/config.yml
       - --contract-deployment-block=0
-      - --chain-id=1337
+      - --chain-id=11155111
       - --rpc-host=0.0.0.0
       - --grpc-gateway-host=0.0.0.0
       - --execution-endpoint=http://l1-geth:8551
