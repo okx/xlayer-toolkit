@@ -182,7 +182,7 @@ func RunTxs(e func(ethcmn.Address) []TxParam) {
 	}
 
 	concurrency := TransferCfg.Concurrency
-	count := len(accounts) / concurrency
+	count := (len(accounts) + concurrency - 1) / concurrency
 	for i := 0; i < concurrency; i++ {
 		go func(gIndex int) {
 			for {
@@ -194,6 +194,9 @@ func RunTxs(e func(ethcmn.Address) []TxParam) {
 				}
 
 				start := gIndex * count
+				if start >= len(accounts) {
+					return
+				}
 				end := start + count
 				if end > len(accounts) {
 					end = len(accounts)
