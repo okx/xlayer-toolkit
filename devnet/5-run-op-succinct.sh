@@ -70,8 +70,11 @@ sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_NODE_RPC_URL_IN_DOCKER|" "$OP_SUC
 
 sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$PROOF_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.proposer
 
-# ANCHOR_STATE_REGISTRY_ADDRESS is required by proposer since op-succinct PR #746
-# (Dec 2025). Reuses $ANCHOR_STATE_REGISTRY computed above for .env.deploy.
+sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.proposer
+sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.challenger
+
+# upsert_env: fall back to appending when example.env.* doesn't declare the key.
+# Used below for SP1_PROVER / CUDA_GPU_IDS / AGG_PROOF_MODE which are GPU-only.
 upsert_env() {
     local key=$1 value=$2 file=$3
     if grep -qE "^${key}=" "$file"; then
@@ -80,7 +83,6 @@ upsert_env() {
         printf '\n%s=%s\n' "$key" "$value" >> "$file"
     fi
 }
-upsert_env ANCHOR_STATE_REGISTRY_ADDRESS "$ANCHOR_STATE_REGISTRY" "$OP_SUCCINCT_DIR"/.env.proposer
 
 # Local GPU proving: SP1_PROVER=local and MOCK_MODE=true are mutually exclusive
 # in op-succinct. When GPU is enabled, force MOCK_MODE=false and write SP1_PROVER /
