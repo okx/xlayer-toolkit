@@ -65,10 +65,11 @@ run_job() {
 
 matches_cron() {
     local cron="$1"
-    local cron_min cron_hour _rest
-    read -r cron_min cron_hour _rest <<< "$cron"
+    local cron_min cron_hour cron_dom cron_mon cron_dow
+    read -r cron_min cron_hour cron_dom cron_mon cron_dow <<< "$cron"
     local cur_min=$(TZ=Asia/Shanghai date +%-M)
     local cur_hour=$(TZ=Asia/Shanghai date +%-H)
+    local cur_dow=$(TZ=Asia/Shanghai date +%u)  # 1=Monday, 7=Sunday
 
     # Match minute
     local min_ok=false
@@ -92,7 +93,34 @@ matches_cron() {
         done
     fi
 
-    [ "$min_ok" = "true" ] && [ "$hour_ok" = "true" ]
+    # Match day-of-week (1-5 = Mon-Fri, * = any)
+    local dow_ok=false
+    if [ "${cron_dow:-*}" = "*" ]; then
+        dow_ok=true
+    else
+        # Handle ranges like 1-5 and lists like 1,3,5
+        local expanded_dow
+        expanded_dow=$(echo "$cron_dow" | sed 's/-/../g' | xargs -I{} bash -c 'eval echo {'"'"'{}'\''}' 2>/dev/null || echo "$cron_dow")
+        # Simpler: just expand ranges manually
+        local dow_list=""
+        IFS=',' read -ra dow_parts <<< "$cron_dow"
+        for part in "${dow_parts[@]}"; do
+            if [[ "$part" == *-* ]]; then
+                local range_start="${part%-*}"
+                local range_end="${part#*-}"
+                for ((d=range_start; d<=range_end; d++)); do
+                    dow_list="$dow_list $d"
+                done
+            else
+                dow_list="$dow_list $part"
+            fi
+        done
+        for d in $dow_list; do
+            [ "$d" -eq "$cur_dow" ] 2>/dev/null && dow_ok=true && break
+        done
+    fi
+
+    [ "$min_ok" = "true" ] && [ "$hour_ok" = "true" ] && [ "$dow_ok" = "true" ]
 }
 
 sleep_to_next_minute() {
@@ -152,15 +180,15 @@ run_daemon() {
 usage() {
     cat << 'EOF'
 Usage:
-  ./run_remote.sh                      Run pipeline for xlayer (default)
   ./run_remote.sh --team <team_id>     Run pipeline once for a specific team
   ./run_remote.sh --daemon             Long-running daemon (matches cron from config)
+  ./run_remote.sh --all                Run all teams once sequentially
   ./run_remote.sh --help               Show this help
 
 Examples:
-  ./run_remote.sh                      # Run xlayer team (default)
   ./run_remote.sh --team wallet        # Single run for wallet team
   ./run_remote.sh --team web3          # Single run for web3 team
+  ./run_remote.sh --all                # Run all 5 teams now
   ./run_remote.sh --daemon             # Start daemon (runs forever)
 
   # Via system cron (alternative to daemon mode):
@@ -184,13 +212,15 @@ case "${1:-}" in
     --daemon)
         run_daemon
         ;;
+    --all)
+        log "=== Running all teams ==="
+        for team in web3 wallet xlayer dex pay; do
+            run_job "$team" || true  # Don't stop on failure
+        done
+        log "=== All teams done ==="
+        ;;
     --help|-h)
         usage
-        ;;
-    "")
-        log "=== Running xlayer team ==="
-        run_job "xlayer" || true
-        log "=== Done ==="
         ;;
     *)
         echo "ERROR: Unknown option '${1:-}'"

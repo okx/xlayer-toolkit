@@ -18,15 +18,11 @@
 
   "schedule": {
     "enabled": true,
-    "active_hours": { "start": 8, "end": 22 },
-    "interval_hours": 1,
-    "_hint": "推送间隔（小时），活跃时段 08:00-22:00 北京时间，安静期自动静默",
+    "active_hours": { "start": 9, "end": 22 },
+    "interval_hours": 6,
+    "_hint": "推送间隔（小时），活跃时段 09:00-22:00 北京时间，周一至周五",
     "jobs": [
-      { "cron": "0 8,20 * * *", "team": "web3",   "comment": "Web3:   每天 08:00 和 20:00" },
-      { "cron": "0 10 * * *",   "team": "wallet",  "comment": "Wallet: 每天 10:00" },
-      { "cron": "0 12 * * *",   "team": "xlayer",  "comment": "XLayer: 每天 12:00" },
-      { "cron": "0 14 * * *",   "team": "dex",     "comment": "DEX:    每天 14:00" },
-      { "cron": "0 18 * * *",   "team": "pay",     "comment": "Pay:    每天 18:00" }
+      { "cron": "30 9,15,21 * * 1-5", "team": "xlayer", "comment": "XLayer: 周一至周五 09:30, 15:30, 21:30 CST" }
     ]
   },
 
