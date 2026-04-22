@@ -3,13 +3,13 @@
   "_version": "2.0.0",
 
   "team": {
-    "id": "web3-bpm",
-    "name": "OKX Web3 Team",
+    "id": "xlayer",
+    "name": "X Layer Team",
     "_hint": "团队 ID，对应 intel-profiles/{id}-team.md。内置 Profile：wallet / xlayer / pay / growth。自定义 ID 运行 /start 后自动生成 Profile"
   },
 
   "lark": {
-    "webhook_url": "https://open.larksuite.com/open-apis/bot/v2/hook/702be83d-b7c3-48cc-b04f-61a244884143",
+    "webhook_url": "https://open.larksuite.com/open-apis/bot/v2/hook/ca41d19c-09cf-4c9b-8139-e5895ddbec1a",
     "_hint": "Lark Bot Webhook URL，格式：https://open.larksuite.com/open-apis/bot/v2/hook/xxx",
     "card_color_briefing": "blue"
   },
@@ -47,11 +47,6 @@
     "sent_history": "auto",
     "_hint": "auto = 自动查找。sent_history 路径从 pipeline_config.json 所在目录推导"
   },
-  "poc_mentions": [
-    { "name": "Abel Duolaitike 阿迪力江・多来提克", "email": "abel.duolaitike@okg.com"},
-    { "name": "Richard Zhang 张兆睿", "email": "richard.zhang@okg.com"},
-    { "name": "蒋子良 Eden Jiang", "email": "ziliang.jiang@okg.com"},
-    { "name": "Zhenghao Wang 王政豪", "email": "zhenghao.wang@okg.com"}
-  ],
+  "poc_mentions": [],
   "_poc_mentions_hint": "POC 关注人列表。email 填写 Lark 登录邮箱，推送时生成 <at email=\"xxx@okg.com\"></at> 真实 @；email 为空则只显示姓名文本。"
 }

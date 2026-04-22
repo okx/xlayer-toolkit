@@ -152,15 +152,15 @@ run_daemon() {
 usage() {
     cat << 'EOF'
 Usage:
+  ./run_remote.sh                      Run pipeline for xlayer (default)
   ./run_remote.sh --team <team_id>     Run pipeline once for a specific team
   ./run_remote.sh --daemon             Long-running daemon (matches cron from config)
-  ./run_remote.sh --all                Run all teams once sequentially
   ./run_remote.sh --help               Show this help
 
 Examples:
+  ./run_remote.sh                      # Run xlayer team (default)
   ./run_remote.sh --team wallet        # Single run for wallet team
   ./run_remote.sh --team web3          # Single run for web3 team
-  ./run_remote.sh --all                # Run all 5 teams now
   ./run_remote.sh --daemon             # Start daemon (runs forever)
 
   # Via system cron (alternative to daemon mode):
@@ -184,15 +184,13 @@ case "${1:-}" in
     --daemon)
         run_daemon
         ;;
-    --all)
-        log "=== Running all teams ==="
-        for team in web3 wallet xlayer dex pay; do
-            run_job "$team" || true  # Don't stop on failure
-        done
-        log "=== All teams done ==="
-        ;;
     --help|-h)
         usage
+        ;;
+    "")
+        log "=== Running xlayer team ==="
+        run_job "xlayer" || true
+        log "=== Done ==="
         ;;
     *)
         echo "ERROR: Unknown option '${1:-}'"
