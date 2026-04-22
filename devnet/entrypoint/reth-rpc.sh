@@ -71,7 +71,7 @@ if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
     CMD="$CMD \
         --flashblocks.addr=0.0.0.0 \
         --flashblocks.port=1111 \
-        --xlayer.flashblocks-url=ws://op-reth-seq:1111 \
+        --flashblocks-url=ws://op-reth-seq:1111 \
         --xlayer.flashblocks-subscription"
 
     # Enable flashblocks state comparison debug mode
