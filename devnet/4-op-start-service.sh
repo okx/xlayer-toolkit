@@ -104,7 +104,12 @@ if [ "$CONDUCTOR_ENABLED" = "true" ]; then
 else
     docker compose up -d op-${SEQ_TYPE}-seq
     wait_for_el_to_start "op-${SEQ_TYPE}-seq" "$SEQ_TYPE"
-    docker compose up -d op-seq
+    if [ "$SEQ_CL" = "kona" ]; then
+        echo "🚀 Starting kona-node as CL (SEQ_CL=kona)"
+        docker compose up -d op-kona-seq
+    else
+        docker compose up -d op-seq
+    fi
 fi
 
 sleep 5
@@ -137,8 +142,12 @@ else
     echo "🔧 Configuring op-batcher for single sequencer mode..."
     # Set single sequencer mode endpoints
     export OP_BATCHER_L2_ETH_RPC="http://op-${SEQ_TYPE}-seq:8545"
-    export OP_BATCHER_ROLLUP_RPC="http://op-seq:9545"
-    echo "✅ op-batcher configured for single sequencer mode"
+    if [ "$SEQ_CL" = "kona" ]; then
+        export OP_BATCHER_ROLLUP_RPC="http://op-kona-seq:9545"
+    else
+        export OP_BATCHER_ROLLUP_RPC="http://op-seq:9545"
+    fi
+    echo "✅ op-batcher configured for single sequencer mode (CL=${SEQ_CL:-opnode})"
 fi
 
 docker compose up -d op-batcher

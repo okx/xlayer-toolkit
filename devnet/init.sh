@@ -15,9 +15,13 @@ function build_and_tag_image() {
   local image_tag=$2
   local build_dir=$3
   local dockerfile=$4
+  # Optional: repo dir holding .git when it is outside build_dir (e.g. kona
+  # builds where context=optimism/rust but .git lives at optimism/). Defaults
+  # to build_dir for the common case where both coincide.
+  local git_dir="${5:-$build_dir}"
 
   cd "$build_dir"
-  GITTAG=$(git rev-parse --short HEAD)
+  GITTAG=$(cd "$git_dir" && git rev-parse --short HEAD 2>/dev/null || echo "local")
   docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
   docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
   echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
@@ -120,6 +124,27 @@ else
 
     cd "$OP_STACK_LOCAL_DIRECTORY"
   fi
+fi
+
+# Build Kona image (optional alternative CL, vendored under optimism/rust/kona)
+if [ "$SKIP_KONA_BUILD" = "true" ]; then
+  echo "⏭️  Skipping kona build"
+else
+  if [ -z "$OP_STACK_LOCAL_DIRECTORY" ]; then
+    echo "❌ Please set OP_STACK_LOCAL_DIRECTORY in .env"
+    exit 1
+  fi
+
+  RUST_CTX="$OP_STACK_LOCAL_DIRECTORY/rust"
+  KONA_DOCKERFILE="$PWD_DIR/dockerfile/Dockerfile.kona"
+
+  if [ ! -d "$RUST_CTX/kona" ]; then
+    echo "❌ Kona workspace not found at $RUST_CTX/kona"
+    exit 1
+  fi
+
+  echo "🔨 Building kona image (context=$RUST_CTX)"
+  build_and_tag_image "kona" "$KONA_IMAGE_TAG" "$RUST_CTX" "$KONA_DOCKERFILE" "$OP_STACK_LOCAL_DIRECTORY"
 fi
 
 # Build OP_SUCCINCT image if not skipping
