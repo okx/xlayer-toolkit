@@ -350,9 +350,16 @@ services:
 
   # Alternative CL: kona-node (Rust, built from optimism/rust workspace).
   # Mutually exclusive with op-seq at runtime (same host ports). Selected via SEQ_CL=kona.
+  # DNS alias `op-seq` lets rpc nodes' hard-coded --p2p.static addresses resolve
+  # without modification. The libp2p peer ID matches because both op-node and
+  # kona derive it from the same p2p.priv.raw via secp256k1.
   op-kona-seq:
     image: "${KONA_IMAGE_TAG:-kona:latest}"
     container_name: op-kona-seq
+    networks:
+      default:
+        aliases:
+          - op-seq
     volumes:
       - ./config-op/rollup.json:/rollup.json
       - ./config-op/jwt.txt:/jwt.txt
