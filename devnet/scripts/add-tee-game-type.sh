@@ -137,17 +137,6 @@ export CHALLENGER_BOND="${CHALLENGER_BOND:-100000000000000}"
 export FALLBACK_TIMEOUT="${FALLBACK_TIMEOUT:-3600}"
 export INIT_BOND="${ARG_INIT_BOND:-${INIT_BOND:-100000000000000}}"
 
-if [ -n "$PROPOSER_ADDRESS" ]; then
-    export PROPOSER_ADDRESS
-else
-    unset PROPOSER_ADDRESS
-fi
-
-if [ -n "$CHALLENGER_ADDRESS" ]; then
-    export CHALLENGER_ADDRESS
-else
-    unset CHALLENGER_ADDRESS
-fi
 
 if [ "$USE_MOCK_VERIFIER" = "true" ] && [ -z "$MOCK_ENCLAVE_ADDRESS" ]; then
     echo "❌ --mock-verifier requires --enclave <address> (e.g. --mock-verifier --enclave 0xABC...)"
@@ -240,6 +229,80 @@ register_enclave_with_mock_verifier() {
         echo " ❌ Transaction failed with status: $TX_STATUS"
         echo "Full output: $TX_OUTPUT"
         exit 1
+    fi
+    echo ""
+}
+
+# ── Function: register proposer/challenger whitelist on TeeProofVerifier ──────
+register_proposers_and_challengers() {
+    echo "=== Registering proposer/challenger whitelist on TeeProofVerifier ==="
+
+    VERIFIER_ADDR_LOCAL=$(cast call --rpc-url "$L1_RPC_URL" "$TEE_GAME_IMPL" 'teeProofVerifier()(address)')
+    echo "  TeeProofVerifier: $VERIFIER_ADDR_LOCAL"
+    echo ""
+
+    if [ -n "$PROPOSER_ADDRESS" ]; then
+        echo "  Registering proposer: $PROPOSER_ADDRESS"
+        if [ "$USE_MOCK_VERIFIER" = "true" ]; then
+            TX_OUTPUT=$(cast send \
+                --json \
+                --legacy \
+                --rpc-url "$L1_RPC_URL" \
+                --private-key "$DEPLOYER_PRIVATE_KEY" \
+                "$VERIFIER_ADDR_LOCAL" \
+                'setAllowedProposer(address,bool)' \
+                "$PROPOSER_ADDRESS" \
+                true)
+        else
+            TX_OUTPUT=$(cast send \
+                --json \
+                --legacy \
+                --rpc-url "$L1_RPC_URL" \
+                --private-key "$DEPLOYER_PRIVATE_KEY" \
+                "$VERIFIER_ADDR_LOCAL" \
+                'addProposer(address)' \
+                "$PROPOSER_ADDRESS")
+        fi
+        TX_STATUS=$(echo "$TX_OUTPUT" | jq -r '.status // empty')
+        if [ "$TX_STATUS" = "0x1" ] || [ "$TX_STATUS" = "1" ]; then
+            echo " ✅ proposer registered successfully"
+        else
+            echo " ❌ proposer registration failed with status: $TX_STATUS"
+            echo "Full output: $TX_OUTPUT"
+            exit 1
+        fi
+    fi
+
+    if [ -n "$CHALLENGER_ADDRESS" ]; then
+        echo "  Registering challenger: $CHALLENGER_ADDRESS"
+        if [ "$USE_MOCK_VERIFIER" = "true" ]; then
+            TX_OUTPUT=$(cast send \
+                --json \
+                --legacy \
+                --rpc-url "$L1_RPC_URL" \
+                --private-key "$DEPLOYER_PRIVATE_KEY" \
+                "$VERIFIER_ADDR_LOCAL" \
+                'setAllowedChallenger(address,bool)' \
+                "$CHALLENGER_ADDRESS" \
+                true)
+        else
+            TX_OUTPUT=$(cast send \
+                --json \
+                --legacy \
+                --rpc-url "$L1_RPC_URL" \
+                --private-key "$DEPLOYER_PRIVATE_KEY" \
+                "$VERIFIER_ADDR_LOCAL" \
+                'addChallenger(address)' \
+                "$CHALLENGER_ADDRESS")
+        fi
+        TX_STATUS=$(echo "$TX_OUTPUT" | jq -r '.status // empty')
+        if [ "$TX_STATUS" = "0x1" ] || [ "$TX_STATUS" = "1" ]; then
+            echo " ✅ challenger registered successfully"
+        else
+            echo " ❌ challenger registration failed with status: $TX_STATUS"
+            echo "Full output: $TX_OUTPUT"
+            exit 1
+        fi
     fi
     echo ""
 }
@@ -459,17 +522,20 @@ if [ "${BASH_SOURCE[0]}" == "${0}" ]; then
         register_enclave_with_mock_verifier
     fi
 
-    # 3. setRespectedGameType(1960) on new ASR (deployer is guardian on devnet)
+    # 3. Register proposer/challenger whitelist on TeeProofVerifier
+    register_proposers_and_challengers
+
+    # 4. setRespectedGameType(1960) on new ASR (deployer is guardian on devnet)
     set_respected_game_type
 
-    # 4. setImplementation + setInitBond on existing DGF via TRANSACTOR or Safe
+    # 5. setImplementation + setInitBond on existing DGF via TRANSACTOR or Safe
     if [ "$OWNER_TYPE" = "transactor" ]; then
         add_tee_game_type_via_transactor
     elif [ "$OWNER_TYPE" = "safe" ]; then
         add_tee_game_type_via_safe
     fi
 
-    # 5. Verify — fetch all on-chain state first, then print
+    # 6. Verify — fetch all on-chain state first, then print
     echo "=== Verifying TeeDisputeGame type was registered ==="
     REGISTERED_IMPL=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDR 'gameImpls(uint32)(address)' $TEE_GAME_TYPE)
     REGISTERED_BOND=$(cast call --rpc-url $L1_RPC_URL $DISPUTE_GAME_FACTORY_ADDR 'initBonds(uint32)(uint256)' $TEE_GAME_TYPE | awk '{print $1}')
