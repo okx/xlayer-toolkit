@@ -37,12 +37,118 @@ func main() {
 		erc20BenchCmd(),
 		nativeInitCmd(),
 		nativeBenchCmd(),
+		simulatorInitCmd(),
+		IOBenchCmd(),
+		FibBenchCmd(),
+		CreateBenchCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+func simulatorInitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "simulator-init",
+		Short: "Initialize accounts for IO benchmark",
+		Long: `Initialize accounts for IO benchmark.
+Example:
+  adventure simulator-init 100ETH -f ./testdata/config.json`,
+		Args: cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if configPath == "" {
+				fmt.Println("Error: Config file (-f) is required")
+				os.Exit(1)
+			}
+
+			if err := bench.SimulatorInit(args[0], configPath); err != nil {
+				fmt.Printf("ERC20 initialization failed: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
+
+	return cmd
+}
+
+func IOBenchCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "io-bench",
+		Short: "Run io benchmark",
+		Long: `Run io benchmark.
+
+Example:
+  adventure io-bench -f ./testdata/config.json.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			if configPath == "" {
+				fmt.Println("Error: Config file (-f) is required")
+				os.Exit(1)
+			}
+
+			if err := bench.IOBench(configPath); err != nil {
+				fmt.Printf("ERC20 benchmark failed: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
+	return cmd
+}
+
+func FibBenchCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "fib-bench",
+		Short: "Run io benchmark",
+		Long: `Run io benchmark.
+
+Example:
+  adventure fib-bench -f ./testdata/config.json.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			if configPath == "" {
+				fmt.Println("Error: Config file (-f) is required")
+				os.Exit(1)
+			}
+
+			if err := bench.FibBench(configPath); err != nil {
+				fmt.Printf("fib benchmark failed: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
+	return cmd
+}
+
+// CreateBench
+func CreateBenchCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "create-bench",
+		Short: "Run io benchmark",
+		Long: `Run io benchmark.
+
+Example:
+  adventure create-bench -f ./testdata/config.json.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			if configPath == "" {
+				fmt.Println("Error: Config file (-f) is required")
+				os.Exit(1)
+			}
+
+			if err := bench.CreateBench(configPath); err != nil {
+				fmt.Printf("fib benchmark failed: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
+	return cmd
 }
 
 func erc20InitCmd() *cobra.Command {

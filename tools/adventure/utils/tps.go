@@ -96,6 +96,9 @@ func (tpsman *SimpleTPSManager) TPSDisplay() {
 		} else {
 			fmt.Println("height", height, "txcount", txCount)
 			time.Sleep(time.Millisecond * 200)
+			initHeight = height
+			initTime = time.Now()
+			break
 		}
 	}
 	fmt.Println("initHeight", initHeight)

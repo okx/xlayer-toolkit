@@ -182,8 +182,9 @@ func Erc20Bench(configPath, contractAddr string) error {
 
 	gasPrice := utils.ParseGasPriceToBigInt(utils.TransferCfg.GasPriceGwei, 9)
 
+	to := ethcmn.HexToAddress(contractAddr)
 	eParam := utils.NewTxParam(
-		ethcmn.HexToAddress(contractAddr),
+		&to,
 		nil,
 		uint64(100000),
 		gasPrice,

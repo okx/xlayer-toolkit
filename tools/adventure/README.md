@@ -20,6 +20,30 @@ make native
 # Or run manually:
 adventure native-init 10ETH -f ./testdata/config.json
 adventure native-bench -f ./testdata/config.json
+
+# io bench
+make io
+
+# Or run manually:
+adventure simulator-init 10ETH -f ./testdata/config.json
+adventure io-bench -f ./testdata/config.json
+
+
+# fib bench
+make fib
+
+# Or run manually:
+adventure simulator-init 10ETH -f ./testdata/config.json
+adventure fib-bench -f ./testdata/config.json
+
+# create bench
+make create
+
+# Or run manually:
+adventure native-init 10ETH -f ./testdata/config.json
+adventure create-bench -f ./testdata/config.json
+
+
 ```
 
 **Notes:**

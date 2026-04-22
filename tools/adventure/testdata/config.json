@@ -7,5 +7,17 @@
   "targetTPS": 0,
   "maxBatchSize": 100,
   "gasPriceGwei": 100,
-  "saveTxHashes": false
+  "saveTxHashes": false,
+  "simulatorParams": {
+    "simulatorConfig": {
+      "load_accounts": 12,
+      "update_accounts": 5,
+      "create_accounts": 0,
+      "load_storage": 49,
+      "update_storage": 9,
+      "delete_storage": 0,
+      "create_storage": 2,
+      "fib": 100
+    }
+  }
 }
