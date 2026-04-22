@@ -1,0 +1,164 @@
+{
+  "$schema": "https://claude.ai/schema/plugin-manifest-v1.json",
+  "apiVersion": "1.0.0",
+  "metadata": {
+    "id": "okx-web3-intel",
+    "name": "OKX Web3 Intel",
+    "displayName": "OKX Web3 情报流水线",
+    "version": "15.0.0",
+    "description": "OKX Web3 战略情报自动化流水线：浏览器实时抓取 188+ 信息源 → 过滤矩阵筛选 → 去重 → 深度战略分析 → CTO 审核 → Lark 推送情报 + 决策建议",
+    "author": {
+      "name": "Jason Wang",
+      "contact": ""
+    },
+    "tags": ["web3", "intelligence", "automation", "okx", "lark", "crypto", "strategy", "twitter"],
+    "keywords": ["okx", "web3", "intelligence", "lark", "crypto", "strategy", "twitter", "browser-scraping", "github", "rss"],
+    "icon": "🔭",
+    "category": "productivity"
+  },
+  "capabilities": {
+    "commands": [
+      {
+        "id": "insight-decision-flow",
+        "name": "Web3 情报全自动流水线",
+        "description": "串联采集、过滤、去重、分析、审核、推送的核心流水线",
+        "path": "skills/insight-decision-flow/SKILL.md",
+        "trigger": "okx-web3-intel:insight-decision-flow"
+      },
+      {
+        "id": "web3-sources",
+        "name": "Web3 信息源库管理",
+        "description": "管理和更新 188+ Web3 信息源列表（Twitter/GitHub/RSS/数据平台）",
+        "path": "skills/web3-sources/SKILL.md",
+        "trigger": "okx-web3-intel:web3-sources"
+      },
+      {
+        "id": "web3-intel-filter",
+        "name": "Web3 信号过滤矩阵",
+        "description": "基于 8+8 信号矩阵和团队 Profile 的情报过滤，输出精炼 Briefing",
+        "path": "skills/web3-intel-filter/SKILL.md",
+        "trigger": "okx-web3-intel:web3-intel-filter"
+      },
+      {
+        "id": "okx-impact-analyst",
+        "name": "OKX 战略影响分析",
+        "description": "判断情报对 OKX 各业务线的战略意义，输出决策建议",
+        "path": "skills/okx-impact-analyst/SKILL.md",
+        "trigger": "okx-web3-intel:okx-impact-analyst"
+      },
+      {
+        "id": "intel-reviewer",
+        "name": "CTO 视角情报审核",
+        "description": "5 维度审核情报质量：事实准确性、技术准确性、叙事一致性、战略判断、OKX 内部对齐",
+        "path": "skills/intel-reviewer/SKILL.md",
+        "trigger": "okx-web3-intel:intel-reviewer"
+      },
+      {
+        "id": "lark-intel-notify",
+        "name": "Lark 情报卡片推送",
+        "description": "将情报格式化为 Lark Interactive Card 并推送（三级降级：curl → 浏览器 Fetch → 写日志）",
+        "path": "skills/lark-intel-notify/SKILL.md",
+        "trigger": "okx-web3-intel:lark-intel-notify"
+      },
+      {
+        "id": "start",
+        "name": "首次配置向导",
+        "description": "自动收集团队信息、写入配置、测试推送、创建定时任务",
+        "path": "commands/start.md",
+        "trigger": "/okx-web3-intel:start"
+      },
+      {
+        "id": "run-intel",
+        "name": "立即运行情报流水线",
+        "description": "手动触发一次完整的情报采集和推送",
+        "path": "commands/run-intel.md",
+        "trigger": "/okx-web3-intel:run-intel"
+      },
+      {
+        "id": "analyze",
+        "name": "情报深度分析",
+        "description": "对特定加密事件进行 OKX 业务影响战略分析",
+        "path": "commands/analyze.md",
+        "trigger": "/okx-web3-intel:analyze"
+      },
+      {
+        "id": "update-sources",
+        "name": "更新信息源库",
+        "description": "发现并添加新的 Web3 Twitter/X 信息源",
+        "path": "commands/update-sources.md",
+        "trigger": "/okx-web3-intel:update-sources"
+      }
+    ],
+    "resources": [
+      {
+        "id": "pipeline-config",
+        "name": "流水线配置文件",
+        "description": "团队配置、Webhook、全局参数",
+        "path": "pipeline_config.json",
+        "type": "config"
+      },
+      {
+        "id": "intel-profiles",
+        "name": "团队情报 Profile",
+        "description": "各团队的 KEEP/DROP 规则、分析 Persona、推送配置",
+        "path": "intel-profiles/",
+        "type": "directory"
+      }
+    ],
+    "scheduling": {
+      "enabled": true,
+      "description": "支持定时任务自动触发情报流水线"
+    }
+  },
+  "requirements": {
+    "tools": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Bash",
+      "WebFetch",
+      "WebSearch",
+      "Grep"
+    ]
+  },
+  "permissions": {
+    "fileAccess": {
+      "allowed": [
+        "pipeline_config.json",
+        "intel-profiles/**",
+        "skills/**",
+        "commands/**",
+        "sent_history_*.md"
+      ]
+    },
+    "networkAccess": {
+      "allowed": [
+        "open.larksuite.com",
+        "x.com",
+        "twitter.com",
+        "okg-block.sg.larksuite.com"
+      ]
+    }
+  },
+  "entryPoints": {
+    "primary": {
+      "command": "start",
+      "description": "首次运行推荐使用此命令完成配置"
+    },
+    "automaticTriggers": [
+      {
+        "pattern": "情报",
+        "description": "检测用户提及情报需求时自动建议触发流水线"
+      },
+      {
+        "pattern": "web3|Web3",
+        "description": "检测 Web3 相关讨论时建议获取最新情报"
+      }
+    ]
+  },
+  "compatibility": {
+    "minClaudeVersion": "4.5",
+    "requiredFeatures": ["skills", "scheduled-tasks"]
+  }
+}

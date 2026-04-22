@@ -1,0 +1,9 @@
+{
+  "name": "okx-web3-intel",
+  "version": "15.0.0",
+  "description": "OKX Web3 战略情报自动化流水线：浏览器实时抓取 188+ 信息源（Twitter/GitHub/RSS/数据平台） → 过滤矩阵筛选 → 去重 → 深度战略分析 → CTO 审核 → Lark 推送情报 + 决策建议。多团队支持（wallet / xlayer / pay / growth），每小时自动运行，无需 API Token。V15 更新：新增 Base 脱离 OP Stack 及代币化证券监管叙事。",
+  "author": {
+    "name": "Jason Wang"
+  },
+  "keywords": ["okx","web3","intelligence","lark","crypto","strategy","twitter","browser-scraping","github","rss"]
+}

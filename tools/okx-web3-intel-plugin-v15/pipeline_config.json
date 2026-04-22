@@ -1,0 +1,57 @@
+{
+  "_comment": "Web3 情报流水线配置文件 — 唯一配置入口，由 /start 向导自动写入",
+  "_version": "2.0.0",
+
+  "team": {
+    "id": "web3-bpm",
+    "name": "OKX Web3 Team",
+    "_hint": "团队 ID，对应 intel-profiles/{id}-team.md。内置 Profile：wallet / xlayer / pay / growth。自定义 ID 运行 /start 后自动生成 Profile"
+  },
+
+  "lark": {
+    "webhook_url": "https://open.larksuite.com/open-apis/bot/v2/hook/702be83d-b7c3-48cc-b04f-61a244884143",
+    "_hint": "Lark Bot Webhook URL，格式：https://open.larksuite.com/open-apis/bot/v2/hook/xxx",
+    "card_color_briefing": "blue"
+  },
+
+  "tweet_db_sheet_url": "https://okg-block.sg.larksuite.com/base/L2fZbt0QzaA1UIskbkTlZ8ylgog?table=tbl37Y8bF0sNt2Eo&view=vewB8RsqtK",
+
+  "schedule": {
+    "enabled": true,
+    "active_hours": { "start": 8, "end": 22 },
+    "interval_hours": 1,
+    "_hint": "推送间隔（小时），活跃时段 08:00-22:00 北京时间，安静期自动静默",
+    "jobs": [
+      { "cron": "0 8,20 * * *", "team": "web3",   "comment": "Web3:   每天 08:00 和 20:00" },
+      { "cron": "0 10 * * *",   "team": "wallet",  "comment": "Wallet: 每天 10:00" },
+      { "cron": "0 12 * * *",   "team": "xlayer",  "comment": "XLayer: 每天 12:00" },
+      { "cron": "0 14 * * *",   "team": "dex",     "comment": "DEX:    每天 14:00" },
+      { "cron": "0 18 * * *",   "team": "pay",     "comment": "Pay:    每天 18:00" }
+    ]
+  },
+
+  "twitter": {
+    "enabled": true,
+    "priority_filter": ["P0", "P1"],
+    "max_per_user": 5,
+    "hours_lookback": 6
+  },
+
+  "filter": {
+    "min_likes": 0,
+    "no_retweets": true
+  },
+
+  "paths": {
+    "sources_md": "auto",
+    "sent_history": "auto",
+    "_hint": "auto = 自动查找。sent_history 路径从 pipeline_config.json 所在目录推导"
+  },
+  "poc_mentions": [
+    { "name": "Abel Duolaitike 阿迪力江・多来提克", "email": "abel.duolaitike@okg.com"},
+    { "name": "Richard Zhang 张兆睿", "email": "richard.zhang@okg.com"},
+    { "name": "蒋子良 Eden Jiang", "email": "ziliang.jiang@okg.com"},
+    { "name": "Zhenghao Wang 王政豪", "email": "zhenghao.wang@okg.com"}
+  ],
+  "_poc_mentions_hint": "POC 关注人列表。email 填写 Lark 登录邮箱，推送时生成 <at email=\"xxx@okg.com\"></at> 真实 @；email 为空则只显示姓名文本。"
+}
