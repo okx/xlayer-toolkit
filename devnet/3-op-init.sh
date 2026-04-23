@@ -47,7 +47,7 @@ if [ "$MERGE_RETH_GENESIS" = "true" ]; then
     FORK_BLOCK=$(($(cast to-dec $(jq .number config-op/xlayer-devnet.json|tr -d '"'))-1))
     echo "FORK_BLOCK=$FORK_BLOCK"
     sed_inplace "s/FORK_BLOCK=.*/FORK_BLOCK=$FORK_BLOCK/" .env
-    jq 'genesis.l2.number = '"$((FORK_BLOCK+1))" ./config-op/rollup.json > tmp.json && mv tmp.json ./config-op/rollup.json
+    jq '.genesis.l2.number = '"$((FORK_BLOCK+1))" ./config-op/rollup.json > tmp.json && mv tmp.json ./config-op/rollup.json
 else
     # Create genesis-reth.json from genesis.json
     echo "🔧 Creating genesis-reth.json from genesis.json ..."
