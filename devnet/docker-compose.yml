@@ -936,7 +936,7 @@ services:
     volumes:
       - ./op-succinct/.env.challenger:/app/.env
     ports:
-      - "9001:9001"
+      - "9002:9001"
     command:
       - challenger
       - --env-file=/app/.env

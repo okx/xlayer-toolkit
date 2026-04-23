@@ -53,12 +53,14 @@ sed_inplace "s|^L2_NODE_RPC=.*|L2_NODE_RPC=$L2_NODE_RPC_URL_IN_DOCKER|" "$OP_SUC
 sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.deploy
 sed_inplace "s|^OPTIMISM_PORTAL2_ADDRESS=.*|OPTIMISM_PORTAL2_ADDRESS=$OPTIMISM_PORTAL_PROXY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.deploy
 sed_inplace "s|^ANCHOR_STATE_REGISTRY=.*|ANCHOR_STATE_REGISTRY=$ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.deploy
-sed_inplace "s|^TRANSACTOR_ADDRESS=.*|TRANSACTOR_ADDRESS=$TRANSACTOR|" "$OP_SUCCINCT_DIR"/.env.deploy
+sed_inplace "s|^TRANSACTOR=.*|TRANSACTOR=$TRANSACTOR|" "$OP_SUCCINCT_DIR"/.env.deploy
+sed_inplace "s|^PROPOSER_ADDRESSES=.*|PROPOSER_ADDRESSES=$PROPOSER_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.deploy
+sed_inplace "s|^CHALLENGER_ADDRESSES=.*|CHALLENGER_ADDRESSES=$CHALLENGER_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.deploy
 sed_inplace "s|^STARTING_L2_BLOCK_NUMBER=.*|STARTING_L2_BLOCK_NUMBER=$((FORK_BLOCK + 1))|" "$OP_SUCCINCT_DIR"/.env.deploy
 
 sed_inplace "s|^OP_SUCCINCT_MOCK=.*|OP_SUCCINCT_MOCK=$PROOF_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.env.deploy
 
-STARTING_L2_BLOCK_NUMBER=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json | jq -r '.[1]')
+STARTING_L2_BLOCK_NUMBER=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json -r "$L1_RPC_URL" | jq -r '.[1]')
 sed_inplace "s|^STARTING_L2_BLOCK_NUMBER=.*|STARTING_L2_BLOCK_NUMBER=$STARTING_L2_BLOCK_NUMBER|" "$OP_SUCCINCT_DIR"/.env.deploy
 
 # update .env.proposer
@@ -74,15 +76,26 @@ sed_inplace "s|^MOCK_MODE=.*|MOCK_MODE=$PROOF_MOCK_MODE|" "$OP_SUCCINCT_DIR"/.en
 sed_inplace "s|^L1_RPC=.*|L1_RPC=$L1_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
 sed_inplace "s|^L2_RPC=.*|L2_RPC=$L2_RPC_URL_IN_DOCKER|" "$OP_SUCCINCT_DIR"/.env.challenger
 sed_inplace "s|^FACTORY_ADDRESS=.*|FACTORY_ADDRESS=$DISPUTE_GAME_FACTORY_ADDRESS|" "$OP_SUCCINCT_DIR"/.env.challenger
+grep -q "^RUST_LOG=" "$OP_SUCCINCT_DIR"/.env.challenger || echo "RUST_LOG=info" >> "$OP_SUCCINCT_DIR"/.env.challenger
 
 docker compose up op-succinct-fetch-config
 OP_DEPLOYER_ADDR=$(cast wallet a "$DEPLOYER_PRIVATE_KEY")
 cast send --private-key "$RICH_L1_PRIVATE_KEY" --value 1ether "$OP_DEPLOYER_ADDR" --legacy --rpc-url "$L1_RPC_URL"
 docker compose up op-succinct-contracts
 
-cast send "$ANCHOR_STATE_REGISTRY" "setRespectedGameType(uint32)" 42 --private-key="$DEPLOYER_PRIVATE_KEY"
+# Update ANCHOR_STATE_REGISTRY_ADDRESS in .env.proposer with the address from the newly deployed game implementation
+NEW_GAME_IMPL=$(cast call "$DISPUTE_GAME_FACTORY_ADDRESS" 'gameImpls(uint32)(address)' 42 -r "$L1_RPC_URL")
+NEW_ANCHOR_STATE_REGISTRY=$(cast call "$NEW_GAME_IMPL" 'anchorStateRegistry()(address)' -r "$L1_RPC_URL")
+grep -q "^ANCHOR_STATE_REGISTRY_ADDRESS=" "$OP_SUCCINCT_DIR"/.env.proposer \
+    && sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.proposer \
+    || echo "ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY" >> "$OP_SUCCINCT_DIR"/.env.proposer
+grep -q "^ANCHOR_STATE_REGISTRY_ADDRESS=" "$OP_SUCCINCT_DIR"/.env.challenger \
+    && sed_inplace "s|^ANCHOR_STATE_REGISTRY_ADDRESS=.*|ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY|" "$OP_SUCCINCT_DIR"/.env.challenger \
+    || echo "ANCHOR_STATE_REGISTRY_ADDRESS=$NEW_ANCHOR_STATE_REGISTRY" >> "$OP_SUCCINCT_DIR"/.env.challenger
 
-TARGET_HEIGHT=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json | jq -r '.[1]')
+cast send "$ANCHOR_STATE_REGISTRY" "setRespectedGameType(uint32)" 42 --private-key="$DEPLOYER_PRIVATE_KEY" --rpc-url "$L1_RPC_URL"
+
+TARGET_HEIGHT=$(cast call "$ANCHOR_STATE_REGISTRY" "getAnchorRoot()(bytes32,uint256)" --json -r "$L1_RPC_URL" | jq -r '.[1]')
 
 while true; do
     CURRENT_HEIGHT=$(cast bn -r "$L2_RPC_URL" finalized 2>/dev/null || echo "0")
@@ -101,8 +114,8 @@ docker compose up -d op-succinct-proposer
 echo "   ✓ Proposer started"
 
 if [ "$MIN_RUN" = "false" ]; then
-    docker-compose down op-proposer
-    docker-compose down op-challenger
+    docker compose down op-proposer
+    docker compose down op-challenger
     echo "   ✓ Older proposer and challenger stopped"
 fi
 
