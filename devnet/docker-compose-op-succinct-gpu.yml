@@ -2,22 +2,14 @@ services:
   op-succinct-proposer:
     image: "${OP_SUCCINCT_CUDA_IMAGE_TAG}"
     runtime: nvidia
-    # NVIDIA_VISIBLE_DEVICES=all works under plain `docker compose up` (the
-    # `deploy.resources.reservations.devices` API only applies in swarm mode
-    # or with `--compatibility`, which silently caps the container to 1 GPU
-    # otherwise). Keep `runtime: nvidia` so the nvidia OCI hook runs.
+    # Use NVIDIA_VISIBLE_DEVICES (below) instead of `deploy.resources.devices`
+    # — the latter only works in swarm mode and silently caps to 1 GPU.
     #
-    # shm_size: SP1's native executor uses shm_open + mmap over /dev/shm for
-    # zkVM trace ring buffers. Docker's default 64MB is too small; writing to
-    # pages that can't be backed by tmpfs raises SIGBUS (signal 7). Size scales
-    # with RANGE_SPLIT_COUNT × MAX_CONCURRENT_RANGE_PROOFS × per-range trace.
-    # 128GB covers split=4 conc=4 on 600-block ranges with headroom; tmpfs is
-    # lazy-allocated so unused capacity doesn't consume RAM.
+    # shm_size: SP1 trace ring buffers use /dev/shm; default 64MB → SIGBUS.
+    # 128GB covers split=4 conc=4 on 600-block ranges; tmpfs is lazy-allocated.
     shm_size: "128gb"
-    # init: true injects tini as PID 1 so child sp1-gpu-server processes killed
-    # by OOM (or anything else) are reaped properly. Without this, zombies can
-    # pile up and even stall `docker stop` (PID 1 proposer won't respond to
-    # SIGTERM while it has un-reaped zombie children under OOM pressure).
+    # init: tini as PID 1 reaps sp1-gpu-server children killed by OOM; without
+    # it zombies can stall `docker stop`.
     init: true
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
