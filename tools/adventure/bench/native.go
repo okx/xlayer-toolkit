@@ -108,7 +108,7 @@ func NativeInit(amountStr, configPath string) error {
 }
 
 // NativeBench runs native token transfer benchmark
-func NativeBench(configPath string) error {
+func NativeBench(configPath string, csvReport string) error {
 	amount := new(big.Int).SetUint64(1)
 
 	if configPath == "" {
@@ -120,6 +120,7 @@ func NativeBench(configPath string) error {
 	}
 
 	gasPrice := utils.ParseGasPriceToBigInt(utils.TransferCfg.GasPriceGwei, 9)
+	utils.EnableBenchmarkCSVReport(csvReport)
 
 	// Generate random recipient addresses to simulate real-world transfer scenarios
 	toAddrs := generateAddresses()
