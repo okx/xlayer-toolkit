@@ -44,6 +44,10 @@ if [ "$MERGE_RETH_GENESIS" = "true" ]; then
     docker run --rm -v "./config-op:/config-op" -v "$MERGE_RETH_DATADIR_PATH:/reth-datadir" $XLAYER_RETH_TOOLS_IMAGE_TAG \
         gen-genesis --datadir /reth-datadir --chain $MERGE_RETH_CHAIN \
         --template-genesis /config-op/genesis.json --output /config-op/genesis-reth.json --output-chainspec /config-op/xlayer-devnet.json
+    FORK_BLOCK=$(($(cast to-dec $(jq .number config-op/xlayer-devnet.json|tr -d '"'))-1))
+    echo "FORK_BLOCK=$FORK_BLOCK"
+    sed_inplace "s/FORK_BLOCK=.*/FORK_BLOCK=$FORK_BLOCK/" .env
+    jq 'genesis.l2.number = '"$((FORK_BLOCK+1))" ./config-op/rollup.json > tmp.json && mv tmp.json ./config-op/rollup.json
 else
     # Create genesis-reth.json from genesis.json
     echo "🔧 Creating genesis-reth.json from genesis.json ..."
