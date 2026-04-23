@@ -1,0 +1,56 @@
+# ── Stage 1: build base-consensus from base/base v0.6.0 ──────────────────────
+FROM rust:1.93.1-slim-bookworm AS builder
+
+ARG MOLD_VERSION=2.34.1
+ARG BASE_BASE_TAG=v0.6.0
+ARG BASE_BASE_COMMIT=50e3bb16233ef7a50070bf16169dc6356fe5dd39
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl pkg-config libssl-dev build-essential cmake clang libclang-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install mold linker — arch-aware (x86_64 or aarch64)
+RUN set -eux; \
+    ARCH=$(uname -m); \
+    case "$ARCH" in \
+      x86_64)  MOLD_ARCH=x86_64  ;; \
+      aarch64) MOLD_ARCH=aarch64 ;; \
+      *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL \
+        "https://github.com/rui314/mold/releases/download/v${MOLD_VERSION}/mold-${MOLD_VERSION}-${MOLD_ARCH}-linux.tar.gz" \
+        -o /tmp/mold.tar.gz \
+    && tar -xzf /tmp/mold.tar.gz -C /usr/local --strip-components=1 \
+    && rm /tmp/mold.tar.gz
+
+WORKDIR /build
+
+RUN git clone --depth 1 --branch ${BASE_BASE_TAG} \
+    https://github.com/base/base.git . \
+    && git rev-parse HEAD | grep -qF ${BASE_BASE_COMMIT} \
+    || (echo "Commit mismatch!" && exit 1)
+
+# Build only the consensus binary — arch-aware linker config
+RUN set -eux; \
+    ARCH=$(uname -m); \
+    case "$ARCH" in \
+      x86_64)  RUST_TARGET=x86_64-unknown-linux-gnu  ;; \
+      aarch64) RUST_TARGET=aarch64-unknown-linux-gnu ;; \
+      *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
+    esac; \
+    cargo build --bin base-consensus --release \
+        --config "target.${RUST_TARGET}.linker=\"clang\"" \
+        --config "target.${RUST_TARGET}.rustflags=[\"-C\",\"link-arg=-fuse-ld=mold\"]"
+
+# ── Stage 2: minimal runtime image ───────────────────────────────────────────
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/target/release/base-consensus /usr/local/bin/base-consensus
+
+EXPOSE 9545 9222
+
+ENTRYPOINT ["base-consensus"]
