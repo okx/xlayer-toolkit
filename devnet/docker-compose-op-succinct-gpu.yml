@@ -9,9 +9,16 @@ services:
     #
     # shm_size: SP1's native executor uses shm_open + mmap over /dev/shm for
     # zkVM trace ring buffers. Docker's default 64MB is too small; writing to
-    # pages that can't be backed by tmpfs raises SIGBUS (signal 7). 16GB is
+    # pages that can't be backed by tmpfs raises SIGBUS (signal 7). Size scales
+    # with RANGE_SPLIT_COUNT × MAX_CONCURRENT_RANGE_PROOFS × per-range trace.
+    # 128GB covers split=4 conc=4 on 600-block ranges with headroom; tmpfs is
     # lazy-allocated so unused capacity doesn't consume RAM.
-    shm_size: "16gb"
+    shm_size: "128gb"
+    # init: true injects tini as PID 1 so child sp1-gpu-server processes killed
+    # by OOM (or anything else) are reaped properly. Without this, zombies can
+    # pile up and even stall `docker stop` (PID 1 proposer won't respond to
+    # SIGTERM while it has un-reaped zombie children under OOM pressure).
+    init: true
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
