@@ -40,8 +40,8 @@
 
   "paths": {
     "sources_md": "auto",
-    "sent_history": "auto",
-    "_hint": "auto = 自动查找。sent_history 路径从 pipeline_config.json 所在目录推导"
+    "sent_history_bitable_url": "https://okg-block.sg.larksuite.com/wiki/IeIDwVNHZiRlOXkMEF8lv2BegOg?table=tbl6NS1q1u5fsvL2&view=vewqB6K291",
+    "_hint": "sent_history_bitable_url: Lark Bitable 用于跨会话/跨机器持久化去重历史。表结构：Title(Text), Summary(Text), Source_URL(URL), sent_at(Date), team(Text)"
   },
   "poc_mentions": [],
   "_poc_mentions_hint": "POC 关注人列表。email 填写 Lark 登录邮箱，推送时生成 <at email=\"xxx@okg.com\"></at> 真实 @；email 为空则只显示姓名文本。"

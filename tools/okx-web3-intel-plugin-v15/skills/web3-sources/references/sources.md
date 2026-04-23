@@ -60,6 +60,9 @@
 
 | Handle | 名称 | 说明 | 粉丝量级 | 优先级 | teams | 最后验证 |
 |--------|------|------|----------|--------|-------|----------|
+| @Bitcoin | Bitcoin | 比特币官方账号，最大加密资产 | 5M+ | P0 | all | 2026-04-22 |
+| @bitcoinCoreOrg | Bitcoin Core | 比特币核心客户端开发 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @lightning | Lightning Network | 比特币 L2 支付网络 | 500K+ | P1 | xlayer,pay | 2026-04-22 |
 | @ethereum | Ethereum | 以太坊官方，OKX Web3 钱包核心支持链 | 1M+ | P0 | all | 2026-02-27 |
 | @solana | Solana | Solana 官方，OKX 重点支持的高性能链 | 1M+ | P0 | all | 2026-02-27 |
 | @base | Base | Coinbase L2，X Layer 直接竞品 | 500K+ | P0 | xlayer,wallet | 2026-02-27 |
@@ -76,8 +79,45 @@
 | @zksync | zkSync | zkEVM L2，ZK 赛道竞品 | 100K+ | P1 | xlayer | 2026-02-27 |
 | @LineaBuild | Linea | ConsenSys 的 zkEVM L2 | 100K+ | P2 | xlayer | 2026-02-27 |
 | @MantaNetwork | Manta Network | 模块化 L2，隐私计算方向 | 100K+ | P2 | xlayer | 2026-02-27 |
-| @SeiNetwork | Sei | 高性能交易链 | 100K+ | P2 | wallet | 2026-02-27 |
+| @SeiNetwork | Sei | 高性能交易链 | 100K+ | P1 | xlayer,wallet | 2026-02-27 |
 | @CelestiaOrg | Celestia | 模块化区块链 DA 层 | 100K+ | P1 | xlayer | 2026-02-27 |
+| @NEARProtocol | NEAR Protocol | 分片 L1，链抽象先驱 | 1M+ | P1 | xlayer,wallet | 2026-04-22 |
+| @cosmos | Cosmos | IBC 跨链生态，模块化区块链先驱 | 500K+ | P1 | xlayer | 2026-04-22 |
+| @Polkadot | Polkadot | 平行链架构，跨链互操作 | 1M+ | P1 | xlayer | 2026-04-22 |
+| @Cardano | Cardano | Ouroboros PoS L1 | 1M+ | P1 | xlayer | 2026-04-22 |
+| @trondao | TRON | 亚洲高用量 L1，USDT 主要载体链 | 1M+ | P1 | xlayer,pay | 2026-04-22 |
+| @0xMantle | Mantle | L2 + 链上财库，BitDAO 旗下 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @Blast_L2 | Blast | 原生收益 L2 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @taikoxyz | Taiko | Based Rollup L2，以太坊等价 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @fuel_network | Fuel | 模块化执行层，UTXO 模型 L2 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @AvailProject | Avail | 模块化 DA 层，Polygon 分拆 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @CronosApp | Cronos | Crypto.com 交易所链 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @HSKChain | HashKey Chain | HashKey Chain，持牌交易所链 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @HyperliquidX_L1 | Hyperliquid L1 | 高性能 Perp DEX 自建 L1，TVL 前 10 | 500K+ | P1 | xlayer,defi | 2026-04-22 |
+| @StellarOrg | Stellar | 支付导向 L1，跨境结算 | 500K+ | P1 | xlayer,pay | 2026-04-22 |
+| @FlareNetworks | Flare | EVM 兼容 L1，数据预言机 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @Algorand | Algorand | Pure PoS L1，机构级 | 500K+ | P1 | xlayer | 2026-04-22 |
+| @hedera | Hedera | 企业级 DLT，HBAR | 500K+ | P1 | xlayer | 2026-04-22 |
+| @Ripple | XRP Ledger | 跨境支付 L1，机构采用 | 1M+ | P1 | xlayer,pay | 2026-04-22 |
+| @StacksOrg | Stacks | Bitcoin L2，智能合约层 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @GnosisChain | Gnosis Chain | 以太坊侧链，预测市场生态 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @KAVA_CHAIN | Kava | Cosmos 生态 DeFi 链 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @plumenetwork | Plume Network | RWA 专用 L2 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @THORChain | THORChain | 原生跨链 DEX，无桥交换 | 100K+ | P1 | xlayer,defi | 2026-04-22 |
+| @EOSNetworkFDN | EOS | 高性能 L1，Antelope 框架 | 500K+ | P2 | xlayer | 2026-04-22 |
+| @SonicLabs | Sonic | 高性能 EVM 链（前 Fantom） | 100K+ | P1 | xlayer | 2026-04-22 |
+| @Celo | Celo | 移动优先 L1，转为以太坊 L2 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @injective | Injective | Cosmos 生态金融链，高速 DeFi | 500K+ | P1 | xlayer,defi | 2026-04-22 |
+| @Flow_blockchain | Flow | 消费级 L1，NFT 生态 | 100K+ | P2 | xlayer | 2026-04-22 |
+| @MultiversX | MultiversX | 分片 L1（前 Elrond） | 100K+ | P2 | xlayer | 2026-04-22 |
+| @klaytn_official | Kaia | Kakao 系 L1（Klaytn + Finschia 合并） | 100K+ | P1 | xlayer | 2026-04-22 |
+| @Immutable | Immutable | 游戏专用 zkEVM L2 | 500K+ | P1 | xlayer,growth | 2026-04-22 |
+| @SoneiumOfficial | Soneium | Sony 旗下 L2 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @RoninChain | Ronin | 游戏链（Axie Infinity） | 100K+ | P1 | xlayer,growth | 2026-04-22 |
+| @ModeNetwork | Mode | Superchain 成员 L2，AI 导向 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @plumeNetworkOrg | Plume Network | RWA 专用 L2 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @Conflux_Network | Conflux | 中国合规公链，Tree-Graph 共识 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @dfinity | Internet Computer | Dfinity 的 L1，链上全栈 | 500K+ | P2 | xlayer | 2026-04-22 |
 
 ---
 
@@ -97,6 +137,9 @@
 | @babylonlabs_io | Babylon | BTC 质押协议，Bitcoin DeFi | 50K+ | P1 | defi,growth | 2026-02-27 |
 | @SonicSVM | Sonic SVM | 游戏专用 Solana VM | 50K+ | P2 | growth | 2026-02-27 |
 | @EclipseFND | Eclipse | SVM 执行层 + 以太坊 DA | 50K+ | P2 | xlayer | 2026-02-27 |
+| @AbstractChain | Abstract | 消费级 L2，ZK Stack 构建 | 100K+ | P1 | xlayer,growth | 2026-04-22 |
+| @worldcoin | Worldcoin | 身份验证 L2（World Chain），Optimism Superchain 成员 | 500K+ | P1 | xlayer | 2026-04-22 |
+| @unichain | Unichain | Uniswap 专属 L2，Superchain 成员 | 50K+ | P1 | xlayer,defi | 2026-04-22 |
 | @farcaster_xyz | Farcaster | 去中心化社交协议，建立在 Optimism 上，Web3 开发者社区最活跃集散地，高质量技术讨论和早期项目信号 | 100K+ | P1 | dev,growth | 2026-02-27 |
 
 ---
@@ -123,6 +166,17 @@
 | @AveryChing | Avery Ching | CTO | Aptos Labs | Aptos 技术负责人 | 50K+ | P1 | wallet | 2026-02-27 |
 | @moshaikhs | Mo Shaikh | 联合创始人 & CEO | Aptos Labs | Aptos 生态战略 | 50K+ | P1 | wallet | 2026-02-27 |
 | @gavofyork | Gavin Wood | 创始人 | Polkadot / Parity | 以太坊联合创始人，跨链先驱 | 250K+ | P1 | xlayer | 2026-02-27 |
+| @karl_dot_tech | Karl Floersch | CEO | OP Labs | OP Stack 核心维护者，X Layer 上游关键人物 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @gluk64 | Alex Gluchowski | CEO | Matter Labs (zkSync) | zkEVM 竞品核心人物 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @barryWhiteHat | Barry Whitehat | 研究员 | PSE / Ethereum Foundation | ZK 隐私研究先驱 | 50K+ | P1 | xlayer,dev | 2026-04-22 |
+| @AuroraSivan | Illia Polosukhin | 联合创始人 | NEAR Protocol | 链抽象架构师，Transformer 论文联合作者 | 100K+ | P1 | xlayer | 2026-04-22 |
+| @keoneHD | Keone Hon | 联合创始人 & CEO | Monad Labs | 高性能 EVM 并行执行 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @0xSree | Sree | 联合创始人 | MegaETH | 实时区块链架构师 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @hasufl | Hasu | 策略主管 | Flashbots | MEV 研究，Sequencer 设计影响 L2 | 300K+ | P1 | xlayer,defi | 2026-04-22 |
+| @samczsun | samczsun | 安全研究员 | Paradigm | 白帽安全研究，重大漏洞发现者 | 300K+ | P0 | all | 2026-04-22 |
+| @samczsun | samczsun | 安全研究员 | Paradigm | 白帽安全研究，重大漏洞发现者 | 300K+ | P0 | all | 2026-04-22 |
+| @SuccinctLabs | Succinct Labs | ZK 证明基础设施 | Succinct | SP1 prover，ZK 证明加速 | 50K+ | P1 | xlayer,dev | 2026-04-23 |
+| @tyneslol | tynes | 核心开发者 | OP Labs | OP Stack 核心开发者 | 10K+ | P1 | xlayer | 2026-04-23 |
 
 ---
 
@@ -148,6 +202,14 @@
 | @AntonioMJuliano | Antonio Juliano | 创始人 & CEO | dYdX | 去中心化衍生品交易 | 50K+ | P1 | defi | 2026-02-27 |
 | @jespow | Jesse Powell | 联合创始人 & 董事长 | Kraken | 老牌交易所 | 300K+ | P1 | all | 2026-02-27 |
 | @durov | Pavel Durov | 创始人 | Telegram / TON | TON 生态核心，用户基数巨大 | 2M+ | P1 | pay,growth | 2026-02-27 |
+| @kris | Kris Marszalek | 联合创始人 & CEO | Crypto.com | Cronos 链母公司，竞品交易所 | 500K+ | P1 | all | 2026-04-22 |
+| @JayPSei | Jay (Dae) Shin | 联合创始人 & CEO | Sei Labs | 高性能交易链 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @0xSmokey | Smokey | 联合创始人 | Berachain | PoL 共识 DeFi 原生链 | 50K+ | P1 | xlayer,defi | 2026-04-22 |
+| @ASvanevik | Alex Svanevik | CEO | Nansen | 链上数据平台，行业洞察 | 100K+ | P1 | dev,growth | 2026-04-22 |
+| @codeofcrypto | Liam | CEO | Abstract | 消费级 L2 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @aspect_daniel | Daniel Wang | 创始人 & CEO | Taiko Labs | Based Rollup 先驱 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @nickowhite | Nick White | 联合创始人 & CEO | Celestia Labs | 模块化 DA 层 | 50K+ | P1 | xlayer | 2026-04-22 |
+| @xiaofeng0519 | Xiao Feng | 董事长 | HashKey Group | 持牌交易所，HashKey Chain | 50K+ | P1 | xlayer | 2026-04-22 |
 
 ---
 
@@ -197,6 +259,8 @@ Web3 钱包竞品和核心基础设施服务商。
 | @the_graph | The Graph | 链上数据索引，开发者基础设施 | 100K+ | P1 | dev | 2026-02-27 |
 | @_SEAL_Org | Security Alliance (SEAL) | Web3 安全联盟，MetaMask 和 Phantom 均已加入其实时钓鱼防护网络，负责安全事件响应和威胁情报共享 | 50K+ | P1 | wallet | 2026-02-27 |
 | @BackpackExchange | Backpack | 多链钱包+交易所，BPM Profile 列为竞品钱包 | 100K+ | P1 | wallet | 2026-04-15 |
+| @axelar | Axelar | 跨链互操作协议，通用消息传递 | 100K+ | P1 | xlayer,wallet | 2026-04-22 |
+| @ChainlinkLabs | Chainlink CCIP | 跨链互操作协议，机构级跨链消息 | 50K+ | P1 | xlayer,wallet | 2026-04-22 |
 
 ---
 
@@ -213,7 +277,7 @@ Web3 钱包竞品和核心基础设施服务商。
 | @OndoFinance | Ondo Finance | RWA 代币化，机构级 DeFi | 50K+ | P1 | pay,defi | 2026-02-27 |
 | @PayPal | PayPal | 传统支付巨头的加密布局 | 1M+ | P1 | pay | 2026-02-27 |
 | @stripe | Stripe | 支付基础设施，加密支付整合 | 1M+ | P1 | pay | 2026-02-27 |
-| @tempo | Tempo (Stripe) | Stripe 旗下 Agent 商务 L1 区块链，Visa/渣打 Zodia 已加入验证者 | 10K+ | P1 | pay,wallet,ai_agent | 2026-04-15 |
+| @tempo | Tempo (Stripe) | Stripe 旗下 Agent 商务 L1 区块链，Visa/渣打 Zodia 已加入验证者 | 10K+ | P1 | pay,wallet,ai_agent,xlayer | 2026-04-15 |
 | @fraxfinance | Frax Finance | 混合稳定币协议 | 50K+ | P2 | pay,defi | 2026-02-27 |
 | @Edenaofficial | EDENA Capital | 全球 STO 交易所，机构级 RWA 代币化（房产/碳信用/REIT），zkSync ZK 基础设施深度集成，$2亿代币化额度 | 10K+ | P1 | pay,xlayer | 2026-02-28 |
 
@@ -438,7 +502,7 @@ OKX 直接竞品的官方账号和核心高管。
 | Ithaca Updates | Ithaca (Odyssey) 团队博客，ERC-7702 参考实现与智能账户标准前沿 | P0 | wallet,ai_agent | https://ithaca.xyz/blog/rss.xml |
 | Biconomy Blog | AA SDK/Paymaster/Bundler 产品更新，智能账户基础设施标杆 | P0 | wallet,ai_agent | https://www.biconomy.io/blog/rss.xml |
 | ZeroDev Blog | Kernel 智能账户框架，SessionKey/权限委派等 AA 原语更新 | P0 | wallet,ai_agent | https://zerodev.app/blog/rss.xml |
-| Tempo Blog | Tempo 官方博客，MPP/x402/Agent Payment 协议更新 | P0 | ai_agent,pay | https://docs.tempo.xyz/blog/rss.xml |
+| Tempo Blog | Tempo 官方博客，MPP/x402/Agent Payment 协议更新 | P0 | ai_agent,pay,xlayer | https://docs.tempo.xyz/blog/rss.xml |
 | Stripe Engineering | Stripe 工程博客，AI Agent 支付集成与稳定币支付基础设施 | P1 | ai_agent,pay | https://stripe.com/blog/engineering/rss.xml |
 | Morpho Blog | 模块化借贷协议官方博客，AI Agent 链上执行潜在集成目标 | P1 | ai_agent,wallet | https://morpho.org/blog/rss.xml |
 | Polymarket Blog | 预测市场官方博客，钱包内嵌事件合约交易参考 | P1 | wallet,ai_agent | https://polymarket.com/blog/rss.xml |
