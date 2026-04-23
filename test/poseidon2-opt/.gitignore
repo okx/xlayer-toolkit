@@ -1,0 +1,12 @@
+# Foundry build artifacts
+cache/
+out/
+
+# Vendored third-party libraries (populate locally via `make setup`)
+#   lib/forge-std              https://github.com/foundry-rs/forge-std
+#   lib/poseidon2-evm          https://github.com/zemse/poseidon2-evm
+#   lib/poseidon2-solidity     https://github.com/V-k-h/poseidon2-solidity
+lib/
+
+# Safety catch-all for accidental secrets
+.env

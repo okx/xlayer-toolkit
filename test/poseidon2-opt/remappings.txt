@@ -1,0 +1,3 @@
+forge-std/=lib/forge-std/src/
+poseidon2-evm/=lib/poseidon2-evm/src/
+poseidon2-solidity/=lib/poseidon2-solidity/contracts/
