@@ -923,15 +923,7 @@ services:
       - ./op-succinct/.env.proposer:/app/.env
       - ./op-succinct/configs:/app/configs
     environment:
-      # dotenv::from_filename in proposer.rs does NOT override existing env, so
-      # values baked into compose take precedence over .env.proposer. To make
-      # .env.proposer the single source of truth for logging config, leave
-      # RUST_LOG unset here; override via PROPOSER_RUST_LOG in the top-level
-      # .env if a custom value is needed before .env.proposer is read.
       - RUST_LOG=${PROPOSER_RUST_LOG:-info}
-      # tracing-subscriber injects ANSI color escapes around structured fields
-      # (e.g. `blocks\x1b[0m=\x1b[0m(...)`) which breaks regex-based log
-      # scrapers. RUST_LOG_STYLE=never disables colors unconditionally.
       - RUST_LOG_STYLE=never
       - NO_COLOR=1
     ports:
