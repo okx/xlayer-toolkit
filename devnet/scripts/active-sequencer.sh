@@ -80,12 +80,12 @@ echo "Sequencer successfully activated"
 SERVER_COUNT=$(curl -sS -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_clusterMembership","params":[],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT  | jq '.result.servers | length')
 if (( $SERVER_COUNT < 3 )); then
     curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_addServerAsVoter","params":["conductor-2", "op-conductor2:50050", 0],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT
-    curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_addServerAsVoter","params":["conductor-3", "op-conductor3:50050", 0],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT
+    curl -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_addServerAsNonvoter","params":["conductor-3", "op-conductor3:50050", 0],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT
     SERVER_COUNT=$(curl -sS -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"conductor_clusterMembership","params":[],"id":1}' http://localhost:$LEADER_CONDUCTOR_PORT  | jq '.result.servers | length')
     if (( $SERVER_COUNT != 3 )); then
         echo "unexpected server count, expected: 3, real: $SERVER_COUNT"
         exit 1
     fi
 
-    echo "add 2 new voters to raft consensus cluster successfully!"
+    echo "add 1 voter and 1 nonvoter to raft consensus cluster successfully!"
 fi
