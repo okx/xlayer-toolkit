@@ -183,16 +183,34 @@ sed_inplace "s/faultGameClockExtension = .*/faultGameClockExtension = $TEMP_CLOC
 sed_inplace "s/faultGameMaxClockDuration = .*/faultGameMaxClockDuration = $TEMP_MAX_CLOCK_DURATION/" "$CONFIG_DIR/intent.toml"
 echo " ✅ Updated clock parameters in intent.toml: clockExtension=$TEMP_CLOCK_EXTENSION, maxClockDuration=$TEMP_MAX_CLOCK_DURATION"
 
-# Read opcmAddress from implementations.json and write it into intent.toml
-OPCM_ADDRESS=$(jq -r '.opcmAddress' ./config-op/implementations.json)
-if [ -z "$OPCM_ADDRESS" ] || [ "$OPCM_ADDRESS" = "null" ]; then
-  echo " ❌ Failed to read opcmAddress from implementations.json"
+# Read opcmV2Address from implementations.json and write it into intent.toml.
+# In op-deployer v2.1.0+, the Solidity DeployImplementations script no longer populates
+# the legacy "opcmAddress" (OPCM v1) output field - it is always zero. The active OPCM
+# contract is "opcmV2Address". Intent.toml's opcmAddress field maps to Intent.OPCMAddress
+# which the apply pipeline uses to resolve the pre-deployed OPCM v2 contract.
+OPCM_ADDRESS=$(jq -r '.opcmV2Address' ./config-op/implementations.json)
+if [ -z "$OPCM_ADDRESS" ] || [ "$OPCM_ADDRESS" = "null" ] || [ "$OPCM_ADDRESS" = "0x0000000000000000000000000000000000000000" ]; then
+  echo " ❌ Failed to read opcmV2Address from implementations.json (got: $OPCM_ADDRESS)"
   exit 1
 fi
 
-# Replace the opcmAddress field in intent.toml with the new value
+# Replace the opcmAddress field in intent.toml with the OPCM v2 address.
 sed_inplace "s/^opcmAddress = \".*\"/opcmAddress = \"$OPCM_ADDRESS\"/" ./config-op/intent.toml
 echo " ✅ Updated opcmAddress ($OPCM_ADDRESS) in intent.toml"
+
+# Read superchainConfigProxyAddress from superchain.json and write it into intent.toml.
+# The apply pipeline's InitLiveStrategy resolves SuperchainConfig from the OPCM contract
+# via superchainConfig(), but OPContractsManagerV2 does not expose that getter. We must
+# supply superchainConfigProxy explicitly so the pipeline skips the on-chain resolution
+# and calls ReadSuperchainDeployment with the correct pre-deployed proxy address.
+SUPERCHAIN_CONFIG_PROXY=$(jq -r '.superchainConfigProxyAddress' ./config-op/superchain.json)
+if [ -z "$SUPERCHAIN_CONFIG_PROXY" ] || [ "$SUPERCHAIN_CONFIG_PROXY" = "null" ] || [ "$SUPERCHAIN_CONFIG_PROXY" = "0x0000000000000000000000000000000000000000" ]; then
+  echo " ❌ Failed to read superchainConfigProxyAddress from superchain.json (got: $SUPERCHAIN_CONFIG_PROXY)"
+  exit 1
+fi
+
+sed_inplace "s/^superchainConfigProxy = \".*\"/superchainConfigProxy = \"$SUPERCHAIN_CONFIG_PROXY\"/" ./config-op/intent.toml
+echo " ✅ Updated superchainConfigProxy ($SUPERCHAIN_CONFIG_PROXY) in intent.toml"
 
 # deploy contracts, TODO, should we need to modify source code to deploy contracts?
 docker run --rm \
