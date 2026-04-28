@@ -17,20 +17,21 @@ else
     CHAIN="/genesis.json"
 fi
 
-# Build base RocksDB flags
-ROCKSDB_FLAGS=""
+# Build storage flags
+RETH_INIT_STORAGE_FLAGS=""
 if [ "${RETH_STORAGE_V2:-false}" = "true" ]; then
-    ROCKSDB_FLAGS="--storage.v2"
     if [ -n "${RETH_ROCKSDB_PATH:-}" ]; then
-        ROCKSDB_FLAGS="$ROCKSDB_FLAGS --datadir.rocksdb=$RETH_ROCKSDB_PATH"
+        RETH_INIT_STORAGE_FLAGS="$RETH_INIT_STORAGE_FLAGS --datadir.rocksdb=$RETH_ROCKSDB_PATH"
     fi
+else 
+    RETH_INIT_STORAGE_FLAGS="--storage.v2=false"
 fi
 
 CMD="op-reth node \
       --datadir=/datadir \
       --chain=$CHAIN \
       --config=/config.toml \
-      $ROCKSDB_FLAGS \
+      $RETH_INIT_STORAGE_FLAGS \
       --http \
       --http.corsdomain=* \
       --http.port=8545 \
