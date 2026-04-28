@@ -1155,11 +1155,17 @@ download_genesis() {
 extract_genesis() {
     local target_dir=$1
     local target_file=$2
-    
+
     # Get genesis filename (consistent with download_genesis)
     local genesis_file="genesis-${NETWORK_TYPE}.tar.gz"
-    
-    if ! extract_with_progress "Extracting genesis file..." "$genesis_file" -xzf -C "$target_dir/"; then
+
+    # Ensure target directory exists before extraction
+    mkdir -p "$target_dir"
+
+    # Note: use "-xz -C dir -f" instead of "-xzf -C dir" because
+    # extract_with_progress appends the archive as the last arg to tar.
+    # With "-xzf -C dir archive", the -f flag consumes -C as the filename.
+    if ! extract_with_progress "Extracting genesis file..." "$genesis_file" -xz -C "$target_dir/" -f; then
         print_step_fail "Failed to extract genesis file"
         rm -f "$genesis_file"
         exit 1
