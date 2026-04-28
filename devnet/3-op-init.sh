@@ -182,17 +182,20 @@ OP_RETH_DATADIR2="$(pwd)/data/op-reth-seq2"
 rm -rf "$OP_RETH_DATADIR"
 mkdir -p "$OP_RETH_DATADIR"
 
-# Build storage flags for op-reth init so the DB is initialized with the
-# correct storage_v2 setting (it is written at genesis time and cannot be
-# changed later without a full re-sync).
-RETH_INIT_STORAGE_FLAGS=""
-if [ "${RETH_STORAGE_V2:-false}" = "true" ]; then
-    RETH_INIT_STORAGE_FLAGS="--storage.v2"
-    if [ -n "${RETH_ROCKSDB_PATH:-}" ]; then
-        RETH_INIT_STORAGE_FLAGS="$RETH_INIT_STORAGE_FLAGS --datadir.rocksdb=$RETH_ROCKSDB_PATH"
-    fi
-fi
-
+# Initialize the DB with the v1 storage layout, then migrate to v2.
+#
+# The v2 init path in reth (`set_expected_block_start`) produces misnamed
+# static file segments for non-zero genesis blocks — X Layer starts at
+# FORK_BLOCK+1, so v2 init writes a header with `expected_block_range =
+# (genesis, end)` while leaving the file named `..._<fixed_start>_<end>`,
+# which causes the next startup's `check_consistency` healer to fail with
+# "No such file or directory" on AccountChangeSets/StorageChangeSets.
+#
+# Reth >= v2.0.0 defaults `--storage.v2` to `true`, so we explicitly pass
+# `--storage.v2=false` for init to take the v1 path that does not call
+# `set_expected_block_start`. Then `op-reth db migrate-v2` upgrades the
+# freshly-initialized DB to v2 — that command builds the static files
+# correctly via its own writer logic (PRs paradigmxyz/reth#23422 + #23716).
 INIT_LOG=$(docker compose run --no-deps --rm \
   -v "$(pwd)/$CONFIG_DIR/genesis-reth.json:/genesis.json" \
   --entrypoint op-reth \
@@ -200,12 +203,32 @@ INIT_LOG=$(docker compose run --no-deps --rm \
   init \
   --datadir="/datadir" \
   --chain=/genesis.json \
-  $RETH_INIT_STORAGE_FLAGS \
+  --storage.v2=false \
   --log.stdout.format=json | tee init.log)
 
 NEW_BLOCK_HASH=$(tail -n 1 init.log | jq -r .fields.hash)
 echo "NEW_BLOCK_HASH=$NEW_BLOCK_HASH"
 sed_inplace "s/NEW_BLOCK_HASH=.*/NEW_BLOCK_HASH=$NEW_BLOCK_HASH/" .env
+
+# Migrate the freshly-initialized v1 DB at $OP_RETH_DATADIR to v2.
+echo " 🔧 Migrating op-reth db at $OP_RETH_DATADIR from v1 to v2 (db migrate-v2)..."
+
+MIGRATE_ROCKSDB_FLAGS=""
+if [ -n "${RETH_ROCKSDB_PATH:-}" ]; then
+    MIGRATE_ROCKSDB_FLAGS="--datadir.rocksdb=$RETH_ROCKSDB_PATH"
+fi
+
+docker compose run --no-deps --rm \
+  -v "$(pwd)/$CONFIG_DIR/genesis-reth.json:/genesis.json" \
+  --entrypoint op-reth \
+  op-reth-seq \
+  db \
+  --datadir=/datadir \
+  --chain=/genesis.json \
+  $MIGRATE_ROCKSDB_FLAGS \
+  migrate-v2
+
+echo " ✅ op-reth db migrated to v2"
 
 if [ "${USE_CHAINSPEC:-false}" = "true" ]; then
     if [ -z "$OP_RETH_LOCAL_DIRECTORY" ]; then
