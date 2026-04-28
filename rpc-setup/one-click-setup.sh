@@ -1166,11 +1166,12 @@ extract_genesis() {
     echo "target_dir: $target_dir"
     echo "target_file: $target_file"
     
-    if ! extract_with_progress "Extracting genesis file..." "$genesis_file" -xzf -C "$target_dir/"; then
-        print_step_fail "Failed to extract genesis file"
-        # rm -f "$genesis_file"
-        exit 1
-    fi
+     #if ! extract_with_progress "Extracting genesis file..." "$genesis_file" -xzf -C "$target_dir/"; then
+    #    print_step_fail "Failed to extract genesis file"
+    #    rm -f "$genesis_file"
+    #    exit 1
+    #fi
+    tar -xzf $genesis_file -C $target_dir/
 
     if [ -f "$target_dir/merged.genesis.json" ]; then
         mv "$target_dir/merged.genesis.json" "$target_dir/$target_file"
