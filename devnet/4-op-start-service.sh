@@ -124,11 +124,29 @@ echo "✅ Grafana available at http://localhost:3000 (admin/admin)"
 if [ "$LAUNCH_RPC_NODE" = "true" ]; then
     docker compose up -d op-${RPC_TYPE}-rpc
     wait_for_el_to_start "op-${RPC_TYPE}-rpc" "$RPC_TYPE"
-    docker compose up -d op-rpc
+    if [ "$RPC_CL" = "kona" ]; then
+        echo "🚀 Starting kona-node as RPC CL (RPC_CL=kona)"
+        docker compose up -d op-kona-rpc
+    else
+        docker compose up -d op-rpc
+    fi
 fi
 
 if [ "$LAUNCH_RPC_NODE2" = "true" ]; then
-    docker compose up -d op-rpc2
+    if [ "$RPC_CL" = "kona" ]; then
+        docker compose up -d op-kona-rpc2
+    else
+        docker compose up -d op-rpc2
+    fi
+fi
+
+if [ "$RPC_CL" = "kona" ]; then
+    URLS=()
+    [ "$LAUNCH_RPC_NODE" = "true" ] && URLS+=(http://localhost:9555)
+    [ "$LAUNCH_RPC_NODE2" = "true" ] && URLS+=(http://localhost:9565)
+    if [ ${#URLS[@]} -gt 0 ]; then
+        $SCRIPTS_DIR/kona-connect-peer.sh "${URLS[@]}"
+    fi
 fi
 
 # Configure op-batcher endpoints based on conductor mode

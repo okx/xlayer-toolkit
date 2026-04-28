@@ -348,11 +348,6 @@ services:
       retries: 10
       start_period: 3s
 
-  # Alternative CL: kona-node (Rust, built from optimism/rust workspace).
-  # Mutually exclusive with op-seq at runtime (same host ports). Selected via SEQ_CL=kona.
-  # DNS alias `op-seq` lets rpc nodes' hard-coded --p2p.static addresses resolve
-  # without modification. The libp2p peer ID matches because both op-node and
-  # kona derive it from the same p2p.priv.raw via secp256k1.
   op-kona-seq:
     image: "${KONA_IMAGE_TAG:-kona:latest}"
     container_name: op-kona-seq
@@ -484,6 +479,104 @@ services:
       - --syncmode=execution-layer
     depends_on:
       - op-${RPC_TYPE}-rpc2
+
+  op-kona-rpc:
+    image: "${KONA_IMAGE_TAG:-kona:latest}"
+    container_name: op-kona-rpc
+    networks:
+      default:
+        aliases:
+          - op-rpc
+    volumes:
+      - ./config-op/rollup.json:/rollup.json
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./data/op-kona-rpc:/data
+      - ./l1-geth/execution/genesis.json:/l1-genesis.json
+    ports:
+      - "9555:9545"
+      - "9233:9223"
+      - "9233:9223/udp"
+      - "9094:9091"
+    command:
+      - --chain=${CHAIN_ID}
+      - --metrics.enabled
+      - --metrics.addr=0.0.0.0
+      - --metrics.port=9091
+      - -vvvv
+      - --logs.stdout.format=logfmt
+      - node
+      - --mode=Validator
+      - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
+      - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
+      - --l1-config-file=/l1-genesis.json
+      - --l2-engine-rpc=http://op-${RPC_TYPE}-rpc:8552
+      - --l2-engine-jwt-secret=/jwt.txt
+      - --l2-config-file=/rollup.json
+      - --rpc.addr=0.0.0.0
+      - --rpc.port=9545
+      - --rpc.enable-admin
+      - --p2p.listen.tcp=9223
+      - --p2p.listen.udp=9223
+      - --p2p.priv.raw=604557d042fbea9ed42f46c0c95c346a932b6a5ef0c0dd07a00dbf95801a2510
+      - --p2p.no-discovery
+      - --p2p.no-bootstore
+    depends_on:
+      - op-${RPC_TYPE}-rpc
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9545/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  op-kona-rpc2:
+    image: "${KONA_IMAGE_TAG:-kona:latest}"
+    container_name: op-kona-rpc2
+    networks:
+      default:
+        aliases:
+          - op-rpc2
+    volumes:
+      - ./config-op/rollup.json:/rollup.json
+      - ./config-op/jwt.txt:/jwt.txt
+      - ./data/op-kona-rpc2:/data
+      - ./l1-geth/execution/genesis.json:/l1-genesis.json
+    ports:
+      - "9565:9545"
+      - "9243:9223"
+      - "9243:9223/udp"
+      - "9093:9091"
+    command:
+      - --chain=${CHAIN_ID}
+      - --metrics.enabled
+      - --metrics.addr=0.0.0.0
+      - --metrics.port=9091
+      - -vvvv
+      - --logs.stdout.format=logfmt
+      - node
+      - --mode=Validator
+      - --l1-eth-rpc=${L1_RPC_URL_IN_DOCKER}
+      - --l1-beacon=${L1_BEACON_URL_IN_DOCKER}
+      - --l1-config-file=/l1-genesis.json
+      - --l2-engine-rpc=http://op-${RPC_TYPE}-rpc2:8552
+      - --l2-engine-jwt-secret=/jwt.txt
+      - --l2-config-file=/rollup.json
+      - --rpc.addr=0.0.0.0
+      - --rpc.port=9545
+      - --rpc.enable-admin
+      - --p2p.listen.tcp=9223
+      - --p2p.listen.udp=9223
+      - --p2p.priv.raw=096648ce9102985f9a57a12fa8138c4892a881f7b99dc7e84ede99b7ba24ffe7
+      - --p2p.no-discovery
+      - --p2p.no-bootstore
+    depends_on:
+      - op-${RPC_TYPE}-rpc2
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9545/healthz"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
 
   op-geth-rpc2-init:
     image: "${OP_GETH_IMAGE_TAG}"
