@@ -52,6 +52,51 @@ services:
     restart: unless-stopped
     # Note: Service startup order is controlled by Makefile
 
+  op-kona:
+    image: "${OP_KONA_IMAGE_TAG}"
+    container_name: xlayer-${NETWORK_TYPE}-${RPC_TYPE}-op-kona
+    networks:
+      - xlayer-network
+    ports:
+      - "${NODE_RPC_PORT:-9545}:9545"
+      - "${NODE_P2P_PORT:-9223}:9223"
+      - "${NODE_P2P_PORT:-9223}:9223/udp"
+      - "${KONA_METRICS_PORT:-9091}:9091"
+    volumes:
+      - ./${TARGET_DIR}/data/op-kona:/data
+      - ./${TARGET_DIR}/config/rollup-${NETWORK_TYPE}.json:/rollup.json
+      - ./${TARGET_DIR}/config/jwt.txt:/jwt.txt
+      - ./${TARGET_DIR}/logs:/logs
+    command:
+      - --chain=${L2_CHAIN_ID}
+      - --metrics.enabled
+      - --metrics.addr=0.0.0.0
+      - --metrics.port=9091
+      - -vvv
+      - --logs.stdout.format=logfmt
+      - node
+      - --mode=Validator
+      - --l1-eth-rpc=${L1_RPC_URL}
+      - --l1-beacon=${L1_BEACON_URL}
+      - --l2-engine-rpc=${L2_ENGINE_URL}
+      - --l2-engine-jwt-secret=/jwt.txt
+      - --l2-config-file=/rollup.json
+      - --rpc.addr=0.0.0.0
+      - --rpc.port=9545
+      - --rpc.enable-admin
+      - --p2p.listen.tcp=9223
+      - --p2p.listen.udp=9223
+      - --p2p.no-discovery
+      - --p2p.no-bootstore
+    stop_grace_period: 60s
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9545/healthz"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+
   op-geth:
     image: "${OP_GETH_IMAGE_TAG}"
     container_name: xlayer-${NETWORK_TYPE}-${RPC_TYPE}-op-geth

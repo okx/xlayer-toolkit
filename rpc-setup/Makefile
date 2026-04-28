@@ -37,7 +37,7 @@ run:
 		done; \
 		echo ""; \
 		printf "\033[0;36m  [*] Starting op-node...\033[0m\n"; \
-		$(SUDO) docker compose -p $$PROJECT_NAME up -d op-node; \
+		$(SUDO) docker compose -p $$PROJECT_NAME up -d op-kona; \
 	else \
 		printf "\033[0;36m  [*] Starting op-geth...\033[0m\n"; \
 		$(SUDO) docker compose -p $$PROJECT_NAME up -d op-geth; \
