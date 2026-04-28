@@ -1393,6 +1393,7 @@ init_reth() {
     if ! $SUDO docker run --rm \
         -v "$data_dir:/datadir" \
         -v "$genesis_file:/genesis.json" \
+        --entrypoint /usr/local/bin/op-reth \
         "${OP_RETH_IMAGE_TAG}" \
         init \
         --datadir /datadir \
