@@ -923,7 +923,9 @@ services:
       - ./op-succinct/.env.proposer:/app/.env
       - ./op-succinct/configs:/app/configs
     environment:
-      - RUST_LOG=info
+      - RUST_LOG=${PROPOSER_RUST_LOG:-info}
+      - RUST_LOG_STYLE=never
+      - NO_COLOR=1
     ports:
       - "9000:9000"
     command:
@@ -936,7 +938,8 @@ services:
     volumes:
       - ./op-succinct/.env.challenger:/app/.env
     ports:
-      - "9001:9001"
+      # Host 9001 is already claimed by op-reth-seq metrics.
+      - "9011:9001"
     command:
       - challenger
       - --env-file=/app/.env

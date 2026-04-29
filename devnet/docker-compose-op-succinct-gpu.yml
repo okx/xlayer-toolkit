@@ -1,0 +1,16 @@
+services:
+  op-succinct-proposer:
+    image: "${OP_SUCCINCT_CUDA_IMAGE_TAG}"
+    runtime: nvidia
+    # Use NVIDIA_VISIBLE_DEVICES (below) instead of `deploy.resources.devices`
+    # — the latter only works in swarm mode and silently caps to 1 GPU.
+    #
+    # shm_size: SP1 trace ring buffers use /dev/shm; default 64MB → SIGBUS.
+    # 128GB covers split=4 conc=4 on 600-block ranges; tmpfs is lazy-allocated.
+    shm_size: "128gb"
+    # init: tini as PID 1 reaps sp1-gpu-server children killed by OOM; without
+    # it zombies can stall `docker stop`.
+    init: true
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility

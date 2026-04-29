@@ -15,10 +15,12 @@ function build_and_tag_image() {
   local image_tag=$2
   local build_dir=$3
   local dockerfile=$4
+  shift 4
+  local extra_args=("$@")
 
   cd "$build_dir"
   GITTAG=$(git rev-parse --short HEAD)
-  docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
+  docker build "${extra_args[@]}" -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
   docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
   echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
   cd -
@@ -135,6 +137,49 @@ else
     cd "$OP_SUCCINCT_LOCAL_DIRECTORY"
     build_and_tag_image "op-succinct" "$OP_SUCCINCT_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile"
     build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.contract"
+
+    if [ "$OP_SUCCINCT_USE_GPU" = "true" ]; then
+      echo "🔨 Building op-succinct CUDA image"
+      cuda_build_args=()
+      if [ -n "$OP_SUCCINCT_SP1_PARAMS_DIR" ]; then
+        sp1_params_path="$OP_SUCCINCT_SP1_PARAMS_DIR"
+        if [ ! -e "$sp1_params_path" ]; then
+          echo "❌ OP_SUCCINCT_SP1_PARAMS_DIR=$sp1_params_path does not exist"
+          exit 1
+        fi
+        if [ -f "$sp1_params_path" ]; then
+          # User pointed at the tarball itself; resolve to its parent directory.
+          sp1_params_parent=$(dirname "$sp1_params_path")
+          echo "⚠️  OP_SUCCINCT_SP1_PARAMS_DIR points to a file; using parent dir $sp1_params_parent"
+          sp1_params_path="$sp1_params_parent"
+        fi
+        if [ ! -d "$sp1_params_path" ]; then
+          echo "❌ OP_SUCCINCT_SP1_PARAMS_DIR=$OP_SUCCINCT_SP1_PARAMS_DIR must be a directory containing <ver>-<mode>.tar.gz"
+          exit 1
+        fi
+        echo "📦 Using local SP1 params from $sp1_params_path"
+        cuda_build_args+=(--build-context "sp1-params-cache=$sp1_params_path")
+      fi
+      if [ -n "$OP_SUCCINCT_ICICLE_DIR" ]; then
+        icicle_path="$OP_SUCCINCT_ICICLE_DIR"
+        if [ ! -e "$icicle_path" ]; then
+          echo "❌ OP_SUCCINCT_ICICLE_DIR=$icicle_path does not exist"
+          exit 1
+        fi
+        if [ -f "$icicle_path" ]; then
+          icicle_parent=$(dirname "$icicle_path")
+          echo "⚠️  OP_SUCCINCT_ICICLE_DIR points to a file; using parent dir $icicle_parent"
+          icicle_path="$icicle_parent"
+        fi
+        if [ ! -d "$icicle_path" ]; then
+          echo "❌ OP_SUCCINCT_ICICLE_DIR=$OP_SUCCINCT_ICICLE_DIR must be a directory containing icicle_*-ubuntu22*.tar.gz"
+          exit 1
+        fi
+        echo "📦 Using local icicle tarballs from $icicle_path"
+        cuda_build_args+=(--build-context "icicle-cache=$icicle_path")
+      fi
+      build_and_tag_image "op-succinct-cuda" "$OP_SUCCINCT_CUDA_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.cuda" "${cuda_build_args[@]}"
+    fi
   fi
 fi
 
