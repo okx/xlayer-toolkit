@@ -55,6 +55,7 @@ services:
   op-kona:
     image: "${OP_KONA_IMAGE_TAG}"
     container_name: xlayer-${NETWORK_TYPE}-${RPC_TYPE}-op-kona
+    entrypoint: sh
     networks:
       - xlayer-network
     ports:
@@ -68,26 +69,33 @@ services:
       - ./${TARGET_DIR}/config/jwt.txt:/jwt.txt
       - ./${TARGET_DIR}/logs:/logs
     command:
-      - --chain=${L2_CHAIN_ID}
-      - --metrics.enabled
-      - --metrics.addr=0.0.0.0
-      - --metrics.port=9091
-      - -vvv
-      - --logs.stdout.format=logfmt
-      - node
-      - --mode=Sequencer
-      - --l1-eth-rpc=${L1_RPC_URL}
-      - --l1-beacon=${L1_BEACON_URL}
-      - --l2-engine-rpc=${L2_ENGINE_URL}
-      - --l2-engine-jwt-secret=/jwt.txt
-      - --l2-config-file=/rollup.json
-      - --rpc.addr=0.0.0.0
-      - --rpc.port=9545
-      - --rpc.enable-admin
-      - --p2p.listen.tcp=9223
-      - --p2p.listen.udp=9223
-      - --p2p.no-discovery
-      - --p2p.no-bootstore
+      - -c
+      - |
+        mkdir -p /data/p2p
+        exec kona-node \
+          --chain=${L2_CHAIN_ID} \
+          --metrics.enabled \
+          --metrics.addr=0.0.0.0 \
+          --metrics.port=9091 \
+          -vvv \
+          --logs.stdout.format=logfmt \
+          node \
+          --mode=Validator \
+          $$([ -n "${L1_RPC_URL}" ] && echo "--l1-eth-rpc=${L1_RPC_URL}") \
+          $$([ -n "${L1_BEACON_URL}" ] && echo "--l1-beacon=${L1_BEACON_URL}") \
+          --l2-engine-rpc=${L2_ENGINE_URL} \
+          --l2-engine-jwt-secret=/jwt.txt \
+          --l2-config-file=/rollup.json \
+          --rpc.addr=0.0.0.0 \
+          --rpc.port=9545 \
+          --rpc.enable-admin \
+          --p2p.listen.tcp=9223 \
+          --p2p.listen.udp=9223 \
+          --p2p.priv.path=/data/p2p/p2p-priv-key.txt \
+          --p2p.bootnodes=${OP_NODE_BOOTNODE} \
+          --p2p.bootstore=/data/p2p/bootstore \
+          $$([ -n "${L2_FOLLOW_SOURCE}" ] && echo "--l2.follow.source=${L2_FOLLOW_SOURCE}") \
+          2>&1 | tee /logs/op-kona.log
     stop_grace_period: 60s
     restart: unless-stopped
     healthcheck:
