@@ -41,6 +41,7 @@ devnet/init.log
 devnet/l1-geth/
 profiling/
 tools/adventure/txhashes.log
+tools/flashblocks-monitoring/flashblocks-monitor
 
 # Rust build artifacts
 **/target/
