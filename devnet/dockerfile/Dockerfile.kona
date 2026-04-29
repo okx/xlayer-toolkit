@@ -1,0 +1,52 @@
+# syntax=docker/dockerfile:1.6
+#
+# Dockerfile for building kona-node from the optimism monorepo's rust/ workspace.
+#
+# Build context MUST be the optimism monorepo's rust/ directory, e.g.:
+#   docker build -f xlayer-toolkit/devnet/dockerfile/Dockerfile.kona \
+#                -t kona:latest \
+#                /path/to/optimism/rust
+#
+# The rust/.dockerignore at that path already excludes target/, book/, tests/, etc.
+
+ARG RUST_VERSION=1.94
+
+# ---------- Builder ----------
+FROM rust:${RUST_VERSION}-slim-bookworm AS builder
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      git libclang-dev pkg-config build-essential cmake curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY . .
+
+ARG PROFILE=release
+ARG CARGO_FEATURES=""
+
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,id=kona-target,sharing=locked \
+    set -eux; \
+    FEATURE_ARGS=""; \
+    if [ -n "$CARGO_FEATURES" ]; then FEATURE_ARGS="--features $CARGO_FEATURES"; fi; \
+    cargo build --profile "$PROFILE" $FEATURE_ARGS -p kona-node --bin kona-node; \
+    TARGET_SUBDIR="$PROFILE"; \
+    if [ "$PROFILE" = "dev" ]; then TARGET_SUBDIR="debug"; fi; \
+    cp "/app/target/${TARGET_SUBDIR}/kona-node" /usr/local/bin/kona-node
+
+# ---------- Runtime ----------
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /usr/local/bin/kona-node /usr/local/bin/kona-node
+
+# Default ports used by kona-node: RPC (9545), P2P (9223 tcp/udp), metrics (9002).
+EXPOSE 9545 9223 9223/udp 9002
+
+ENTRYPOINT ["/usr/local/bin/kona-node"]
