@@ -187,10 +187,11 @@ mkdir -p "$OP_RETH_DATADIR"
 # changed later without a full re-sync).
 RETH_INIT_STORAGE_FLAGS=""
 if [ "${RETH_STORAGE_V2:-false}" = "true" ]; then
-    RETH_INIT_STORAGE_FLAGS="--storage.v2"
     if [ -n "${RETH_ROCKSDB_PATH:-}" ]; then
         RETH_INIT_STORAGE_FLAGS="$RETH_INIT_STORAGE_FLAGS --datadir.rocksdb=$RETH_ROCKSDB_PATH"
     fi
+else 
+    RETH_INIT_STORAGE_FLAGS="--storage.v2=false"
 fi
 
 INIT_LOG=$(docker compose run --no-deps --rm \
