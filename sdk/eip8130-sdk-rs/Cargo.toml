@@ -1,0 +1,42 @@
+[package]
+name = "eip8130-send"
+version = "0.1.0"
+edition = "2024"
+# Required by op-alloy-consensus (pulled from the okx/optimism EIP-8130 fork).
+rust-version = "1.94"
+license = "MIT OR Apache-2.0"
+description = "Minimal EIP-8130 (X Layer Native AA) transaction sender CLI"
+repository = "https://github.com/okx/eip8130-sdk-rs"
+
+[dependencies]
+# eip-8130 types from our optimism fork (pinned to the EIP-8130 port commit).
+op-alloy-consensus = { git = "https://github.com/okx/optimism", rev = "4c80fe5b17a6a59c43f16678cbed7d0f29cc9edd", default-features = false, features = ["std", "serde"] }
+# RPC types from the same fork: `OpTransactionReceipt` knows EIP-8130 (type 0x7b)
+# receipts and exposes the AA-only `payer` / `phaseStatuses` fields.
+op-alloy-rpc-types = { git = "https://github.com/okx/optimism", rev = "4c80fe5b17a6a59c43f16678cbed7d0f29cc9edd", default-features = false, features = ["std"] }
+# `Optimism` Network — wires `OpTransactionReceipt` into provider methods like
+# `pending.get_receipt()` so we don't have to roll our own poll loop.
+op-alloy-network = { git = "https://github.com/okx/optimism", rev = "4c80fe5b17a6a59c43f16678cbed7d0f29cc9edd", default-features = false }
+
+# alloy — versions match what optimism pins in its rust/Cargo.toml so we
+# resolve to a single shared copy of the alloy types (otherwise
+# op-alloy-consensus would bring in alloy-primitives 1.5 alongside our 2.0,
+# breaking type unification).
+alloy-primitives = { version = "1.5.6", features = ["std", "serde"] }
+alloy-eips = { version = "2.0.0", features = ["std", "serde"] }
+alloy-provider = { version = "2.0.0", features = ["reqwest"] }
+alloy-rpc-types-eth = { version = "2.0.0", default-features = false }
+alloy-network = { version = "2.0.0" }
+
+# crypto
+secp256k1 = { version = "0.31", features = ["std", "recovery", "global-context"] }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "std"] }
+sha2 = { version = "0.10", default-features = false, features = ["std"] }
+
+# cli + runtime
+clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+eyre = "0.6"
+url = "2"
+alloy-consensus = { version = "2.0.0", default-features = false }
+serde_json = "1"

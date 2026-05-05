@@ -103,4 +103,5 @@ if [ "${XLAYER_INTERCEPT_ENABLED:-false}" = "true" ]; then
     fi
 fi
 
+export RUST_LOG="info,reth_optimism_payload_builder=trace,alloy_op_evm=debug,op_revm=debug,reth_optimism_txpool=debug"
 exec $CMD

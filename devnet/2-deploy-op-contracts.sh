@@ -190,7 +190,12 @@ echo " ✅ Updated clock parameters in intent.toml: clockExtension=$TEMP_CLOCK_E
 # which the apply pipeline uses to resolve the pre-deployed OPCM v2 contract.
 OPCM_ADDRESS=$(jq -r '.opcmV2Address' ./config-op/implementations.json)
 if [ -z "$OPCM_ADDRESS" ] || [ "$OPCM_ADDRESS" = "null" ] || [ "$OPCM_ADDRESS" = "0x0000000000000000000000000000000000000000" ]; then
-  echo " ❌ Failed to read opcmV2Address from implementations.json (got: $OPCM_ADDRESS)"
+  # Older op-deployer images emit the active OPCM under "opcmAddress" instead of "opcmV2Address".
+  echo " ℹ️  opcmV2Address is zero; falling back to opcmAddress (older op-deployer layout)"
+  OPCM_ADDRESS=$(jq -r '.opcmAddress' ./config-op/implementations.json)
+fi
+if [ -z "$OPCM_ADDRESS" ] || [ "$OPCM_ADDRESS" = "null" ] || [ "$OPCM_ADDRESS" = "0x0000000000000000000000000000000000000000" ]; then
+  echo " ❌ Failed to read OPCM address from implementations.json (both opcmV2Address and opcmAddress are zero)"
   exit 1
 fi
 

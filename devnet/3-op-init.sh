@@ -32,6 +32,23 @@ sed_inplace 's/"eip1559Elasticity": [0-9]*/"eip1559Elasticity": '"$(jq -r '.conf
 sed_inplace 's/"eip1559Denominator": [0-9]*/"eip1559Denominator": '"$(jq -r '.config.optimism.eip1559Denominator' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"$(jq -r '.config.optimism.eip1559DenominatorCanyon' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 
+# Inject NativeAA (EIP-8130) fork activation timestamp into genesis.json and rollup.json.
+# op-deployer in op-contracts:latest does not yet emit NativeAA fields, so we patch them in
+# post-deployment. We activate one L2 block after genesis so the deposit txs in
+# op-node/rollup/derive/native_aa_upgrade_transactions.go cleanly deploy the 6 system contracts
+# at the activation block (genesis allocs would otherwise be required for at-genesis activation).
+GENESIS_TS_HEX=$(jq -r '.timestamp' ./config-op/genesis.json)
+GENESIS_TS=$(cast to-dec "$GENESIS_TS_HEX")
+NATIVEAA_TS=$((GENESIS_TS + 1))
+echo "🔧 Injecting NativeAA activation: nativeAaTime=$NATIVEAA_TS (genesisTime=$GENESIS_TS + 1)"
+
+# Genesis JSON: op-reth chainspec reads .config.nativeAaTime (camelCase, since
+# OpGenesisInfo deserializes with rename_all = camelCase).
+jq --argjson ts "$NATIVEAA_TS" '.config.nativeAaTime = $ts' ./config-op/genesis.json > tmp.json && mv tmp.json ./config-op/genesis.json
+
+# Rollup JSON: op-node reads top-level .native_aa_time (snake_case JSON tag from Go side).
+jq --argjson ts "$NATIVEAA_TS" '.native_aa_time = $ts' ./config-op/rollup.json > tmp.json && mv tmp.json ./config-op/rollup.json
+
 if [ "$MERGE_RETH_GENESIS" = "true" ]; then
     echo "🔧 Merging genesis files..."
 
