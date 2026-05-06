@@ -39,6 +39,18 @@ KEY_X=0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6
 DEFAULT_ACCOUNT=0xAb4eE49EE97e49807e180BD5Fb9D9F35783b84F2
 NONCE_KEY_MAX_HEX=0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 
+# Dedicated funder: anvil account 0. Never participates in AA flows so it
+# stays un-delegated → no EIP-7702 1-slot in-flight throttle on funding.
+FUNDER_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+FUNDER_ADDR=0xf39Fd6e51aad88F6F4ce6aB8827279cfFFb92266
+
+# Pre-funded key pool — built lazily by `bulk_prefund` in preflight when
+# running the full suite. Per-test calls to `fresh_secret_key` pop from
+# this pool; when empty (single-test runs or pool exhausted), each call
+# falls back to fresh-generation + per-test funding.
+POOL_KEYS=()
+POOL_IDX=0
+
 # Targets without code: calls succeed (no-op return).
 T1=0x1111111111111111111111111111111111111111
 T2=0x2222222222222222222222222222222222222222
@@ -189,8 +201,8 @@ receipt_type() {
     receipt_field "$hash" type
 }
 
-# Generates a fresh, never-before-seen secp256k1 key (32 bytes, hex).
-fresh_secret_key() {
+# Internal: generate a brand-new secp256k1 key without consulting the pool.
+fresh_secret_key_raw() {
     python3 -c "
 import hashlib, secrets, time
 seed = hashlib.sha256(f'$1-{time.time_ns()}-{secrets.token_hex(8)}'.encode()).digest()
@@ -198,6 +210,19 @@ N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
 k = (int.from_bytes(seed,'big') % (N-1)) + 1
 print('0x{:064x}'.format(k))
 "
+}
+
+# Public: returns a fresh-or-pool secp256k1 key. When the pre-funded pool
+# (built by `bulk_prefund` in preflight for full suite runs) has remaining
+# entries, pop one (already funded). Otherwise generate a new key — the
+# caller's `fund_account` will handle per-test funding.
+fresh_secret_key() {
+    if (( POOL_IDX < ${#POOL_KEYS[@]} )); then
+        echo "${POOL_KEYS[$POOL_IDX]}"
+        ((POOL_IDX++))
+        return
+    fi
+    fresh_secret_key_raw "$1"
 }
 
 # Generates a fresh P256 (secp256r1) private key.
@@ -214,16 +239,67 @@ print('0x{:064x}'.format(k))
 
 fund_account() {
     local addr="$1" amount="${2:-0.01ether}"
+    # Quick path: pre-funded pool keys already have balance; skip cast send.
+    local bal; bal=$(rpc eth_getBalance "[\"$addr\",\"latest\"]" \
+        | python3 -c "import json,sys; r=json.load(sys.stdin).get('result','0x0'); print(int(r,16))")
+    [[ "$bal" != "0" ]] && return 0
+    # Slow path: send a fresh funding tx from FUNDER (un-delegated, no
+    # EIP-7702 in-flight throttle) and poll until balance is non-zero.
     local attempt
     for attempt in 1 2 3; do
-        cast send --private-key "$KEY_S" --rpc-url "$RPC_URL" \
+        cast send --private-key "$FUNDER_KEY" --rpc-url "$RPC_URL" \
             "$addr" --value "$amount" >/dev/null 2>&1 || true
-        local bal; bal=$(rpc eth_getBalance "[\"$addr\",\"latest\"]" \
+        bal=$(rpc eth_getBalance "[\"$addr\",\"latest\"]" \
             | python3 -c "import json,sys; r=json.load(sys.stdin).get('result','0x0'); print(int(r,16))")
         [[ "$bal" != "0" ]] && return 0
         sleep 1
     done
     return 1
+}
+
+# Build the pre-funded key pool by submitting N funding txs in parallel.
+# Each tx uses an explicit nonce so cast doesn't race on `eth_getTransactionCount`.
+# Returns once the highest-nonce funding has confirmed (so all keys are funded).
+bulk_prefund() {
+    local n="$1"
+    local amount="${2:-0.01ether}"
+    POOL_KEYS=()
+    POOL_IDX=0
+    local addrs=()
+
+    echo "  [preflight] generating $n keys + bulk-funding via account 0..."
+    for i in $(seq 1 "$n"); do
+        local k; k=$(fresh_secret_key_raw "pool-$i")
+        POOL_KEYS+=("$k")
+    done
+    for k in "${POOL_KEYS[@]}"; do
+        addrs+=("$(cast wallet address --private-key "$k")")
+    done
+
+    # Read funder's next nonce ONCE; assign nonces sequentially to async sends.
+    local start_nonce
+    start_nonce=$(rpc eth_getTransactionCount "[\"$FUNDER_ADDR\",\"pending\"]" \
+        | python3 -c "import json,sys; print(int(json.load(sys.stdin)['result'],16))")
+
+    # Fan out: submit all $n funding txs concurrently with explicit nonces.
+    for i in "${!addrs[@]}"; do
+        cast send --private-key "$FUNDER_KEY" --rpc-url "$RPC_URL" \
+            --nonce $((start_nonce + i)) --async \
+            "${addrs[$i]}" --value "$amount" >/dev/null 2>&1 &
+    done
+    wait
+
+    # The highest-nonce tx mines last; once its balance is set, all earlier
+    # ones must have mined too (nonce ordering).
+    local last="${addrs[$((n-1))]}"
+    local deadline=$((SECONDS + 60))
+    until (( $(rpc eth_getBalance "[\"$last\",\"latest\"]" \
+        | python3 -c "import json,sys; print(int(json.load(sys.stdin).get('result','0x0'),16))") > 0 ))
+    do
+        (( SECONDS > deadline )) && { echo "  [preflight] bulk_prefund timed out" >&2; return 1; }
+        sleep 1
+    done
+    echo "  [preflight] pool ready: $n keys funded"
 }
 
 get_code() {
@@ -265,6 +341,17 @@ preflight() {
         for ch in 0x0 0xdead 0x1 0x2222; do
             drain_channel "$KEY_S" "$ch"
         done
+    fi
+
+    # Pre-fund a pool of fresh keys when running the full suite (or a
+    # large selection). Single-test runs skip this — per-test funding
+    # in the few-seconds range is fine and saves the ~30s preflight.
+    # Override with `SKIP_PREFUND=1` to force per-test funding even on
+    # full runs (useful when devnet basefee is volatile).
+    local pool_size="${PREFUND_POOL_SIZE:-200}"
+    if [[ "${SKIP_PREFUND:-0}" != "1" ]] \
+        && (( ${#SELECTED[@]} == 0 || ${#SELECTED[@]} > 5 )); then
+        bulk_prefund "$pool_size" || true
     fi
 }
 
