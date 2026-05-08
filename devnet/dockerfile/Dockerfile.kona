@@ -1,5 +1,13 @@
 # syntax=docker/dockerfile:1.6
 #
+# Dockerfile for building kona-node from the optimism monorepo's rust/ workspace.
+#
+# Build context MUST be the optimism monorepo's rust/ directory, e.g.:
+#   docker build -f xlayer-toolkit/devnet/dockerfile/Dockerfile.kona \
+#                -t kona:latest \
+#                /path/to/optimism/rust
+#
+# The rust/.dockerignore at that path already excludes target/, book/, tests/, etc.
 
 ARG RUST_VERSION=1.94
 
@@ -13,24 +21,21 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY rust/    ./rust/
-COPY op-core/ ./op-core/
-
-WORKDIR /app/rust
+COPY . .
 
 ARG PROFILE=release
 ARG CARGO_FEATURES=""
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
-    --mount=type=cache,target=/app/rust/target,id=kona-target,sharing=locked \
+    --mount=type=cache,target=/app/target,id=kona-target,sharing=locked \
     set -eux; \
     FEATURE_ARGS=""; \
     if [ -n "$CARGO_FEATURES" ]; then FEATURE_ARGS="--features $CARGO_FEATURES"; fi; \
     cargo build --profile "$PROFILE" $FEATURE_ARGS -p kona-node --bin kona-node; \
     TARGET_SUBDIR="$PROFILE"; \
     if [ "$PROFILE" = "dev" ]; then TARGET_SUBDIR="debug"; fi; \
-    cp "/app/rust/target/${TARGET_SUBDIR}/kona-node" /usr/local/bin/kona-node
+    cp "/app/target/${TARGET_SUBDIR}/kona-node" /usr/local/bin/kona-node
 
 # ---------- Runtime ----------
 FROM debian:bookworm-slim AS runtime
