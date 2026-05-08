@@ -137,6 +137,8 @@ else
 
   RUST_CTX="$OP_STACK_LOCAL_DIRECTORY/rust"
   KONA_DOCKERFILE="$PWD_DIR/dockerfile/Dockerfile.kona"
+  mkdir -p $RUST_CTX/kona/op-core/nuts/bundles
+  cp $OP_STACK_LOCAL_DIRECTORY/op-core/nuts/bundles/karst_nut_bundle.json $RUST_CTX/kona/op-core/nuts/bundles/
 
   if [ ! -d "$RUST_CTX/kona" ]; then
     echo "❌ Kona workspace not found at $RUST_CTX/kona"
