@@ -1,0 +1,98 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"time"
+
+	"github.com/spf13/viper"
+)
+
+type ConductorSequencerPair struct {
+	ConductorURL string
+	SequencerURL string
+}
+
+type Config struct {
+	WSURL                  string
+	RPCURL                 string
+	LarkBotURL             string
+	LarkGroupID            string
+	AlertEnabled           bool
+	MaxFlashblockDelay     time.Duration
+	TxCheckDelay           time.Duration
+	AlertRateLimit         time.Duration
+	WSLongDownThreshold    time.Duration
+	VerifyTimeout          time.Duration
+	RPCTimeout             time.Duration
+	PeerStatusPollInterval time.Duration
+	ConductorSequencers    []ConductorSequencerPair
+	Verbose                bool
+}
+
+func LoadConfig(configPath string) *Config {
+	if _, err := os.Stat(configPath); err == nil {
+		viper.SetConfigFile(configPath)
+		if err := viper.ReadInConfig(); err != nil {
+			log.Fatalf("Failed to read config file %s: %v", configPath, err)
+		}
+		log.Printf("Loaded config from %s", configPath)
+	} else {
+		log.Printf("Config file %s not found, using defaults + env", configPath)
+	}
+
+	// Environment variables override config file values
+	viper.AutomaticEnv()
+
+	// Set default values
+	viper.SetDefault("WS_URL", "ws://localhost:7547")
+	viper.SetDefault("RPC_URL", "http://localhost:8545")
+	viper.SetDefault("APM_BOT_URL", "")
+	viper.SetDefault("LARK_GROUP_ID", "")
+	viper.SetDefault("ALERT_ENABLED", true)
+	viper.SetDefault("MAX_FLASHBLOCK_DELAY_MS", 1000)
+	viper.SetDefault("TX_CHECK_DELAY_MS", 1000)
+	viper.SetDefault("ALERT_RATE_LIMIT_S", 30)
+	viper.SetDefault("WS_LONG_DOWN_THRESHOLD_S", 60)
+	viper.SetDefault("VERIFY_TIMEOUT_S", 5)
+	viper.SetDefault("RPC_TIMEOUT_S", 10)
+	viper.SetDefault("PEER_STATUS_POLL_INTERVAL_S", 5)
+	viper.SetDefault("CONDUCTOR1_URL", "http://localhost:8547")
+	viper.SetDefault("SEQUENCER1_URL", "http://localhost:8123")
+	viper.SetDefault("CONDUCTOR2_URL", "http://localhost:8548")
+	viper.SetDefault("SEQUENCER2_URL", "http://localhost:8223")
+	viper.SetDefault("VERBOSE", false)
+
+	return &Config{
+		WSURL:                  viper.GetString("WS_URL"),
+		RPCURL:                 viper.GetString("RPC_URL"),
+		LarkBotURL:             viper.GetString("APM_BOT_URL"),
+		LarkGroupID:            viper.GetString("LARK_GROUP_ID"),
+		AlertEnabled:           viper.GetBool("ALERT_ENABLED"),
+		MaxFlashblockDelay:     time.Duration(viper.GetInt("MAX_FLASHBLOCK_DELAY_MS")) * time.Millisecond,
+		TxCheckDelay:           time.Duration(viper.GetInt("TX_CHECK_DELAY_MS")) * time.Millisecond,
+		AlertRateLimit:         time.Duration(viper.GetInt("ALERT_RATE_LIMIT_S")) * time.Second,
+		WSLongDownThreshold:    time.Duration(viper.GetInt("WS_LONG_DOWN_THRESHOLD_S")) * time.Second,
+		VerifyTimeout:          time.Duration(viper.GetInt("VERIFY_TIMEOUT_S")) * time.Second,
+		RPCTimeout:             time.Duration(viper.GetInt("RPC_TIMEOUT_S")) * time.Second,
+		PeerStatusPollInterval: time.Duration(viper.GetInt("PEER_STATUS_POLL_INTERVAL_S")) * time.Second,
+		ConductorSequencers:    parseConductorSequencers(),
+		Verbose:                viper.GetBool("VERBOSE"),
+	}
+}
+
+func parseConductorSequencers() []ConductorSequencerPair {
+	var pairs []ConductorSequencerPair
+	for i := 1; i <= 2; i++ {
+		conductor := viper.GetString(fmt.Sprintf("CONDUCTOR%d_URL", i))
+		sequencer := viper.GetString(fmt.Sprintf("SEQUENCER%d_URL", i))
+		if conductor != "" && sequencer != "" {
+			pairs = append(pairs, ConductorSequencerPair{
+				ConductorURL: conductor,
+				SequencerURL: sequencer,
+			})
+		}
+	}
+	return pairs
+}
