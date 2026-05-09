@@ -7,9 +7,10 @@ Gas-optimized Poseidon2 hash function implementations in **Solidity** and **Circ
 On a fresh checkout, no manual dependency setup is required — every `make` target auto-populates `lib/` and downloads `pot12.ptau` on first use.
 
 ```shell
-make test          # correctness suite (forge test)
+make test          # correctness + fuzz suite (forge test, ~0.2 s, 256 fuzz runs/test)
 make bench         # Solidity gas benchmark
-make cross-check   # Solidity <-> Circom output equality
+make cross-check   # Solidity <-> Circom equality on 9 fixed inputs
+make cross-fuzz    # Solidity <-> Circom equality on boundary + N random inputs (default N=4)
 make bench-circom  # Circom R1CS + Groth16 proving benchmark
 make help          # list all targets
 ```
@@ -54,8 +55,9 @@ bench/                     # Benchmark suite (Poseidon1 vs Poseidon2 vs third-pa
 └── circom/                # Constraint benchmarks (circuits, vendored, scripts)
 
 test/
-├── Correctness.t.sol      # Output correctness verification (test vectors + cross-impl)
-└── cross_check.sh         # Solidity <-> Circom automated cross-check
+├── Correctness.t.sol      # Fixed test vectors + cross-impl agreement (zemse / V-k-h)
+├── Fuzz.t.sol             # Property-based fuzz: input mod invariance + output in-range
+└── cross_check.sh         # Solidity <-> Circom equality (fixed inputs + optional fuzz mode)
 
 scripts/
 └── setup-libs.sh          # Idempotent bootstrap: clones lib/* at pinned refs + fetches pot12.ptau
@@ -69,14 +71,15 @@ The recommended entry points are the Makefile targets in [Quick Start](#quick-st
 
 Under the hood they map to:
 
-| Make target         | Underlying command                                    |
-| ------------------- | ----------------------------------------------------- |
-| `make build`        | `forge build`                                         |
-| `make test`         | `forge test` (correctness suite, `test/` profile)     |
-| `make bench`        | `FOUNDRY_PROFILE=bench forge test -vv`                |
-| `make cross-check`  | `bash test/cross_check.sh`                            |
-| `make bench-circom` | `bash bench/circom/scripts/bench_full.sh`             |
-| `make clean`        | `forge clean && rm -rf bench/circom/build_*`          |
+| Make target         | Underlying command                                                       | Approx wall-clock      |
+| ------------------- | ------------------------------------------------------------------------ | ---------------------- |
+| `make build`        | `forge build`                                                            | ~5 s                   |
+| `make test`         | `forge test` (correctness vectors + 6 fuzz tests × 256 runs each)        | <1 s                   |
+| `make bench`        | `FOUNDRY_PROFILE=bench forge test -vv`                                   | <1 s                   |
+| `make cross-check`  | `bash test/cross_check.sh` (9 fixed Solidity↔Circom comparisons)         | ~2 min                 |
+| `make cross-fuzz`   | `CROSS_CHECK_FUZZ=$${CROSS_CHECK_FUZZ:-4} bash test/cross_check.sh` (9 fixed + 36 boundary + 6N random) | ~12 min at N=4 |
+| `make bench-circom` | `bash bench/circom/scripts/bench_full.sh`                                | ~10 min                |
+| `make clean`        | `forge clean && rm -rf bench/circom/build_*`                             | <1 s                   |
 
 External prerequisites (must be installed on the host):
 
@@ -105,6 +108,10 @@ To add a new Poseidon-family implementation to the benchmark matrix:
 ### Correctness
 
 If the new implementation shares RCs with any `lib/` dependency or `src/` variant, add an `assertEq` against it in `test/Correctness.t.sol`. If it uses different RCs, cross-checking is not meaningful and you can skip this step.
+
+### Fuzz coverage (our own libraries only)
+
+`test/Fuzz.t.sol` only exercises libraries under `src/solidity/`. If you add a new in-house library variant there, add a matching `testFuzz_<Name>_invariants` function asserting (a) `output < PRIME` and (b) `hash(a) == hash(a % PRIME)`. Third-party impls under `lib/` are not fuzzed here — their cross-language consistency is instead covered by the optional `make cross-fuzz` mode in `test/cross_check.sh`.
 
 ## Key Results
 
