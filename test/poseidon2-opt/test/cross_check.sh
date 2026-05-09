@@ -36,16 +36,16 @@ circom_output() {
     mkdir -p "$DIR"
 
     if [ ! -f "$DIR/${NAME}_js/${NAME}.wasm" ]; then
-        $CIRCOM "$CIRCUIT" --wasm -o "$DIR" >/dev/null 2>&1
+        $CIRCOM "$CIRCUIT" --wasm -o "$DIR" >/dev/null
     fi
 
     echo "$INPUT_JSON" > "$DIR/input.json"
     node "$DIR/${NAME}_js/generate_witness.js" \
          "$DIR/${NAME}_js/${NAME}.wasm" \
          "$DIR/input.json" \
-         "$DIR/witness.wtns" >/dev/null 2>&1
+         "$DIR/witness.wtns" >/dev/null
 
-    snarkjs wtns export json "$DIR/witness.wtns" "$DIR/witness.json" >/dev/null 2>&1
+    snarkjs wtns export json "$DIR/witness.wtns" "$DIR/witness.json" >/dev/null
     node -p "require('$DIR/witness.json')[1]"
 }
 
@@ -98,7 +98,7 @@ compare() {
 
 # ── Pre-build Solidity ──
 echo "Building Solidity..."
-forge build --quiet 2>/dev/null
+forge build --quiet
 
 echo ""
 echo "============================================"
