@@ -25,6 +25,15 @@ PWD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR=$PWD_DIR/scripts
 OP_SUCCINCT_DIR=$PWD_DIR/op-succinct
 
+# GPU prover mode: layer in sp1-cluster's compose file via COMPOSE_FILE, and
+# pre-create the host dir for trusted-setup params so docker doesn't bind-mount
+# a root-owned empty.
+if [ "$PROOF_USE_GPU_PROVER" = "true" ]; then
+    export SP1_CIRCUITS_HOST_DIR
+    mkdir -p "$SP1_CIRCUITS_HOST_DIR"
+    export COMPOSE_FILE="docker-compose.yml:docker-compose-sp1-cluster.yml"
+fi
+
 if [ ! -f "$OP_SUCCINCT_DIR"/.env.deploy ]; then
     cp "$OP_SUCCINCT_DIR"/example.env.deploy "$OP_SUCCINCT_DIR"/.env.deploy
 fi
@@ -96,6 +105,45 @@ while true; do
     sleep 5
 done
 
+
+# Bring up sp1-cluster + point .env.proposer at it.
+if [ "$PROOF_USE_GPU_PROVER" = "true" ]; then
+    echo "   → starting sp1-cluster..."
+    docker compose up -d \
+        sp1-redis sp1-postgresql sp1-api sp1-coordinator sp1-cpu-node \
+        sp1-gpu0 sp1-gpu1 sp1-gpu2 sp1-gpu3
+
+    # Coordinator readiness: API + DB migration cold-start takes 20-40s.
+    echo "   → waiting for sp1-coordinator..."
+    for i in $(seq 1 60); do
+        if docker exec sp1-coordinator sh -c \
+                'echo > /dev/tcp/127.0.0.1/50051' 2>/dev/null; then
+            echo "   ✓ sp1-coordinator ready"
+            break
+        fi
+        sleep 2
+        if [ "$i" = "60" ]; then
+            echo "   ✗ sp1-coordinator did not become ready within 120s"
+            docker logs --tail 50 sp1-coordinator || true
+            exit 1
+        fi
+    done
+
+    upsert_proposer_env() {
+        local key="$1" value="$2" file="$OP_SUCCINCT_DIR/.env.proposer"
+        if grep -q "^${key}=" "$file"; then
+            sed_inplace "s|^${key}=.*|${key}=${value}|" "$file"
+        else
+            echo "${key}=${value}" >> "$file"
+        fi
+    }
+
+    # ClusterProofProvider reads these to talk to the local coordinator.
+    upsert_proposer_env "SP1_PROVER"      "cluster"
+    upsert_proposer_env "CLI_CLUSTER_RPC" "http://sp1-coordinator:50051"
+    upsert_proposer_env "CLI_REDIS_NODES" "redis://:redispassword@sp1-redis:6379/0"
+    upsert_proposer_env "MOCK_MODE"       "false"
+fi
 
 docker compose up -d op-succinct-proposer
 echo "   ✓ Proposer started"

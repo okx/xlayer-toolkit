@@ -1,0 +1,130 @@
+# Self-hosted sp1-cluster for op-succinct's SP1_PROVER=cluster mode.
+# Layered with docker-compose.yml; activated by PROOF_USE_GPU_PROVER=true and
+# wired up by 5-run-op-succinct.sh.
+
+services:
+  sp1-redis:
+    image: bitnamisecure/redis:latest
+    container_name: sp1-redis
+    environment:
+      # Stores task artifacts (ELF / stdin / intermediate proofs).
+      - REDIS_PASSWORD=redispassword
+      - REDIS_AOF_ENABLED=no
+      - REDIS_EXTRA_FLAGS=--maxmemory 28gb --maxmemory-policy volatile-lru
+    volumes:
+      - sp1_redis_data:/bitnami/redis/data
+    deploy:
+      resources:
+        limits:
+          memory: 30G
+
+  sp1-postgresql:
+    image: bitnamisecure/postgresql:latest
+    container_name: sp1-postgresql
+    environment:
+      - POSTGRES_PASSWORD=postgrespassword
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - sp1_postgresql_data:/bitnami/postgresql
+
+  # gRPC API + DB migration. Coordinator/nodes/proposer all talk through it.
+  sp1-api:
+    image: ghcr.io/succinctlabs/sp1-cluster:base-v2.2.1
+    container_name: sp1-api
+    environment:
+      - API_GRPC_ADDR=0.0.0.0:50051
+      - API_HTTP_ADDR=0.0.0.0:3000
+      - API_AUTO_MIGRATE=true
+      - API_DATABASE_URL=postgresql://postgres:postgrespassword@sp1-postgresql:5432/postgres
+      - RUST_LOG=info
+    command: ["/bin/sh", "-c", "/api"]
+    depends_on:
+      - sp1-postgresql
+
+  # Task scheduler. Proposer connects to sp1-coordinator:50051.
+  sp1-coordinator:
+    image: ghcr.io/succinctlabs/sp1-cluster:base-v2.2.1
+    container_name: sp1-coordinator
+    environment:
+      - COORDINATOR_CLUSTER_RPC=http://sp1-api:50051
+      - COORDINATOR_METRICS_ADDR=0.0.0.0:9090
+      - COORDINATOR_ADDR=0.0.0.0:50051
+      - RUST_LOG=info
+    command: ["/bin/sh", "-c", "/coordinator"]
+    depends_on:
+      - sp1-api
+
+  # CPU worker: CONTROLLER (~16GB) + SNARK-wrap (~32GB, Groth16 by default).
+  # Trusted-setup params come from the host mount below.
+  sp1-cpu-node:
+    image: ghcr.io/succinctlabs/sp1-cluster:base-v2.2.1
+    container_name: sp1-cpu-node
+    environment:
+      - NODE_COORDINATOR_RPC=http://sp1-coordinator:50051
+      - WORKER_MAX_WEIGHT_OVERRIDE=80
+      - NODE_ARTIFACT_STORE=redis
+      - NODE_REDIS_NODES=redis://:redispassword@sp1-redis:6379/0
+      - WORKER_TYPE=CPU
+      - WORKER_PLONK_WRAP_WEIGHT=32
+      - RUST_LOG=info
+    volumes:
+      # Resolved + created by 5-run-op-succinct.sh (default $HOME/.sp1/circuits).
+      - ${SP1_CIRCUITS_HOST_DIR}:/root/.sp1/circuits
+    command: ["/bin/sh", "-c", "/node"]
+    shm_size: 96G
+    deploy:
+      resources:
+        limits:
+          memory: 96G
+    depends_on:
+      - sp1-coordinator
+      - sp1-redis
+
+  # GPU workers: one container per card. memory limit isolates OOM blast
+  # radius — a runaway ProveShard takes down its pod, not the rest.
+  sp1-gpu0:
+    image: ghcr.io/succinctlabs/sp1-cluster:node-gpu-v2.2.1
+    container_name: sp1-gpu0
+    runtime: nvidia
+    environment:
+      - NODE_COORDINATOR_RPC=http://sp1-coordinator:50051
+      - WORKER_MAX_WEIGHT_OVERRIDE=80
+      - NODE_ARTIFACT_STORE=redis
+      - NODE_REDIS_NODES=redis://:redispassword@sp1-redis:6379/0
+      - WORKER_TYPE=GPU
+      - CUDA_VISIBLE_DEVICES=0
+      - RUST_LOG=info
+    deploy:
+      resources:
+        limits:
+          memory: 80G
+    depends_on:
+      - sp1-coordinator
+      - sp1-redis
+      - sp1-cpu-node
+
+  sp1-gpu1:
+    extends:
+      service: sp1-gpu0
+    container_name: sp1-gpu1
+    environment:
+      - CUDA_VISIBLE_DEVICES=1
+
+  sp1-gpu2:
+    extends:
+      service: sp1-gpu0
+    container_name: sp1-gpu2
+    environment:
+      - CUDA_VISIBLE_DEVICES=2
+
+  sp1-gpu3:
+    extends:
+      service: sp1-gpu0
+    container_name: sp1-gpu3
+    environment:
+      - CUDA_VISIBLE_DEVICES=3
+
+volumes:
+  sp1_redis_data:
+  sp1_postgresql_data:
