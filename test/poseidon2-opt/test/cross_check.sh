@@ -146,55 +146,104 @@ compare "T8 hash7(0*7)" \
     "$CIRCUITS/bench_t8_hash7.circom" \
     '{"a0":"0","a1":"0","a2":"0","a3":"0","a4":"0","a5":"0","a6":"0"}'
 
-# ── Optional fuzz mode: random uint256 inputs across all 6 libraries ──
+# ── Optional fuzz mode: boundary sweep + random uint256 inputs ──
 # Opt in via env var: `CROSS_CHECK_FUZZ=N bash test/cross_check.sh`
-# Each iteration adds 6 compares (one per library), so wall-clock ≈ N × 60 s.
-if [ -n "${CROSS_CHECK_FUZZ:-}" ] && [ "${CROSS_CHECK_FUZZ}" -gt 0 ] 2>/dev/null; then
+# Adds 6 boundary compares per library (≈ 30s × 6 × 6 = 6 min) plus N random
+# iterations (each ≈ 60s).
+#
+# Boundary sweep is critical: pure-random uniform sampling over uint256 has
+# negligible probability of hitting interesting edges. The boundary set targets
+# values that exercise input mod reduction, dirty-value tracking, and uint256
+# overflow paths — values Foundry's fuzzer would auto-include via dictionary
+# extraction but bash cannot.
+if [ -n "${CROSS_CHECK_FUZZ:-}" ] && [ "${CROSS_CHECK_FUZZ}" -ge 0 ] 2>/dev/null; then
     echo ""
     echo "============================================"
-    echo "  Fuzz mode: ${CROSS_CHECK_FUZZ} random uint256 input(s) per library"
+    echo "  Fuzz mode: boundary sweep + ${CROSS_CHECK_FUZZ} random input(s) per library"
     echo "============================================"
     echo ""
 
-    rand_hex() { openssl rand -hex 32; }
-    hex_to_dec() { python3 -c "print(int('$1', 16))"; }
+    # Use decimal literals on both sides — Solidity natively accepts large
+    # decimal literals as uint256, eliminating any chance of hand-computed hex
+    # values disagreeing with their decimal counterparts (this code originally
+    # had separate _DEC and _HEX constants and a typo'd 3*PRIME hex caused 6
+    # silent mismatches).
+    boundary_run() {
+        local D=$1 LBL=$2
 
-    for i in $(seq 1 "$CROSS_CHECK_FUZZ"); do
-        h_a=$(rand_hex); d_a=$(hex_to_dec "$h_a")
-        h_b=$(rand_hex); d_b=$(hex_to_dec "$h_b")
-        h_c=$(rand_hex); d_c=$(hex_to_dec "$h_c")
-        h_d=$(rand_hex); d_d=$(hex_to_dec "$h_d")
-        h_e=$(rand_hex); d_e=$(hex_to_dec "$h_e")
-        h_f=$(rand_hex); d_f=$(hex_to_dec "$h_f")
-        h_g=$(rand_hex); d_g=$(hex_to_dec "$h_g")
+        compare "boundary[$LBL] T2 hash1" \
+            "Poseidon2T2.hash1($D)" \
+            "$CIRCUITS/bench_t2_hash1.circom" \
+            "{\"a0\": \"$D\"}"
+
+        compare "boundary[$LBL] T2FF compress" \
+            "Poseidon2T2FF.compress($D, $D)" \
+            "$CIRCUITS/bench_t2ff_compress.circom" \
+            "{\"a0\": \"$D\", \"a1\": \"$D\"}"
+
+        compare "boundary[$LBL] T3 hash2" \
+            "Poseidon2T3.hash2($D, $D)" \
+            "$CIRCUITS/bench_t3_hash2.circom" \
+            "{\"a0\": \"$D\", \"a1\": \"$D\"}"
+
+        compare "boundary[$LBL] T4 hash3" \
+            "Poseidon2T4.hash3($D, $D, $D)" \
+            "$CIRCUITS/bench_t4_hash3.circom" \
+            "{\"a0\": \"$D\", \"a1\": \"$D\", \"a2\": \"$D\"}"
+
+        compare "boundary[$LBL] T4S hash3" \
+            "Poseidon2T4Sponge.hash3($D, $D, $D)" \
+            "$CIRCUITS/bench_opt_hash3.circom" \
+            "{\"inputs\": [\"$D\", \"$D\", \"$D\"]}"
+
+        compare "boundary[$LBL] T8 hash7" \
+            "Poseidon2T8.hash7($D, $D, $D, $D, $D, $D, $D)" \
+            "$CIRCUITS/bench_t8_hash7.circom" \
+            "{\"a0\":\"$D\",\"a1\":\"$D\",\"a2\":\"$D\",\"a3\":\"$D\",\"a4\":\"$D\",\"a5\":\"$D\",\"a6\":\"$D\"}"
+    }
+
+    # Boundary values that pure-uniform random would never hit, but matter
+    # for correctness of input reduction and dirty-value tracking.
+    boundary_run 21888242871839275222246405745257275088548364400416034343698204186575808495616  "PRIME-1"
+    boundary_run 21888242871839275222246405745257275088548364400416034343698204186575808495617  "PRIME"
+    boundary_run 21888242871839275222246405745257275088548364400416034343698204186575808495618  "PRIME+1"
+    boundary_run 65664728615517825666739217235771825265645093201248103031094612559727425486851  "3*PRIME"
+    boundary_run 115792089237316195423570985008687907853269984665640564039457584007913129639935 "uint256_max"
+    boundary_run 115792089237316195423570985008687907853269984665640564039457584007913129639934 "uint256_max-1"
+
+    rand_dec() { python3 -c "import secrets; print(secrets.randbits(256))"; }
+
+    for i in $(seq 1 "${CROSS_CHECK_FUZZ}"); do
+        d_a=$(rand_dec); d_b=$(rand_dec); d_c=$(rand_dec)
+        d_d=$(rand_dec); d_e=$(rand_dec); d_f=$(rand_dec); d_g=$(rand_dec)
 
         compare "fuzz[$i] T2 hash1" \
-            "Poseidon2T2.hash1(0x$h_a)" \
+            "Poseidon2T2.hash1($d_a)" \
             "$CIRCUITS/bench_t2_hash1.circom" \
             "{\"a0\": \"$d_a\"}"
 
         compare "fuzz[$i] T2FF compress" \
-            "Poseidon2T2FF.compress(0x$h_a, 0x$h_b)" \
+            "Poseidon2T2FF.compress($d_a, $d_b)" \
             "$CIRCUITS/bench_t2ff_compress.circom" \
             "{\"a0\": \"$d_a\", \"a1\": \"$d_b\"}"
 
         compare "fuzz[$i] T3 hash2" \
-            "Poseidon2T3.hash2(0x$h_a, 0x$h_b)" \
+            "Poseidon2T3.hash2($d_a, $d_b)" \
             "$CIRCUITS/bench_t3_hash2.circom" \
             "{\"a0\": \"$d_a\", \"a1\": \"$d_b\"}"
 
         compare "fuzz[$i] T4 hash3" \
-            "Poseidon2T4.hash3(0x$h_a, 0x$h_b, 0x$h_c)" \
+            "Poseidon2T4.hash3($d_a, $d_b, $d_c)" \
             "$CIRCUITS/bench_t4_hash3.circom" \
             "{\"a0\": \"$d_a\", \"a1\": \"$d_b\", \"a2\": \"$d_c\"}"
 
         compare "fuzz[$i] T4S hash3" \
-            "Poseidon2T4Sponge.hash3(0x$h_a, 0x$h_b, 0x$h_c)" \
+            "Poseidon2T4Sponge.hash3($d_a, $d_b, $d_c)" \
             "$CIRCUITS/bench_opt_hash3.circom" \
             "{\"inputs\": [\"$d_a\", \"$d_b\", \"$d_c\"]}"
 
         compare "fuzz[$i] T8 hash7" \
-            "Poseidon2T8.hash7(0x$h_a, 0x$h_b, 0x$h_c, 0x$h_d, 0x$h_e, 0x$h_f, 0x$h_g)" \
+            "Poseidon2T8.hash7($d_a, $d_b, $d_c, $d_d, $d_e, $d_f, $d_g)" \
             "$CIRCUITS/bench_t8_hash7.circom" \
             "{\"a0\":\"$d_a\",\"a1\":\"$d_b\",\"a2\":\"$d_c\",\"a3\":\"$d_d\",\"a4\":\"$d_e\",\"a5\":\"$d_f\",\"a6\":\"$d_g\"}"
     done
