@@ -16,12 +16,20 @@ require_command bc      "Install via your package manager (apt install bc / brew
 cd "$SCRIPT_DIR/.."
 PTAU="pot12.ptau"
 
+# Live progress counter — emitted to stderr before each bench() so a user
+# running `make bench-circom` (8-15 min wall-clock) can see the script is
+# making progress. The benchmark table itself stays on stdout, untouched.
+BENCH_COUNTER=0
+
 # Compile + measure constraints + prove. The r1cs / zkey guards make re-runs
 # essentially free for unchanged circuits; we only keep stdout silent so the
 # bench table stays clean — stderr passes through so failures are visible.
 bench() {
     local LABEL=$1 CIRCUIT=$2 DIR=$3 INPUT=$4
     local NAME=$(basename "$CIRCUIT" .circom)
+
+    BENCH_COUNTER=$((BENCH_COUNTER + 1))
+    printf "  [%2d] %s ...\n" "$BENCH_COUNTER" "$LABEL" >&2
 
     mkdir -p "$DIR"
     if [ ! -f "${DIR}/${NAME}.r1cs" ]; then

@@ -58,15 +58,37 @@ else
   echo "[setup-libs] pot12.ptau: downloading (~4.8 MB)"
   mkdir -p "$(dirname "$PTAU_PATH")"
   tmp="${PTAU_PATH}.tmp"
+
+  download_failed() {
+    rm -f "$tmp"
+    echo "" >&2
+    echo "[setup-libs] ERROR: pot12.ptau download failed (network / mirror issue)" >&2
+    echo "  URL:  $PTAU_URL" >&2
+    echo "  Hint: check network access; if behind a proxy, export HTTPS_PROXY before retry" >&2
+    exit 1
+  }
+
   # --retry / --tries adds resilience against transient CI network blips.
   if command -v curl >/dev/null 2>&1; then
     curl --fail --silent --show-error --location \
       --retry 3 --retry-delay 2 --connect-timeout 30 \
-      "$PTAU_URL" -o "$tmp"
+      "$PTAU_URL" -o "$tmp" || download_failed
   elif command -v wget >/dev/null 2>&1; then
-    wget --quiet --tries=3 --waitretry=2 --timeout=30 "$PTAU_URL" -O "$tmp"
+    wget --quiet --tries=3 --waitretry=2 --timeout=30 "$PTAU_URL" -O "$tmp" || download_failed
   else
     echo "[setup-libs] ERROR: neither curl nor wget is available" >&2
+    exit 1
+  fi
+
+  # Sanity-check size before sha256 — a 0-byte or tiny file is almost always
+  # a silent network/mirror failure that slipped past curl --fail (e.g. the
+  # mirror returned a small HTML 404 page with HTTP 200 and the right
+  # content-type). Distinguishing this from a true content-tamper case keeps
+  # the diagnostic accurate.
+  if [ ! -s "$tmp" ] || [ "$(wc -c < "$tmp")" -lt 1000000 ]; then
+    rm -f "$tmp"
+    echo "[setup-libs] ERROR: downloaded pot12.ptau is suspiciously small (truncated download?)" >&2
+    echo "  Hint: retry; the mirror may be temporarily flaky" >&2
     exit 1
   fi
 
@@ -79,10 +101,13 @@ else
     actual="$PTAU_SHA256"
   fi
   if [ "$actual" != "$PTAU_SHA256" ]; then
-    echo "[setup-libs] ERROR: pot12.ptau checksum mismatch" >&2
+    rm -f "$tmp"
+    echo "" >&2
+    echo "[setup-libs] ERROR: pot12.ptau checksum mismatch (download succeeded but content unexpected)" >&2
     echo "  expected: $PTAU_SHA256" >&2
     echo "  actual:   $actual" >&2
-    rm -f "$tmp"
+    echo "  Hint: the mirror at $PTAU_URL may have changed file contents." >&2
+    echo "        Verify against the canonical hermez ptau or update PTAU_SHA256 in this script." >&2
     exit 1
   fi
   mv "$tmp" "$PTAU_PATH"

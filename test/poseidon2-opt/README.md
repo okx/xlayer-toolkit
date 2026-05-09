@@ -89,7 +89,7 @@ with an actionable error if any is missing.
 
 | Tool | Required for | Install command |
 |------|--------------|-----------------|
-| `forge` (from [Foundry](https://book.getfoundry.sh/)) | every target | `curl -L https://foundry.paradigm.xyz \| bash && foundryup` |
+| `forge` (from [Foundry](https://book.getfoundry.sh/), 2024-08+ recommended for solc 0.8.30 support) | every target | `curl -L https://foundry.paradigm.xyz \| bash && foundryup` |
 | [`circom`](https://docs.circom.io/) | cross-check, cross-fuzz, bench-circom | `cargo install --git https://github.com/iden3/circom` |
 | [`snarkjs`](https://github.com/iden3/snarkjs) | cross-check, cross-fuzz, bench-circom | `npm install -g snarkjs` |
 | `node` (≥ 18) | cross-check, cross-fuzz, bench-circom | https://nodejs.org/ |
