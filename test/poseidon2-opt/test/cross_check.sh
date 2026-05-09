@@ -213,7 +213,8 @@ if [ -n "${CROSS_CHECK_FUZZ:-}" ] && [ "${CROSS_CHECK_FUZZ}" -ge 0 ] 2>/dev/null
 
     rand_dec() { python3 -c "import secrets; print(secrets.randbits(256))"; }
 
-    for i in $(seq 1 "${CROSS_CHECK_FUZZ}"); do
+    # bash arithmetic — safe at 0 / negative; macOS BSD `seq 1 0` reverses to "1 0".
+    for ((i=1; i<=CROSS_CHECK_FUZZ; i++)); do
         d_a=$(rand_dec); d_b=$(rand_dec); d_c=$(rand_dec)
         d_d=$(rand_dec); d_e=$(rand_dec); d_f=$(rand_dec); d_g=$(rand_dec)
 
