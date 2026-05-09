@@ -81,11 +81,17 @@ Under the hood they map to:
 | `make bench-circom` | `bash bench/circom/scripts/bench_full.sh`                                | ~10 min                |
 | `make clean`        | `forge clean && rm -rf bench/circom/build_*`                             | <1 s                   |
 
-External prerequisites (must be installed on the host):
+External prerequisites (must be installed on the host). The `cross-check`,
+`cross-fuzz`, and `bench-circom` targets pre-flight all of these and abort
+with an actionable error if any is missing.
 
-- [Foundry](https://book.getfoundry.sh/) — `forge build` / `forge test`
-- [`circom`](https://docs.circom.io/) + [`snarkjs`](https://github.com/iden3/snarkjs) + `node` — only for `cross-check` and `bench-circom`
-- `curl` or `wget` — used once by `setup-libs.sh` to fetch `pot12.ptau`
+| Tool | Required for | Install command |
+|------|--------------|-----------------|
+| [Foundry](https://book.getfoundry.sh/) | every target | `curl -L https://foundry.paradigm.xyz \| bash && foundryup` |
+| [`circom`](https://docs.circom.io/) | cross-check, cross-fuzz, bench-circom | `cargo install --git https://github.com/iden3/circom` |
+| [`snarkjs`](https://github.com/iden3/snarkjs) | cross-check, cross-fuzz, bench-circom | `npm install -g snarkjs` |
+| `node` (≥ 18) | cross-check, cross-fuzz, bench-circom | https://nodejs.org/ |
+| `curl` or `wget` | first run only (downloads `pot12.ptau`) | (preinstalled on macOS / Linux) |
 
 ## Adding a New Implementation for Comparison
 

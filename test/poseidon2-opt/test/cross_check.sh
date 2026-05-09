@@ -7,7 +7,37 @@ set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 bash "$REPO_ROOT/scripts/setup-libs.sh"
-CIRCOM=~/.cargo/bin/circom
+
+# ── Preflight: external dependencies ──
+# Fail fast with an actionable message instead of producing cryptic
+# downstream errors (silent witness-generation failure → confusing
+# `Cannot find module .../witness.json` later in the pipeline).
+preflight_fail() {
+    echo "" >&2
+    echo "ERROR: cross_check.sh prerequisite missing: $1" >&2
+    echo "       $2" >&2
+    echo "" >&2
+    exit 1
+}
+
+# circom: prefer ~/.cargo/bin (the install path used by `cargo install --git
+# https://github.com/iden3/circom`), fall back to anything on PATH.
+if [ -x "$HOME/.cargo/bin/circom" ]; then
+    CIRCOM="$HOME/.cargo/bin/circom"
+elif command -v circom >/dev/null 2>&1; then
+    CIRCOM="$(command -v circom)"
+else
+    preflight_fail "circom" \
+        "Install via: cargo install --git https://github.com/iden3/circom"
+fi
+
+command -v snarkjs >/dev/null 2>&1 || preflight_fail "snarkjs" \
+    "Install via: npm install -g snarkjs"
+command -v node >/dev/null 2>&1 || preflight_fail "node" \
+    "Install Node.js >= 18 (https://nodejs.org/)"
+command -v forge >/dev/null 2>&1 || preflight_fail "forge" \
+    "Install Foundry: https://book.getfoundry.sh/getting-started/installation"
+
 BUILD="$REPO_ROOT/bench/circom/build_crosscheck"
 CIRCUITS="$REPO_ROOT/bench/circom/circuits"
 PASS=0
