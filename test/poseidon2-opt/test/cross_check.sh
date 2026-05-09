@@ -172,6 +172,7 @@ compare "T8 hash7(0*7)" \
 # overflow paths — values Foundry's fuzzer would auto-include via dictionary
 # extraction but bash cannot.
 if [ -n "${CROSS_CHECK_FUZZ:-}" ] && [ "${CROSS_CHECK_FUZZ}" -ge 0 ] 2>/dev/null; then
+    require_command python3 "Install Python 3 (https://www.python.org/) — used to generate random uint256 fuzz inputs"
     echo ""
     echo "============================================"
     echo "  Fuzz mode: boundary sweep + ${CROSS_CHECK_FUZZ} random input(s) per library"

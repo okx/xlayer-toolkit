@@ -4,7 +4,7 @@ Gas-optimized Poseidon2 hash function implementations in **Solidity** and **Circ
 
 ## Quick Start
 
-On a fresh checkout, no manual dependency setup is required — every `make` target auto-populates `lib/` and downloads `pot12.ptau` on first use.
+On a fresh checkout, no manual setup is required — `make test`/`build`/`bench` auto-populate `lib/`, and `make cross-check`/`cross-fuzz`/`bench-circom` additionally fetch `pot12.ptau` (~5 MB) on first use.
 
 ```shell
 make test          # correctness + fuzz suite (forge test, ~0.2 s, 256 fuzz runs/test)
@@ -18,10 +18,11 @@ make help          # list all targets
 To populate dependencies manually (e.g. before running `forge` directly):
 
 ```shell
-make setup         # or: bash scripts/setup-libs.sh
+make setup         # full bootstrap: lib/ + pot12.ptau
+                   # or `SKIP_PTAU=1 bash scripts/setup-libs.sh` for lib/ only
 ```
 
-This clones `forge-std`, `zemse/poseidon2-evm` and `V-k-h/poseidon2-solidity` into `lib/` at pinned refs, and downloads the Powers-of-Tau file into `bench/circom/`. Both `lib/` and `pot12.ptau` are **gitignored** — they live locally only.
+This clones `forge-std`, `zemse/poseidon2-evm` and `V-k-h/poseidon2-solidity` into `lib/` at pinned refs and (unless `SKIP_PTAU=1`) downloads the Powers-of-Tau file into `bench/circom/`. Both `lib/` and `pot12.ptau` are **gitignored** — they live locally only.
 
 ## Implementations
 
@@ -60,7 +61,8 @@ test/
 └── cross_check.sh         # Solidity <-> Circom equality (fixed inputs + optional fuzz mode)
 
 scripts/
-└── setup-libs.sh          # Idempotent bootstrap: clones lib/* at pinned refs + fetches pot12.ptau
+├── setup-libs.sh          # Idempotent bootstrap: clones lib/* + (optionally) fetches pot12.ptau
+└── lib.sh                 # Shared shell helpers: preflight checks, slugify, circom autodetect
 
 Makefile                   # Wraps forge/cross-check/bench workflows with auto-setup
 ```
@@ -91,6 +93,8 @@ with an actionable error if any is missing.
 | [`circom`](https://docs.circom.io/) | cross-check, cross-fuzz, bench-circom | `cargo install --git https://github.com/iden3/circom` |
 | [`snarkjs`](https://github.com/iden3/snarkjs) | cross-check, cross-fuzz, bench-circom | `npm install -g snarkjs` |
 | `node` (≥ 18) | cross-check, cross-fuzz, bench-circom | https://nodejs.org/ |
+| `python3` | cross-fuzz only (random uint256 generation) | (preinstalled on macOS / most Linux) |
+| `bc`, `/usr/bin/time` | bench-circom only (averaging + timing) | `apt install bc time` / preinstalled on macOS |
 | `curl` or `wget` | first run only (downloads `pot12.ptau`) | (preinstalled on macOS / Linux) |
 
 ## Adding a New Implementation for Comparison

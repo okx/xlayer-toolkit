@@ -9,6 +9,9 @@ bash "$REPO_ROOT/scripts/setup-libs.sh"
 detect_circom
 require_command snarkjs "Install via: npm install -g snarkjs"
 require_command node    "Install Node.js >= 18 (https://nodejs.org/)"
+require_command bc      "Install via your package manager (apt install bc / brew install bc)"
+[ -x /usr/bin/time ] || preflight_fail "/usr/bin/time" \
+    "Install GNU/BSD time (apt install time on Debian/Ubuntu; preinstalled on macOS / RHEL)"
 
 cd "$SCRIPT_DIR/.."
 PTAU="pot12.ptau"

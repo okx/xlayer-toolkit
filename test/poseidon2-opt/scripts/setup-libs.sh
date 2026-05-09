@@ -39,6 +39,15 @@ done
 # The original hermez.s3 URL started returning 403 in early 2026; use the
 # storage.googleapis.com/zkevm mirror. sha256 is pinned to detect any silent
 # mirror drift in the future.
+#
+# Solidity-only callers (`make test`, `make build`, `make bench`) skip this
+# 4.8 MB download by setting SKIP_PTAU=1.
+if [ "${SKIP_PTAU:-0}" = "1" ]; then
+  echo "[setup-libs] pot12.ptau: skipped (SKIP_PTAU=1)"
+  echo "[setup-libs] done"
+  exit 0
+fi
+
 PTAU_PATH="$ROOT_DIR/bench/circom/pot12.ptau"
 PTAU_URL="https://storage.googleapis.com/zkevm/ptau/powersOfTau28_hez_final_12.ptau"
 PTAU_SHA256="dcf4ea473bf14b971ce5f7b7c1d6ce1c41a8ed042cdb75b65ca9178e3a3c7c17"
