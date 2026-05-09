@@ -146,6 +146,60 @@ compare "T8 hash7(0*7)" \
     "$CIRCUITS/bench_t8_hash7.circom" \
     '{"a0":"0","a1":"0","a2":"0","a3":"0","a4":"0","a5":"0","a6":"0"}'
 
+# ── Optional fuzz mode: random uint256 inputs across all 6 libraries ──
+# Opt in via env var: `CROSS_CHECK_FUZZ=N bash test/cross_check.sh`
+# Each iteration adds 6 compares (one per library), so wall-clock ≈ N × 60 s.
+if [ -n "${CROSS_CHECK_FUZZ:-}" ] && [ "${CROSS_CHECK_FUZZ}" -gt 0 ] 2>/dev/null; then
+    echo ""
+    echo "============================================"
+    echo "  Fuzz mode: ${CROSS_CHECK_FUZZ} random uint256 input(s) per library"
+    echo "============================================"
+    echo ""
+
+    rand_hex() { openssl rand -hex 32; }
+    hex_to_dec() { python3 -c "print(int('$1', 16))"; }
+
+    for i in $(seq 1 "$CROSS_CHECK_FUZZ"); do
+        h_a=$(rand_hex); d_a=$(hex_to_dec "$h_a")
+        h_b=$(rand_hex); d_b=$(hex_to_dec "$h_b")
+        h_c=$(rand_hex); d_c=$(hex_to_dec "$h_c")
+        h_d=$(rand_hex); d_d=$(hex_to_dec "$h_d")
+        h_e=$(rand_hex); d_e=$(hex_to_dec "$h_e")
+        h_f=$(rand_hex); d_f=$(hex_to_dec "$h_f")
+        h_g=$(rand_hex); d_g=$(hex_to_dec "$h_g")
+
+        compare "fuzz[$i] T2 hash1" \
+            "Poseidon2T2.hash1(0x$h_a)" \
+            "$CIRCUITS/bench_t2_hash1.circom" \
+            "{\"a0\": \"$d_a\"}"
+
+        compare "fuzz[$i] T2FF compress" \
+            "Poseidon2T2FF.compress(0x$h_a, 0x$h_b)" \
+            "$CIRCUITS/bench_t2ff_compress.circom" \
+            "{\"a0\": \"$d_a\", \"a1\": \"$d_b\"}"
+
+        compare "fuzz[$i] T3 hash2" \
+            "Poseidon2T3.hash2(0x$h_a, 0x$h_b)" \
+            "$CIRCUITS/bench_t3_hash2.circom" \
+            "{\"a0\": \"$d_a\", \"a1\": \"$d_b\"}"
+
+        compare "fuzz[$i] T4 hash3" \
+            "Poseidon2T4.hash3(0x$h_a, 0x$h_b, 0x$h_c)" \
+            "$CIRCUITS/bench_t4_hash3.circom" \
+            "{\"a0\": \"$d_a\", \"a1\": \"$d_b\", \"a2\": \"$d_c\"}"
+
+        compare "fuzz[$i] T4S hash3" \
+            "Poseidon2T4Sponge.hash3(0x$h_a, 0x$h_b, 0x$h_c)" \
+            "$CIRCUITS/bench_opt_hash3.circom" \
+            "{\"inputs\": [\"$d_a\", \"$d_b\", \"$d_c\"]}"
+
+        compare "fuzz[$i] T8 hash7" \
+            "Poseidon2T8.hash7(0x$h_a, 0x$h_b, 0x$h_c, 0x$h_d, 0x$h_e, 0x$h_f, 0x$h_g)" \
+            "$CIRCUITS/bench_t8_hash7.circom" \
+            "{\"a0\":\"$d_a\",\"a1\":\"$d_b\",\"a2\":\"$d_c\",\"a3\":\"$d_d\",\"a4\":\"$d_e\",\"a5\":\"$d_f\",\"a6\":\"$d_g\"}"
+    done
+fi
+
 echo ""
 echo "============================================"
 echo "  Results: $PASS passed, $FAIL failed"
