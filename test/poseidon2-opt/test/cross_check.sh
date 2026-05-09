@@ -17,11 +17,22 @@ mkdir -p "$BUILD"
 
 # ── Helpers ──
 
+# Slugify a human label into a path-safe directory name
+# (spaces, parens, brackets, slashes, etc. → underscores).
+# Required because some tools in the witness/snarkjs chain (notably
+# generate_witness.js under newer Node versions) misbehave on paths
+# containing whitespace or shell metacharacters.
+slugify() {
+    echo "$1" | LC_ALL=C tr -c '[:alnum:]._-' '_'
+}
+
 # Compile circom circuit, generate witness, return output[0]
 circom_output() {
     local LABEL=$1 CIRCUIT=$2 INPUT_JSON=$3
     local NAME=$(basename "$CIRCUIT" .circom)
-    local DIR="$BUILD/$LABEL"
+    local SLUG
+    SLUG=$(slugify "$LABEL")
+    local DIR="$BUILD/$SLUG"
     mkdir -p "$DIR"
 
     if [ ! -f "$DIR/${NAME}_js/${NAME}.wasm" ]; then
