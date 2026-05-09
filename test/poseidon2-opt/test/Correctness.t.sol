@@ -6,6 +6,11 @@ import {ZemseSolWrapper} from "../bench/solidity/wrappers/ZemseSolWrapper.sol";
 import {ZemseYulWrapper} from "../bench/solidity/wrappers/ZemseYulWrapper.sol";
 import {VkhWrapper} from "../bench/solidity/wrappers/VkhWrapper.sol";
 import {OptimizedWrapper} from "../bench/solidity/wrappers/OptimizedWrapper.sol";
+import {T2Wrapper} from "../bench/solidity/wrappers/T2Wrapper.sol";
+import {CompressWrapper} from "../bench/solidity/wrappers/CompressWrapper.sol";
+import {T3Wrapper} from "../bench/solidity/wrappers/T3Wrapper.sol";
+import {T4PermWrapper} from "../bench/solidity/wrappers/T4PermWrapper.sol";
+import {T8Wrapper} from "../bench/solidity/wrappers/T8Wrapper.sol";
 import {Poseidon2T2} from "../src/solidity/Poseidon2T2.sol";
 import {Poseidon2T2FF} from "../src/solidity/Poseidon2T2FF.sol";
 import {Poseidon2T3} from "../src/solidity/Poseidon2T3.sol";
@@ -204,5 +209,30 @@ contract CorrectnessTest is Test {
         assertTrue(Poseidon2T2.hash1(max) < PRIME, "T2 hash1(max) in field");
         assertTrue(Poseidon2T3.hash2(max, max) < PRIME, "T3 hash2(max,max) in field");
         assertTrue(Poseidon2T8.hash7(max, max, max, max, max, max, max) < PRIME, "T8 hash7(max*7) in field");
+    }
+
+    // ================================================================
+    //  EIP-170 deployability — runtime validation of the README claim
+    //  that every src/solidity/ library fits in a deployable wrapper.
+    //  Wrapper bytecode is the inlined library plus a thin function
+    //  selector, so its code.length is a tight upper bound on what a
+    //  user pays to deploy each library standalone.
+    // ================================================================
+
+    uint24 constant EIP170_LIMIT = 24_576;
+
+    function test_deployable_wrappers_within_eip170() public {
+        T2Wrapper p2t2 = new T2Wrapper();
+        CompressWrapper p2t2ff = new CompressWrapper();
+        T3Wrapper p2t3 = new T3Wrapper();
+        T4PermWrapper p2t4 = new T4PermWrapper();
+        T8Wrapper p2t8 = new T8Wrapper();
+
+        assertLt(address(p2t2).code.length,    EIP170_LIMIT, "T2 wrapper exceeds EIP-170");
+        assertLt(address(p2t2ff).code.length,  EIP170_LIMIT, "T2FF wrapper exceeds EIP-170");
+        assertLt(address(p2t3).code.length,    EIP170_LIMIT, "T3 wrapper exceeds EIP-170");
+        assertLt(address(p2t4).code.length,    EIP170_LIMIT, "T4 wrapper exceeds EIP-170");
+        assertLt(address(optimized).code.length, EIP170_LIMIT, "T4Sponge wrapper exceeds EIP-170");
+        assertLt(address(p2t8).code.length,    EIP170_LIMIT, "T8 wrapper exceeds EIP-170");
     }
 }

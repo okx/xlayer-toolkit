@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
@@ -25,7 +25,9 @@ bench() {
         $CIRCOM "$CIRCUIT" --r1cs --wasm -o "$DIR" >/dev/null
     fi
 
-    local CONSTRAINTS=$(snarkjs ri "${DIR}/${NAME}.r1cs" 2>&1 | grep "Constraints" | awk '{print $NF}')
+    # `|| true` keeps `set -o pipefail` from aborting on a missing "Constraints"
+    # line; an empty CONSTRAINTS surfaces as a blank cell in the bench table.
+    local CONSTRAINTS=$(snarkjs ri "${DIR}/${NAME}.r1cs" 2>&1 | grep "Constraints" | awk '{print $NF}' || true)
 
     if [ ! -f "${DIR}/${NAME}.zkey" ]; then
         snarkjs groth16 setup "${DIR}/${NAME}.r1cs" "$PTAU" "${DIR}/${NAME}.zkey" >/dev/null
@@ -37,7 +39,7 @@ bench() {
     for i in 1 2 3; do
         local T=$( { /usr/bin/time -p snarkjs groth16 prove \
             "${DIR}/${NAME}.zkey" "${DIR}/witness.wtns" \
-            "${DIR}/proof.json" "${DIR}/public.json" ; } 2>&1 | grep "^real" | awk '{print $2}')
+            "${DIR}/proof.json" "${DIR}/public.json" ; } 2>&1 | grep "^real" | awk '{print $2}' || true)
         TOTAL=$(echo "$TOTAL + $T" | bc)
     done
     local AVG=$(echo "scale=3; $TOTAL / 3" | bc)

@@ -49,10 +49,13 @@ else
   echo "[setup-libs] pot12.ptau: downloading (~4.8 MB)"
   mkdir -p "$(dirname "$PTAU_PATH")"
   tmp="${PTAU_PATH}.tmp"
+  # --retry / --tries adds resilience against transient CI network blips.
   if command -v curl >/dev/null 2>&1; then
-    curl --fail --silent --show-error --location "$PTAU_URL" -o "$tmp"
+    curl --fail --silent --show-error --location \
+      --retry 3 --retry-delay 2 --connect-timeout 30 \
+      "$PTAU_URL" -o "$tmp"
   elif command -v wget >/dev/null 2>&1; then
-    wget --quiet "$PTAU_URL" -O "$tmp"
+    wget --quiet --tries=3 --waitretry=2 --timeout=30 "$PTAU_URL" -O "$tmp"
   else
     echo "[setup-libs] ERROR: neither curl nor wget is available" >&2
     exit 1

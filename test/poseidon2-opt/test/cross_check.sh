@@ -3,7 +3,7 @@
 # Requires: circom, snarkjs, node, forge
 #
 # Usage: bash test/cross_check.sh
-set -e
+set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 bash "$REPO_ROOT/scripts/setup-libs.sh"
@@ -16,8 +16,12 @@ require_command forge   "Install Foundry: https://book.getfoundry.sh/getting-sta
 
 BUILD="$REPO_ROOT/bench/circom/build_crosscheck"
 CIRCUITS="$REPO_ROOT/bench/circom/circuits"
+TMP_SOL="$REPO_ROOT/test/_CrossCheckTmp.t.sol"
 PASS=0
 FAIL=0
+
+# Clean up the per-call temp test file even on Ctrl+C, SIGTERM, or `set -e` aborts.
+trap 'rm -f "$TMP_SOL"' EXIT INT TERM
 
 mkdir -p "$BUILD"
 
@@ -49,8 +53,7 @@ circom_output() {
 # Run a Solidity expression via a temporary forge test, return the numeric result
 solidity_output() {
     local SOL_CALL=$1
-    local TMP="$REPO_ROOT/test/_CrossCheckTmp.t.sol"
-    cat > "$TMP" << SOLEOF
+    cat > "$TMP_SOL" << SOLEOF
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 import {Test, console} from "forge-std/Test.sol";
@@ -66,10 +69,14 @@ contract CrossCheckTmp is Test {
     }
 }
 SOLEOF
+    # Tolerate forge test failure: an empty OUT downstream surfaces as MISMATCH
+    # in compare(), preserving the existing soft-fail UX. Without `|| true`,
+    # `set -o pipefail` would make the whole script abort on the first
+    # compilation error inside the temp test.
     local OUT
-    OUT=$(forge test --match-test test_crosscheck --match-contract CrossCheckTmp -vv 2>&1 \
-        | grep "XCHECK:" | awk '{print $NF}')
-    rm -f "$TMP"
+    OUT=$( { forge test --match-test test_crosscheck --match-contract CrossCheckTmp -vv 2>&1 \
+        | grep "XCHECK:" | awk '{print $NF}'; } || true )
+    rm -f "$TMP_SOL"
     echo "$OUT"
 }
 

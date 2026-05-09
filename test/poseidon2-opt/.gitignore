@@ -8,5 +8,11 @@ out/
 #   lib/poseidon2-solidity     https://github.com/V-k-h/poseidon2-solidity
 lib/
 
+# Circom benchmark artefacts (populated by `make cross-check` / `bench-circom`;
+# also ignored by bench/circom/.gitignore — duplicated here so the root
+# .gitignore is self-documenting)
+bench/circom/pot12.ptau
+bench/circom/build_*
+
 # Safety catch-all for accidental secrets
 .env
