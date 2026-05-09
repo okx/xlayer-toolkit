@@ -114,10 +114,12 @@ if [ "$PROOF_USE_GPU_PROVER" = "true" ]; then
         sp1-gpu0 sp1-gpu1 sp1-gpu2 sp1-gpu3
 
     # Coordinator readiness: API + DB migration cold-start takes 20-40s.
+    # We can't use /dev/tcp probes because the image's sh is dash. Look for
+    # the periodic "GetStatsResponse" log line — coordinator only emits that
+    # once it has finished startup and is serving the stats RPC.
     echo "   → waiting for sp1-coordinator..."
     for i in $(seq 1 60); do
-        if docker exec sp1-coordinator sh -c \
-                'echo > /dev/tcp/127.0.0.1/50051' 2>/dev/null; then
+        if docker logs sp1-coordinator 2>&1 | grep -q GetStatsResponse; then
             echo "   ✓ sp1-coordinator ready"
             break
         fi
@@ -125,6 +127,25 @@ if [ "$PROOF_USE_GPU_PROVER" = "true" ]; then
         if [ "$i" = "60" ]; then
             echo "   ✗ sp1-coordinator did not become ready within 120s"
             docker logs --tail 50 sp1-coordinator || true
+            exit 1
+        fi
+    done
+
+    # Coordinator is up, but PlonkWrap needs the cpu-node registered too.
+    # If cpu-node failed to start (most often: missing trusted-setup params at
+    # $SP1_CIRCUITS_HOST_DIR), we'd fail later inside the prove pipeline.
+    # Surface it now.
+    echo "   → waiting for sp1-cpu-node to register..."
+    for i in $(seq 1 30); do
+        if docker logs sp1-coordinator 2>&1 | grep -E "cpu_workers: [1-9]" -q; then
+            echo "   ✓ sp1-cpu-node registered"
+            break
+        fi
+        sleep 2
+        if [ "$i" = "30" ]; then
+            echo "   ✗ sp1-cpu-node never registered (cpu_workers still 0)"
+            echo "   most likely cause: missing trusted-setup params at $SP1_CIRCUITS_HOST_DIR"
+            docker logs --tail 50 sp1-cpu-node || true
             exit 1
         fi
     done

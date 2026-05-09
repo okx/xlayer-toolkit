@@ -70,7 +70,9 @@ services:
       - RUST_LOG=info
     volumes:
       # Resolved + created by 5-run-op-succinct.sh (default $HOME/.sp1/circuits).
-      - ${SP1_CIRCUITS_HOST_DIR}:/root/.sp1/circuits
+      # The image runs as appuser (uid 1001), so SP1 reads from /home/appuser
+      # — not /root, which the upstream sp1-cluster compose example uses.
+      - ${SP1_CIRCUITS_HOST_DIR}:/home/appuser/.sp1/circuits
     command: ["/bin/sh", "-c", "/node"]
     shm_size: 96G
     deploy:
