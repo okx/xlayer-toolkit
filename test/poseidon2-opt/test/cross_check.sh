@@ -5,38 +5,14 @@
 # Usage: bash test/cross_check.sh
 set -e
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 bash "$REPO_ROOT/scripts/setup-libs.sh"
+. "$REPO_ROOT/scripts/lib.sh"
 
-# ── Preflight: external dependencies ──
-# Fail fast with an actionable message instead of producing cryptic
-# downstream errors (silent witness-generation failure → confusing
-# `Cannot find module .../witness.json` later in the pipeline).
-preflight_fail() {
-    echo "" >&2
-    echo "ERROR: cross_check.sh prerequisite missing: $1" >&2
-    echo "       $2" >&2
-    echo "" >&2
-    exit 1
-}
-
-# circom: prefer ~/.cargo/bin (the install path used by `cargo install --git
-# https://github.com/iden3/circom`), fall back to anything on PATH.
-if [ -x "$HOME/.cargo/bin/circom" ]; then
-    CIRCOM="$HOME/.cargo/bin/circom"
-elif command -v circom >/dev/null 2>&1; then
-    CIRCOM="$(command -v circom)"
-else
-    preflight_fail "circom" \
-        "Install via: cargo install --git https://github.com/iden3/circom"
-fi
-
-command -v snarkjs >/dev/null 2>&1 || preflight_fail "snarkjs" \
-    "Install via: npm install -g snarkjs"
-command -v node >/dev/null 2>&1 || preflight_fail "node" \
-    "Install Node.js >= 18 (https://nodejs.org/)"
-command -v forge >/dev/null 2>&1 || preflight_fail "forge" \
-    "Install Foundry: https://book.getfoundry.sh/getting-started/installation"
+detect_circom
+require_command snarkjs "Install via: npm install -g snarkjs"
+require_command node    "Install Node.js >= 18 (https://nodejs.org/)"
+require_command forge   "Install Foundry: https://book.getfoundry.sh/getting-started/installation"
 
 BUILD="$REPO_ROOT/bench/circom/build_crosscheck"
 CIRCUITS="$REPO_ROOT/bench/circom/circuits"
@@ -46,15 +22,6 @@ FAIL=0
 mkdir -p "$BUILD"
 
 # ── Helpers ──
-
-# Slugify a human label into a path-safe directory name
-# (spaces, parens, brackets, slashes, etc. → underscores).
-# Required because some tools in the witness/snarkjs chain (notably
-# generate_witness.js under newer Node versions) misbehave on paths
-# containing whitespace or shell metacharacters.
-slugify() {
-    echo "$1" | LC_ALL=C tr -c '[:alnum:]._-' '_'
-}
 
 # Compile circom circuit, generate witness, return output[0]
 circom_output() {

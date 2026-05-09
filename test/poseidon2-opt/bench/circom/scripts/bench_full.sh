@@ -4,29 +4,11 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 bash "$REPO_ROOT/scripts/setup-libs.sh"
+. "$REPO_ROOT/scripts/lib.sh"
 
-# ── Preflight: external dependencies ──
-preflight_fail() {
-    echo "" >&2
-    echo "ERROR: bench_full.sh prerequisite missing: $1" >&2
-    echo "       $2" >&2
-    echo "" >&2
-    exit 1
-}
-
-if [ -x "$HOME/.cargo/bin/circom" ]; then
-    CIRCOM="$HOME/.cargo/bin/circom"
-elif command -v circom >/dev/null 2>&1; then
-    CIRCOM="$(command -v circom)"
-else
-    preflight_fail "circom" \
-        "Install via: cargo install --git https://github.com/iden3/circom"
-fi
-
-command -v snarkjs >/dev/null 2>&1 || preflight_fail "snarkjs" \
-    "Install via: npm install -g snarkjs"
-command -v node >/dev/null 2>&1 || preflight_fail "node" \
-    "Install Node.js >= 18 (https://nodejs.org/)"
+detect_circom
+require_command snarkjs "Install via: npm install -g snarkjs"
+require_command node    "Install Node.js >= 18 (https://nodejs.org/)"
 
 cd "$SCRIPT_DIR/.."
 PTAU="pot12.ptau"
