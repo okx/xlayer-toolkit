@@ -29,8 +29,12 @@ services:
       - sp1_postgresql_data:/bitnami/postgresql
 
   # gRPC API + DB migration. Coordinator/nodes/proposer all talk through it.
+  # Pin to v2.1.2 to match op-succinct's sp1-cluster-* deps in Cargo.toml — the
+  # proto schema for CreateProof drifted between v2.1.2 and v2.2.1, so a v2.2.1
+  # server silently drops submissions from a v2.1.2 client (workers register fine
+  # but total_tasks stays 0).
   sp1-api:
-    image: ghcr.io/succinctlabs/sp1-cluster:base-v2.2.1
+    image: ghcr.io/succinctlabs/sp1-cluster:base-v2.1.2
     container_name: sp1-api
     environment:
       - API_GRPC_ADDR=0.0.0.0:50051
@@ -44,7 +48,7 @@ services:
 
   # Task scheduler. Proposer connects to sp1-coordinator:50051.
   sp1-coordinator:
-    image: ghcr.io/succinctlabs/sp1-cluster:base-v2.2.1
+    image: ghcr.io/succinctlabs/sp1-cluster:base-v2.1.2
     container_name: sp1-coordinator
     environment:
       - COORDINATOR_CLUSTER_RPC=http://sp1-api:50051
@@ -58,7 +62,7 @@ services:
   # CPU worker: CONTROLLER (~16GB) + SNARK-wrap (~32GB, Groth16 by default).
   # Trusted-setup params come from the host mount below.
   sp1-cpu-node:
-    image: ghcr.io/succinctlabs/sp1-cluster:base-v2.2.1
+    image: ghcr.io/succinctlabs/sp1-cluster:base-v2.1.2
     container_name: sp1-cpu-node
     environment:
       - NODE_COORDINATOR_RPC=http://sp1-coordinator:50051
@@ -69,9 +73,6 @@ services:
       - WORKER_PLONK_WRAP_WEIGHT=32
       - RUST_LOG=info
     volumes:
-      # Resolved + created by 5-run-op-succinct.sh (default $HOME/.sp1/circuits).
-      # The image runs as appuser (uid 1001), so SP1 reads from /home/appuser
-      # — not /root, which the upstream sp1-cluster compose example uses.
       - ${SP1_CIRCUITS_HOST_DIR}:/home/appuser/.sp1/circuits
     command: ["/bin/sh", "-c", "/node"]
     shm_size: 96G
@@ -86,7 +87,7 @@ services:
   # GPU workers: one container per card. memory limit isolates OOM blast
   # radius — a runaway ProveShard takes down its pod, not the rest.
   sp1-gpu0:
-    image: ghcr.io/succinctlabs/sp1-cluster:node-gpu-v2.2.1
+    image: ghcr.io/succinctlabs/sp1-cluster:node-gpu-v2.1.2
     container_name: sp1-gpu0
     runtime: nvidia
     environment:
