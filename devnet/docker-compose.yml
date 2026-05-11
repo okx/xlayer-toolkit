@@ -351,6 +351,10 @@ services:
   op-kona-seq:
     image: "${KONA_IMAGE_TAG:-kona:latest}"
     container_name: op-kona-seq
+    # Upstream kona image bakes in USER 10001:10001. We override to the host
+    # user at runtime so bind-mounted ./data stays writable. ${UID} is auto-set
+    # by bash/zsh; GID falls back to 0 (root group) when unset on bash.
+    user: "${UID:-0}:${GID:-0}"
     networks:
       default:
         aliases:
@@ -483,6 +487,7 @@ services:
   op-kona-rpc:
     image: "${KONA_IMAGE_TAG:-kona:latest}"
     container_name: op-kona-rpc
+    user: "${UID:-0}:${GID:-0}"
     networks:
       default:
         aliases:
@@ -532,6 +537,7 @@ services:
   op-kona-rpc2:
     image: "${KONA_IMAGE_TAG:-kona:latest}"
     container_name: op-kona-rpc2
+    user: "${UID:-0}:${GID:-0}"
     networks:
       default:
         aliases:

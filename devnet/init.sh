@@ -136,17 +136,34 @@ else
   fi
 
   RUST_CTX="$OP_STACK_LOCAL_DIRECTORY/rust"
-  KONA_DOCKERFILE="$PWD_DIR/dockerfile/Dockerfile.kona"
-  mkdir -p $RUST_CTX/kona/op-core/nuts/bundles
-  cp $OP_STACK_LOCAL_DIRECTORY/op-core/nuts/bundles/karst_nut_bundle.json $RUST_CTX/kona/op-core/nuts/bundles/
+  KONA_DOCKERFILE="$RUST_CTX/kona/docker/apps/kona_app_generic.dockerfile"
+  NUTS_BUNDLES_CTX="$OP_STACK_LOCAL_DIRECTORY/op-core/nuts/bundles"
 
   if [ ! -d "$RUST_CTX/kona" ]; then
     echo "❌ Kona workspace not found at $RUST_CTX/kona"
     exit 1
   fi
+  if [ ! -f "$KONA_DOCKERFILE" ]; then
+    echo "❌ Upstream kona dockerfile not found at $KONA_DOCKERFILE"
+    exit 1
+  fi
+  if [ ! -d "$NUTS_BUNDLES_CTX" ]; then
+    echo "❌ NUT bundles dir not found at $NUTS_BUNDLES_CTX (required as a named build context)"
+    exit 1
+  fi
 
-  echo "🔨 Building kona image (context=$RUST_CTX)"
-  build_and_tag_image "kona" "$KONA_IMAGE_TAG" "$RUST_CTX" "$KONA_DOCKERFILE" "$OP_STACK_LOCAL_DIRECTORY"
+  echo "🔨 Building kona image with upstream dockerfile (context=$RUST_CTX)"
+  GITTAG=$(cd "$OP_STACK_LOCAL_DIRECTORY" && git rev-parse --short HEAD 2>/dev/null || echo "local")
+  docker build \
+    --build-context "nuts-bundles=$NUTS_BUNDLES_CTX" \
+    --build-arg REPO_LOCATION=local \
+    --build-arg BIN_TARGET=kona-node \
+    --build-arg BUILD_PROFILE=release \
+    -f "$KONA_DOCKERFILE" \
+    -t "kona:$GITTAG" \
+    "$RUST_CTX"
+  docker tag "kona:$GITTAG" "$KONA_IMAGE_TAG"
+  echo "✅ Built and tagged image: kona:$GITTAG as $KONA_IMAGE_TAG"
 fi
 
 # Build OP_SUCCINCT image if not skipping
