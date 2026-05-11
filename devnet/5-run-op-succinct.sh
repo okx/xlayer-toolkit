@@ -159,9 +159,8 @@ if [ "$PROOF_USE_GPU_PROVER" = "true" ]; then
         fi
     }
 
-    # ClusterProofProvider reads these to talk to the local coordinator.
     upsert_proposer_env "SP1_PROVER"      "cluster"
-    upsert_proposer_env "CLI_CLUSTER_RPC" "http://sp1-coordinator:50051"
+    upsert_proposer_env "CLI_CLUSTER_RPC" "http://sp1-api:50051"
     upsert_proposer_env "CLI_REDIS_NODES" "redis://:redispassword@sp1-redis:6379/0"
     upsert_proposer_env "MOCK_MODE"       "false"
 fi

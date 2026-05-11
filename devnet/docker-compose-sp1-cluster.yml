@@ -10,13 +10,13 @@ services:
       # Stores task artifacts (ELF / stdin / intermediate proofs).
       - REDIS_PASSWORD=redispassword
       - REDIS_AOF_ENABLED=no
-      - REDIS_EXTRA_FLAGS=--maxmemory 28gb --maxmemory-policy volatile-lru
+      - REDIS_EXTRA_FLAGS=--maxmemory 128gb --maxmemory-policy allkeys-lru
     volumes:
       - sp1_redis_data:/bitnami/redis/data
     deploy:
       resources:
         limits:
-          memory: 30G
+          memory: 140G
 
   sp1-postgresql:
     image: bitnamisecure/postgresql:latest
@@ -28,11 +28,11 @@ services:
     volumes:
       - sp1_postgresql_data:/bitnami/postgresql
 
-  # gRPC API + DB migration. Coordinator/nodes/proposer all talk through it.
-  # Pin to v2.1.2 to match op-succinct's sp1-cluster-* deps in Cargo.toml — the
-  # proto schema for CreateProof drifted between v2.1.2 and v2.2.1, so a v2.2.1
-  # server silently drops submissions from a v2.1.2 client (workers register fine
-  # but total_tasks stays 0).
+  # gRPC API + DB migration. Hosts cluster.ClusterService — the proposer
+  # (ClusterProofProvider) submits ProofRequestCreate here; the coordinator
+  # polls it for new requests. NOT to be confused with sp1-coordinator (which
+  # only hosts worker.WorkerService).
+  # Image pinned to v2.1.2 to match op-succinct's sp1-cluster-* git tag.
   sp1-api:
     image: ghcr.io/succinctlabs/sp1-cluster:base-v2.1.2
     container_name: sp1-api
@@ -46,7 +46,8 @@ services:
     depends_on:
       - sp1-postgresql
 
-  # Task scheduler. Proposer connects to sp1-coordinator:50051.
+  # Worker task scheduler — hosts worker.WorkerService (workers register here).
+  # The proposer does NOT talk to this; it talks to sp1-api.
   sp1-coordinator:
     image: ghcr.io/succinctlabs/sp1-cluster:base-v2.1.2
     container_name: sp1-coordinator
