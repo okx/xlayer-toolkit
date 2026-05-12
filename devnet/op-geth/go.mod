@@ -9,6 +9,8 @@ require (
 	gopkg.in/yaml.v2 v2.4.0
 )
 
+// placeholder will be replaced with op-geth directory specified 
+// in .env file when running make run-geth-test command
 replace github.com/ethereum/go-ethereum => /path/to/op-geth
 
 require (
