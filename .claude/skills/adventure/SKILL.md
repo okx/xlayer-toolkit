@@ -20,7 +20,7 @@ All commands must be executed from the adventure directory (`cd "$(git rev-parse
 ```bash
 make erc20
 # equivalent to:
-adventure erc20-init 10ETH -f ./testdata/config.json
+adventure erc20-init 10000ETH -f ./testdata/config.json
 adventure erc20-bench -f ./testdata/config.json --contract 0xContractAddress
 ```
 
@@ -29,7 +29,7 @@ adventure erc20-bench -f ./testdata/config.json --contract 0xContractAddress
 ```bash
 make native
 # equivalent to:
-adventure native-init 10ETH -f ./testdata/config.json
+adventure native-init 10000ETH -f ./testdata/config.json
 adventure native-bench -f ./testdata/config.json
 ```
 
@@ -38,7 +38,7 @@ adventure native-bench -f ./testdata/config.json
 ```bash
 make io
 # equivalent to:
-adventure simulator-init 10ETH -f ./testdata/config.json
+adventure simulator-init 10000ETH -f ./testdata/config.json
 adventure io-bench -f ./testdata/config.json
 ```
 
@@ -47,7 +47,7 @@ adventure io-bench -f ./testdata/config.json
 ```bash
 make fib
 # equivalent to:
-adventure simulator-init 10ETH -f ./testdata/config.json
+adventure simulator-init 10000ETH -f ./testdata/config.json
 adventure fib-bench -f ./testdata/config.json
 ```
 
@@ -56,7 +56,7 @@ adventure fib-bench -f ./testdata/config.json
 ```bash
 make create
 # equivalent to:
-adventure native-init 10ETH -f ./testdata/config.json
+adventure native-init 10000ETH -f ./testdata/config.json
 adventure create-bench -f ./testdata/config.json
 ```
 
@@ -64,7 +64,7 @@ adventure create-bench -f ./testdata/config.json
 
 - RPC node reachable (default `http://127.0.0.1:8123`).
 - `testdata/config.json` exists and is tuned for the run.
-- `testdata/accounts-20k.txt` (20,000 accounts) is present.
+- `testdata/accounts/accounts-20000.txt` (20,000 accounts) is present as default, but may change if account number change.
 - `senderPrivateKey` in `testdata/config.json` has enough balance to fund init.
 
 ## 2. Configuration file (`testdata/config.json`)

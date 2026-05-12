@@ -11,7 +11,7 @@ See `devnet/README.md` for full background. The flow here is the "first-time set
 
 ## 0. Working directory
 
-All commands run from `<repo-root>/devnet`. Resolve the repo root with `git rev-parse --show-toplevel` and `cd "$(git rev-parse --show-toplevel)/devnet"` before each step (or run once at the start). Never edit `.env` directly — edit `example.env` and run `./clean.sh` to sync.
+All commands run from `<repo-root>/devnet`. Resolve the repo root with `git rev-parse --show-toplevel` and `cd "$(git rev-parse --show-toplevel)/devnet"` before each step (or run once at the start). Never edit `.env` directly, .env prepare by user from `example.env`.
 
 ## 1. Check repo paths in `example.env`
 
@@ -84,7 +84,7 @@ If the port is not listening, inspect container state:
 ```bash
 cd "$(git rev-parse --show-toplevel)/devnet"
 docker compose ps
-docker compose logs --tail=200 op-geth-seq
+docker compose logs --tail=200 op-reth-seq
 ```
 
 Report the failing container and stop — do not claim success.

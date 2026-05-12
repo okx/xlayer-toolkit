@@ -103,7 +103,7 @@ Behavior (Old Method branch):
 
 Heads-up to the user (optional, only mention if the benchmark is expected to run long):
 - Perf profile capture: `curl http://localhost:6060/debug/pprof/profile?seconds=120 > prof_<timestamp>.bin`
-- Sequencer log monitor: `docker logs xlayer-seq --tail 10 -f 2>&1 | grep TotalDuration-batch`
+- Sequencer log monitor: `docker logs op-reth-seq --tail 10 -f 2>&1 | grep TotalDuration-batch`
 
 ## 4. Reporting
 
