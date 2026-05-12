@@ -1,0 +1,14 @@
+[profile.default]
+src = "src/solidity"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.30"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 1000000
+via_ir = true
+fs_permissions = [{ access = "read", path = "bench/solidity/vendored/poseidon1_cljs" }]
+
+# Bench profile: run gas benchmarks with `FOUNDRY_PROFILE=bench forge test`
+[profile.bench]
+test = "bench/solidity"
