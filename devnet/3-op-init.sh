@@ -151,25 +151,29 @@ echo ""
 echo "🔧 Setting up System Config Parameters..."
 "$PWD_DIR/scripts/setup-system-config-params.sh"
 
-# init geth sequencer
-echo " 🔧 Initializing geth sequencer..."
+# init geth sequencer (only if any node uses geth)
 OP_GETH_DATADIR="$(pwd)/data/op-geth-seq"
-rm -rf "$OP_GETH_DATADIR"
-mkdir -p "$OP_GETH_DATADIR"
+if [ "$SEQ_TYPE" = "geth" ] || [ "$RPC_TYPE" = "geth" ]; then
+  echo " 🔧 Initializing geth sequencer..."
+  rm -rf "$OP_GETH_DATADIR"
+  mkdir -p "$OP_GETH_DATADIR"
 
-docker compose run --no-deps --rm \
-  -v "$(pwd)/$CONFIG_DIR/genesis.json:/genesis.json" \
-  op-geth-seq \
-  --datadir "/datadir" \
-  --gcmode=archive \
-  --db.engine=$DB_ENGINE \
-  init \
-  --state.scheme=hash \
-  /genesis.json
+  docker compose run --no-deps --rm \
+    -v "$(pwd)/$CONFIG_DIR/genesis.json:/genesis.json" \
+    op-geth-seq \
+    --datadir "/datadir" \
+    --gcmode=archive \
+    --db.engine=$DB_ENGINE \
+    init \
+    --state.scheme=hash \
+    /genesis.json
 
-# Remove nodekey to ensure other nodes generates a unique node ID
-echo " 🔑 Removing nodekey to generate unique node ID for other nodes..."
-rm -f "$OP_GETH_DATADIR/geth/nodekey"
+  # Remove nodekey to ensure other nodes generates a unique node ID
+  echo " 🔑 Removing nodekey to generate unique node ID for other nodes..."
+  rm -f "$OP_GETH_DATADIR/geth/nodekey"
+else
+  echo " ⏭️  Skipping geth sequencer init (SEQ_TYPE=$SEQ_TYPE, RPC_TYPE=$RPC_TYPE)"
+fi
 
 # Get trusted peers enode url
 sed_inplace "s|TRUSTED_PEERS=.*|TRUSTED_PEERS=$(./scripts/trusted-peers.sh)|" .env
@@ -233,18 +237,19 @@ if [ "${USE_CHAINSPEC:-false}" = "true" ]; then
     fi
 fi
 
-# Copy initialized database from op-geth-seq to other nodes
-OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
+# Copy initialized database from op-geth-seq to other nodes (only if any node uses geth)
+if [ "$RPC_TYPE" = "geth" ]; then
+    OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
+    echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
+    rm -rf "$OP_GETH_RPC_DATADIR"
+    cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
 
-echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
-rm -rf "$OP_GETH_RPC_DATADIR"
-cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
-
-if [ "$LAUNCH_RPC_NODE2" = "true" ] && [ "$RPC_TYPE" = "geth" ]; then
-    OP_GETH_RPC2_DATADIR="$(pwd)/data/op-geth-rpc2"
-    echo " 🔄 Copying database from op-geth-seq to op-geth-rpc2..."
-    rm -rf "$OP_GETH_RPC2_DATADIR"
-    cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC2_DATADIR"
+    if [ "$LAUNCH_RPC_NODE2" = "true" ]; then
+        OP_GETH_RPC2_DATADIR="$(pwd)/data/op-geth-rpc2"
+        echo " 🔄 Copying database from op-geth-seq to op-geth-rpc2..."
+        rm -rf "$OP_GETH_RPC2_DATADIR"
+        cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC2_DATADIR"
+    fi
 fi
 
 if [ "$LAUNCH_RPC_NODE2" = "true" ] && [ "$RPC_TYPE" = "reth" ]; then

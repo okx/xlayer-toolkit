@@ -104,9 +104,9 @@ else
     cd "$OP_RETH_LOCAL_DIRECTORY"
     if [ -n "$OP_RETH_BRANCH" ]; then
       echo "🔄 Switching op-reth to branch: $OP_RETH_BRANCH"
-      git fetch origin
+      # git fetch origin
       git checkout "$OP_RETH_BRANCH"
-      git pull origin "$OP_RETH_BRANCH"
+      # git pull origin "$OP_RETH_BRANCH"
     else
       echo "📍 Using op-reth branch: $(git branch --show-current)"
     fi
