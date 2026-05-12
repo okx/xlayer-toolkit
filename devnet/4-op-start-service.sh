@@ -104,7 +104,12 @@ if [ "$CONDUCTOR_ENABLED" = "true" ]; then
 else
     docker compose up -d op-${SEQ_TYPE}-seq
     wait_for_el_to_start "op-${SEQ_TYPE}-seq" "$SEQ_TYPE"
-    docker compose up -d op-seq
+    if [ "$SEQ_CL" = "kona" ]; then
+        echo "🚀 Starting kona-node as CL (SEQ_CL=kona)"
+        docker compose up -d op-kona-seq
+    else
+        docker compose up -d op-seq
+    fi
 fi
 
 sleep 5
@@ -119,11 +124,29 @@ echo "✅ Grafana available at http://localhost:3000 (admin/admin)"
 if [ "$LAUNCH_RPC_NODE" = "true" ]; then
     docker compose up -d op-${RPC_TYPE}-rpc
     wait_for_el_to_start "op-${RPC_TYPE}-rpc" "$RPC_TYPE"
-    docker compose up -d op-rpc
+    if [ "$RPC_CL" = "kona" ]; then
+        echo "🚀 Starting kona-node as RPC CL (RPC_CL=kona)"
+        docker compose up -d op-kona-rpc
+    else
+        docker compose up -d op-rpc
+    fi
 fi
 
 if [ "$LAUNCH_RPC_NODE2" = "true" ]; then
-    docker compose up -d op-rpc2
+    if [ "$RPC_CL" = "kona" ]; then
+        docker compose up -d op-kona-rpc2
+    else
+        docker compose up -d op-rpc2
+    fi
+fi
+
+if [ "$RPC_CL" = "kona" ]; then
+    URLS=()
+    [ "$LAUNCH_RPC_NODE" = "true" ] && URLS+=(http://localhost:9555)
+    [ "$LAUNCH_RPC_NODE2" = "true" ] && URLS+=(http://localhost:9565)
+    if [ ${#URLS[@]} -gt 0 ]; then
+        $SCRIPTS_DIR/kona-connect-peer.sh "${URLS[@]}"
+    fi
 fi
 
 # Configure op-batcher endpoints based on conductor mode
@@ -137,8 +160,12 @@ else
     echo "🔧 Configuring op-batcher for single sequencer mode..."
     # Set single sequencer mode endpoints
     export OP_BATCHER_L2_ETH_RPC="http://op-${SEQ_TYPE}-seq:8545"
-    export OP_BATCHER_ROLLUP_RPC="http://op-seq:9545"
-    echo "✅ op-batcher configured for single sequencer mode"
+    if [ "$SEQ_CL" = "kona" ]; then
+        export OP_BATCHER_ROLLUP_RPC="http://op-kona-seq:9545"
+    else
+        export OP_BATCHER_ROLLUP_RPC="http://op-seq:9545"
+    fi
+    echo "✅ op-batcher configured for single sequencer mode (CL=${SEQ_CL:-opnode})"
 fi
 
 docker compose up -d op-batcher
