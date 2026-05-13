@@ -43,6 +43,31 @@ Complete local Optimism test environment for development and testing, supporting
 
 **Detailed Documentation:** [devnet/README.md](devnet/README.md)
 
+### X Layer Expert (AI Coding Skill)
+
+AI coding assistant skill that provides deep expertise for building on X Layer — smart contract security, gas optimization, deployment patterns, and more.
+
+**Quick Start:**
+```bash
+cd tools/xlayer-expert
+# Claude Code
+cp -r . ~/.claude/skills/xlayer-expert
+
+# Or install via skills.sh
+npx skills add berktavsan/xlayer-expert
+```
+
+**Key Features:**
+- ✅ 22 Security Golden Rules for Solidity
+- ✅ Network config, RPC endpoints, chain IDs
+- ✅ Hardhat & Foundry deployment patterns
+- ✅ Gas optimization (OKB economics, L1 data fees)
+- ✅ Bridge & cross-chain patterns
+- ✅ OKLink OnChain Data API integration
+- ✅ Works with Claude Code, Cursor, Windsurf, Codex CLI, Gemini CLI
+
+[📖 Full Documentation →](tools/xlayer-expert/README.md)
+
 ## 🤝 Contributing
 
 Issues and Pull Requests are welcome!
