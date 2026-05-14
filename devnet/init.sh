@@ -22,7 +22,12 @@ function build_and_tag_image() {
 
   cd "$build_dir"
   GITTAG=$(cd "$git_dir" && git rev-parse --short HEAD 2>/dev/null || echo "local")
-  docker build -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
+  SECRET_ARG=""
+  if [ -f /etc/ssl/copilot.pem ]; then
+      SECRET_ARG="--secret id=copilot,src=/etc/ssl/copilot.pem"
+  fi
+
+  docker build $SECRET_ARG -t "${image_base_name}:${GITTAG}" -f "$dockerfile" .
   docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
   echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
   cd -
@@ -154,7 +159,13 @@ else
 
   echo "🔨 Building kona image with upstream dockerfile (context=$RUST_CTX)"
   GITTAG=$(cd "$OP_STACK_LOCAL_DIRECTORY" && git rev-parse --short HEAD 2>/dev/null || echo "local")
-  docker build \
+  SECRET_ARG=""
+  if [ -f /etc/ssl/copilot.pem ]; then
+      SECRET_ARG="--secret id=copilot,src=/etc/ssl/copilot.pem"
+  fi
+
+  BUILDKIT_PROGRESS=plain docker build \
+    $SECRET_ARG \
     --build-context "nuts-bundles=$NUTS_BUNDLES_CTX" \
     --build-arg REPO_LOCATION=local \
     --build-arg BIN_TARGET=kona-node \
@@ -177,8 +188,10 @@ else
     echo "🔨 Building op-succinct images"
 
     cd "$OP_SUCCINCT_LOCAL_DIRECTORY"
+    cp /etc/ssl/copilot.pem copilot.pem 2>/dev/null || touch copilot.pem;
     build_and_tag_image "op-succinct" "$OP_SUCCINCT_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile"
     build_and_tag_image "op-succinct-contracts" "$OP_SUCCINCT_CONTRACTS_IMAGE_TAG" "$OP_SUCCINCT_LOCAL_DIRECTORY" "Dockerfile.contract"
+    rm -f copilot.pem
   fi
 fi
 
