@@ -28,6 +28,46 @@ function build_and_tag_image() {
   cd -
 }
 
+# Specialised builder for op-reth: stages only Cargo manifests / lockfile /
+# rust-toolchain.toml into a separate named build context (`manifests`) so the
+# cargo-chef planner stage caches across source-only edits. Buildkit's COPY
+# cache keys on content hashes, so identical manifest sets across runs => hit.
+function build_op_reth_with_manifest_context() {
+  local image_base_name=$1
+  local image_tag=$2
+  local build_dir=$3
+  local dockerfile=$4
+
+  local manifest_staging
+  manifest_staging=$(mktemp -d -t xlayer-reth-manifests.XXXXXX)
+  # shellcheck disable=SC2064
+  trap "rm -rf '$manifest_staging'" RETURN
+
+  echo "📦 Staging Cargo manifests into $manifest_staging"
+  (
+    cd "$build_dir"
+    find . \( -name 'Cargo.toml' -o -name 'Cargo.lock' -o -name 'rust-toolchain.toml' \) \
+      -not -path './target/*' \
+      -not -path './node_modules/*' \
+      -not -path './.git/*' \
+      -print0 \
+    | while IFS= read -r -d '' f; do
+        mkdir -p "$manifest_staging/$(dirname "$f")"
+        cp "$f" "$manifest_staging/$f"
+      done
+  )
+
+  cd "$build_dir"
+  GITTAG=$(git rev-parse --short HEAD 2>/dev/null || echo "local")
+  docker build \
+    --build-context "manifests=$manifest_staging" \
+    -t "${image_base_name}:${GITTAG}" \
+    -f "$dockerfile" .
+  docker tag "${image_base_name}:${GITTAG}" "${image_tag}"
+  echo "✅ Built and tagged image: ${image_base_name}:${GITTAG} as ${image_tag}"
+  cd -
+}
+
 # Build OP_STACK image
 if [ "$SKIP_OP_STACK_BUILD" = "true" ]; then
   echo "⏭️  Skipping op-stack build"
@@ -119,7 +159,7 @@ else
       ./scripts/build-reth-with-profiling.sh
     else
       echo "Building standard op-reth image..."
-      build_and_tag_image "op-reth" "$OP_RETH_IMAGE_TAG" "$OP_RETH_LOCAL_DIRECTORY" "DockerfileOp"
+      build_op_reth_with_manifest_context "op-reth" "$OP_RETH_IMAGE_TAG" "$OP_RETH_LOCAL_DIRECTORY" "DockerfileOp"
     fi
 
     cd "$OP_STACK_LOCAL_DIRECTORY"
