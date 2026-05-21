@@ -9,6 +9,7 @@ import (
 	"time"
 
 	ethcmn "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -81,6 +82,114 @@ func (e EthClient) QueryNonce(hexAddr string) (uint64, error) {
 		return 0, err
 	}
 	return nonce, nil
+}
+
+// QueryAANonce queries the EIP-8130 2D nonce sequence for address/nonceKey.
+func (e EthClient) QueryAANonce(addr ethcmn.Address, nonceKey *big.Int) (uint64, error) {
+	var result string
+	err := e.rpcClient.CallContext(
+		context.Background(),
+		&result,
+		"eth_getTransactionCount",
+		addr,
+		"pending",
+		hexutil.EncodeBig(nonceKey),
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	value, err := hexutil.DecodeBig(result)
+	if err != nil {
+		return 0, err
+	}
+	if !value.IsUint64() {
+		return 0, fmt.Errorf("AA nonce overflows uint64: %s", result)
+	}
+	return value.Uint64(), nil
+}
+
+// BatchAANonces queries pending EIP-8130 nonce sequences for one nonce key.
+func (e EthClient) BatchAANonces(ctx context.Context, addrs []ethcmn.Address, nonceKey *big.Int) ([]uint64, error) {
+	if len(addrs) == 0 {
+		return nil, nil
+	}
+
+	batch := make([]rpc.BatchElem, len(addrs))
+	results := make([]string, len(addrs))
+	encodedNonceKey := hexutil.EncodeBig(nonceKey)
+	for i, addr := range addrs {
+		batch[i] = rpc.BatchElem{
+			Method: "eth_getTransactionCount",
+			Args:   []interface{}{addr, "pending", encodedNonceKey},
+			Result: &results[i],
+		}
+	}
+
+	if err := e.rpcClient.BatchCallContext(ctx, batch); err != nil {
+		return nil, fmt.Errorf("AA nonce batch call failed: %w", err)
+	}
+
+	sequences := make([]uint64, len(addrs))
+	var errors []string
+	for i, elem := range batch {
+		if elem.Error != nil {
+			errors = append(errors, fmt.Sprintf("account %d %s: %v", i, addrs[i], elem.Error))
+			continue
+		}
+		value, err := hexutil.DecodeBig(results[i])
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("account %d %s: decode nonce %q: %v", i, addrs[i], results[i], err))
+			continue
+		}
+		if !value.IsUint64() {
+			errors = append(errors, fmt.Sprintf("account %d %s: AA nonce overflows uint64: %s", i, addrs[i], results[i]))
+			continue
+		}
+		sequences[i] = value.Uint64()
+	}
+	if len(errors) > 0 {
+		return sequences, fmt.Errorf("AA nonce batch errors: %v", errors)
+	}
+
+	return sequences, nil
+}
+
+// BatchBalances queries latest balances for multiple addresses in one RPC batch.
+func (e EthClient) BatchBalances(ctx context.Context, addrs []ethcmn.Address) ([]*big.Int, error) {
+	if len(addrs) == 0 {
+		return nil, nil
+	}
+
+	batch := make([]rpc.BatchElem, len(addrs))
+	results := make([]hexutil.Big, len(addrs))
+	for i, addr := range addrs {
+		batch[i] = rpc.BatchElem{
+			Method: "eth_getBalance",
+			Args:   []interface{}{addr, "latest"},
+			Result: &results[i],
+		}
+	}
+
+	if err := e.rpcClient.BatchCallContext(ctx, batch); err != nil {
+		return nil, fmt.Errorf("balance batch call failed: %w", err)
+	}
+
+	balances := make([]*big.Int, len(addrs))
+	var errors []string
+	for i, elem := range batch {
+		if elem.Error != nil {
+			errors = append(errors, fmt.Sprintf("account %d %s: %v", i, addrs[i], elem.Error))
+			balances[i] = big.NewInt(0)
+			continue
+		}
+		balances[i] = new(big.Int).Set((*big.Int)(&results[i]))
+	}
+	if len(errors) > 0 {
+		return balances, fmt.Errorf("balance batch errors: %v", errors)
+	}
+
+	return balances, nil
 }
 
 // SendEthereumTx signs and sends an Ethereum transaction
@@ -178,6 +287,47 @@ func (e EthClient) SendMultipleEthereumTx(signedTxs []*types.Transaction) ([]eth
 		}
 	}
 
+	if len(errors) > 0 {
+		return resultHashes, fmt.Errorf("batch errors: %v", errors)
+	}
+
+	return resultHashes, nil
+}
+
+// SendMultipleRawTransactions sends already-encoded raw transactions in a batch RPC call.
+func (e EthClient) SendMultipleRawTransactions(rawTxs []string) ([]ethcmn.Hash, error) {
+	if len(rawTxs) == 0 {
+		return nil, fmt.Errorf("empty transaction list")
+	}
+
+	batch := make([]rpc.BatchElem, len(rawTxs))
+	txHashes := make([]string, len(rawTxs))
+	for i, rawTx := range rawTxs {
+		batch[i] = rpc.BatchElem{
+			Method: "eth_sendRawTransaction",
+			Args:   []interface{}{rawTx},
+			Result: &txHashes[i],
+		}
+	}
+
+	if err := e.rpcClient.BatchCall(batch); err != nil {
+		return nil, fmt.Errorf("batch call failed: %v", err)
+	}
+
+	resultHashes := make([]ethcmn.Hash, 0, len(rawTxs))
+	var errors []string
+	for i, elem := range batch {
+		if elem.Error != nil {
+			errors = append(errors, fmt.Sprintf("tx %d: %v", i, elem.Error))
+			resultHashes = append(resultHashes, ethcmn.Hash{})
+			continue
+		}
+		if txHashes[i] == "" {
+			resultHashes = append(resultHashes, ethcmn.Hash{})
+			continue
+		}
+		resultHashes = append(resultHashes, ethcmn.HexToHash(txHashes[i]))
+	}
 	if len(errors) > 0 {
 		return resultHashes, fmt.Errorf("batch errors: %v", errors)
 	}

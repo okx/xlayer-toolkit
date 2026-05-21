@@ -122,6 +122,11 @@ func closeTxHashWriter() {
 	}
 }
 
+// WriteTxHashAsync writes a tx hash using the optional async tx hash writer.
+func WriteTxHashAsync(hash string) {
+	writeTxHashAsync(hash)
+}
+
 // Default GasPrice for X1 is set to 10GWei/gas
 func ParseGasPriceToBigInt(gasPriceFloat float64, prec int) *big.Int {
 	mul, err := strconv.ParseFloat(fmt.Sprintf(`1%0`+strconv.Itoa(prec)+`s`, ""), 64)
@@ -150,15 +155,20 @@ func NewTxParam(to *ethcmn.Address, amount *big.Int, gasLimit uint64, gasPrice *
 	}
 }
 
-func RunTxs(e func(ethcmn.Address) []TxParam) {
+// TxBatchRunner executes one benchmark batch for one worker.
+// Return false when the worker has no assigned work and should exit.
+type TxBatchRunner func(gIndex int, cli *EthClient, limiter *rate.Limiter) bool
+
+// RunTxBatches owns the common benchmark loop: tx hash writer, mempool pause,
+// TPS display, rate limiter, RPC client fan-out, and worker lifecycle.
+func RunTxBatches(run TxBatchRunner) {
 	// Initialize tx hash writer if enabled
 	if err := initTxHashWriter(); err != nil {
 		log.Printf("⚠️  Failed to initialize tx hash writer: %v\n", err)
 	}
 	defer closeTxHashWriter()
 
-	clients := GenerateClients(TransferCfg.Rpc)                 // generate CosmosClient or EthClient
-	accounts := generateAccounts(TransferCfg.BenchmarkAccounts) // generate 20k benchmark accounts
+	clients := GenerateClients(TransferCfg.Rpc) // generate CosmosClient or EthClient
 	mempoolSizeMap := &sync.Map{}
 	mempoolSizeMap.Store(0, 0)
 
@@ -182,9 +192,15 @@ func RunTxs(e func(ethcmn.Address) []TxParam) {
 	}
 
 	concurrency := TransferCfg.Concurrency
-	count := (len(accounts) + concurrency - 1) / concurrency
+	if concurrency <= 0 {
+		concurrency = 1
+	}
 	for i := 0; i < concurrency; i++ {
 		go func(gIndex int) {
+			cli, ok := clients[gIndex%len(clients)].(*EthClient)
+			if !ok {
+				panic("eth client is not a eth client")
+			}
 			for {
 				mempoolSize, ok := mempoolSizeMap.Load(0)
 				//fmt.Printf("Mempool size: %d\n", mempoolSize)
@@ -193,25 +209,40 @@ func RunTxs(e func(ethcmn.Address) []TxParam) {
 					continue
 				}
 
-				start := gIndex * count
-				if start >= len(accounts) {
+				if !run(gIndex, cli, limiter) {
 					return
 				}
-				end := start + count
-				if end > len(accounts) {
-					end = len(accounts)
-				}
-				batchAccounts := accounts[start:end]
-
-				// Use batch execution
-				cli := clients[gIndex%len(clients)]
-				executeBatch(gIndex, cli, batchAccounts, e, limiter)
 			}
 		}(i)
 	}
 
 	go tpsman.TPSDisplay()
 	select {}
+}
+
+func RunTxs(e func(ethcmn.Address) []TxParam) {
+	accounts := generateAccounts(TransferCfg.BenchmarkAccounts) // generate 20k benchmark accounts
+	concurrency := TransferCfg.Concurrency
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	count := (len(accounts) + concurrency - 1) / concurrency
+
+	RunTxBatches(func(gIndex int, cli *EthClient, limiter *rate.Limiter) bool {
+		start := gIndex * count
+		if start >= len(accounts) {
+			return false
+		}
+		end := start + count
+		if end > len(accounts) {
+			end = len(accounts)
+		}
+		batchAccounts := accounts[start:end]
+
+		// Use batch execution
+		executeBatch(gIndex, cli, batchAccounts, e, limiter)
+		return true
+	})
 }
 
 var defaultGasPrice = big.NewInt(100000000000)
@@ -310,13 +341,8 @@ func hexToInt(hexStr string) int {
 }
 
 // executeBatch executes transactions for multiple accounts in batch
-func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.Address) []TxParam, limiter *rate.Limiter) {
+func executeBatch(gIndex int, ethClient *EthClient, accounts []*EthAccount, e func(ethcmn.Address) []TxParam, limiter *rate.Limiter) {
 	maxBatchSize := TransferCfg.MaxBatchSize
-	// Check if batch sending is supported
-	ethClient, ok := cli.(*EthClient)
-	if !ok {
-		panic("eth client is not a eth client")
-	}
 
 	// Get transaction parameter template (use first transaction from first account as template)
 	if len(accounts) == 0 {

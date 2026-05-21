@@ -18,11 +18,21 @@ func init() {
 const (
 	FlagConfigFile = "config-file"
 	FlagContract   = "contract"
+	FlagGasLimit   = "gaslimit"
+	FlagNonceKey   = "noncekey"
+	FlagPayer      = "payer"
+	FlagSig        = "sig"
+	FlagTx         = "tx"
 )
 
 var (
 	configPath   string
 	contractAddr string
+	aaGasLimit   uint64
+	aaNonceKey   string
+	aaPayerMode  string
+	aaSigMode    string
+	aaTxKind     string
 )
 
 func main() {
@@ -41,12 +51,80 @@ func main() {
 		IOBenchCmd(),
 		FibBenchCmd(),
 		CreateBenchCmd(),
+		aaInitCmd(),
+		aaBenchCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+func aaInitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "aa-init",
+		Short: "Prepare accounts for EIP-8130 benchmark signature modes",
+		Long: `Prepare accounts for EIP-8130 benchmark signature modes.
+
+For secp this is a no-op because XLayerAA accepts implicit EOA owners.
+For p256 this submits owner-config transactions that authorize each account's
+locally derived P256Raw owner.
+
+Example:
+  adventure aa-init -f ./testdata/config.json --sig p256`,
+		Run: func(cmd *cobra.Command, args []string) {
+			if configPath == "" {
+				fmt.Println("Error: Config file (-f) is required")
+				os.Exit(1)
+			}
+			if err := bench.AAInit(configPath, aaSigMode); err != nil {
+				fmt.Printf("AA initialization failed: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
+	cmd.Flags().StringVar(&aaSigMode, FlagSig, "secp", "AA sender signature mode: secp or p256")
+	return cmd
+}
+
+func aaBenchCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "aa-bench",
+		Short: "Run EIP-8130 account-abstraction benchmark",
+		Long: `Run EIP-8130 account-abstraction benchmark.
+
+Each transaction is a 0x7b AA transaction containing one call. The sender
+signature mode is selected with --sig. With --payer sender, payer and payer_auth
+are empty; with --payer random, a random benchmark account signs payer_auth.
+
+Example:
+  adventure aa-bench -f ./testdata/config.json --sig secp --tx native --noncekey 0 --payer sender
+  adventure aa-bench -f ./testdata/config.json --sig secp --tx native --noncekey 1,4 --payer random
+  adventure aa-bench -f ./testdata/config.json --sig p256 --tx erc20 --contract 0x1234... --noncekey max
+  adventure aa-bench -f ./testdata/config.json --sig secp --tx native --payer sender --gaslimit 55000`,
+		Run: func(cmd *cobra.Command, args []string) {
+			if configPath == "" {
+				fmt.Println("Error: Config file (-f) is required")
+				os.Exit(1)
+			}
+			if err := bench.AABench(configPath, aaSigMode, aaTxKind, contractAddr, aaNonceKey, aaPayerMode, aaGasLimit); err != nil {
+				fmt.Printf("AA benchmark failed: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
+	cmd.Flags().StringVar(&aaSigMode, FlagSig, "secp", "AA sender signature mode: secp or p256")
+	cmd.Flags().StringVar(&aaTxKind, FlagTx, "native", "AA call payload: native or erc20")
+	cmd.Flags().StringVar(&contractAddr, FlagContract, "", "ERC20 contract address for --tx erc20")
+	cmd.Flags().Uint64Var(&aaGasLimit, FlagGasLimit, 0, "AA transaction gas limit; 0 selects a mode-specific default")
+	cmd.Flags().StringVar(&aaNonceKey, FlagNonceKey, "0", "AA nonce lane: 0, max, or start,end such as 1,4")
+	cmd.Flags().StringVar(&aaPayerMode, FlagPayer, "random", "AA payer mode: sender or random")
+	return cmd
 }
 
 func simulatorInitCmd() *cobra.Command {

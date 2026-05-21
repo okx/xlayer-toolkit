@@ -44,6 +44,26 @@ adventure native-init 10ETH -f ./testdata/config.json
 adventure create-bench -f ./testdata/config.json
 
 
+# EIP-8130 AA bench
+make aa sig=secp tx=native
+make aa sig=secp tx=erc20
+make aa sig=p256 tx=native
+make aa sig=p256 tx=erc20
+make aa sig=secp tx=native noncekey=1,4 payer=sender
+make aa sig=secp tx=native noncekey=max payer=random
+make aa sig=secp tx=native noncekey=0 payer=sender gaslimit=55000
+
+# Or run manually:
+adventure native-init 10ETH -f ./testdata/config.json
+adventure aa-bench -f ./testdata/config.json --sig secp --tx native --noncekey 0 --payer random
+adventure aa-bench -f ./testdata/config.json --sig secp --tx native --noncekey 1,4 --payer sender
+adventure aa-bench -f ./testdata/config.json --sig secp --tx native --noncekey 0 --payer sender --gaslimit 55000
+
+adventure erc20-init 10ETH -f ./testdata/config.json
+adventure aa-bench -f ./testdata/config.json --sig secp --tx erc20 --contract 0xContractAddress --noncekey max --payer random
+
+# p256 sender auth needs owner config once before aa-bench:
+adventure aa-init -f ./testdata/config.json --sig p256
 ```
 
 **Notes:**
@@ -51,6 +71,14 @@ adventure create-bench -f ./testdata/config.json
 - Configuration file located at `testdata/config.json`
 - Test accounts file is `testdata/accounts-20k.txt` (20,000 accounts)
 - Sender private key (for initialization) is configured in `testdata/config.json`
+- `make aa` accepts Make variables (`sig=secp|p256`, `tx=native|erc20`, `noncekey=0|1,4|max`, `payer=sender|random`, `gaslimit=<uint64>`). `make` itself does not support `-sig`; use `sig=...` / `tx=...`.
+- `make aa tx=erc20` deploys ERC20 through `erc20-init` and passes the parsed contract address to `aa-bench`, matching the regular `make erc20` flow.
+- `--noncekey 0` sends all AA transactions to lane 0. `--noncekey 1,4` round-robins across nonce keys 1, 2, 3, and 4; `--noncekey 1,1` only uses lane 1. `--noncekey max` uses `U256::MAX`; the current 8130 implementation treats this as nonce-free, so the tool encodes `nonce_sequence=0` with a short non-zero expiry based on the latest L2 block timestamp.
+- `--payer sender` leaves both `payer` and `payer_auth` empty so the sender pays. `--payer random` randomly selects a benchmark account as payer and includes its K1 payer signature.
+- AA transactions are EIP-8130 type `0x7b`, contain one call, and `sig` selects the sender auth mode.
+- `--gaslimit 0` (the default) selects a mode-specific AA gas limit: `55000` for `sig=secp tx=native payer=sender`, plus extra headroom for ERC20, P256 sender auth, or random payer auth. Use `gaslimit=...` / `--gaslimit ...` to override it for packing experiments.
+- In the current reth 8130 wire format, call entries carry `to` and `data` only; `tx=native` is therefore an empty-calldata native call to a deterministic inert recipient address outside the benchmark sender set, while `tx=erc20` calls `transfer(address,uint256)`.
+- `sig=p256` uses the native P256Raw verifier for sender auth and requires `AccountConfiguration` to be deployed at `0xf946601D5424118A4e4054BB0B13133f216b4FeE` before `aa-init --sig p256` can register P256 owners. `aa-init` submits and waits for those config-change transactions before `aa-bench`; it does not deploy the system contract itself.
 
 ## 📝 Configuration
 

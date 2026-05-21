@@ -1,8 +1,13 @@
-.PHONY: build lint erc20 native
+.PHONY: build lint erc20 native aa
 
 # Configuration variables
 CONFIG_FILE := ./testdata/config.json
 INIT_AMOUNT := 10000ETH
+SIG := $(or $(SIG),$(sig),secp)
+TX := $(or $(TX),$(tx),native)
+NONCEKEY := $(or $(NONCEKEY),$(noncekey),0)
+PAYER := $(or $(PAYER),$(payer),random)
+GASLIMIT := $(or $(GASLIMIT),$(gaslimit),0)
 
 # Lint the code using golangci-lint
 lint:
@@ -63,3 +68,26 @@ create: build
 	@sleep 10
 	@adventure create-bench -f $(CONFIG_FILE)
 	@echo "✅ create contract test completed!"
+
+
+aa: build
+	@echo "🚀 Starting EIP-8130 AA test (sig=$(SIG), tx=$(TX), noncekey=$(NONCEKEY), payer=$(PAYER), gaslimit=$(GASLIMIT))..."
+	@set -e; \
+	if [ "$(TX)" = "erc20" ]; then \
+		adventure erc20-init $(INIT_AMOUNT) -f $(CONFIG_FILE) > /tmp/aa-erc20-init.log 2>&1; \
+		cat /tmp/aa-erc20-init.log; \
+		sleep 10; \
+		CONTRACT_ADDR=$$(grep "ERC20 Address:" /tmp/aa-erc20-init.log | awk '{print $$NF}'); \
+		if [ -z "$$CONTRACT_ADDR" ]; then echo "failed to parse ERC20 contract address"; exit 1; fi; \
+		if [ "$(SIG)" = "p256" ]; then \
+			adventure aa-init -f $(CONFIG_FILE) --sig $(SIG); \
+		fi; \
+		adventure aa-bench -f $(CONFIG_FILE) --sig $(SIG) --tx $(TX) --contract $$CONTRACT_ADDR --noncekey $(NONCEKEY) --payer $(PAYER) --gaslimit $(GASLIMIT); \
+	else \
+		adventure native-init $(INIT_AMOUNT) -f $(CONFIG_FILE); \
+		sleep 10; \
+		if [ "$(SIG)" = "p256" ]; then \
+			adventure aa-init -f $(CONFIG_FILE) --sig $(SIG); \
+		fi; \
+		adventure aa-bench -f $(CONFIG_FILE) --sig $(SIG) --tx $(TX) --noncekey $(NONCEKEY) --payer $(PAYER) --gaslimit $(GASLIMIT); \
+	fi
