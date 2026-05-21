@@ -27,8 +27,8 @@ l2ContractsLocator = "file:///app/packages/contracts-bedrock/forge-artifacts"
       faultGameClockExtension = 5
       faultGameMaxClockDuration = 40
       l2GenesisJovianTimeOffset = "0x0"      # Jovian fork activation
-      l2GenesisKarstTimeOffset = "0x0"       # Karst fork activation
-      l2GenesisXLayerV1TimeOffset = "0x0"       # XLayerV1 fork activation
+      l2GenesisKarstTimeOffset = "0x2"       # Karst fork activation (set to 0x2 to activate xlayerv1)
+      l2GenesisXLayerV1TimeOffset = "0x0"    # XLayerV1 fork activation (it's stale now cause op-deployer doesn't know about this config)
   [chains.roles]
     l1ProxyAdminOwner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
     l2ProxyAdminOwner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
