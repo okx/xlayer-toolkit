@@ -79,14 +79,14 @@ aa: build
 		sleep 10; \
 		CONTRACT_ADDR=$$(grep "ERC20 Address:" /tmp/aa-erc20-init.log | awk '{print $$NF}'); \
 		if [ -z "$$CONTRACT_ADDR" ]; then echo "failed to parse ERC20 contract address"; exit 1; fi; \
-		if [ "$(SIG)" = "p256" ]; then \
+		if [ "$(SIG)" != "secp" ]; then \
 			adventure aa-init -f $(CONFIG_FILE) --sig $(SIG); \
 		fi; \
 		adventure aa-bench -f $(CONFIG_FILE) --sig $(SIG) --tx $(TX) --contract $$CONTRACT_ADDR --noncekey $(NONCEKEY) --payer $(PAYER) --gaslimit $(GASLIMIT); \
 	else \
 		adventure native-init $(INIT_AMOUNT) -f $(CONFIG_FILE); \
 		sleep 10; \
-		if [ "$(SIG)" = "p256" ]; then \
+		if [ "$(SIG)" != "secp" ]; then \
 			adventure aa-init -f $(CONFIG_FILE) --sig $(SIG); \
 		fi; \
 		adventure aa-bench -f $(CONFIG_FILE) --sig $(SIG) --tx $(TX) --noncekey $(NONCEKEY) --payer $(PAYER) --gaslimit $(GASLIMIT); \

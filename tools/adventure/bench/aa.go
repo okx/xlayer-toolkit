@@ -5,6 +5,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	cryptorand "crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -29,8 +31,9 @@ const (
 	aaTxType    byte = 0x7b
 	aaPayerType byte = 0x7c
 
-	aaSigSecp = "secp"
-	aaSigP256 = "p256"
+	aaSigSecp        = "secp"
+	aaSigP256        = "p256"
+	aaSigP256WebAuth = "p256_webauthn"
 
 	aaTxNative = "native"
 	aaTxERC20  = "erc20"
@@ -54,14 +57,15 @@ const (
 )
 
 var (
-	aaK1Verifier       = ethcmn.HexToAddress("0x0000000000000000000000000000000000000001")
-	aaP256RawVerifier  = ethcmn.HexToAddress("0x75E9779603e826f2D8d4dD7Edee3F0a737e4228d")
-	aaAccountConfig    = ethcmn.HexToAddress("0xf946601D5424118A4e4054BB0B13133f216b4FeE")
-	aaStorageSlotZero  = make([]byte, 32)
-	aaStorageSlotOne   = uint256Bytes(big.NewInt(1))
-	aaConfigTypehash   = crypto.Keccak256([]byte("SignedOwnerChanges(address account,uint64 chainId,uint64 sequence,OwnerChange[] ownerChanges)OwnerChange(uint8 changeType,address verifier,bytes32 ownerId,uint8 scope)"))
-	aaP256HalfOrder, _ = new(big.Int).SetString("7FFFFFFF800000007FFFFFFFFFFFFFFFDE737D56D38BCF4279DCE5617E3192A8", 16)
-	aaU256Max          = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
+	aaK1Verifier          = ethcmn.HexToAddress("0x0000000000000000000000000000000000000001")
+	aaP256RawVerifier     = ethcmn.HexToAddress("0x75E9779603e826f2D8d4dD7Edee3F0a737e4228d")
+	aaP256WebAuthVerifier = ethcmn.HexToAddress("0xb2c8b7ec119882fBcc32FDe1be1341e19a5Bd53E")
+	aaAccountConfig       = ethcmn.HexToAddress("0xf946601D5424118A4e4054BB0B13133f216b4FeE")
+	aaStorageSlotZero     = make([]byte, 32)
+	aaStorageSlotOne      = uint256Bytes(big.NewInt(1))
+	aaConfigTypehash      = crypto.Keccak256([]byte("SignedOwnerChanges(address account,uint64 chainId,uint64 sequence,OwnerChange[] ownerChanges)OwnerChange(uint8 changeType,address verifier,bytes32 ownerId,uint8 scope)"))
+	aaP256HalfOrder, _    = new(big.Int).SetString("7FFFFFFF800000007FFFFFFFFFFFFFFFDE737D56D38BCF4279DCE5617E3192A8", 16)
+	aaU256Max             = new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(1))
 )
 
 type aaNonceLane struct {
@@ -129,14 +133,15 @@ type aaP256Key struct {
 
 // AAInit prepares accounts for AA benchmark modes that need on-chain owner config.
 func AAInit(configPath, sigMode string) error {
-	sigMode = strings.ToLower(sigMode)
+	sigMode = normalizeAASigMode(sigMode)
 	if sigMode == "" || sigMode == aaSigSecp {
 		log.Printf("AA init: secp uses implicit EOA owners; nothing to initialize")
 		return nil
 	}
-	if sigMode != aaSigP256 {
+	if !aaSigModeUsesP256(sigMode) {
 		return fmt.Errorf("unsupported AA signature mode %q", sigMode)
 	}
+	verifier := aaP256VerifierForSig(sigMode)
 
 	if err := loadConfig(configPath); err != nil {
 		return err
@@ -176,7 +181,7 @@ func AAInit(configPath, sigMode string) error {
 	}
 	initNonceKey := big.NewInt(0)
 
-	log.Printf("AA init: registering P256Raw owners for %d accounts", len(accounts))
+	log.Printf("AA init: registering %s owners for %d accounts", sigMode, len(accounts))
 	totalBuilt := 0
 	totalSent := 0
 	submittedAccounts := make([]*aaBenchAccount, 0, len(accounts))
@@ -190,7 +195,7 @@ func AAInit(configPath, sigMode string) error {
 		batchAccounts := make([]*aaBenchAccount, 0, end-start)
 
 		for _, acc := range accounts[start:end] {
-			configured, err := aaP256OwnerConfigured(cli, acc)
+			configured, err := aaP256OwnerConfigured(cli, acc, verifier)
 			if err != nil {
 				log.Printf("AA init: owner config check failed for %s: %v", acc.address, err)
 				continue
@@ -210,7 +215,7 @@ func AAInit(configPath, sigMode string) error {
 				continue
 			}
 
-			raw, err := buildAAP256ConfigRawTx(acc, chainID.Uint64(), initNonceKey, seq, localSeq, maxFee)
+			raw, err := buildAAP256ConfigRawTx(acc, chainID.Uint64(), initNonceKey, seq, localSeq, maxFee, verifier)
 			if err != nil {
 				log.Printf("AA init: build config tx failed for %s: %v", acc.address, err)
 				continue
@@ -240,7 +245,7 @@ func AAInit(configPath, sigMode string) error {
 			success++
 		}
 		totalSent += success
-		log.Printf("AA init batch [%d:%d] sent %d/%d P256 owner config txs", start, end, success, len(rawTxs))
+		log.Printf("AA init batch [%d:%d] sent %d/%d %s owner config txs", start, end, success, len(rawTxs), sigMode)
 		time.Sleep(200 * time.Millisecond)
 	}
 
@@ -249,17 +254,17 @@ func AAInit(configPath, sigMode string) error {
 	}
 	if totalSent > 0 {
 		log.Printf("AA init: waiting for %d P256 owner config transactions to be mined", totalSent)
-		if err := waitAAP256OwnerConfigs(clients[0], submittedAccounts, 2*time.Minute); err != nil {
+		if err := waitAAP256OwnerConfigs(clients[0], submittedAccounts, verifier, 2*time.Minute); err != nil {
 			return err
 		}
 	}
-	log.Printf("AA init: confirmed %d/%d P256 owner config transactions before p256 bench", totalSent, totalBuilt)
+	log.Printf("AA init: confirmed %d/%d %s owner config transactions before bench", totalSent, totalBuilt, sigMode)
 	return nil
 }
 
 // AABench runs an EIP-8130 benchmark with one call per AA transaction.
 func AABench(configPath, sigMode, txKind, contractAddr, nonceKeyArg, payerMode string, gasLimit uint64) error {
-	sigMode = strings.ToLower(strings.TrimSpace(sigMode))
+	sigMode = normalizeAASigMode(sigMode)
 	txKind = strings.ToLower(strings.TrimSpace(txKind))
 	payerMode = strings.ToLower(strings.TrimSpace(payerMode))
 	if sigMode == "" {
@@ -275,7 +280,7 @@ func AABench(configPath, sigMode, txKind, contractAddr, nonceKeyArg, payerMode s
 	if err != nil {
 		return err
 	}
-	if sigMode != aaSigSecp && sigMode != aaSigP256 {
+	if sigMode != aaSigSecp && !aaSigModeUsesP256(sigMode) {
 		return fmt.Errorf("unsupported AA signature mode %q", sigMode)
 	}
 	if txKind != aaTxNative && txKind != aaTxERC20 {
@@ -494,12 +499,37 @@ func executeAABatch(
 	}
 }
 
+func normalizeAASigMode(sigMode string) string {
+	mode := strings.ToLower(strings.TrimSpace(sigMode))
+	switch strings.ReplaceAll(mode, "-", "_") {
+	case "", aaSigSecp:
+		return aaSigSecp
+	case aaSigP256, "p256_raw", "p256raw":
+		return aaSigP256
+	case aaSigP256WebAuth, "p256webauthn", "webauthn", "p256_web_authn", "p256_web_auth":
+		return aaSigP256WebAuth
+	default:
+		return mode
+	}
+}
+
+func aaSigModeUsesP256(sigMode string) bool {
+	return sigMode == aaSigP256 || sigMode == aaSigP256WebAuth
+}
+
+func aaP256VerifierForSig(sigMode string) ethcmn.Address {
+	if sigMode == aaSigP256WebAuth {
+		return aaP256WebAuthVerifier
+	}
+	return aaP256RawVerifier
+}
+
 func defaultAAGasLimit(sigMode, txKind, payerMode string) uint64 {
 	limit := aaDefaultGasLimit
 	if txKind == aaTxERC20 {
 		limit += aaERC20GasLimitExtra
 	}
-	if sigMode == aaSigP256 {
+	if aaSigModeUsesP256(sigMode) {
 		limit += aaP256GasLimitExtra
 	}
 	if payerMode == aaPayerRandom {
@@ -647,7 +677,12 @@ func generateAANativeRecipients(count int) []ethcmn.Address {
 func buildAACall(txKind string, erc20 ethcmn.Address, erc20ABI abi.ABI, toAddrs []ethcmn.Address) (aaCallEntry, error) {
 	to := toAddrs[mathrand.Intn(len(toAddrs))]
 	if txKind == aaTxNative {
-		return aaCallEntry{To: to.Bytes(), Data: nil}, nil
+		// 8 random bytes of calldata so that identical (sender, recipient,
+		// expiry) tuples in nonce-free mode still produce unique tx hashes;
+		// recipients are EOAs so the bytes are ignored by the EVM.
+		data := make([]byte, 8)
+		binary.BigEndian.PutUint64(data, mathrand.Uint64())
+		return aaCallEntry{To: to.Bytes(), Data: data}, nil
 	}
 	data, err := erc20ABI.Pack("transfer", to, big.NewInt(1))
 	if err != nil {
@@ -843,7 +878,7 @@ func buildAABenchmarkRawTx(acc, payer *aaBenchAccount, chainID uint64, nonceKey 
 		payerAddr := payer.address
 		tx.Payer = &payerAddr
 	}
-	if sigMode == aaSigP256 {
+	if aaSigModeUsesP256(sigMode) {
 		sender := acc.address
 		tx.Sender = &sender
 	}
@@ -854,6 +889,8 @@ func buildAABenchmarkRawTx(acc, payer *aaBenchAccount, chainID uint64, nonceKey 
 	}
 	if sigMode == aaSigP256 {
 		tx.SenderAuth, err = signP256Explicit(acc.p256, senderHash)
+	} else if sigMode == aaSigP256WebAuth {
+		tx.SenderAuth, err = signP256WebAuthnExplicit(acc.p256, senderHash)
 	} else {
 		tx.SenderAuth, err = signK1Bare(acc.privateKey, senderHash)
 	}
@@ -875,10 +912,10 @@ func buildAABenchmarkRawTx(acc, payer *aaBenchAccount, chainID uint64, nonceKey 
 	return tx.encodeRaw()
 }
 
-func buildAAP256ConfigRawTx(acc *aaBenchAccount, chainID uint64, nonceKey *big.Int, aaSeq, localSeq uint64, maxFee *big.Int) ([]byte, error) {
+func buildAAP256ConfigRawTx(acc *aaBenchAccount, chainID uint64, nonceKey *big.Int, aaSeq, localSeq uint64, maxFee *big.Int, verifier ethcmn.Address) ([]byte, error) {
 	ownerChange := aaOwnerChangeRLP{
 		ChangeType: aaOwnerAuthorizeType,
-		Verifier:   aaP256RawVerifier.Bytes(),
+		Verifier:   verifier.Bytes(),
 		OwnerID:    acc.p256.ownerID,
 		Scope:      aaOwnerScopeSenderPayer,
 	}
@@ -1040,6 +1077,40 @@ func signP256Explicit(key *aaP256Key, hash []byte) ([]byte, error) {
 	return auth, nil
 }
 
+func signP256WebAuthnExplicit(key *aaP256Key, hash []byte) ([]byte, error) {
+	if key == nil || key.privateKey == nil {
+		return nil, errors.New("missing P256 key")
+	}
+	authData := make([]byte, 37)
+	authData[32] = 0x01 // user-present flag; verifier does not pin rpIdHash.
+	challenge := base64.RawURLEncoding.EncodeToString(hash)
+	clientDataJSON := []byte(fmt.Sprintf(`{"type":"webauthn.get","challenge":"%s","origin":"https://xlayer.local"}`, challenge))
+	clientHash := sha256.Sum256(clientDataJSON)
+	signedMessageInput := make([]byte, 0, len(authData)+len(clientHash))
+	signedMessageInput = append(signedMessageInput, authData...)
+	signedMessageInput = append(signedMessageInput, clientHash[:]...)
+	signedMessage := sha256.Sum256(signedMessageInput)
+
+	r, s, err := ecdsa.Sign(cryptorand.Reader, key.privateKey, signedMessage[:])
+	if err != nil {
+		return nil, err
+	}
+	if s.Cmp(aaP256HalfOrder) > 0 {
+		s = new(big.Int).Sub(key.privateKey.Curve.Params().N, s)
+	}
+	auth := make([]byte, 0, 20+64+37+4+len(clientDataJSON)+64)
+	auth = append(auth, aaP256WebAuthVerifier.Bytes()...)
+	auth = append(auth, key.publicKey...)
+	auth = append(auth, authData...)
+	var lenBuf [4]byte
+	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(clientDataJSON)))
+	auth = append(auth, lenBuf[:]...)
+	auth = append(auth, clientDataJSON...)
+	auth = append(auth, leftPadBig(r, 32)...)
+	auth = append(auth, leftPadBig(s, 32)...)
+	return auth, nil
+}
+
 func newAAClients(rpcs []string) ([]*utils.EthClient, error) {
 	clients := make([]*utils.EthClient, 0, len(rpcs))
 	for _, rpcURL := range rpcs {
@@ -1119,7 +1190,7 @@ func aaConfigChangeDigest(account ethcmn.Address, chainID, sequence uint64, owne
 	return crypto.Keccak256(buf)
 }
 
-func waitAAP256OwnerConfigs(cli *utils.EthClient, accounts []*aaBenchAccount, timeout time.Duration) error {
+func waitAAP256OwnerConfigs(cli *utils.EthClient, accounts []*aaBenchAccount, verifier ethcmn.Address, timeout time.Duration) error {
 	if len(accounts) == 0 {
 		return nil
 	}
@@ -1130,7 +1201,7 @@ func waitAAP256OwnerConfigs(cli *utils.EthClient, accounts []*aaBenchAccount, ti
 	for {
 		remaining := pending[:0]
 		for _, acc := range pending {
-			configured, err := aaP256OwnerConfigured(cli, acc)
+			configured, err := aaP256OwnerConfigured(cli, acc, verifier)
 			if err != nil {
 				lastErr = err
 				remaining = append(remaining, acc)
@@ -1162,16 +1233,16 @@ func aaAccountConfigDeployed(cli *utils.EthClient) (bool, error) {
 	return len(code) > 0, nil
 }
 
-func aaP256OwnerConfigured(cli *utils.EthClient, acc *aaBenchAccount) (bool, error) {
+func aaP256OwnerConfigured(cli *utils.EthClient, acc *aaBenchAccount, verifier ethcmn.Address) (bool, error) {
 	slot := aaOwnerConfigSlot(acc.address, acc.p256.ownerID)
 	word, err := cli.StorageAt(context.Background(), aaAccountConfig, slot, nil)
 	if err != nil {
 		return false, err
 	}
 	padded := leftPadBytes(word, 32)
-	verifier := ethcmn.BytesToAddress(padded[12:32])
+	onChainVerifier := ethcmn.BytesToAddress(padded[12:32])
 	scope := padded[11]
-	return verifier == aaP256RawVerifier && (scope == 0 || scope&aaOwnerScopeSender != 0), nil
+	return onChainVerifier == verifier && (scope == 0 || scope&aaOwnerScopeSender != 0), nil
 }
 
 func aaLocalConfigSequence(cli *utils.EthClient, account ethcmn.Address) (uint64, error) {

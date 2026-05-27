@@ -69,7 +69,7 @@ func aaInitCmd() *cobra.Command {
 
 For secp this is a no-op because XLayerAA accepts implicit EOA owners.
 For p256 this submits owner-config transactions that authorize each account's
-locally derived P256Raw owner.
+locally derived P256 owner for raw or WebAuthn verifier modes.
 
 Example:
   adventure aa-init -f ./testdata/config.json --sig p256`,
@@ -86,7 +86,7 @@ Example:
 	}
 
 	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
-	cmd.Flags().StringVar(&aaSigMode, FlagSig, "secp", "AA sender signature mode: secp or p256")
+	cmd.Flags().StringVar(&aaSigMode, FlagSig, "secp", "AA sender signature mode: secp, p256, or p256_webauthn")
 	return cmd
 }
 
@@ -104,6 +104,7 @@ Example:
   adventure aa-bench -f ./testdata/config.json --sig secp --tx native --noncekey 0 --payer sender
   adventure aa-bench -f ./testdata/config.json --sig secp --tx native --noncekey 1,4 --payer random
   adventure aa-bench -f ./testdata/config.json --sig p256 --tx erc20 --contract 0x1234... --noncekey max
+  adventure aa-bench -f ./testdata/config.json --sig p256_webauthn --tx native --payer sender
   adventure aa-bench -f ./testdata/config.json --sig secp --tx native --payer sender --gaslimit 55000`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if configPath == "" {
@@ -118,7 +119,7 @@ Example:
 	}
 
 	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
-	cmd.Flags().StringVar(&aaSigMode, FlagSig, "secp", "AA sender signature mode: secp or p256")
+	cmd.Flags().StringVar(&aaSigMode, FlagSig, "secp", "AA sender signature mode: secp, p256, or p256_webauthn")
 	cmd.Flags().StringVar(&aaTxKind, FlagTx, "native", "AA call payload: native or erc20")
 	cmd.Flags().StringVar(&contractAddr, FlagContract, "", "ERC20 contract address for --tx erc20")
 	cmd.Flags().Uint64Var(&aaGasLimit, FlagGasLimit, 0, "AA transaction gas limit; 0 selects a mode-specific default")
