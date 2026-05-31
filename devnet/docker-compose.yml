@@ -291,6 +291,7 @@ services:
       - "8124:8545"
       - "7547:7546"
       - "11113:1111" # outbound flashblocks ws port
+      - "9002:9001"  # rpc metrics port
       - "30304:30303"
       - "30304:30303/udp"
 

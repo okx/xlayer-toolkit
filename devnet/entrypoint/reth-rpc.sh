@@ -65,6 +65,8 @@ CMD="op-reth node \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
       --rpc.eth-proof-window=10000 \
+      --engine.slow-block-threshold=${RETH_SLOW_BLOCK_THRESHOLD:-0} \
+      --metrics=0.0.0.0:9001 \
       --rpc.legacy-url=http://l1-geth:8545"
 
 # For flashblocks architecture. Enable flashblocks RPC
