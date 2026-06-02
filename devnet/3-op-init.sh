@@ -32,6 +32,14 @@ sed_inplace 's/"eip1559Elasticity": [0-9]*/"eip1559Elasticity": '"$(jq -r '.conf
 sed_inplace 's/"eip1559Denominator": [0-9]*/"eip1559Denominator": '"$(jq -r '.config.optimism.eip1559Denominator' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"$(jq -r '.config.optimism.eip1559DenominatorCanyon' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 
+# 🔧 Pre-deploy the XLayer GaslessWhitelist contract into the L2 genesis at the
+# fixed devnet address op-reth expects (0x...9999). Must run after genesis.json
+# is generated but before genesis-reth.json is derived and before op-geth/op-reth
+# init, so the predeploy is reflected in the recomputed genesis hash.
+if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
+    ./scripts/inject-gasless-predeploy.sh
+fi
+
 if [ "$MERGE_RETH_GENESIS" = "true" ]; then
     echo "🔧 Merging genesis files..."
 
@@ -151,25 +159,28 @@ echo ""
 echo "🔧 Setting up System Config Parameters..."
 "$PWD_DIR/scripts/setup-system-config-params.sh"
 
-# init geth sequencer
-echo " 🔧 Initializing geth sequencer..."
-OP_GETH_DATADIR="$(pwd)/data/op-geth-seq"
-rm -rf "$OP_GETH_DATADIR"
-mkdir -p "$OP_GETH_DATADIR"
+# init geth sequencer (only when the sequencer is geth; skipped for a reth devnet
+# so it doesn't require the op-geth image)
+if [ "$SEQ_TYPE" = "geth" ]; then
+  echo " 🔧 Initializing geth sequencer..."
+  OP_GETH_DATADIR="$(pwd)/data/op-geth-seq"
+  rm -rf "$OP_GETH_DATADIR"
+  mkdir -p "$OP_GETH_DATADIR"
 
-docker compose run --no-deps --rm \
-  -v "$(pwd)/$CONFIG_DIR/genesis.json:/genesis.json" \
-  op-geth-seq \
-  --datadir "/datadir" \
-  --gcmode=archive \
-  --db.engine=$DB_ENGINE \
-  init \
-  --state.scheme=hash \
-  /genesis.json
+  docker compose run --no-deps --rm \
+    -v "$(pwd)/$CONFIG_DIR/genesis.json:/genesis.json" \
+    op-geth-seq \
+    --datadir "/datadir" \
+    --gcmode=archive \
+    --db.engine=$DB_ENGINE \
+    init \
+    --state.scheme=hash \
+    /genesis.json
 
-# Remove nodekey to ensure other nodes generates a unique node ID
-echo " 🔑 Removing nodekey to generate unique node ID for other nodes..."
-rm -f "$OP_GETH_DATADIR/geth/nodekey"
+  # Remove nodekey to ensure other nodes generates a unique node ID
+  echo " 🔑 Removing nodekey to generate unique node ID for other nodes..."
+  rm -f "$OP_GETH_DATADIR/geth/nodekey"
+fi
 
 # Get trusted peers enode url
 sed_inplace "s|TRUSTED_PEERS=.*|TRUSTED_PEERS=$(./scripts/trusted-peers.sh)|" .env
@@ -233,12 +244,15 @@ if [ "${USE_CHAINSPEC:-false}" = "true" ]; then
     fi
 fi
 
-# Copy initialized database from op-geth-seq to other nodes
-OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
+# Copy initialized database from op-geth-seq to other nodes (geth sequencer only;
+# for a reth devnet the geth datadir does not exist, so skip it)
+if [ "$SEQ_TYPE" = "geth" ]; then
+  OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
 
-echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
-rm -rf "$OP_GETH_RPC_DATADIR"
-cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
+  echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
+  rm -rf "$OP_GETH_RPC_DATADIR"
+  cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
+fi
 
 if [ "$LAUNCH_RPC_NODE2" = "true" ] && [ "$RPC_TYPE" = "geth" ]; then
     OP_GETH_RPC2_DATADIR="$(pwd)/data/op-geth-rpc2"

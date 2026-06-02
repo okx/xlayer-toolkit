@@ -65,6 +65,11 @@ CMD="op-reth node \
       --metrics=0.0.0.0:9001 \
       --xlayer.sequencer-mode"
 
+# Enable XLayer gasless (zero gas price) transactions in the mempool
+if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
+    CMD="$CMD --rollup.enable-gasless"
+fi
+
 # For flashblocks architecture
 if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
     CMD="$CMD \

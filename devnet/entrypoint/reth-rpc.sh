@@ -67,6 +67,11 @@ CMD="op-reth node \
       --rpc.eth-proof-window=10000 \
       --rpc.legacy-url=http://l1-geth:8545"
 
+# Enable XLayer gasless (zero gas price) transactions in the mempool
+if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
+    CMD="$CMD --rollup.enable-gasless"
+fi
+
 # For flashblocks architecture. Enable flashblocks RPC
 if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
     CMD="$CMD \
