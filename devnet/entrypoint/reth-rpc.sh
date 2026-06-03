@@ -26,8 +26,13 @@ if [ "${RETH_STORAGE_V2:-false}" = "true" ]; then
     if [ -n "${RETH_ROCKSDB_PATH:-}" ]; then
         RETH_INIT_STORAGE_FLAGS="$RETH_INIT_STORAGE_FLAGS --datadir.rocksdb=$RETH_ROCKSDB_PATH"
     fi
-else 
-    RETH_INIT_STORAGE_FLAGS="--storage.v2=false"
+else
+    # Opt out of storage v2 only if this op-reth build exposes the flag. The
+    # xlayer gasless reth build has no --storage.v2 and would abort with
+    # "unexpected argument '--storage.v2'".
+    if op-reth node --help 2>/dev/null | grep -q -- '--storage.v2'; then
+        RETH_INIT_STORAGE_FLAGS="--storage.v2=false"
+    fi
 fi
 
 # Build the command with common arguments.
@@ -69,15 +74,23 @@ CMD="op-reth node \
 
 # Enable XLayer gasless (zero gas price) transactions in the mempool
 if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
-    CMD="$CMD --rollup.enable-gasless"
+    CMD="$CMD --rollup.allow-gasless"
 fi
 
 # For flashblocks architecture. Enable flashblocks RPC
 if [ "$FLASHBLOCK_ENABLED" = "true" ] && [ "$FLASHBLOCKS_RPC" = "true" ]; then
+    # The flashblocks subscription URL flag was renamed across op-reth versions:
+    # older builds expose --flashblocks-url, newer xlayer-reth uses
+    # --xlayer.flashblocks-url. Pick whichever this binary actually supports.
+    if op-reth node --help 2>/dev/null | grep -q -- '--xlayer.flashblocks-url'; then
+        FB_URL_FLAG="--xlayer.flashblocks-url"
+    else
+        FB_URL_FLAG="--flashblocks-url"
+    fi
     CMD="$CMD \
         --flashblocks.addr=0.0.0.0 \
         --flashblocks.port=1111 \
-        --xlayer.flashblocks-url=ws://op-reth-seq:1111 \
+        $FB_URL_FLAG=ws://op-reth-seq:1111 \
         --xlayer.flashblocks-subscription"
 
     # Enable flashblocks state comparison debug mode

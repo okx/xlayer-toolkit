@@ -5,7 +5,7 @@
 #
 # op-reth (chain id 195 / devnet) evaluates gasless eligibility by issuing view
 # system-calls to XLAYER_DEVNET_GASLESS_CONTRACT =
-#   0x0000000000000000000000000000000000009999
+#   0x4200000000000000000000000000000000000700
 # so the contract code MUST already exist at that exact address at genesis.
 #
 # GaslessWhitelist storage layout (both vars pack into slot 0):
@@ -18,9 +18,13 @@ set -e
 source .env
 
 GENESIS="./config-op/genesis.json"
-GASLESS_ADDR_NO0X="0000000000000000000000000000000000009999"
+GASLESS_ADDR_NO0X="4200000000000000000000000000000000000700"
 GASLESS_OWNER="${GASLESS_WHITELIST_OWNER:-0x14dC79964da2C08b23698B3D3cc7Ca32193d9955}"
-ARTIFACT="$OP_RETH_LOCAL_DIRECTORY/deps/optimism/packages/contracts-xlayer/GaslessWhitelist/out/GaslessWhitelist.sol/GaslessWhitelist.json"
+
+# The optimism monorepo that ships the GaslessWhitelist contract is always at
+# OP_STACK_LOCAL_DIRECTORY (whether it's a standalone checkout or vendored under
+# op-reth/deps/optimism), so derive the artifact path straight from it.
+ARTIFACT="$OP_STACK_LOCAL_DIRECTORY/packages/contracts-xlayer/GaslessWhitelist/out/GaslessWhitelist.sol/GaslessWhitelist.json"
 
 if [ ! -f "$GENESIS" ]; then
     echo " ❌ $GENESIS not found (run after op-deployer generates genesis.json)"
@@ -50,9 +54,18 @@ if [ -z "$CODE" ] || [ "$CODE" = "null" ]; then
     exit 1
 fi
 
-# slot 0 = owner left-padded to 32 bytes (isGaslessEnabled = false initially)
-OWNER_NO0X=$(echo "${GASLESS_OWNER#0x}" | tr 'A-F' 'a-f')
-SLOT0="0x000000000000000000000000${OWNER_NO0X}"
+# slot 0 = owner left-padded to 32 bytes (isGaslessEnabled = false initially).
+# Normalize first: strip 0x, drop any non-hex chars (guards against a stray CR /
+# trailing whitespace when .env was saved with CRLF), and lowercase. A storage
+# value MUST be exactly 32 bytes (64 hex chars) or op-reth rejects the genesis
+# with a "wrong length" error and init produces no block hash.
+OWNER_NO0X=$(echo "${GASLESS_OWNER#0x}" | tr -cd '0-9A-Fa-f' | tr 'A-F' 'a-f')
+if [ "${#OWNER_NO0X}" -ne 40 ]; then
+    echo " ❌ GASLESS_WHITELIST_OWNER has wrong length: expected a 20-byte (40 hex char) address, got ${#OWNER_NO0X} hex chars from '${GASLESS_OWNER}'"
+    exit 1
+fi
+# Left-pad the 40-char address to a full 64-char (32-byte) slot value.
+SLOT0=$(printf "0x%064s" "$OWNER_NO0X" | tr ' ' '0')
 SLOT_KEY="0x0000000000000000000000000000000000000000000000000000000000000000"
 
 echo "🔧 Pre-deploying GaslessWhitelist at 0x${GASLESS_ADDR_NO0X} (owner=${GASLESS_OWNER}) ..."

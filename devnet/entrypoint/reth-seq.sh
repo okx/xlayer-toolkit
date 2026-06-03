@@ -23,8 +23,13 @@ if [ "${RETH_STORAGE_V2:-false}" = "true" ]; then
     if [ -n "${RETH_ROCKSDB_PATH:-}" ]; then
         RETH_INIT_STORAGE_FLAGS="$RETH_INIT_STORAGE_FLAGS --datadir.rocksdb=$RETH_ROCKSDB_PATH"
     fi
-else 
-    RETH_INIT_STORAGE_FLAGS="--storage.v2=false"
+else
+    # Opt out of storage v2 only if this op-reth build exposes the flag. The
+    # xlayer gasless reth build has no --storage.v2 and would abort with
+    # "unexpected argument '--storage.v2'".
+    if op-reth node --help 2>/dev/null | grep -q -- '--storage.v2'; then
+        RETH_INIT_STORAGE_FLAGS="--storage.v2=false"
+    fi
 fi
 
 CMD="op-reth node \
@@ -67,7 +72,7 @@ CMD="op-reth node \
 
 # Enable XLayer gasless (zero gas price) transactions in the mempool
 if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
-    CMD="$CMD --rollup.enable-gasless"
+    CMD="$CMD --rollup.allow-gasless"
 fi
 
 # For flashblocks architecture

@@ -19,7 +19,7 @@ fi
 export PATH="$HOME/.foundry/bin:$PATH"
 
 # XLAYER_DEVNET_GASLESS_CONTRACT (chain id 195) — see deps/optimism .../xlayer_gasless_contract.rs
-GASLESS_ADDR="0x0000000000000000000000000000000000009999"
+GASLESS_ADDR="0x4200000000000000000000000000000000000700"
 RPC="${L2_RPC_URL:-http://localhost:8123}"
 OWNER_KEY="${RICH_L1_PRIVATE_KEY:?RICH_L1_PRIVATE_KEY (gasless owner) must be set in .env}"
 

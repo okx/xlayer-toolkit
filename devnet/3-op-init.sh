@@ -33,7 +33,7 @@ sed_inplace 's/"eip1559Denominator": [0-9]*/"eip1559Denominator": '"$(jq -r '.co
 sed_inplace 's/"eip1559DenominatorCanyon": [0-9]*/"eip1559DenominatorCanyon": '"$(jq -r '.config.optimism.eip1559DenominatorCanyon' ./config-op/genesis.json)"'/' ./config-op/rollup.json
 
 # 🔧 Pre-deploy the XLayer GaslessWhitelist contract into the L2 genesis at the
-# fixed devnet address op-reth expects (0x...9999). Must run after genesis.json
+# fixed devnet address op-reth expects (0x4200...0700). Must run after genesis.json
 # is generated but before genesis-reth.json is derived and before op-geth/op-reth
 # init, so the predeploy is reflected in the recomputed genesis hash.
 if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
@@ -201,11 +201,21 @@ if [ "${RETH_STORAGE_V2:-false}" = "true" ]; then
     if [ -n "${RETH_ROCKSDB_PATH:-}" ]; then
         RETH_INIT_STORAGE_FLAGS="$RETH_INIT_STORAGE_FLAGS --datadir.rocksdb=$RETH_ROCKSDB_PATH"
     fi
-else 
-    RETH_INIT_STORAGE_FLAGS="--storage.v2=false"
+else
+    # Opt out of storage v2 — but only if this op-reth build actually exposes the
+    # flag. Newer upstream reth (>= v1.11.0) defaults to storage v2 and needs the
+    # explicit opt-out; the xlayer gasless reth build has no --storage.v2 flag and
+    # would abort init with "unexpected argument '--storage.v2'".
+    if docker run --rm --entrypoint op-reth "$OP_RETH_IMAGE_TAG" init --help 2>/dev/null | grep -q -- '--storage.v2'; then
+        RETH_INIT_STORAGE_FLAGS="--storage.v2=false"
+    else
+        echo " ℹ️ op-reth build has no --storage.v2 flag; skipping it"
+    fi
 fi
 
-INIT_LOG=$(docker compose run --no-deps --rm \
+# Capture stdout+stderr so a failed init leaves a diagnosable init.log instead of
+# an empty one. PIPESTATUS[0] is op-reth's exit code (tee always succeeds).
+docker compose run --no-deps --rm \
   -v "$(pwd)/$CONFIG_DIR/genesis-reth.json:/genesis.json" \
   --entrypoint op-reth \
   op-reth-seq \
@@ -213,9 +223,22 @@ INIT_LOG=$(docker compose run --no-deps --rm \
   --datadir="/datadir" \
   --chain=/genesis.json \
   $RETH_INIT_STORAGE_FLAGS \
-  --log.stdout.format=json | tee init.log)
+  --log.stdout.format=json 2>&1 | tee init.log
+INIT_RC=${PIPESTATUS[0]}
+if [ "$INIT_RC" -ne 0 ]; then
+    echo " ❌ op-reth init failed (exit $INIT_RC). Last log lines:"
+    tail -n 20 init.log
+    exit 1
+fi
 
-NEW_BLOCK_HASH=$(tail -n 1 init.log | jq -r .fields.hash)
+# Pick the genesis hash from the JSON log line that actually carries it, rather
+# than blindly taking the last line (later lines / stderr may not have .fields.hash).
+NEW_BLOCK_HASH=$(grep '"hash"' init.log | tail -n 1 | jq -r '.fields.hash // empty' 2>/dev/null)
+if [ -z "$NEW_BLOCK_HASH" ] || [ "$NEW_BLOCK_HASH" = "null" ]; then
+    echo " ❌ Could not parse genesis hash from op-reth init output (NEW_BLOCK_HASH would be empty). Last log lines:"
+    tail -n 20 init.log
+    exit 1
+fi
 echo "NEW_BLOCK_HASH=$NEW_BLOCK_HASH"
 sed_inplace "s/NEW_BLOCK_HASH=.*/NEW_BLOCK_HASH=$NEW_BLOCK_HASH/" .env
 
