@@ -201,7 +201,6 @@ INIT_LOG=$(docker compose run --no-deps --rm \
   init \
   --datadir="/datadir" \
   --chain=/genesis.json \
-  $RETH_INIT_STORAGE_FLAGS \
   --log.stdout.format=json | tee init.log)
 
 NEW_BLOCK_HASH=$(tail -n 1 init.log | jq -r .fields.hash)

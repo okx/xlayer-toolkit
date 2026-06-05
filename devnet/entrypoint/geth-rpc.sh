@@ -9,4 +9,6 @@ exec geth \
       --config=/config.toml \
       --gcmode=archive \
       --rollup.txpool.trusted-peers-only \
-      --rollup.enabletxpooladmission
+      --rollup.enabletxpooladmission \
+      --txpool.pricelimit=0 \
+      --rollup.allow-gasless=true

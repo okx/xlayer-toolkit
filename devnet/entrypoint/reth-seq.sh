@@ -31,7 +31,6 @@ CMD="op-reth node \
       --datadir=/datadir \
       --chain=$CHAIN \
       --config=/config.toml \
-      $RETH_INIT_STORAGE_FLAGS \
       --http \
       --http.corsdomain=* \
       --http.port=8545 \
@@ -63,6 +62,10 @@ CMD="op-reth node \
       --log.file.directory=/logs/reth \
       --log.file.filter=info \
       --metrics=0.0.0.0:9001 \
+       --rollup.allow-gasless \
+      --txpool.minimum-priority-fee=0 \
+      --txpool.minimal-protocol-fee=0 \
+      --min-suggested-priority-fee=0 \
       --xlayer.sequencer-mode"
 
 # For flashblocks architecture
