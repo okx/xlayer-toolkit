@@ -70,9 +70,10 @@ CMD="op-reth node \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
       --rpc.eth-proof-window=10000 \
+      --rollup.gasless-mock-gas-price-percentile=0.1 \
       --rpc.legacy-url=http://l1-geth:8545"
 
-# Enable XLayer gasless (zero gas price) transactions in the mempool
+# Enable XLayer gasless` flag to forward gasless txs to sequencer node.
 if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
     CMD="$CMD --rollup.allow-gasless"
 fi
