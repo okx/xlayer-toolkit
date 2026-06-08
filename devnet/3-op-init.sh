@@ -267,21 +267,41 @@ if [ "${USE_CHAINSPEC:-false}" = "true" ]; then
     fi
 fi
 
-# Copy initialized database from op-geth-seq to other nodes (geth sequencer only;
-# for a reth devnet the geth datadir does not exist, so skip it)
-if [ "$SEQ_TYPE" = "geth" ]; then
+# Initialize the op-geth-rpc datadir whenever the RPC node is geth.
+# - geth sequencer: copy the already-initialized op-geth-seq datadir.
+# - reth sequencer: op-geth-seq is never initialized, so init op-geth-rpc directly
+#   from genesis.json. Otherwise geth boots an empty datadir and falls back to the
+#   default Ethereum mainnet config (chainId 1) instead of $CHAIN_ID.
+if [ "$RPC_TYPE" = "geth" ]; then
   OP_GETH_RPC_DATADIR="$(pwd)/data/op-geth-rpc"
-
-  echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
   rm -rf "$OP_GETH_RPC_DATADIR"
-  cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
+
+  if [ "$SEQ_TYPE" = "geth" ]; then
+    echo " 🔄 Copying database from op-geth-seq to op-geth-rpc..."
+    cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC_DATADIR"
+  else
+    echo " 🔧 Initializing op-geth-rpc from genesis.json (reth sequencer)..."
+    mkdir -p "$OP_GETH_RPC_DATADIR"
+    # Override the entrypoint: op-geth-rpc's default entrypoint (geth-rpc.sh) starts
+    # a full node and never returns, so we invoke geth directly for `init`. The
+    # nodekey is removed (for a unique node ID, like the geth sequencer init) in the
+    # same root container, because the datadir is written as root and the host user
+    # cannot delete files under it.
+    docker compose run --no-deps --rm \
+      --entrypoint sh \
+      -v "$(pwd)/$CONFIG_DIR/genesis.json:/genesis.json" \
+      op-geth-rpc \
+      -c "geth --datadir=/datadir --gcmode=archive --db.engine=$DB_ENGINE init --state.scheme=hash /genesis.json && rm -f /datadir/geth/nodekey"
+  fi
 fi
 
 if [ "$LAUNCH_RPC_NODE2" = "true" ] && [ "$RPC_TYPE" = "geth" ]; then
     OP_GETH_RPC2_DATADIR="$(pwd)/data/op-geth-rpc2"
-    echo " 🔄 Copying database from op-geth-seq to op-geth-rpc2..."
+    # Source from op-geth-rpc, which is genesis-initialized above for either
+    # sequencer type (op-geth-seq only exists when SEQ_TYPE=geth).
+    echo " 🔄 Copying database from op-geth-rpc to op-geth-rpc2..."
     rm -rf "$OP_GETH_RPC2_DATADIR"
-    cp -r "$OP_GETH_DATADIR" "$OP_GETH_RPC2_DATADIR"
+    cp -r "$OP_GETH_RPC_DATADIR" "$OP_GETH_RPC2_DATADIR"
 fi
 
 if [ "$LAUNCH_RPC_NODE2" = "true" ] && [ "$RPC_TYPE" = "reth" ]; then
