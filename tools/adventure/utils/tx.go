@@ -380,9 +380,10 @@ func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accou
 		}
 
 		// Create transaction
-		// Use gasPrice from txTemplate if set, otherwise fallback to defaultGasPrice
+		// A non-nil gasPrice is honored as-is, including an explicit zero (gasless txs); only a nil
+		// gasPrice falls back to defaultGasPrice.
 		gasPrice := defaultGasPrice
-		if txTemplate.gasPrice != nil && txTemplate.gasPrice.Cmp(big.NewInt(0)) > 0 {
+		if txTemplate.gasPrice != nil {
 			gasPrice = txTemplate.gasPrice
 		}
 		var unsignedTx *types.Transaction

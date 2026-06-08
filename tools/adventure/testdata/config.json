@@ -8,6 +8,7 @@
   "maxBatchSize": 100,
   "gasPriceGwei": 100,
   "saveTxHashes": false,
+  "gaslessOwnerPrivateKey": "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356",
   "simulatorParams": {
     "simulatorConfig": {
       "load_accounts": 12,

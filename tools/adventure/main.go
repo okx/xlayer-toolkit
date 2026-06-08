@@ -35,6 +35,8 @@ func main() {
 	rootCmd.AddCommand(
 		erc20InitCmd(),
 		erc20BenchCmd(),
+		gaslessInitCmd(),
+		gaslessBenchCmd(),
 		nativeInitCmd(),
 		nativeBenchCmd(),
 		simulatorInitCmd(),
@@ -207,6 +209,68 @@ Example:
 
 	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
 	cmd.Flags().StringVar(&contractAddr, FlagContract, "", "ERC20 contract address")
+
+	return cmd
+}
+
+func gaslessInitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gasless-init",
+		Short: "Deploy an ERC20, distribute it, and register its transfer as gasless",
+		Long: `Deploy an ERC20, distribute tokens to the benchmark accounts, and register that ERC20 as a
+gasless transfer token on the whitelist predeploy (enabling gasless globally).
+
+Requires both senderPrivateKey (funded deployer) and gaslessOwnerPrivateKey (the whitelist owner)
+in the config file.
+
+Example:
+  adventure gasless-init -f ./testdata/config.json`,
+		Run: func(cmd *cobra.Command, args []string) {
+			if configPath == "" {
+				fmt.Println("Error: Config file (-f) is required")
+				os.Exit(1)
+			}
+
+			if err := bench.GaslessInit(configPath); err != nil {
+				fmt.Printf("Gasless initialization failed: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
+
+	return cmd
+}
+
+func gaslessBenchCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "gasless-bench",
+		Short: "Run zero-gas-price (gasless) ERC20 transfer benchmark",
+		Long: `Run a gasless (zero-gas-price) ERC20 transfer stress test. The --contract ERC20 must already be
+registered as a gasless transfer token (via gasless-init), or the node rejects the zero-priced txs.
+
+Example:
+  adventure gasless-bench -f ./testdata/config.json --contract 0x1234...`,
+		Run: func(cmd *cobra.Command, args []string) {
+			if configPath == "" {
+				fmt.Println("Error: Config file (-f) is required")
+				os.Exit(1)
+			}
+			if contractAddr == "" {
+				fmt.Println("Error: Contract address (--contract) is required")
+				os.Exit(1)
+			}
+
+			if err := bench.GaslessBench(configPath, contractAddr); err != nil {
+				fmt.Printf("Gasless benchmark failed: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
+	cmd.Flags().StringVar(&contractAddr, FlagContract, "", "ERC20 contract address (registered as gasless)")
 
 	return cmd
 }

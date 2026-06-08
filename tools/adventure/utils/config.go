@@ -5,17 +5,19 @@ var (
 )
 
 type TransferConfig struct {
-	Rpc                   []string        `json:"rpc"`
-	Accounts              int             `json:"accounts"`
-	SenderPrivateKey      string          `json:"senderPrivateKey"`
-	Concurrency           int             `json:"concurrency"`
-	MempoolPauseThreshold int             `json:"mempoolPauseThreshold"`
-	TargetTPS             int             `json:"targetTPS"`    // Target transactions per second, 0 means no limit
-	MaxBatchSize          int             `json:"maxBatchSize"` // Maximum transactions per batch, default 100
-	GasPriceGwei          float64         `json:"gasPriceGwei"`
-	SaveTxHashes          bool            `json:"saveTxHashes"`
-	SimulatorParams       SimulatorParams `json:"simulatorParams"`
-	BenchmarkAccounts     []string        // 20k accounts for stress testing (both senders and receivers)
+	Rpc                    []string        `json:"rpc"`
+	Accounts               int             `json:"accounts"`
+	SenderPrivateKey       string          `json:"senderPrivateKey"`
+	Concurrency            int             `json:"concurrency"`
+	MempoolPauseThreshold  int             `json:"mempoolPauseThreshold"`
+	TargetTPS              int             `json:"targetTPS"`    // Target transactions per second, 0 means no limit
+	MaxBatchSize           int             `json:"maxBatchSize"` // Maximum transactions per batch, default 100
+	GasPriceGwei           float64         `json:"gasPriceGwei"`
+	SaveTxHashes           bool            `json:"saveTxHashes"`
+	SimulatorParams        SimulatorParams `json:"simulatorParams"`
+	GaslessOwnerPrivateKey string          `json:"gaslessOwnerPrivateKey"` // the gasless whitelist owner
+
+	BenchmarkAccounts []string // 20k accounts for stress testing (both senders and receivers)
 }
 
 type SimulatorParams struct {
