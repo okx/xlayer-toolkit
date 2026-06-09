@@ -1,6 +1,7 @@
 package bench
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
@@ -26,12 +27,42 @@ import (
 // are gasless). `gasless-bench` then has the benchmark accounts send zero-gas-price ERC20 transfers
 // to that contract — the gasless path under load.
 
-// GaslessWhitelistAddr is the XLayer gasless whitelist predeploy address (chain id 195 / devnet).
-// Mirrors XLAYER_DEVNET_GASLESS_CONTRACT in alloy-op-evm.
-const GaslessWhitelistAddr = "0x4200000000000000000000000000000000000700"
+// Gasless whitelist predeploy addresses, keyed by chain id.
+//   - 195 (local devnet): the predeploy at 0x4200...0700, mirroring XLAYER_DEVNET_GASLESS_CONTRACT
+//     in alloy-op-evm.
+//   - 1952 / 196 (XLayer testnet / mainnet): the deployed GaslessWhitelist contract.
+const (
+	GaslessWhitelistAddrDevnet = "0x4200000000000000000000000000000000000700" // chain id 195
+	GaslessWhitelistAddrXLayer = "0x19787404b0c70021b4752028f7e3a92313885B27" // chain id 1952 / 196
+)
+
+// GaslessDevnetChainID is the local devnet chain id. Only on this chain does adventure own the
+// whitelist owner key, so registering the deployed ERC20 as a gasless transfer token (and using the
+// hardcoded owner key below) is gated on it. On 1952 / 196 the tokens must already be whitelisted.
+const GaslessDevnetChainID int64 = 195
+
+// GaslessDevnetOwnerPrivateKey is the genesis-seeded gasless whitelist owner on the local devnet
+// (chain id 195). It is a well-known devnet key, not a secret, and is only ever used against 195.
+const GaslessDevnetOwnerPrivateKey = "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356"
+
+// DefaultApproveSpender is the fallback spender for the gasless `approve` scenario when the config
+// leaves approveSpender empty (any address works — approve only records an allowance).
+const DefaultApproveSpender = "0x203B9aD06aeb929427E233587F0020661dd23B11"
+
+// GaslessTransferRecipient is the (arbitrary) recipient for the gasless `transfer` scenario. The
+// whitelist only checks the token address and selector, not the recipient.
+const GaslessTransferRecipient = "0x000000000000000000000000000000000000dEaD"
 
 // GaslessTransferGasLimit is the per-tx gas allowance registered for the ERC20 transfer rule.
 const GaslessTransferGasLimit uint64 = 1000000
+
+// gaslessWhitelistAddr returns the gasless whitelist predeploy address for the given chain id.
+func gaslessWhitelistAddr(chainID int64) string {
+	if chainID == GaslessDevnetChainID {
+		return GaslessWhitelistAddrDevnet
+	}
+	return GaslessWhitelistAddrXLayer
+}
 
 // GaslessBenchTxGasLimit is the gas limit set on each benchmark gasless transfer.
 const GaslessBenchTxGasLimit uint64 = 100000
@@ -40,7 +71,8 @@ const GaslessBenchTxGasLimit uint64 = 100000
 // enable gasless and register an ERC20 as a gasless transfer token.
 const GaslessWhitelistABI = `[
 	{"inputs":[{"internalType":"bool","name":"enabled","type":"bool"}],"name":"setGaslessEnabled","outputs":[],"stateMutability":"nonpayable","type":"function"},
-	{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"bool","name":"allowed","type":"bool"},{"internalType":"uint64","name":"gasLimit","type":"uint64"}],"name":"setGaslessTransferToken","outputs":[],"stateMutability":"nonpayable","type":"function"}
+	{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"bool","name":"allowed","type":"bool"},{"internalType":"uint64","name":"gasLimit","type":"uint64"}],"name":"setGaslessTransferToken","outputs":[],"stateMutability":"nonpayable","type":"function"},
+	{"inputs":[{"internalType":"address","name":"token","type":"address"},{"internalType":"address","name":"spender","type":"address"},{"internalType":"bool","name":"allowed","type":"bool"},{"internalType":"uint64","name":"gasLimit","type":"uint64"}],"name":"setApproveSpender","outputs":[],"stateMutability":"nonpayable","type":"function"}
 ]`
 
 // GaslessInit deploys an ERC20, distributes it to the benchmark accounts, and registers that ERC20
@@ -51,9 +83,6 @@ func GaslessInit(configPath string) error {
 	}
 	if utils.TransferCfg.SenderPrivateKey == "" {
 		return errors.New("senderPrivateKey must be set in config file")
-	}
-	if utils.TransferCfg.GaslessOwnerPrivateKey == "" {
-		return errors.New("gaslessOwnerPrivateKey (the gasless whitelist owner) must be set in config file")
 	}
 
 	rpcURL := utils.TransferCfg.Rpc[0]
@@ -66,10 +95,6 @@ func GaslessInit(configPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse senderPrivateKey: %v", err)
 	}
-	ownerKey, err := crypto.HexToECDSA(strings.TrimPrefix(utils.TransferCfg.GaslessOwnerPrivateKey, "0x"))
-	if err != nil {
-		return fmt.Errorf("failed to parse gaslessOwnerPrivateKey: %v", err)
-	}
 
 	hexAddrs := loadAccountAddresses(accountsFile)
 	if len(hexAddrs) == 0 {
@@ -77,6 +102,10 @@ func GaslessInit(configPath string) error {
 	}
 
 	cli := utils.NewClient(rpcURL)
+	chainID, err := cli.ChainID(context.Background())
+	if err != nil {
+		return fmt.Errorf("failed to query chainId: %v", err)
+	}
 	sender := utils.GetEthAddressFromPK(senderKey)
 
 	// 1. Deploy ERC20.
@@ -125,20 +154,43 @@ func GaslessInit(configPath string) error {
 	}
 	time.Sleep(time.Second * 5)
 
-	// 5. Register the ERC20 as a gasless transfer token (owner-only), enabling gasless.
-	if err := registerGaslessTransferToken(cli, ownerKey, erc20Addr); err != nil {
-		return fmt.Errorf("failed to register gasless transfer token: %v", err)
+	// 5. Register the ERC20 as a gasless transfer token (owner-only), enabling gasless. Only the local
+	// devnet (chain id 195) ships the whitelist owner key, so registration is gated on it; on
+	// 1952 / 196 the benchmark token must already be whitelisted on-chain.
+	if chainID.Int64() == GaslessDevnetChainID {
+		ownerKey, err := crypto.HexToECDSA(strings.TrimPrefix(GaslessDevnetOwnerPrivateKey, "0x"))
+		if err != nil {
+			return fmt.Errorf("failed to parse devnet gasless owner key: %v", err)
+		}
+		// approveSpender must match the spender the `approve` bench scenario uses, or the approve
+		// rule won't match (the whitelist keys approve rules by the (token, spender) pair).
+		approveSpender := utils.TransferCfg.ApproveSpender
+		if approveSpender == "" {
+			approveSpender = DefaultApproveSpender
+		}
+		if err := registerGaslessTransferToken(cli, ownerKey, erc20Addr, ethcmn.HexToAddress(approveSpender), chainID.Int64()); err != nil {
+			return fmt.Errorf("failed to register gasless transfer token: %v", err)
+		}
+		log.Printf("✅ Gasless init done. ERC20=%s registered (transfer + approve spender=%s gasless); run: adventure gasless-bench -f <cfg> --contract %s\n",
+			erc20Addr, approveSpender, erc20Addr)
+	} else {
+		log.Printf("✅ Gasless init done. ERC20=%s deployed and distributed (chain id %d: registration skipped — token must already be whitelisted on-chain)\n",
+			erc20Addr, chainID.Int64())
 	}
-
-	log.Printf("✅ Gasless init done. ERC20=%s registered as a gasless transfer token; run: adventure gasless-bench -f <cfg> --contract %s\n",
-		erc20Addr, erc20Addr)
 	return nil
 }
 
-// GaslessBench runs a zero-gas-price ERC20 transfer benchmark against `contractAddr`, which must
-// have been registered as a gasless transfer token (via gasless-init); otherwise the node rejects
-// the zero-priced txs as underpriced.
-func GaslessBench(configPath, contractAddr string) error {
+// GaslessBench runs a zero-gas-price ERC20 benchmark for the given scenario. Mirroring
+// scripts/gasless/test.js, two scenarios are supported, both as legacy (type 0) gasPrice=0 txs:
+//   - "approve":  approve(approveSpender, 0) on tokenApprove
+//   - "transfer": transfer(deadAddr, 0)      on tokenTransfer
+//
+// The token must already be a gasless-whitelisted token, or the node rejects the zero-priced txs as
+// underpriced. Token addresses come from the config file (tokenApprove / tokenTransfer); if
+// `contractAddr` is non-empty (the devnet path, set by the Makefile to gasless-init's freshly
+// deployed ERC20) it overrides both. approveSpender comes from the config, defaulting to
+// DefaultApproveSpender.
+func GaslessBench(configPath, contractAddr, scenario string) error {
 	if configPath == "" {
 		return errors.New("configPath must not be empty")
 	}
@@ -146,15 +198,31 @@ func GaslessBench(configPath, contractAddr string) error {
 		return err
 	}
 
-	to := ethcmn.HexToAddress(contractAddr)
+	tokenApprove := utils.TransferCfg.TokenApprove
+	tokenTransfer := utils.TransferCfg.TokenTransfer
+	if contractAddr != "" {
+		tokenApprove = contractAddr
+		tokenTransfer = contractAddr
+	}
+	approveSpender := utils.TransferCfg.ApproveSpender
+	if approveSpender == "" {
+		approveSpender = DefaultApproveSpender
+	}
+
+	to, data, err := buildGaslessTxData(scenario, tokenApprove, approveSpender, tokenTransfer)
+	if err != nil {
+		return err
+	}
+	log.Printf("gasless-bench scenario=%s to=%s spender=%s\n", scenario, to.Hex(), approveSpender)
+
 	// gasPrice == 0 makes each tx zero-priced (gasless). The whitelist must already approve this
-	// ERC20's transfer, or the mempool rejects it as underpriced.
+	// token's selector, or the mempool rejects it as underpriced.
 	eParam := utils.NewTxParam(
 		&to,
 		nil,
 		GaslessBenchTxGasLimit,
 		big.NewInt(0),
-		generateTxData(),
+		data,
 	)
 
 	utils.RunTxs(
@@ -166,14 +234,48 @@ func GaslessBench(configPath, contractAddr string) error {
 	return nil
 }
 
-// registerGaslessTransferToken enables gasless globally and whitelists `erc20`'s transfer, sending
-// both owner-only txs from `ownerKey` (the whitelist owner seeded in genesis).
-func registerGaslessTransferToken(cli utils.Client, ownerKey *ecdsa.PrivateKey, erc20 ethcmn.Address) error {
+// buildGaslessTxData returns the target token and calldata for a gasless scenario. Amounts are 0 so
+// the txs never revert on balance/allowance and the bench can run indefinitely.
+func buildGaslessTxData(scenario, tokenApprove, approveSpender, tokenTransfer string) (ethcmn.Address, []byte, error) {
+	erc20ABI, err := abi.JSON(strings.NewReader(ERC20ABI))
+	if err != nil {
+		return ethcmn.Address{}, nil, fmt.Errorf("failed to initialize ERC20 ABI: %v", err)
+	}
+
+	switch scenario {
+	case "approve":
+		if tokenApprove == "" {
+			return ethcmn.Address{}, nil, errors.New("tokenApprove must be set (config tokenApprove or --contract)")
+		}
+		data, err := erc20ABI.Pack("approve", ethcmn.HexToAddress(approveSpender), big.NewInt(0))
+		if err != nil {
+			return ethcmn.Address{}, nil, err
+		}
+		return ethcmn.HexToAddress(tokenApprove), data, nil
+	case "transfer":
+		if tokenTransfer == "" {
+			return ethcmn.Address{}, nil, errors.New("tokenTransfer must be set (config tokenTransfer or --contract)")
+		}
+		data, err := erc20ABI.Pack("transfer", ethcmn.HexToAddress(GaslessTransferRecipient), big.NewInt(0))
+		if err != nil {
+			return ethcmn.Address{}, nil, err
+		}
+		return ethcmn.HexToAddress(tokenTransfer), data, nil
+	default:
+		return ethcmn.Address{}, nil, fmt.Errorf("unknown gasless scenario %q (use: approve | transfer)", scenario)
+	}
+}
+
+// registerGaslessTransferToken enables gasless globally and whitelists `erc20` for both the
+// `transfer(address,uint256)` selector and `approve(spender,uint256)` for `approveSpender` (the
+// whitelist keys approve rules by the (token, spender) pair), sending the owner-only txs from
+// `ownerKey` (the whitelist owner seeded in genesis).
+func registerGaslessTransferToken(cli utils.Client, ownerKey *ecdsa.PrivateKey, erc20, approveSpender ethcmn.Address, chainID int64) error {
 	wlABI, err := abi.JSON(strings.NewReader(GaslessWhitelistABI))
 	if err != nil {
 		return fmt.Errorf("failed to initialize GaslessWhitelist ABI: %v", err)
 	}
-	wl := ethcmn.HexToAddress(GaslessWhitelistAddr)
+	wl := ethcmn.HexToAddress(gaslessWhitelistAddr(chainID))
 	owner := utils.GetEthAddressFromPK(ownerKey)
 	gasPrice := utils.ParseGasPriceToBigInt(utils.TransferCfg.GasPriceGwei, 9)
 
@@ -202,6 +304,17 @@ func registerGaslessTransferToken(cli utils.Client, ownerKey *ecdsa.PrivateKey, 
 	}
 	log.Printf("setGaslessTransferToken(%s, true, %d): owner=%s, nonce=%d, txhash=%s\n",
 		erc20, GaslessTransferGasLimit, owner, nonce+1, h2)
+
+	approveData, err := wlABI.Pack("setApproveSpender", erc20, approveSpender, true, GaslessTransferGasLimit)
+	if err != nil {
+		return err
+	}
+	h3, err := cli.SendEthereumTx(ownerKey, nonce+2, wl, nil, 200000, gasPrice, approveData)
+	if err != nil {
+		return fmt.Errorf("setApproveSpender: %v", err)
+	}
+	log.Printf("setApproveSpender(%s, %s, true, %d): owner=%s, nonce=%d, txhash=%s\n",
+		erc20, approveSpender, GaslessTransferGasLimit, owner, nonce+2, h3)
 
 	time.Sleep(time.Second * 5)
 	return nil

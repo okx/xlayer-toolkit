@@ -1,6 +1,8 @@
 {
-  "rpc": ["http://127.0.0.1:8123"],
-  "accounts": 20000,
+  "rpc": [
+    "http://127.0.0.1:8123"
+  ],
+  "accounts": 5000,
   "senderPrivateKey": "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
   "concurrency": 20,
   "mempoolPauseThreshold": 50000,
@@ -8,7 +10,9 @@
   "maxBatchSize": 100,
   "gasPriceGwei": 100,
   "saveTxHashes": false,
-  "gaslessOwnerPrivateKey": "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356",
+  "tokenApprove": "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+  "approveSpender": "0x203B9aD06aeb929427E233587F0020661dd23B11",
+  "tokenTransfer": "0x8464135c8F25Da09e49BC8782676a84730C318bC",
   "simulatorParams": {
     "simulatorConfig": {
       "load_accounts": 12,

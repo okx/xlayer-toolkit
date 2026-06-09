@@ -1,8 +1,10 @@
-.PHONY: build lint erc20 native
+.PHONY: build lint erc20 gasless native io fib create
 
 # Configuration variables
 CONFIG_FILE := ./testdata/config.json
 INIT_AMOUNT := 10000ETH
+# Gasless bench scenario: approve | transfer (override: make gasless GASLESS_SCENARIO=approve)
+GASLESS_SCENARIO := transfer
 
 # Lint the code using golangci-lint
 lint:
@@ -34,6 +36,15 @@ erc20: build
 	@sleep 10
 	@adventure erc20-bench -f $(CONFIG_FILE) --contract $$(grep "ERC20 Address:" /tmp/erc20-init.log | awk '{print $$NF}')
 	@echo "✅ ERC20 test completed!"
+
+# Gasless ERC20 stress test (devnet, chain id 195): gasless-init deploys + whitelists an ERC20, then
+# gasless-bench uses that ERC20 as both the approve and transfer token via --contract.
+gasless: build
+	@echo "🚀 Starting Gasless ERC20 test (scenario=$(GASLESS_SCENARIO))..."
+	@adventure gasless-init -f $(CONFIG_FILE) 2>&1 | tee /tmp/gasless-init.log
+	@sleep 10
+	@adventure gasless-bench -f $(CONFIG_FILE) --scenario $(GASLESS_SCENARIO) --contract $$(grep -oE "ERC20=0x[0-9a-fA-F]{40}" /tmp/gasless-init.log | head -1 | cut -d= -f2)
+	@echo "✅ Gasless ERC20 test completed!"
 
 # Native Token stress test (init + bench)
 native: build

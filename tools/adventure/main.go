@@ -18,11 +18,13 @@ func init() {
 const (
 	FlagConfigFile = "config-file"
 	FlagContract   = "contract"
+	FlagScenario   = "scenario"
 )
 
 var (
-	configPath   string
-	contractAddr string
+	configPath      string
+	contractAddr    string
+	gaslessScenario string
 )
 
 func main() {
@@ -217,11 +219,12 @@ func gaslessInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gasless-init",
 		Short: "Deploy an ERC20, distribute it, and register its transfer as gasless",
-		Long: `Deploy an ERC20, distribute tokens to the benchmark accounts, and register that ERC20 as a
-gasless transfer token on the whitelist predeploy (enabling gasless globally).
+		Long: `Deploy an ERC20 and distribute tokens to the benchmark accounts. On the local devnet (chain id
+195) it also registers that ERC20 as a gasless transfer token on the whitelist predeploy (enabling
+gasless globally), using the built-in devnet owner key. On 1952 / 196 registration is skipped — the
+benchmark token must already be whitelisted on-chain.
 
-Requires both senderPrivateKey (funded deployer) and gaslessOwnerPrivateKey (the whitelist owner)
-in the config file.
+Requires senderPrivateKey (funded deployer) in the config file.
 
 Example:
   adventure gasless-init -f ./testdata/config.json`,
@@ -247,22 +250,22 @@ func gaslessBenchCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gasless-bench",
 		Short: "Run zero-gas-price (gasless) ERC20 transfer benchmark",
-		Long: `Run a gasless (zero-gas-price) ERC20 transfer stress test. The --contract ERC20 must already be
-registered as a gasless transfer token (via gasless-init), or the node rejects the zero-priced txs.
+		Long: `Run a gasless (zero-gas-price) ERC20 stress test for one scenario (approve | transfer), as legacy
+txs. The token must already be a gasless-whitelisted token (via gasless-init on devnet, or
+pre-registered on 1952 / 196), or the node rejects the zero-priced txs.
+
+Token addresses come from the config file (tokenApprove / tokenTransfer / approveSpender). Passing
+--contract overrides both token addresses (the devnet path, used by the Makefile).
 
 Example:
-  adventure gasless-bench -f ./testdata/config.json --contract 0x1234...`,
+  adventure gasless-bench -f ./testdata/config.json --scenario transfer --contract 0x1234...`,
 		Run: func(cmd *cobra.Command, args []string) {
 			if configPath == "" {
 				fmt.Println("Error: Config file (-f) is required")
 				os.Exit(1)
 			}
-			if contractAddr == "" {
-				fmt.Println("Error: Contract address (--contract) is required")
-				os.Exit(1)
-			}
 
-			if err := bench.GaslessBench(configPath, contractAddr); err != nil {
+			if err := bench.GaslessBench(configPath, contractAddr, gaslessScenario); err != nil {
 				fmt.Printf("Gasless benchmark failed: %v\n", err)
 				os.Exit(1)
 			}
@@ -270,7 +273,8 @@ Example:
 	}
 
 	cmd.Flags().StringVarP(&configPath, FlagConfigFile, "f", "", "Path to the benchmark configuration file")
-	cmd.Flags().StringVar(&contractAddr, FlagContract, "", "ERC20 contract address (registered as gasless)")
+	cmd.Flags().StringVar(&contractAddr, FlagContract, "", "ERC20 address override for both approve/transfer tokens (devnet)")
+	cmd.Flags().StringVar(&gaslessScenario, FlagScenario, "transfer", "Gasless scenario: approve | transfer")
 
 	return cmd
 }
