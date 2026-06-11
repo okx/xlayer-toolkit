@@ -3,3 +3,5 @@
 contracts/blacklist/out/
 contracts/blacklist/cache/
 contracts/blacklist/broadcast/
+contracts/testkit/out/
+contracts/testkit/cache/
