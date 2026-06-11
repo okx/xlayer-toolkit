@@ -1,0 +1,5 @@
+
+# Foundry build artifacts for the blacklist demo stub
+contracts/blacklist/out/
+contracts/blacklist/cache/
+contracts/blacklist/broadcast/

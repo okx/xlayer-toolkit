@@ -8,3 +8,4 @@ set -e
 ./scripts/enable-gasless.sh
 ./5-run-op-succinct.sh
 ./6-run-kailua.sh
+./7-deploy-blacklist.sh
