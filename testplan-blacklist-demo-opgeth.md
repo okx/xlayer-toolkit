@@ -33,11 +33,11 @@ cd "$(git rev-parse --show-toplevel)/devnet"
 
 ```bash
 docker compose ps
-docker compose logs -f op-geth-seq      # seq RPC 8123;rpc 节点 RPC 9123
+docker compose logs -f op-geth-seq      # seq RPC 8123;rpc 节点 RPC 8124
 docker compose down
 ```
 
-L2 RPC:seq `http://localhost:8123`、rpc `http://localhost:9123`
+L2 RPC:seq `http://localhost:8123`、rpc `http://localhost:8124`
 
 ## 配置变更(.env)
 
@@ -69,7 +69,10 @@ VICTIM2=$(cast wallet address --mnemonic "$MN" --mnemonic-derivation-path "m/44'
 CLEAN=$(cast wallet address --mnemonic "$MN" --mnemonic-derivation-path "m/44'/60'/0'/0/7")
 MIRROR=0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f
 RPC=http://localhost:8123
-# 富有账户(给 victim 充值 / 部署用),DEPLOYER_PRIVATE_KEY / DEPLOYER_ADDRESS 见 .env
+# L2 真富户 = RICH_L1_PRIVATE_KEY(见 .env,地址 0x14dC…9955 = idx7,genesis 10000 ETH)。
+# 注意:CLEAN 也用了 idx7,与 RICH 同一账户——CLEAN 仅作收款方,撞号无害。
+# DEPLOYER(DEPLOYER_PRIVATE_KEY / DEPLOYER_ADDRESS,= anvil#0/f39F)在 L2 上余额很少,
+# 由公共准备段从 RICH 充值后再当 sender。
 ```
 
 部署脚本默认 seed 的是 `0x00…AA`(仅证明合约可写),功能测试请用上面可签名的 VICTIM。
@@ -138,6 +141,11 @@ RPC=http://localhost:8123
 执行顺序:devnet 起好(seq+rpc)且 mirror 已部署后,先跑下面这一段,把工具合约部署好、账户充值好,导出后续 case 用的变量。这样消除 case 之间的部署顺序依赖(任何 case 不再"用到还没部署的合约")。
 
 ```bash
+# DEPLOYER(anvil #0 / f39F)不是 L2 富户(genesis 上仅 ~100 ETH 甚至 0),而后面所有
+# deploy/send 都用 DEPLOYER 签名。先用 L2 真富户 RICH_L1_PRIVATE_KEY
+# (地址 0x14dC…9955 = idx7,见 .env)给 DEPLOYER 充足额,放在任何 DEPLOYER 操作之前。
+cast send --rpc-url $RPC --private-key $RICH_L1_PRIVATE_KEY --value 1000ether $DEPLOYER_ADDRESS
+
 TESTKIT=contracts/testkit
 DEPLOY() { cd $TESTKIT && forge create "src/Mocks.sol:$1" --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --broadcast --json | jq -r .deployedTo; cd - >/dev/null; }
 
@@ -571,7 +579,7 @@ docker run --rm <op-geth-image> --xlayer.blacklist.enabled=true 2>&1 | grep -iE 
 
 ### C30:seq vs rpc 状态一致(anti-fork 核心)
 
-本拓扑已起 seq(geth,8123)+ rpc(geth,9123)。rpc 导入 seq 区块时必须算出一致的 state/receipts root,否则拒块 → 分叉。这是 build vs import 路径一致性的直接验证(deposit 奇偶、L2-tx drop-vs-不拦截不对称都在此暴露),无需 reth。
+本拓扑已起 seq(geth,8123)+ rpc(geth,8124)。rpc 导入 seq 区块时必须算出一致的 state/receipts root,否则拒块 → 分叉。这是 build vs import 路径一致性的直接验证(deposit 奇偶、L2-tx drop-vs-不拦截不对称都在此暴露),无需 reth。
 前置:确保 VICTIM 在名单并制造活动(C26/C27 可能已解黑,这里重新 add 再造一笔被拦交易):
 ```bash
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM ; sleep 3   # 幂等
@@ -580,7 +588,7 @@ cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN   # 制造一笔
 HEAD=$(cast block-number --rpc-url http://localhost:8123)
 for n in $(seq $((HEAD-20)) $HEAD); do
   S=$(cast block $n --rpc-url http://localhost:8123 --json | jq -r '.stateRoot,.receiptsRoot' | paste -sd,)
-  R=$(cast block $n --rpc-url http://localhost:9123 --json | jq -r '.stateRoot,.receiptsRoot' | paste -sd,)
+  R=$(cast block $n --rpc-url http://localhost:8124 --json | jq -r '.stateRoot,.receiptsRoot' | paste -sd,)
   [ "$S" = "$R" ] && echo "block $n OK" || echo "block $n DIVERGE: seq=$S rpc=$R"
 done
 ```
@@ -603,7 +611,7 @@ docker compose start op-geth-rpc
 ```bash
 H=$(cast block-number --rpc-url http://localhost:8123)
 cast block $H --rpc-url http://localhost:8123 --json | jq -r .stateRoot
-cast block $H --rpc-url http://localhost:9123 --json | jq -r .stateRoot   # 应相等
+cast block $H --rpc-url http://localhost:8124 --json | jq -r .stateRoot   # 应相等
 docker compose logs op-geth-rpc | grep -iE "bad block|state root mismatch" ; echo "<-- 应为空"
 ```
 
@@ -651,7 +659,7 @@ cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -iE 
 HEAD=$(cast block-number --rpc-url http://localhost:8123)
 for n in $(seq $DEPLOY_BLOCK $HEAD); do
   S=$(cast block $n --rpc-url http://localhost:8123 --json | jq -r .stateRoot)
-  R=$(cast block $n --rpc-url http://localhost:9123 --json | jq -r .stateRoot)
+  R=$(cast block $n --rpc-url http://localhost:8124 --json | jq -r .stateRoot)
   [ "$S" = "$R" ] && echo "block $n OK" || echo "block $n DIVERGE"
 done
 ```
