@@ -25,6 +25,7 @@ type Client interface {
 	CreateContract(privatekey *ecdsa.PrivateKey, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) (ethcmn.Hash, error)
 	SendMultipleEthereumTx(signedTxs []*types.Transaction) ([]ethcmn.Hash, error)
 	CodeAt(ctx context.Context, contract ethcmn.Address, blockNumber *big.Int) ([]byte, error)
+	ChainID(ctx context.Context) (*big.Int, error)
 }
 
 // EthClient wraps the ethereum client with additional functionality

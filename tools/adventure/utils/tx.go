@@ -324,7 +324,9 @@ func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.
 	}
 
 	eParams := e(accounts[0].caller)
-	txTemplate := eParams[0] // Always only 1, all transactions use the same parameters
+	if len(eParams) == 0 {
+		return
+	}
 
 	// Calculate total transactions
 	totalTxs := len(accounts)
@@ -342,13 +344,13 @@ func executeBatch(gIndex int, cli Client, accounts []*EthAccount, e func(ethcmn.
 			endAccountIndex = len(accounts)
 		}
 
-		sendSimpleBatch(gIndex, ethClient, txTemplate, accounts[startAccountIndex:endAccountIndex], limiter)
+		sendSimpleBatch(gIndex, ethClient, eParams, accounts[startAccountIndex:endAccountIndex], limiter)
 
 		time.Sleep(time.Millisecond * 50)
 	}
 }
 
-func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accounts []*EthAccount, limiter *rate.Limiter) {
+func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplates []TxParam, accounts []*EthAccount, limiter *rate.Limiter) {
 	if len(accounts) == 0 {
 		return
 	}
@@ -363,7 +365,7 @@ func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accou
 	signer := types.NewLondonSigner(chainId)
 
 	ctx := context.Background()
-	for _, acc := range accounts {
+	for idx, acc := range accounts {
 		// Apply rate limiting before processing each transaction
 		if limiter != nil {
 			if err := limiter.Wait(ctx); err != nil {
@@ -371,6 +373,11 @@ func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accou
 				continue
 			}
 		}
+
+		// Assign templates round-robin across accounts: a single-template bench (len 1) always picks
+		// the same one (unchanged behavior), while a multi-template bench (e.g. hybrid) interleaves
+		// its tx types across the batch.
+		txTemplate := txTemplates[idx%len(txTemplates)]
 
 		acc.Lock()
 		if err := acc.SetNonce(ethClient); err != nil {
@@ -380,9 +387,10 @@ func sendSimpleBatch(gIndex int, ethClient *EthClient, txTemplate TxParam, accou
 		}
 
 		// Create transaction
-		// Use gasPrice from txTemplate if set, otherwise fallback to defaultGasPrice
+		// A non-nil gasPrice is honored as-is, including an explicit zero (gasless txs); only a nil
+		// gasPrice falls back to defaultGasPrice.
 		gasPrice := defaultGasPrice
-		if txTemplate.gasPrice != nil && txTemplate.gasPrice.Cmp(big.NewInt(0)) > 0 {
+		if txTemplate.gasPrice != nil {
 			gasPrice = txTemplate.gasPrice
 		}
 		var unsignedTx *types.Transaction

@@ -48,3 +48,4 @@ tools/flashblocks-monitoring/flashblocks-monitor
 **/build/
 
 local
+**/node_modules

@@ -23,6 +23,19 @@ done
 echo " 📦 Stopping Docker containers..."
 [ -f .env ] && docker compose down
 
+# Some dirs below are created by containers running as root, so the host user
+# can't rm them ("Permission denied"). Delete them from inside a root container
+# (the same mechanism that created them) before the plain rm -rf calls run.
+# Use the locally-present op-reth image to avoid needing a registry pull.
+[ -f .env ] && . ./.env 2>/dev/null || true
+CLEAN_IMAGE="${OP_RETH_IMAGE_TAG:-alpine}"
+docker run --rm -v "$(pwd):/w" --entrypoint sh "$CLEAN_IMAGE" -c '
+  rm -rf /w/data \
+         /w/l1-geth/consensus/beacondata /w/l1-geth/consensus/genesis.ssz /w/l1-geth/consensus/validatordata \
+         /w/l1-geth/execution/geth /w/l1-geth/execution/keystore /w/l1-geth/execution/genesis.json \
+         /w/op-succinct/configs
+' 2>/dev/null || echo " ⚠️ root-owned cleanup via container skipped (will fall back to host rm)"
+
 echo " 🗑️  Removing generated files..."
 rm -rf data
 rm -rf config-op/genesis.json
