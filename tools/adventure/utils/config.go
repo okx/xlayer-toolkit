@@ -15,7 +15,16 @@ type TransferConfig struct {
 	GasPriceGwei          float64         `json:"gasPriceGwei"`
 	SaveTxHashes          bool            `json:"saveTxHashes"`
 	SimulatorParams       SimulatorParams `json:"simulatorParams"`
-	BenchmarkAccounts     []string        // 20k accounts for stress testing (both senders and receivers)
+
+	// Gasless benchmark targets (see bench/gasless.go). Mirror the TOKEN_APPROVE / APPROVE_SPENDER /
+	// TOKEN_TRANSFER env vars in scripts/gasless/test.js. For the local devnet (chain id 195) these
+	// are overridden by gasless-init's freshly deployed ERC20 (via the Makefile --contract flag); for
+	// other chains (1952 / 196) set them to already-whitelisted tokens here.
+	TokenApprove   string `json:"tokenApprove"`   // ERC20 whose approve(...) is gasless
+	ApproveSpender string `json:"approveSpender"` // spender passed to approve(spender, amount)
+	TokenTransfer  string `json:"tokenTransfer"`  // ERC20 whose transfer(...) is gasless
+
+	BenchmarkAccounts []string // benchmark accounts for stress testing (both senders and receivers)
 }
 
 type SimulatorParams struct {
