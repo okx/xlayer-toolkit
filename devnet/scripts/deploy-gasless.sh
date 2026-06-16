@@ -45,7 +45,7 @@ fi
 
 # Idempotent: if the deterministic proxy is already deployed, skip — re-running the CREATE2 deploy
 # would revert on address collision. Lets enable-gasless.sh re-invoke this safely.
-EXPECTED_GASLESS_ADDR="${GASLESS_PROXY_ADDR:-0x70CA900387FCD29C2A71d511F10E5c961dc9363F}"
+EXPECTED_GASLESS_ADDR="${GASLESS_PROXY_ADDR:-0xA9092BC02e2000a3F8996D1991621E9A03Ef2dfE}"
 if [ "$(cast code "$EXPECTED_GASLESS_ADDR" --rpc-url "$RPC")" != "0x" ]; then
     echo " ✅ GaslessWhitelist proxy already deployed at $EXPECTED_GASLESS_ADDR; skipping deploy."
     echo "      GaslessWhitelist proxy: $EXPECTED_GASLESS_ADDR"
