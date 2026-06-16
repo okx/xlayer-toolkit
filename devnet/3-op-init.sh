@@ -320,7 +320,13 @@ if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     # op-seq3 default EL is always op-geth to ensure multiple seqs' geth and reth compatibilities
     OP_GETH_DATADIR3="$(pwd)/data/op-geth-seq3"
     rm -rf "$OP_GETH_DATADIR3"
-    cp -r $OP_GETH_DATADIR $OP_GETH_DATADIR3
+    # SEQ_TYPE=reth case: op-geth-seq doesn't exist, fall back to op-geth-rpc datadir (genesis-init'd earlier)
+    GETH_SOURCE="${OP_GETH_DATADIR:-$(pwd)/data/op-geth-rpc}"
+    if [ ! -d "$GETH_SOURCE" ]; then
+        echo "❌ No op-geth datadir available to seed op-geth-seq3 (need OP_GETH_DATADIR or op-geth-rpc datadir)"
+        exit 1
+    fi
+    cp -r "$GETH_SOURCE" "$OP_GETH_DATADIR3"
 fi
 
 if [ "$SEQ_TYPE" = "reth" ]; then

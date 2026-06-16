@@ -1,31 +1,57 @@
-测试计划:devnet 黑名单单 op-geth 节点功能验证(XLOP-1100)
+测试计划:devnet 黑名单跨客户端功能验证(XLOP-1100,op-geth + xlayer-reth)
 
 # 测试目标
 
-在单 op-geth 节点的 devnet(chain 195)上,验证应急冻结黑名单的单端功能正确性:
+在 devnet(chain 195)上同时验证 op-geth 与 xlayer-reth 两个客户端的黑名单功能正确性,以及跨端 / 多节点 / 长跑场景下的一致性。重点覆盖:
 
-- 开关关闭时全链 no-op,行为同未引入本功能
-- 开关打开、mirror 部署后,加黑地址的资产转移被拦截(入口关 + 执行关)
-- L1 forced inclusion 的 deposit 命中名单时 included-as-reverted(status=0、gasUsed=gasLimit)
-- 解黑后恢复正常
-- metrics / 日志证据链可追溯
-- 节点通过 getBlacklist 接口读取名单(与本仓 demo 合约对接)
+- **单端基线**:每个客户端独立 build 时,入口关 + 执行关 + 读 API + 时序 + 重启 全部正确
+- **L1 forced inclusion**:deposit 命中名单时 included-as-reverted (status=0、gasUsed=gasLimit);跨端 receipt 字节一致
+- **跨端 anti-fork**:同一区块在 op-geth seq 与 reth follower 上算出的 state/receipts root 必须 byte-identical;reorg、proxy upgrade、fail-open 路径两端语义对齐
+- **多节点 HA**:conductor 切主、跨客户端 leader 轮换、多 rpc 并发 import、mempool 跨端一致
+- **长跑稳态**:高负载 + churn(高频 add/remove)+ 切主 下持续无分叉、无 bad block
+- **对抗性**:恶意 sequencer 包黑名单 tx → follower 必须拒块(P0 anti-fork)
+- **reth-only 特性**:bd6dc9c 的 mempool 主动驱逐;flashblocks 预确认面行为
+- **黑名单 × gasless 交互**:同账户同时在两个白名单/黑名单中的判定优先级
 
-不在本计划内:跨客户端(reth)state root / receipt 逐字段一致(FR-5)——需 reth 到位后混部署才能验;follower 不拦普通 L2 的逻辑(单 seq=geth 走不到)。这些标注为"待 reth"。
+# 客户端 × 角色词汇
+
+每个 case 的"复测范围"列遵循以下词汇,直接表达"几个客户端×角色组合 = 几组"(实际工作量):
+
+| 写法 | 含义 |
+|---|---|
+| `reth-seq + geth-seq(2组)` | 两个客户端各做 seq 角色,跑两遍 |
+| `reth-rpc + geth-rpc(2组)` | 两客户端各做 rpc 角色 |
+| `异类双向 reth-seq×geth-rpc + geth-seq×reth-rpc(2组)` | 跨端双向(seq=A、rpc=B 和 反过来)|
+| `reth-seq + geth-seq + reth-rpc + geth-rpc(4组)` | 4 个角色全跑 |
+| `任一客户端(1组,读合约)` | 合约纯读,跑一次即可 |
+| `flag-关节点 reth+geth(2组)` | 关 flag 的两端 |
+| `档二(多实例选主)` | conductor + 多实例独立端口 |
+| `档二(多节点 P2P)` | 多 rpc 并发 |
+| `档二(混选集群 soak)` | 长跑稳态 |
+
+# 档位定义
+
+| 档位 | 覆盖类别 | 开箱可跑 | 搭建要求 |
+|---|---|---|---|
+| 档一 单 EL + 异类 RPC | A B C D E F G H I + 部分 J/K | 是 | 改 .env 的 `SEQ_TYPE` / `RPC_TYPE` 即可 |
+| 档二 conductor 混选 | CX 多节点、CXR (reorg)、CHURN、ST (soak) | 否 | docker-compose 改给 reth/geth 实例独立端口;`CONDUCTOR_ENABLED=true`;4 个 seq 纳入同一 raft |
+
+档二需要额外搭建;档一只动 .env 即可。本计划默认先在档一完成全部档一 case,再切档二跑剩下的。
 
 # 环境准备
 
 ## 前置条件
 
-1. op-geth 已切到含 `getBlacklist` ABI + 195 地址 `0x73511669…F31f` 的提交,且其未提交改动已落地。
-2. op-geth 镜像必须重建(新代码进二进制),否则节点仍读旧地址 / 旧 ABI。
+1. **op-geth** 切到 `xl/blacklist_latest`,含 `getBlacklist` ABI + 195 地址硬编码 `0x73511669…F31f` + 最新 `EvaluateDeposit` 跳 check① 的 commit(509447e84+),未提交改动需落地后镜像重建。
+2. **xlayer-reth** 切到 `xl/blacklist_latest`,含 5 个相关 commit(`8dc76e4 feat / b93718c sequencer deposit skip check① / 9280dc9 align placeholders / bd6dc9c pool 主动驱逐 / 790ba45 archive`)。
+3. 两个客户端镜像都须重建(`SKIP_OP_GETH_BUILD=false` + `SKIP_OP_RETH_BUILD=false`),首次跑各 5-10 分钟。
 
 ## 启动方式
 
 ```bash
 cd "$(git rev-parse --show-toplevel)/devnet"
 ./clean.sh          # example.env -> .env(若 .env 已存在不覆盖,需手动同步下列项)
-./init.sh           # 重建镜像(SKIP_OP_GETH_BUILD=false 时重建 op-geth)
+./init.sh           # 重建镜像
 ./0-all.sh          # 起 L1 + 合约 + L2,末尾自动跑 7-deploy-blacklist.sh
 ```
 
@@ -33,28 +59,42 @@ cd "$(git rev-parse --show-toplevel)/devnet"
 
 ```bash
 docker compose ps
-docker compose logs -f op-geth-seq      # seq RPC 8123;rpc 节点 RPC 8124
+docker compose logs -f op-${SEQ_TYPE}-seq      # seq RPC 8123;rpc 节点 RPC 8124
 docker compose down
 ```
 
-L2 RPC:seq `http://localhost:8123`、rpc `http://localhost:8124`
+L2 RPC:seq `http://localhost:8123`、rpc `http://localhost:8124`(注意:**不是 9123**;之前 PRD 写错)
+Metrics:`http://localhost:9092/debug/metrics/prometheus`(op-geth)、`http://localhost:9092/...`(reth 同样路径,镜像端口要查 docker-compose.yml)
 
-## 配置变更(.env)
+## 配置变更(.env)— 档一
 
-单 op-geth 拓扑(seq=geth + rpc=geth)+ 打开黑名单:
+按你要测的拓扑切 `SEQ_TYPE` / `RPC_TYPE`:
 
-| 配置项 | 原值 | 改为 |
-|---|---|---|
-| SEQ_TYPE | reth | geth |
-| RPC_TYPE | geth | geth |
-| SKIP_OP_RETH_BUILD | false | true |
-| SKIP_OP_GETH_BUILD | false | false(需重建) |
-| FLASHBLOCK_ENABLED | true | false(geth 无 flashblocks) |
-| CHAIN_ID | 195 | 195 |
-| BLACKLIST_DEMO_ENABLED | false | true |
-| LAUNCH_RPC_NODE | true | true(C30/C31/C32 需要 rpc 节点) |
+| 配置项 | T1 (geth+geth) | T2 (reth+reth) | T3 (geth+reth) | T4 (reth+geth) |
+|---|---|---|---|---|
+| SEQ_TYPE | geth | reth | geth | reth |
+| RPC_TYPE | geth | reth | reth | geth |
+| FLASHBLOCK_ENABLED | false | true(reth 支持)| 任选 | 任选 |
+| SKIP_OP_GETH_BUILD | false 首次 | true | false 首次 | true(已建)|
+| SKIP_OP_RETH_BUILD | true | false 首次 | true(已建)| false 首次 |
+| CONDUCTOR_ENABLED | false | false | false | false |
+| LAUNCH_RPC_NODE | true | true | true | true |
+| CHAIN_ID | 195 | 195 | 195 | 195 |
+| BLACKLIST_DEMO_ENABLED | true | true | true | true |
+| BLACKLIST_DEPLOYER_INDEX | 19 | 19 | 19 | 19 |
+| BLACKLIST_MIRROR_ADDRESS | `0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f` | (同) | (同) | (同) |
 
-注:`.env` 直接改(clean.sh 不覆盖已存在的 .env);同时同步到 example.env 保持一致。
+## 配置变更(.env)— 档二(多实例 conductor)
+
+```env
+CONDUCTOR_ENABLED=true
+LAUNCH_RPC_NODE=true
+LAUNCH_RPC_NODE2=true
+# 还需要改 docker-compose.yml 给 reth/geth 实例独立端口
+# 参考 gasless 测试计划的"档二"搭建说明:把 4 个 seq 纳入同一 raft,端口分开
+```
+
+注:`.env` 直接改(`clean.sh` 不覆盖已存在的 `.env`);若 `.env` 缺 `BLACKLIST_DEPLOYER_INDEX` 或 `BLACKLIST_MIRROR_ADDRESS`,从 example.env 同步过来(否则 7-deploy-blacklist.sh 第一次跑会 `invalid value '' for '<WHO>'`)。
 
 ## 测试用账户(devnet 标准助记词 test…junk)
 
@@ -94,44 +134,76 @@ RPC=http://localhost:8123
 | metric exec_revert | :27 | Prometheus | `xlayer_blacklist_exec_revert_total{hook=call|log|selfdestruct|eth_balance}` | 需 --metrics |
 | metric snapshot_read | :23 | Prometheus | `xlayer_blacklist_snapshot_read_duration_seconds` | 需 --metrics |
 
-# 测试矩阵
+# 测试矩阵(唯一权威:序号 | 分类 | case | 复测范围 | 预期 | 实际)
 
-| 类别 | Case | 配置 / 名单 | 验证项 |
-|---|---|---|---|
-| A 开关/基线 | C1 | BLACKLIST_DEMO_ENABLED=false | 全链 no-op,无 mirror 部署、无拦截 |
-| A 开关/基线 | C2 | flag=on,名单空(部署后 clear) | cache_size=0,普通 tx 不受影响 |
-| A 开关/基线 | C3 | flag=on,mirror 未部署 | GetCodeSize==0 短路 → no-op,无报错 |
-| B 入口关 | C4 | flag=on,名单含 VICTIM | 从 VICTIM 发 tx → 入口关拒绝 -32000;CLEAN 正常 |
-| B 入口关 | C5 | flag=on,名单含 VICTIM | 转账 to=VICTIM → 入口关拒绝(to 也查) |
-| B 入口关 | C6 | 排队 tx 的 from 被加黑 | 下一区块被移出 mempool、不打包(FR-1 AC2) |
-| C 执行关·from/to | C7 | flag=on,名单含 VICTIM | 经 forwarder 内层 CALL 触达 VICTIM → 回滚;触达 CLEAN 成功 |
-| C 执行关·from/to | C8 | 一笔多命中 / from==to | 整笔回滚一次,exec_revert +1 不重复计数 |
-| D 执行关·event | C9 | 名单含 VICTIM,ERC20 | transferFrom/transfer 的 Transfer event 命中 → hook=log 回滚(A-4,B-2/B-3) |
-| D 执行关·event | C10 | approve+helper / permit | 同 Transfer event 机制,不同授权路径(A-5/A-6,B-4) |
-| D 执行关·event | C11 | ERC721 | safeTransferFrom 的 Transfer event 命中(B-7) |
-| D 执行关·event | C12 | ERC1155 | TransferSingle/Batch(事件结构不同分支)命中(B-8) |
-| D 执行关·event | C13 | Transfer 精度负向 | value=0 命中仍回滚;topic0 像 Transfer 但 from/to 不命中 → 不回滚 |
-| D 执行关·event | C14 | 协议变体 | Permit2/EIP-3009/4337/7702/DEX/blob —— 机制等同 C9,defense-in-depth |
-| E 执行关·balance/精度 | C15 | 名单含 VICTIM | selfdestruct beneficiary=VICTIM → hook=eth_balance 回滚(B-1) |
-| E 执行关·balance/精度 | C16 | 名单含 VICTIM | 内层子调用触达 VICTIM 但子调用回滚、整笔成功 → 不拦截(committed-effect) |
-| E 执行关·balance/精度 | C17 | coinbase=VICTIM | 仅费用流入不误拦(FR-2 排除集);真实 value 转移仍拦 |
-| F L1↔L2 | C18 | 名单含 VICTIM | L1 deposit 涉及 VICTIM → included-as-reverted(status=0、gasUsed=gasLimit) |
-| F L1↔L2 | C19 | L1 deposit+helper | deposit 内层 transferFrom 产生 Transfer event 命中 → included-as-reverted(A-9) |
-| F L1↔L2 | C20 | deposit address aliasing | L1 合约 deposit,L2 from 被 aliasing 改写;语义先确认(A-8) |
-| F L1↔L2 | C21 | 名单含 VICTIM | L2→L1 提款经 helper 触达 VICTIM → from/to 命中回滚(B-12) |
-| F L1↔L2 | C22 | 系统 deposit 触达 VICTIM | exempt sender 永不拦截(FR-3 AC2) |
-| G 读取接口 | C23 | 名单 > 1 页(≥1025) | 节点分页读全;第 2 页地址仍被拦;cache_size==total |
-| G 读取接口 | C24 | 合约写入校验 | add(0x0) revert;重复 add total 不增(去重) |
-| G 读取接口 | C25 | getBlacklist 参数边界 | start≥total 返回空;中段分片正确;limit=0 空 |
-| H 时序 | C26 | flag=on,remove(VICTIM) | 从 VICTIM 发 tx 恢复成功;cache_size 减 1 |
-| H 时序 | C27 | remove 生效时序 | 落 M → M+1 放行,需过一个区块(FR-5) |
-| I 负向约束 | C28 | 负向约束 | 无 isBlocked RPC、错误码 -32000 无动态字段、metrics 拆分(FR-7) |
-| I 负向约束 | C29 | 非法 CLI 参数 | `--xlayer.blacklist.*` → 进程报错退出(FR-6 AC3) |
-| J 共识/同步 | C30 | seq vs rpc 一致 | 含 drop L2 / 拦 deposit 的区块,seq 与 rpc 的 state/receipts root 逐块一致 |
-| J 共识/同步 | C31 | RPC 从 0 同步 | 全新 rpc 从创世重放,head 状态与 seq 一致 |
-| J 共识/同步 | C32 | 节点重启 | 重启后继续出块、黑名单仍生效、seq/rpc 一致 |
-| K 生命周期 | C33 | 激活过渡(部署前→空→add) | 三阶段过渡全程 seq/rpc 一致、无分叉;clear 回滚等同现状 |
-| K 生命周期 | C34 | ABI 不变合约升级(proxy) | 升级 impl 后节点透明无感、名单延续、不分叉 |
+本表是用例规格的唯一权威来源,结构固定。复测时只更新「实际」列(标 PASS,或 TODO 并写明原因),不要改动序号/分类/case/复测范围/预期。下方「验证步骤」为各类 case 的命令参考。
+
+「实际」列:每个 case 跑完后填 `✅ PASS T<n> (简述结果 + 证据子目录)`,例如 `✅ PASS T3 (cast send drop, VICTIM 余额 0→0, devnet/test-results/<run-ts>/Cn.md)`。失败填 `❌ FAIL` + 现象;暂跳填 `⏸ DEFER` + 原因。
+
+证据目录结构建议:`devnet/test-results/blacklist-XLOP-1100-<拓扑代号>-<timestamp>/Cn.md` —— 每个 case 一个 .md,含 pre-state / 命令 / 输出 / post-state / 结论。
+
+**Anti-fork P0 强调段** —— 以下三条任一不通过即 P0 阻塞上线(客户端不一致 = 分叉):CX5、CX6、CX10。
+
+| 序号 | 分类 | case | 复测范围 | 预期 | 实际 |
+|---|---|---|---|---|---|
+| 1 | A 开关/基线 | C1 flag=off baseline | reth-seq + geth-seq(2组) | 全链 no-op、metrics 全 0、无 intercept 日志 | ⏳ pending |
+| 2 | A 开关/基线 | C2 flag=on 空名单 | reth-seq + geth-seq(2组) | total=0、cache_size=0、普通 tx 成功 | ⏳ pending |
+| 3 | A 开关/基线 | C3 mirror 未部署短路 | reth-seq + geth-seq(2组) | 同 C1 | ⏳ pending |
+| 4 | B 入口关 | C4 入口关 from | reth-seq + geth-seq(2组) | -32000、nonce 不增、pool_rejected+1 | ⏳ pending |
+| 5 | B 入口关 | C5 入口关 to | reth-seq + geth-seq(2组) | to 命中拒,counter +1 | ⏳ pending |
+| 6 | B 入口关 | C6 mempool 池删除 三段 | reth-seq + geth-seq(2组) | 三段行为跨客户端一致 | ⏳ pending |
+| 7 | C 执行关 | C7 内层 CALL drop (check③ balance) | reth-seq + geth-seq(2组) | drop、VICTIM 余额不变、exec_revert+1 | ⏳ pending |
+| 8 | C 执行关 | C8 多命中 / event from==to | reth-seq + geth-seq(2组) | 单次 drop、counter 不重复 | ⏳ pending |
+| 9 | C 执行关 | C8-ext 多加黑账户互发 | reth-seq + geth-seq(2组) | 入口关 from 优先,counter 不重复 | ⏳ pending |
+| 10 | D 执行关·event | C9 ERC20 Transfer event | reth-seq + geth-seq(2组) | hook=log drop、余额不变 | ⏳ pending |
+| 11 | D 执行关·event | C10 授权变体 | 覆盖 | 同 C9 | ⏳ pending |
+| 12 | D 执行关·event | C11 ERC721 | reth-seq + geth-seq | hook=log + drop | ⏳ pending |
+| 13 | D 执行关·event | C12 ERC1155 | reth-seq + geth-seq(2组) | hook=log + drop | ⏳ pending |
+| 14 | D 执行关·event | C13 精度负向 | reth-seq + geth-seq(2组) | value=0 仍拦、noise 不拦 | ⏳ pending |
+| 15 | D 执行关·event | C14 协议变体 | 覆盖 | 同 C9 | ⏳ pending |
+| 16 | E 执行关·balance | C15 selfdestruct | reth-seq + geth-seq(2组) | drop、VICTIM ETH 不变 | ⏳ pending |
+| 17 | E 执行关·balance | C16 committed-effect | reth-seq + geth-seq(2组) | 不误拦 | ⏳ pending |
+| 18 | E 执行关·balance | C17 coinbase=VICTIM | NA | — | ⏳ pending |
+| 19 | F L1↔L2 | C18 L1 deposit pure-CALL-touch | reth-seq + geth-seq(2组) + 异类双向(2组) | 跨端 byte-identical | ⏳ pending |
+| 20 | F L1↔L2 | C19 deposit + Transfer event | reth-seq + geth-seq(2组) + 异类双向(2组) | status=0、gasUsed≈gasLimit、logs=0 | ⏳ pending |
+| 21 | F L1↔L2 | C20 deposit aliasing | NA | — | ⏳ pending |
+| 22 | F L1↔L2 | C21 L2→L1 提款 initiateWithdrawal | NA | — | ⏳ pending |
+| 23 | F L1↔L2 | CXW1-helper L2 inner-touch | reth-seq + geth-seq(2组) + 异类双向(2组) | 执行关拦,跨端一致 | ⏳ pending |
+| 24 | F L1↔L2 | C22 系统 deposit 豁免 | reth-seq + geth-seq(2组) + 异类双向(2组) | from=0xdead...0001 status=0x1 | ⏳ pending |
+| 25 | G 读取接口 | C23 分页 >1024 | reth-seq + geth-seq(2组) + 异类双向(2组) | cache==1025、第 2 页可拦 | ⏳ pending |
+| 26 | G 读取接口 | C24 写入校验 | reth-seq + geth-seq(2组) | add(0x0) revert + 去重 | ⏳ pending |
+| 27 | G 读取接口 | C25 边界 | 任一客户端(1组,读合约) | 6 个边界符合契约 | ⏳ pending |
+| 28 | H 时序 | C26 remove 恢复 | reth-seq + geth-seq(2组) | VICTIM 发 tx status=1 | ⏳ pending |
+| 29 | H 时序 | C27 时序对称 | reth-seq + geth-seq(2组) | M+1 放行 | ⏳ pending |
+| 30 | I 负向约束 | C28 FR-7 负向 | reth-rpc + geth-rpc(2组) | 无 RPC + message 固定 + metrics 拆分 | ⏳ pending |
+| 31 | I 负向约束 | C29 非法 CLI | reth + geth 二进制(2组) | exit≠0 | ⏳ pending |
+| 32 | J 共识/同步 | C30 跨端 state/receipts root | 异类双向(2组) | 0 divergent | ⏳ pending |
+| 33 | J 共识/同步 | C31 RPC 从 0 同步 | BLOCKED | — | ⏳ pending |
+| 34 | J 共识/同步 | C32 节点重启 | 4 组 | 重启续效 | ⏳ pending |
+| 35 | K 生命周期 | C33 激活过渡三阶段 | reth-seq + geth-seq(2组) + 异类双向(2组) | 跨端三阶段 0 divergent | ⏳ pending |
+| 36 | K 生命周期 | C34 ABI proxy 升级 | reth-seq + geth-seq(2组) + 异类双向(2组) | impl 切换无感 | ⏳ pending |
+| 37 | CX 跨端 anti-fork | CX5 恶意 seq 包黑名单 | 异类双向(2组) | follower 拒块 | ⏳ pending |
+| 38 | CX 跨端 anti-fork | CX6 恶意 seq 漏 deposit | 异类双向(2组) | follower 拒块 | ⏳ pending |
+| 39 | CX 跨端 anti-fork | CX10 fail-open parity | 异类双向(2组) | 两端 fail-open | ⏳ pending |
+| 40 | CX reth-only | CX11 reth pool 主动驱逐 | reth-seq(1组) | reth 主动删 | ⏳ pending |
+| 41 | CX reth-only | CX7 flashblocks pre-confirm | flashblock(2组) | 预确认面拦截 | ⏳ pending |
+| 42 | CX 多节点 | CX3 mirror snapshot 跨端 read parity | 异类双向(2组) | hash 一致 | ⏳ pending |
+| 43 | CX 多节点 | CX8 conductor handover mid-add | 档二 | 切主后名单延续 | ⏳ pending |
+| 44 | CX 多节点 | CX13 multi-rpc 并发 import | 档二 | 并发 import 一致 | ⏳ pending |
+| 45 | CX 多节点 | CX14 混合 seq pool 一致 | 档二 | 行为等价 | ⏳ pending |
+| 46 | CX 多节点 | CX9 proxy upgrade in mixed topology | 异类双向(2组) | 跨端无延迟分叉 | ⏳ pending |
+| 47 | CX reorg | CXR1 reorg 后快照重建 | 档二 (leader kill) | 重建一致 | ⏳ pending |
+| 48 | CX churn | CXW1 toggle 高频翻转 | 档二 | 三节点 stateRoot 一致 | ⏳ pending |
+| 49 | CX churn | CXW2 batch churn | 档二 | 同上 | ⏳ pending |
+| 50 | CX churn | CXW3 churn 跨切主 | 档二 | 同上 | ⏳ pending |
+| 51 | CX 交互 | CXG1 黑名单 × gasless 交互 | reth-seq + geth-seq(2组) | 入口关优先 | ⏳ pending |
+| 52 | CX soak | ST1 5min soak | 档二(混选集群) | 0 div + no bad block | ⏳ pending |
+| 53 | CX soak | ST2 15min soak | 档二 | 同上 | ⏳ pending |
+| 54 | CX soak | ST3 30min soak | 档二 | 同上 | ⏳ pending |
+
+汇总:**54 行**,其中:
+- 已知 BLOCKED:C31(devnet 工具链限制,需 IT 环境)
+- 已知 NA:C17(OP Stack 无 miner coinbase)、C20(EOA 不 aliasing)、C21(L2 端 withdrawal 仅 emit event)
 
 # 公共准备(fixtures,所有 case 前执行一次)
 
@@ -687,54 +759,263 @@ cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -iE 
 负向 / 失败模式(ABI 破坏性升级,归 UT):改坏 getBlacklist 签名 → 节点读失败 → fail-open 当空名单(静默关闭),但须确定性、seq/rpc 一致、不分叉。
 说明:升级需 proxy(保持确定性地址);demo 合约当前非 proxy,本 case 要先把 mirror 改成 proxy 形态。若暂不引 proxy,降级为"换地址重部署=冷升级"(需节点重新硬编码地址 + 重建,等同 C2/C3 路径)。
 
-# 本计划不覆盖(UT/IT 或待 reth)
+## L 新增跨端 / 多节点 / 对抗 / 长跑 case
 
-- 区块边界生效时机:add 落入 block N,同块 N 内 from VICTIM 的 tx 不应被拦,从 N+1 才生效。手动难精确控同块时序,UT/IT 覆盖。
-- 失败策略 fail-open:getBlacklist revert / 解码失败 → 当空名单 + Error 日志。需故意 revert 的 mirror,UT 覆盖。
-- 上限截断:total > 300000 时截断行为。手动构造不现实,UT;且为跨端必须一致项(reth 当前拒绝、op-geth 截断,需统一)。
-- reorg 刷新:入口关快照在 reorg 后按新头重建(FR-1 AC4)。单 sequencer 难触发 reorg,待 reth/多节点或 IT。
-- 多 sequencer HA / conductor 切主 / 灰度升级(CONDUCTOR_ENABLED=true):切主后新 leader 读同一名单、灰度混跑不分叉。未列正式 case,建议补。
-- TPS 性能(G-3 "<1%"):关 / 开空名单 / 开带名单的 loadtest 对照。归性能测试。
+下列 case 在原计划中没有命令,补充骨架。具体测试代码 / harness 在第一次执行时落到 `devnet/test-results/.../Cn.sh` 持久化。
 
-一致性分两层:
-- 同客户端 seq(geth)vs rpc(geth):build vs import 一致、deposit receipt 奇偶、从 0 重放、重启 —— C30/C31/C32 已覆盖,无需 reth。
-- 跨客户端 geth↔reth(FR-5):两种 EVM 实现逐字一致、follower 不拦普通 L2、flashblocks 预确认面 —— 待 reth。
+### C8-ext:多加黑账户互发(Gap 6)
+```bash
+# VICTIM 和 VICTIM2 都在名单。VICTIM → VICTIM2 转账。
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM2
+sleep 3
+cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $VICTIM2 2>&1 | grep "32000"   # 入口关 from 先拦
+# 期望:pool_rejected +1(不重复计数);message 固定
+```
 
-# 结论模板
+### CXW1:L2 提款 helper 内层触达 VICTIM(Gap 1, 替换 C21)
+```bash
+# 部署一个 helper 合约,它调 L2ToL1MessagePasser.initiateWithdrawal 同时内部转账给 VICTIM
+# 顶层 to=helper(非名单),inner-call/balance 涉及 VICTIM
+# 期望:执行关拦截(hook=eth_balance 或 log,取决于触达方式);跨端 receipt 字节一致
+```
 
-| 类别 | Case | 配置 | 启动 | 功能正确 | 证据确认 | 备注 |
-|---|---|---|---|---|---|---|
-| A | C1 | flag=off | | | | no-op 基线 |
-| A | C2 | flag=on,空名单 | | | | cache_size=0 |
-| A | C3 | mirror 未部署 | | | | no-op 无报错 |
-| B | C4 | 名单含 VICTIM(from) | | | | -32000 + pool_rejected |
-| B | C5 | 名单含 VICTIM(to) | | | | 入口关 to 拦截 |
-| B | C6 | mempool 驱逐 | | | | 排队 tx 被移出 |
-| C | C7 | 内层 CALL 触达 | | | | exec_revert + 拦截日志 |
-| C | C8 | 多命中/from==to | | | | 回滚一次 |
-| D | C9 | ERC20 Transfer event | | | | hook=log,A-4/B-2/B-3 |
-| D | C10 | 授权变体 | | | | A-5/A-6/B-4,同 C9 |
-| D | C11 | ERC721 | | | | hook=log,B-7 |
-| D | C12 | ERC1155 | | | | hook=log(不同分支),B-8 |
-| D | C13 | Transfer 精度负向 | | | | value=0 拦、noise 不拦 |
-| D | C14 | 协议变体 | | | | 机制等同 C9,可选 |
-| E | C15 | selfdestruct | | | | hook=eth_balance,B-1 |
-| E | C16 | 回滚子调用触达 | | | | status=1 不拦,committed-effect |
-| E | C17 | coinbase=VICTIM | | | | 费用不误拦(FR-2) |
-| F | C18 | L1 deposit | | | | status=0,gasUsed=gasLimit |
-| F | C19 | deposit+Transfer | | | | A-9 |
-| F | C20 | deposit aliasing | | | | A-8,语义待确认 |
-| F | C21 | L2→L1 提款 | | | | from/to,B-12 |
-| F | C22 | 系统 deposit 豁免 | | | | exempt sender 不拦 |
-| G | C23 | 分页(≥1025) | | | | cache_size==total,第 2 页被拦 |
-| G | C24 | 零地址/去重 | | | | add(0x0) revert,重复 add 不增 |
-| G | C25 | getBlacklist 边界 | | | | start≥total 空、中段分片正确 |
-| H | C26 | remove 解黑 | | | | 恢复 status=1 |
-| H | C27 | remove 时序 | | | | M+1 放行 |
-| I | C28 | FR-7 负向 | | | | 无 RPC/错误码/metrics 拆分 |
-| I | C29 | 非法 CLI | | | | 进程退出 |
-| J | C30 | seq vs rpc 一致 | | | | state/receipts root 逐块比对 |
-| J | C31 | RPC 从 0 同步 | | | | head 状态与 seq 一致 |
-| J | C32 | 节点重启 | | | | 仍生效、无分叉 |
-| K | C33 | 激活过渡 | | | | 三阶段无分叉,PRD rollout/回滚 |
-| K | C34 | ABI 不变升级 | | | | proxy 换 impl,节点无感 |
+### CX3:mirror snapshot 跨端 read parity
+```bash
+H=$(cast block-number --rpc-url $RPC_GETH)
+R_geth=$(cast call $MIRROR "getBlacklist(uint256,uint256)(uint256,address[])" 0 64 --rpc-url $RPC_GETH --block $H)
+R_reth=$(cast call $MIRROR "getBlacklist(uint256,uint256)(uint256,address[])" 0 64 --rpc-url $RPC_RETH --block $H)
+[ "$R_geth" = "$R_reth" ] || echo "DIVERGENCE at block $H"
+```
+
+### CX5/CX6 anti-fork 复现(共用 patch + 不同 env 模式)
+
+测重点:malicious sequencer 双向偏离 deposit gate → honest follower 拒块。
+
+#### 准备 patch(测试专用,跑完必须 revert,严禁带进生产)
+
+文件:`op-geth/core/blacklist_gate_xlayer.go`
+
+```diff
+@@ -36,6 +36,7 @@ package core
+ import (
+ 	"errors"
+ 	"math/big"
++	"os"
+ 	"time"
+
+ 	"github.com/ethereum/go-ethereum/common"
+@@ -238,6 +239,27 @@ func applyTransactionWithBlacklistGate(...) {
+ 	if hit && !tx.IsDepositTx() && !dropNormalHit {
+ 		hit = false
+ 	}
++	// CX5/CX6 anti-fork test ONLY: when XLAYER_BYPASS_BLACKLIST_GATE=1 is set on
++	// a SEQUENCER process, bypass the gate so the seq produces a block where a
++	// blacklisted deposit succeeds (or a clean one fails — toggled by =2). An
++	// honest follower (no env var) will still apply the gate during re-exec and
++	// detect the divergence as a bad block. DO NOT enable in production.
++	if hit && os.Getenv("XLAYER_BYPASS_BLACKLIST_GATE") == "1" {
++		log.Warn("xlayer-blacklist: GATE BYPASSED (CX5 test mode)",
++			"hash", tx.Hash(), "deposit", tx.IsDepositTx(), "category", category)
++		hit = false
++	}
++	// CX6: when env=2, FORCE a synthetic hit on every clean deposit to simulate
++	// a malicious seq that revert-overrides a deposit that should have succeeded.
++	if !hit && tx.IsDepositTx() && os.Getenv("XLAYER_BYPASS_BLACKLIST_GATE") == "2" {
++		if !params.IsDepositExemptSender(msg.From) {
++			log.Warn("xlayer-blacklist: GATE FORCE-HIT (CX6 test mode)",
++				"hash", tx.Hash())
++			hit = true
++			category = "cx6_force"
++		}
++	}
+ 	if hit {
+```
+
+`devnet/docker-compose.yml` `op-geth-seq` 服务加 environment 段:
+
+```yaml
+  op-geth-seq:
+    environment:
+      XLAYER_BYPASS_BLACKLIST_GATE: "${XLAYER_BYPASS_BLACKLIST_GATE:-}"
+```
+
+`devnet/.env` 加:
+```
+XLAYER_BYPASS_BLACKLIST_GATE=1   # CX5
+# XLAYER_BYPASS_BLACKLIST_GATE=2   # CX6
+```
+
+打包步骤:
+```bash
+# 1. 应用 patch
+cd /Users/oker/workspace/xlayer/op-geth
+git apply <patch>   # 或手工编辑
+
+# 2. 重建 op-geth 镜像
+GITTAG=$(git rev-parse --short HEAD)
+docker build -t op-geth:$GITTAG -f Dockerfile .
+docker tag op-geth:$GITTAG op-geth:latest
+
+# 3. 验证 patch 进了 binary
+docker run --rm --entrypoint sh op-geth:latest -c \
+  "strings /usr/local/bin/geth | grep -E 'BYPASSED|FORCE-HIT'"
+```
+
+#### CX5:malicious seq 包黑名单 deposit → follower 拒块
+
+`.env` 设 `XLAYER_BYPASS_BLACKLIST_GATE=1`,T3 拓扑 (SEQ_TYPE=geth, RPC_TYPE=reth):
+
+```bash
+# 部署 FakeTransferEmitter 到 L2
+forge create src/FakeTransferEmitter.sol:FakeTransferEmitter --rpc-url L2 ...
+# add(VICTIM) 到 mirror
+cast send MIRROR "add(address)" VICTIM ...
+# L1 deposit:to=Emitter, data=emitFakeTransfer(SENDER, VICTIM, 1)
+DATA=$(cast calldata "emitFakeTransfer(address,address,uint256)" SENDER VICTIM 1)
+cast send --rpc-url L1 PORTAL \
+  "depositERC20Transaction(address,uint256,uint256,uint64,bool,bytes)" \
+  EMITTER 0 0 300000 false "$DATA"
+# 等 ~15s 让 op-node derive
+# 期望:
+# - op-geth-seq 日志: "GATE BYPASSED (CX5 test mode) ... deposit=true"
+# - L2 deposit tx status=1 on seq (本该是 0)
+# - op-reth-rpc 日志: "Encountered invalid block ... Bad block with existing invalid ancestor"
+# - reth stuck at parent block; geth seq 继续出块
+# 跨端验证:cast block N --rpc-url reth-rpc 在 N>=bad_block_number 时报 NOT_FOUND
+```
+
+#### CX6:malicious seq 反向偏离 → follower 同样拒块
+
+`.env` 改 `XLAYER_BYPASS_BLACKLIST_GATE=2`, clean + reboot devnet (reth 在 CX5 后会 stuck):
+
+```bash
+# Mirror 任意非空状态(自动 seed 的 0xAA 即可),CLEAN 不在名单
+# L1 发 clean deposit:to=CLEAN, data=0x
+cast send --rpc-url L1 PORTAL \
+  "depositERC20Transaction(address,uint256,uint256,uint64,bool,bytes)" \
+  CLEAN 0 0 100000 false 0x
+# 期望:
+# - op-geth-seq 日志: "GATE FORCE-HIT (CX6 test mode)"
+# - 该 clean deposit 被 seq 强制 include-as-reverted (status=0)
+# - reth 期望该 deposit 应 status=1,re-exec 后 state root 不一致 → 拒块
+# - reth stuck at parent block
+```
+
+#### 跑完后 revert(必做)
+
+```bash
+cd /Users/oker/workspace/xlayer/op-geth
+git checkout core/blacklist_gate_xlayer.go      # 撤 patch
+docker build -t op-geth:latest -f Dockerfile .   # 重建干净 binary
+# 撤 docker-compose.yml 的 XLAYER_BYPASS_BLACKLIST_GATE env 段
+# 撤 .env 的 XLAYER_BYPASS_BLACKLIST_GATE 行
+```
+
+### CX7:flashblocks pre-confirm 拦截边界(reth-only)
+```bash
+# FLASHBLOCK_ENABLED=true,SEQ=reth
+# add(VICTIM),让 VICTIM 发 tx
+# 观察 reth flashblock 预确认面是否在 pre-confirm 阶段就拦,还是仅在 finalize 拦
+# 关键:确认 reth 的 builder 路径在 flashblock 周期内正确刷新 snapshot
+```
+
+### CX8:conductor handover mid-add
+```bash
+# 档二集群:3 个 conductor(混选 reth/geth)
+# 启动一笔 add(VICTIM)tx,在它落入区块前 / 立即后,强制切主到另一类型 leader
+# 期望:无论切主何时发生,最终名单状态在 3 节点一致;后续 VICTIM 发 tx 跨任意 seq 都被拦
+```
+
+### CX9:proxy upgrade in mixed topology
+```bash
+# 同 C34,但顶层拓扑切为 reth+geth 异类
+# upgradeTo(V2)tx 落在 block M
+# 验证:M+1 块在 reth-rpc 和 geth-rpc 上读到的 ABI 行为一致;升级块前后 stateRoot 跨端一致
+```
+
+### CX10:fail-open parity(P0 anti-fork)
+```bash
+# 部署一个 V3 mirror impl,getBlacklist 内永远 revert
+# upgradeTo(V3),让 mirror 在 block M 起 fail
+# 两端必须都 fail-open:
+#   - 节点日志出现 "getBlacklist call failed" / Error
+#   - 行为等价于空名单,VICTIM 此后发 tx 应 status=1
+#   - 关键:两端的 fail-open 时点一致,否则一端拒一端过 → 分叉
+```
+
+### CX11:reth pool 主动驱逐(bd6dc9c 专项)
+```bash
+# 仅 reth-seq 拓扑
+# 让 X 提交 nonce-gap queued tx 入池
+# add(X) → 等 1-2 块
+# 期望:reth 主动从 pool 中删除 X 的 queued tx(对比 op-geth 不删)
+# 验证:txpool_content 不再包含 X 的该笔 tx
+```
+
+### CX13:multi-rpc 并发 import
+```bash
+# 档二:1 个 reth-seq + (1 geth-rpc + 1 reth-rpc)
+# seq 持续出含 deposit + drop 的块
+# 两个 rpc 并发拉同一 block,期望两边 stateRoot 一致
+```
+
+### CX14:混合 seq pool 一致
+```bash
+# 档二:2 reth-seq + 1 geth-seq,VICTIM 在名单
+# 把 VICTIM 的 tx 同时提交给三种 seq 的 RPC,各自的入口关都应拒
+# 没有"某 seq 不拦"的偏差
+```
+
+### CXR1:reorg 后黑名单快照重建
+```bash
+# 档二:三 seq raft
+# add(VICTIM)在 leader-A,落入 block M
+# kill leader-A → raft 重选 leader-B → reorg M 之后的几个块
+# 期望:new leader 的 blacklist snapshot 基于新 head 重建;若 add tx 还在 canonical chain → VICTIM 仍被拦;若被 reorg 出去 → VICTIM 暂不被拦,等 add tx 重新打包后恢复
+# 关键:三节点最终 stateRoot 一致
+```
+
+### CXW1-3:churn(高频 add/remove)
+```bash
+# CXW1 toggle:while true; do add(X); sleep 1; remove(X); sleep 1; done & 同时持续发 X 的 tx
+# CXW2 batch:批量 addBatch(N) / removeBatch(N) + 发 X 的 tx
+# CXW3 churn 跨切主:CXW1 同时持续 + 每 5s 在 reth↔geth 之间切主,持续 1-2 分钟
+# 期望:全程三节点逐块 stateRoot 一致、无 bad block
+```
+
+### CXG1:黑名单 × gasless 交互
+```bash
+# 启用 gasless(参考 gasless 测试计划)
+# 在 gasless 白名单中 add 某 EOA,同时在 blacklist 中也 add 同一 EOA
+# 该 EOA 发 0 价 tx
+# 期望:入口关优先级高于 gasless 放行 → tx 仍被入口关 -32000 拒(不靠 gasless 路径绕过 blacklist)
+```
+
+### ST1/ST2/ST3:soak(5min / 15min / 30min)
+```bash
+# 档二:adventure 工具 + cast churn 线程 + 多端点提交,负载 ~300-400 TPS,混合 普通 tx + blacklist 拦截场景
+# 全程逐块三节点 diff stateRoot + 真实坏块日志扫描
+# 期望:零分叉、无 bad block、pool 大小回落、内存平稳
+# 三轮时长递增,5min 验功能、15min 验中等累积、30min 验长时间退化
+```
+
+# 本计划不覆盖
+
+- **区块边界生效时机**:add 落入 block N,同块 N 内 from VICTIM 的 tx 不应被拦,从 N+1 才生效。手动难精确控同块时序,归 UT/IT 覆盖。
+- **上限截断**:total > 300000 时截断行为。手动构造不现实,归 UT;**跨端必须一致项**(若 reth 拒绝、op-geth 截断 → 跨端分叉,需统一)。
+- **TPS 性能**(G-3 "<1%"):关/开空名单/开带名单 loadtest 对照。归性能测试。
+- **形式化验证 / 模糊测试**:归专项。
+- **`RETH_STORAGE_V2=true` 存储变体**:本计划默认 v1,v2 一致性归 reth 团队专项。
+- **网络分区**:raft 自身处理,跟 blacklist 无关。
+- **合约层 access control**:demo mirror 故意无 ACL,跟节点测试无关。
+- **deposit 仅 pure CALL 触达(A-7/B-13)且无 event 无 balance 变化**:两端 Decision B 都跳过 check①,这类路径不拦——属架构权衡,不是 bug。
+
+# 复测流程建议
+
+1. **档一 reth 单端 baseline**(T2 ≈ SEQ=reth+RPC=reth):全量跑序号 1-31 中所有标"reth-seq + geth-seq" 的 case 的 reth 那一组
+2. **档一 跨端**(T3/T4 ≈ 异类双向):跑序号 19-21、24、25、32、34、35-36、42、46(共 ~10 case × 2 组 = 20 跑)
+3. **档二 多节点**(CX8/13/14、CXR1、CXW1-3、CXG1):需要先改 docker-compose 给 reth/geth 实例独立端口、开 CONDUCTOR_ENABLED=true
+4. **档二 soak**(ST1/2/3):最后跑,确认稳态无退化
+5. **CX5/CX6 对抗**:按本文档前面 patch 段步骤,跑完务必 git checkout op-geth 还原
+6. **跑完每 case 后**:更新本文件「实际」列(从 ⏳ pending 改成 ✅/❌/⏸ + 简述结果),保留原始证据到 `devnet/test-results/blacklist-XLOP-1100-<ts>/Cn.md`

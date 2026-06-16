@@ -71,11 +71,35 @@ if [ "$BAL" = "0" ]; then
 fi
 
 # --- Deploy (forge compiles the self-contained stub on the fly). ---
-CREATE_JSON=$(cd contracts/blacklist && forge create \
-  src/L2BlacklistMirror.sol:L2BlacklistMirror \
-  --rpc-url "$L2_RPC_URL" \
-  --mnemonic "$MNEMONIC" --mnemonic-derivation-path "$DPATH" \
-  --broadcast --json)
+# CX9 proxy upgrade test: if USE_PROXY_MIRROR=true, deploy ImplV1 from a
+# separate funded account first, then deploy MirrorProxy from the dedicated
+# deployer (m/19, nonce 0) so the proxy lands at the deterministic address.
+if [ "${USE_PROXY_MIRROR}" = "true" ]; then
+  echo "   USE_PROXY_MIRROR=true — deploying ImplV1 + MirrorProxy"
+  IMPL_DPATH="m/44'/60'/0'/0/1"  # rich account, used for impl deploy only
+  IMPL_JSON=$(cd contracts/blacklist && forge create \
+    src/L2BlacklistMirror.sol:L2BlacklistMirror \
+    --rpc-url "$L2_RPC_URL" \
+    --mnemonic "$MNEMONIC" --mnemonic-derivation-path "$IMPL_DPATH" \
+    --broadcast --json)
+  IMPL_V1=$(echo "$IMPL_JSON" | jq -r '.deployedTo // empty')
+  if [ -z "$IMPL_V1" ]; then
+    echo "❌ ImplV1 deploy failed:"; echo "$IMPL_JSON"; exit 1
+  fi
+  echo "   ImplV1 at $IMPL_V1"
+  CREATE_JSON=$(cd contracts/blacklist && forge create \
+    src/MirrorProxy.sol:MirrorProxy \
+    --constructor-args "$IMPL_V1" \
+    --rpc-url "$L2_RPC_URL" \
+    --mnemonic "$MNEMONIC" --mnemonic-derivation-path "$DPATH" \
+    --broadcast --json)
+else
+  CREATE_JSON=$(cd contracts/blacklist && forge create \
+    src/L2BlacklistMirror.sol:L2BlacklistMirror \
+    --rpc-url "$L2_RPC_URL" \
+    --mnemonic "$MNEMONIC" --mnemonic-derivation-path "$DPATH" \
+    --broadcast --json)
+fi
 
 DEPLOYED=$(echo "$CREATE_JSON" | jq -r '.deployedTo // empty')
 if [ -z "$DEPLOYED" ]; then

@@ -25,9 +25,15 @@ contract L2BlacklistMirror {
     address[] private _values;
     mapping(address => uint256) private _index;
 
+    // CX10 fail-open test only: when true, getBlacklist reverts to simulate a
+    // broken / mis-upgraded mirror impl. Nodes MUST treat revert as fail-open
+    // (empty list + Error log) — anti-fork posture is that BOTH clients agree.
+    bool private _panicked;
+
     event Added(address indexed account);
     event Removed(address indexed account);
     event Cleared();
+    event Panicked(bool on);
 
     /// @notice Add `account` to the blacklist. Rejects the zero address; a
     ///         duplicate is a no-op (the set is deduped).
@@ -71,6 +77,17 @@ contract L2BlacklistMirror {
         return _index[account] != 0;
     }
 
+    /// @notice CX10 fail-open test only: switch getBlacklist into permanent
+    ///         revert mode (or back). Devnet stub with no auth — anyone may toggle.
+    function setPanic(bool on) external {
+        _panicked = on;
+        emit Panicked(on);
+    }
+
+    function isPanicked() external view returns (bool) {
+        return _panicked;
+    }
+
     /// @notice Node read interface (XLOP-1100). Returns the total number of
     ///         listed addresses and a bounded page `[start, start+limit)` of
     ///         them. A list within one page is fetched in a single call (total +
@@ -84,6 +101,7 @@ contract L2BlacklistMirror {
         view
         returns (uint256 total, address[] memory addresses)
     {
+        require(!_panicked, "L2BlacklistMirror: panicked");
         total = _values.length;
         if (start >= total) {
             return (total, new address[](0));

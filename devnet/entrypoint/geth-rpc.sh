@@ -9,12 +9,12 @@ CMD="geth \
       --config=/config.toml \
       --gcmode=archive \
       --rollup.txpool.trusted-peers-only \
-      --rollup.enabletxpooladmission \
-      --rollup.gasless-mock-gas-price-percentile=${GASLESS_MOCK_GAS_PRICE_PERCENTILE:-0.1}"
+      --rollup.enabletxpooladmission"
 
-# Enable XLayer gasless flag to forward gasless (0-price) txs to the sequencer node.
+# Enable XLayer gasless flags only on builds that include gasless; blacklist-only op-geth doesn't have them.
 if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
     CMD="$CMD --rollup.allow-gasless"
+    CMD="$CMD --rollup.gasless-mock-gas-price-percentile=${GASLESS_MOCK_GAS_PRICE_PERCENTILE:-0.1}"
 fi
 
 exec $CMD
