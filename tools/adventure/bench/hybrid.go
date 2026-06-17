@@ -49,17 +49,14 @@ func HybridInit(amountStr, configPath string) error {
 	}
 
 	rpcURL := utils.TransferCfg.Rpc[0]
-	accountsFile, err := GetConfigFilePath(utils.TransferCfg.Accounts)
-	if err != nil {
-		return fmt.Errorf("failed to get accounts file path: %v", err)
-	}
 
 	senderKey, err := crypto.HexToECDSA(strings.TrimPrefix(utils.TransferCfg.SenderPrivateKey, "0x"))
 	if err != nil {
 		return fmt.Errorf("failed to parse senderPrivateKey: %v", err)
 	}
 
-	hexAddrs := loadAccountAddresses(accountsFile)
+	// Reuse the accounts loadConfig already loaded (sliced by accountOffset) — no second file read.
+	hexAddrs := loadAccountAddresses(utils.TransferCfg.BenchmarkAccounts)
 	if len(hexAddrs) == 0 {
 		return errors.New("no benchmark accounts loaded")
 	}

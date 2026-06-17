@@ -42,7 +42,7 @@ func Erc20Init(amountStr, configPath string) error {
 	}
 
 	rpcURL := utils.TransferCfg.Rpc[0]
-	accountsFile, err := GetConfigFilePath(utils.TransferCfg.Accounts)
+	_, err := GetConfigFilePath(utils.TransferCfg.Accounts)
 	if err != nil {
 		return fmt.Errorf("failed to get accounts file path: %v", err)
 	}
@@ -58,8 +58,8 @@ func Erc20Init(amountStr, configPath string) error {
 		os.Exit(1)
 	}
 
-	// Load addresses
-	addresses := utils.ReadDataFromFile(accountsFile)
+	// Reuse the accounts loadConfig already loaded (sliced by accountOffset) — no second file read
+	addresses := utils.TransferCfg.BenchmarkAccounts
 	hexAddrs := make([]ethcmn.Address, len(addresses))
 	if !strings.HasPrefix(addresses[0], "0x") {
 		// Support private key file input
@@ -294,7 +294,7 @@ func loadConfig(configPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get accounts file path: %v", err)
 	}
-	privateKeys := utils.ReadDataFromFile(accountsFile)
+	privateKeys := utils.ReadAccountsFromFile(accountsFile)
 	utils.TransferCfg.BenchmarkAccounts = privateKeys
 
 	return nil

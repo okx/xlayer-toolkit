@@ -88,17 +88,14 @@ func GaslessInit(configPath string) error {
 	}
 
 	rpcURL := utils.TransferCfg.Rpc[0]
-	accountsFile, err := GetConfigFilePath(utils.TransferCfg.Accounts)
-	if err != nil {
-		return fmt.Errorf("failed to get accounts file path: %v", err)
-	}
 
 	senderKey, err := crypto.HexToECDSA(strings.TrimPrefix(utils.TransferCfg.SenderPrivateKey, "0x"))
 	if err != nil {
 		return fmt.Errorf("failed to parse senderPrivateKey: %v", err)
 	}
 
-	hexAddrs := loadAccountAddresses(accountsFile)
+	// Reuse the accounts loadConfig already loaded (sliced by accountOffset) — no second file read.
+	hexAddrs := loadAccountAddresses(utils.TransferCfg.BenchmarkAccounts)
 	if len(hexAddrs) == 0 {
 		return errors.New("no benchmark accounts loaded")
 	}
@@ -324,14 +321,16 @@ func registerGaslessTransferToken(cli utils.Client, ownerKey *ecdsa.PrivateKey, 
 
 // loadAccountAddresses reads the accounts file (addresses or private keys) into addresses, mirroring
 // the loader in Erc20Init/NativeInit.
-func loadAccountAddresses(accountsFile string) []ethcmn.Address {
-	addresses := utils.ReadDataFromFile(accountsFile)
-	if len(addresses) == 0 {
+// loadAccountAddresses derives funding addresses from already-loaded account lines (private keys
+// or 0x-addresses). Callers pass utils.TransferCfg.BenchmarkAccounts (loaded once by the config
+// loader, already sliced by accountOffset) so the file is not read a second time during init.
+func loadAccountAddresses(accounts []string) []ethcmn.Address {
+	if len(accounts) == 0 {
 		return nil
 	}
-	hexAddrs := make([]ethcmn.Address, len(addresses))
-	if !strings.HasPrefix(addresses[0], "0x") {
-		for i, addr := range addresses {
+	hexAddrs := make([]ethcmn.Address, len(accounts))
+	if !strings.HasPrefix(accounts[0], "0x") {
+		for i, addr := range accounts {
 			privKey, err := crypto.HexToECDSA(strings.TrimPrefix(addr, "0x"))
 			if err != nil {
 				log.Printf("Failed to convert private key string %s: %v\n", addr, err)
@@ -340,7 +339,7 @@ func loadAccountAddresses(accountsFile string) []ethcmn.Address {
 			hexAddrs[i] = utils.GetEthAddressFromPK(privKey)
 		}
 	} else {
-		for i, addr := range addresses {
+		for i, addr := range accounts {
 			hexAddrs[i] = ethcmn.HexToAddress(addr)
 		}
 	}
