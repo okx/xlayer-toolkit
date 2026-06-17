@@ -27,12 +27,14 @@ import (
 // are gasless). `gasless-bench` then has the benchmark accounts send zero-gas-price ERC20 transfers
 // to that contract — the gasless path under load.
 
-// Gasless whitelist predeploy addresses, keyed by chain id.
-//   - 195 (local devnet): the predeploy at 0x4200...0700, mirroring XLAYER_DEVNET_GASLESS_CONTRACT
-//     in alloy-op-evm.
+// Gasless whitelist addresses, keyed by chain id. These MUST match the address op-reth's gasless hook
+// actually reads, or registering a token here has no effect and zero-priced txs are rejected as
+// underpriced.
+//   - 195 (local devnet): the GaslessWhitelist proxy deployed by devnet/scripts/deploy-gasless.sh,
+//     equal to alloy-op-evm's XLAYER_DEVNET_GASLESS_CONTRACT.
 //   - 1952 / 196 (XLayer testnet / mainnet): the deployed GaslessWhitelist contract.
 const (
-	GaslessWhitelistAddrDevnet = "0x4200000000000000000000000000000000000700" // chain id 195
+	GaslessWhitelistAddrDevnet = "0xA9092BC02e2000a3F8996D1991621E9A03Ef2dfE" // chain id 195
 	GaslessWhitelistAddrXLayer = "0x19787404b0c70021b4752028f7e3a92313885B27" // chain id 1952 / 196
 )
 
