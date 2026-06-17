@@ -4,13 +4,13 @@
 
 在 devnet(chain 195)上同时验证 op-geth 与 xlayer-reth 两个客户端的黑名单功能正确性,以及跨端 / 多节点 / 长跑场景下的一致性。重点覆盖:
 
-- **单端基线**:每个客户端独立 build 时,入口关 + 执行关 + 读 API + 时序 + 重启 全部正确
+- **单端基线**:每个客户端独立 build 时,执行关 + 读 API + 时序 + 重启 全部正确(入口关已删,执行关是唯一拦截点)
 - **L1 forced inclusion**:deposit 命中名单时 included-as-reverted (status=0、gasUsed=gasLimit);跨端 receipt 字节一致
 - **跨端 anti-fork**:同一区块在 op-geth seq 与 reth follower 上算出的 state/receipts root 必须 byte-identical;reorg、proxy upgrade、fail-open 路径两端语义对齐
 - **多节点 HA**:conductor 切主、跨客户端 leader 轮换、多 rpc 并发 import、mempool 跨端一致
 - **长跑稳态**:高负载 + churn(高频 add/remove)+ 切主 下持续无分叉、无 bad block
 - **对抗性**:恶意 sequencer 包黑名单 tx → follower 必须拒块(P0 anti-fork)
-- **reth-only 特性**:bd6dc9c 的 mempool 主动驱逐;flashblocks 预确认面行为
+- **池驱逐一致性**:两端命中后都从 mempool 驱逐(op-geth `SetRejected` / reth `txs_to_evict`);flashblocks 预确认面行为
 - **黑名单 × gasless 交互**:同账户同时在两个白名单/黑名单中的判定优先级
 
 # 客户端 × 角色词汇
@@ -42,8 +42,8 @@
 
 ## 前置条件
 
-1. **op-geth** 切到 `xl/blacklist_latest`,含 `getBlacklist` ABI + 195 地址硬编码 `0x73511669…F31f` + 最新 `EvaluateDeposit` 跳 check① 的 commit(509447e84+),未提交改动需落地后镜像重建。
-2. **xlayer-reth** 切到 `xl/blacklist_latest`,含 5 个相关 commit(`8dc76e4 feat / b93718c sequencer deposit skip check① / 9280dc9 align placeholders / bd6dc9c pool 主动驱逐 / 790ba45 archive`)。
+1. **op-geth** 切到 `xl/blacklist_v1`,含 `getBlacklist` ABI + 195 地址硬编码 `0x73511669…F31f` + 两查执行关重构 commit(`fcd062753` two-check gate / in-place injection / drop ingress)。入口关(FR-1)已删,执行关为唯一拦截点;check① 已删,只判 check②(Transfer event)+check③(ETH balance)。
+2. **xlayer-reth** 切到 `xl/blacklist_v1`,含单 crate 两查重构 commit(`cc7e144` single crate / two-check gate / deposit thin-seam)。入口关 mempool filter 已删(原 bd6dc9c 池主动驱逐被回退,改由 build-drop 后驱逐),与 op-geth 共识逻辑逐字节对齐。
 3. 两个客户端镜像都须重建(`SKIP_OP_GETH_BUILD=false` + `SKIP_OP_RETH_BUILD=false`),首次跑各 5-10 分钟。
 
 ## 启动方式
@@ -119,20 +119,18 @@ RPC=http://localhost:8123
 
 ## 临时代码改动
 
-无需临时改日志:入口关错误、执行关 WARN 日志均为默认可见级别,metrics 默认注册。
+无需临时改日志:执行关 WARN 日志、出块 drop 日志均为默认可见级别,metrics 默认注册。
 （若 metrics HTTP 端点未开,需确认 op-geth 启动带 `--metrics`;否则本计划以 docker 日志为主证据,metrics 为辅。）
 
 # 证据链
 
 | 证据 | 位置 | 级别 | 内容 | 默认可见 |
 |---|---|---|---|---|
-| 入口关拒绝错误 | core/error.go:158 | RPC error | `xlayer-blacklist: sender or recipient is on the blacklist`(JSON-RPC -32000) | 是 |
-| 执行关拦截日志 | core/blacklist_gate_xlayer.go:253 | Warn | `xlayer-blacklist: tx intercepted at exec gate` + hash/category/deposit | 是 |
-| 出块 drop 日志 | miner/worker.go | — | 普通 L2 命中被 drop(出块路径) | 是 |
+| 执行关拦截日志(deposit) | core/blacklist_gate_xlayer.go:171 | Warn | `xlayer-blacklist: tx intercepted at exec gate` + hash/category/deposit(仅 deposit included-as-reverted 时打印) | 是 |
+| 出块 drop 日志(普通 L2) | miner/worker.go:573 | Warn | `Dropping blacklisted transaction during block-building` + hash;命中 tx 经 `SetRejected` 从池驱逐 | 是 |
 | metric cache_size | core/blacklist_metrics_xlayer.go:15 | Prometheus | `xlayer_blacklist_cache_size` 当前名单快照大小 | 需 --metrics |
-| metric pool_rejected | :19 | Prometheus | `xlayer_blacklist_pool_rejected_total` | 需 --metrics |
-| metric exec_revert | :27 | Prometheus | `xlayer_blacklist_exec_revert_total{hook=call|log|selfdestruct|eth_balance}` | 需 --metrics |
-| metric snapshot_read | :23 | Prometheus | `xlayer_blacklist_snapshot_read_duration_seconds` | 需 --metrics |
+| metric exec_revert | :24 | Prometheus | `xlayer_blacklist_exec_revert_total{hook=log\|selfdestruct\|eth_balance}`(check① 已删,无 `call`) | 需 --metrics |
+| metric snapshot_read | :21 | Prometheus | `xlayer_blacklist_snapshot_read_duration_nanoseconds`(两端单位/命名一致) | 需 --metrics |
 
 # 测试矩阵(唯一权威:序号 | 分类 | case | 复测范围 | 预期 | 实际)
 
@@ -149,12 +147,12 @@ RPC=http://localhost:8123
 | 1 | A 开关/基线 | C1 flag=off baseline | reth-seq + geth-seq(2组) | 全链 no-op、metrics 全 0、无 intercept 日志 | ⏳ pending |
 | 2 | A 开关/基线 | C2 flag=on 空名单 | reth-seq + geth-seq(2组) | total=0、cache_size=0、普通 tx 成功 | ⏳ pending |
 | 3 | A 开关/基线 | C3 mirror 未部署短路 | reth-seq + geth-seq(2组) | 同 C1 | ⏳ pending |
-| 4 | B 入口关 | C4 入口关 from | reth-seq + geth-seq(2组) | -32000、nonce 不增、pool_rejected+1 | ⏳ pending |
-| 5 | B 入口关 | C5 入口关 to | reth-seq + geth-seq(2组) | to 命中拒,counter +1 | ⏳ pending |
-| 6 | B 入口关 | C6 mempool 池删除 三段 | reth-seq + geth-seq(2组) | 三段行为跨客户端一致 | ⏳ pending |
+| 4 | B 执行关·顶层 | C4 顶层 from 命中 | reth-seq + geth-seq(2组) | 资产移动 tx 出块 drop + 池驱逐;value=0 不拦;无 -32000 | ⏳ pending |
+| 5 | B 执行关·顶层 | C5 顶层 to 命中 | reth-seq + geth-seq(2组) | value>0 打给 VICTIM → check③ drop;exec_revert+1 | ⏳ pending |
+| 6 | B 执行关·顶层 | C6 build-drop 后池驱逐 | reth-seq + geth-seq(2组) | 可出块的资产移动 tx 命中 → drop + 池驱逐,两端一致;纯排队 tx 不被驱逐 | ⏳ pending |
 | 7 | C 执行关 | C7 内层 CALL drop (check③ balance) | reth-seq + geth-seq(2组) | drop、VICTIM 余额不变、exec_revert+1 | ⏳ pending |
 | 8 | C 执行关 | C8 多命中 / event from==to | reth-seq + geth-seq(2组) | 单次 drop、counter 不重复 | ⏳ pending |
-| 9 | C 执行关 | C8-ext 多加黑账户互发 | reth-seq + geth-seq(2组) | 入口关 from 优先,counter 不重复 | ⏳ pending |
+| 9 | C 执行关 | C8-ext 多加黑账户互发 | reth-seq + geth-seq(2组) | 执行关命中一次 drop,counter 不重复 | ⏳ pending |
 | 10 | D 执行关·event | C9 ERC20 Transfer event | reth-seq + geth-seq(2组) | hook=log drop、余额不变 | ⏳ pending |
 | 11 | D 执行关·event | C10 授权变体 | 覆盖 | 同 C9 | ⏳ pending |
 | 12 | D 执行关·event | C11 ERC721 | reth-seq + geth-seq | hook=log + drop | ⏳ pending |
@@ -164,7 +162,7 @@ RPC=http://localhost:8123
 | 16 | E 执行关·balance | C15 selfdestruct | reth-seq + geth-seq(2组) | drop、VICTIM ETH 不变 | ⏳ pending |
 | 17 | E 执行关·balance | C16 committed-effect | reth-seq + geth-seq(2组) | 不误拦 | ⏳ pending |
 | 18 | E 执行关·balance | C17 coinbase=VICTIM | NA | — | ⏳ pending |
-| 19 | F L1↔L2 | C18 L1 deposit pure-CALL-touch | reth-seq + geth-seq(2组) + 异类双向(2组) | 跨端 byte-identical | ⏳ pending |
+| 19 | F L1↔L2 | C18 deposit value→VICTIM included-as-reverted | reth-seq + geth-seq(2组) + 异类双向(2组) | 命中 → status=0、gasUsed=gasLimit、keep-mint、nonce+1;跨端 byte-identical;纯 CALL 触达(无资产/event)则不拦 status=1 | ⏳ pending |
 | 20 | F L1↔L2 | C19 deposit + Transfer event | reth-seq + geth-seq(2组) + 异类双向(2组) | status=0、gasUsed≈gasLimit、logs=0 | ⏳ pending |
 | 21 | F L1↔L2 | C20 deposit aliasing | NA | — | ⏳ pending |
 | 22 | F L1↔L2 | C21 L2→L1 提款 initiateWithdrawal | NA | — | ⏳ pending |
@@ -175,7 +173,7 @@ RPC=http://localhost:8123
 | 27 | G 读取接口 | C25 边界 | 任一客户端(1组,读合约) | 6 个边界符合契约 | ⏳ pending |
 | 28 | H 时序 | C26 remove 恢复 | reth-seq + geth-seq(2组) | VICTIM 发 tx status=1 | ⏳ pending |
 | 29 | H 时序 | C27 时序对称 | reth-seq + geth-seq(2组) | M+1 放行 | ⏳ pending |
-| 30 | I 负向约束 | C28 FR-7 负向 | reth-rpc + geth-rpc(2组) | 无 RPC + message 固定 + metrics 拆分 | ⏳ pending |
+| 30 | I 负向约束 | C28 FR-7 负向 | reth-rpc + geth-rpc(2组) | 无 isBlocked RPC;只有 exec_revert、无 pool_rejected | ⏳ pending |
 | 31 | I 负向约束 | C29 非法 CLI | reth + geth 二进制(2组) | exit≠0 | ⏳ pending |
 | 32 | J 共识/同步 | C30 跨端 state/receipts root | 异类双向(2组) | 0 divergent | ⏳ pending |
 | 33 | J 共识/同步 | C31 RPC 从 0 同步 | BLOCKED | — | ⏳ pending |
@@ -185,18 +183,18 @@ RPC=http://localhost:8123
 | 37 | CX 跨端 anti-fork | CX5 恶意 seq 包黑名单 | 异类双向(2组) | follower 拒块 | ⏳ pending |
 | 38 | CX 跨端 anti-fork | CX6 恶意 seq 漏 deposit | 异类双向(2组) | follower 拒块 | ⏳ pending |
 | 39 | CX 跨端 anti-fork | CX10 fail-open parity | 异类双向(2组) | 两端 fail-open | ⏳ pending |
-| 40 | CX reth-only | CX11 reth pool 主动驱逐 | reth-seq(1组) | reth 主动删 | ⏳ pending |
+| 40 | CX 池驱逐 | CX11 池驱逐跨端一致 | reth-seq + geth-seq(2组) | 命中后两端都从池驱逐(op-geth SetRejected / reth txs_to_evict) | ⏳ pending |
 | 41 | CX reth-only | CX7 flashblocks pre-confirm | flashblock(2组) | 预确认面拦截 | ⏳ pending |
 | 42 | CX 多节点 | CX3 mirror snapshot 跨端 read parity | 异类双向(2组) | hash 一致 | ⏳ pending |
 | 43 | CX 多节点 | CX8 conductor handover mid-add | 档二 | 切主后名单延续 | ⏳ pending |
 | 44 | CX 多节点 | CX13 multi-rpc 并发 import | 档二 | 并发 import 一致 | ⏳ pending |
-| 45 | CX 多节点 | CX14 混合 seq pool 一致 | 档二 | 行为等价 | ⏳ pending |
+| 45 | CX 多节点 | CX14 混合 seq drop 一致 | 档二 | 各 seq 出块都 drop 该 tx,行为等价(无入口关) | ⏳ pending |
 | 46 | CX 多节点 | CX9 proxy upgrade in mixed topology | 异类双向(2组) | 跨端无延迟分叉 | ⏳ pending |
 | 47 | CX reorg | CXR1 reorg 后快照重建 | 档二 (leader kill) | 重建一致 | ⏳ pending |
 | 48 | CX churn | CXW1 toggle 高频翻转 | 档二 | 三节点 stateRoot 一致 | ⏳ pending |
 | 49 | CX churn | CXW2 batch churn | 档二 | 同上 | ⏳ pending |
 | 50 | CX churn | CXW3 churn 跨切主 | 档二 | 同上 | ⏳ pending |
-| 51 | CX 交互 | CXG1 黑名单 × gasless 交互 | reth-seq + geth-seq(2组) | 入口关优先 | ⏳ pending |
+| 51 | CX 交互 | CXG1 黑名单 × gasless 交互 | reth-seq + geth-seq(2组) | 执行关 build-drop 优先于 gasless;value=0 gasless tx 不拦 | ⏳ pending |
 | 52 | CX soak | ST1 5min soak | 档二(混选集群) | 0 div + no bad block | ⏳ pending |
 | 53 | CX soak | ST2 15min soak | 档二 | 同上 | ⏳ pending |
 | 54 | CX soak | ST3 30min soak | 档二 | 同上 | ⏳ pending |
@@ -271,7 +269,7 @@ cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN                 
 ```
 负向:
 ```bash
-docker compose logs op-geth-seq | grep "intercepted at exec gate" ; echo "<-- 应为空"
+docker compose logs op-geth-seq | grep -E "intercepted at exec gate|Dropping blacklisted transaction" ; echo "<-- 应为空"
 ```
 
 ### C3:mirror 未部署 → no-op
@@ -283,66 +281,76 @@ cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $CLEAN   
 docker compose logs op-geth-seq | grep -iE "blacklist.*(call failed|decode failed|error)" ; echo "<-- 应为空"
 ```
 
-## B 入口关(FR-1)
+## B 执行关·顶层资产移动(原入口关已删)
 
-### C4:入口关拒绝(from)
+入口关(FR-1)已移除:黑名单地址发起的 tx 不再被 RPC 拒(无 -32000),而是进池、在出块时若发生资产移动则被 drop + 从池驱逐。判定只看 check②(Transfer event)/check③(ETH balance)——只发 value=0 / 纯调用、不动资产的 tx 现在会照常上链(架构权衡,不是 bug)。
+
+### C4:顶层 from 命中(执行关 build-drop)
 
 ```bash
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 5ether $VICTIM   # 充值
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM
 sleep 3   # add 落 N,从 N+1 生效
 ```
-正向(被加黑账户发 tx 被拒,固定错误码/文案):
+正向(VICTIM 转账 → 出块 drop,不上链;无 -32000):
 ```bash
-cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -iE "\-32000|sender or recipient is on the blacklist"
+cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN --async   # 返回 hash 但不会被打包
+sleep 6
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1
+cast nonce $VICTIM --rpc-url $RPC   # 不增(tx 被 drop,未上链)
 ```
-负向(未加黑账户照常成功;被拒交易不上链):
+负向(未加黑账户照常成功;value=0 的黑账户 tx 不再被拦):
 ```bash
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $CLEAN   # 成功 status=1
-cast nonce $VICTIM --rpc-url $RPC                                              # 不因被拒交易增长
+cast send --rpc-url $RPC --private-key $(VKEY) --value 0 $CLEAN                 # value=0 无资产移动 → 成功上链(新行为)
 ```
-metrics(若启用):pool_rejected_total 递增;cache_size ≥ 1;exec_revert_total 不变。
+metrics(若启用):exec_revert_total{hook=eth_balance} 递增;cache_size ≥ 1;无 pool_rejected。
 
-### C5:入口关拒绝(to)
+### C5:顶层 to 命中(执行关 build-drop)
 
-正向:
+正向(value>0 打给 VICTIM → VICTIM 余额变动 → check③ 命中 → 出块 drop):
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $VICTIM 2>&1 | grep -iE "\-32000|on the blacklist"
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $VICTIM --async   # 不被打包
+sleep 6
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1
+cast balance $VICTIM --rpc-url $RPC   # 不增(tx 被 drop)
 ```
 负向:
 ```bash
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $CLEAN   # to=CLEAN 成功
 ```
 
-### C6:mempool 驱逐(FR-1 AC2)
+### C6:build-drop 后池驱逐(两端一致)
 
-排队 tx 的 from 被加黑后,下一区块应被移出、不打包。用 nonce gap 让 tx 稳定 pending:
+入口关已删,池里不再有"按名单主动剔除"的逻辑;驱逐是 build-drop 的副作用:可出块的资产移动 tx 命中 → 出块时 drop → `SetRejected`(op-geth)/ `txs_to_evict`(reth)→ 从池移除,不再每块重抓重放。注意:纯 nonce-gap 排队 tx(出块根本碰不到)不会被驱逐。
 ```bash
 X=$(cast wallet address --mnemonic "$MN" --mnemonic-derivation-path "m/44'/60'/0'/0/8")
 XKEY=$(cast wallet private-key --mnemonic "$MN" --mnemonic-derivation-path "m/44'/60'/0'/0/8")
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 5ether $X
-NONCE=$(cast nonce $X --rpc-url $RPC)
-cast send --rpc-url $RPC --private-key $XKEY --nonce $((NONCE+1)) --value 1 --async $CLEAN   # nonce gap → queued
-cast rpc txpool_content --rpc-url $RPC | grep -i $X   # 确认在池中
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $X ; sleep 3
+cast send --rpc-url $RPC --private-key $XKEY --value 1 --async $CLEAN   # 可出块的资产移动 tx
+cast rpc txpool_content --rpc-url $RPC | grep -i $X   # 进池
+sleep 6
 ```
-正向(被驱逐):
+正向(命中 → drop → 被驱逐):
 ```bash
-cast rpc txpool_content --rpc-url $RPC | grep -i $X ; echo "<-- 应为空(已被移出)"
-# metrics: pool_rejected_total 递增
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1
+cast rpc txpool_content --rpc-url $RPC | grep -i $X ; echo "<-- 应为空(build-drop 后已驱逐)"
+# metrics: exec_revert_total 递增(无 pool_rejected)
 ```
 
 ## C 执行关·from/to(FR-2)
 
-### C7:内层 CALL 触达(绕过入口关)
+### C7:内层 CALL 触达(顶层 to 不在名单,执行关兜底)
 
-入口关只查顶层 from/to;内层触达由执行关兜底。$FWD 来自公共准备段,顶层 to=FWD(不在名单),内层打给 VICTIM。
+顶层 to 不命中,内层资产移动由执行关 check③ 兜底。$FWD 来自公共准备段,顶层 to=FWD(不在名单),内层把 ETH 打给 VICTIM → VICTIM 余额变动命中 check③。普通 L2 tx 命中 = 出块 drop(非 included-as-reverted)。
 前置:`cast send ... $MIRROR "add(address)" $VICTIM`(幂等)。
-正向(内层触达 VICTIM → 回滚):
+正向(内层把 ETH 转给 VICTIM → drop):
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $FWD "forward(address)" $VICTIM
-docker compose logs op-geth-seq | grep "intercepted at exec gate" | tail -1
-# metrics: exec_revert_total{hook=call 或 eth_balance} 递增
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $FWD "forward(address)" $VICTIM --async
+sleep 6
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1
+# metrics: exec_revert_total{hook=eth_balance} 递增。注意:check① 已删,内层纯 CALL 不动资产、不 emit Transfer 则不再命中
 ```
 负向(内层触达 CLEAN → 成功 status=1):
 ```bash
@@ -355,11 +363,12 @@ $TOK 来自公共准备段。
 ```bash
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM    # 幂等,确保在名单
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM2
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $TOK "transferFrom(address,address,uint256)" $VICTIM $VICTIM 10   # from==to==VICTIM
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $TOK "transferFrom(address,address,uint256)" $VICTIM $VICTIM 10 --async   # from==to==VICTIM,Transfer event 命中
 ```
-正向(整笔回滚一次,不重复计数):
+正向(整笔 drop 一次,不重复计数):
 ```bash
-docker compose logs op-geth-seq | grep "intercepted at exec gate" | tail -1   # 单条日志,exec_revert_total +1(非 +2)
+sleep 6
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1   # 单条日志,exec_revert_total +1(非 +2)
 ```
 
 ## D 执行关·Transfer event(FR-2)
@@ -367,17 +376,18 @@ docker compose logs op-geth-seq | grep "intercepted at exec gate" | tail -1   # 
 ### C9:Transfer event(ERC20 transferFrom / transfer)
 
 $TOK 来自公共准备段(已 mint 给 VICTIM 1000、VICTIM 已 approve DEPLOYER)。前置:`add(VICTIM)`(幂等)。
-正向(from=VICTIM 的 Transfer event 命中;顶层 to=TOK 绕过入口关):
+正向(from=VICTIM 的 Transfer event 命中;顶层 to=TOK 不在名单):
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $TOK "transferFrom(address,address,uint256)" $VICTIM $CLEAN 10
-docker compose logs op-geth-seq | grep "intercepted at exec gate" | tail -1
-# metrics: exec_revert_total{hook=log} 递增;VICTIM token 余额不变(整笔回滚)
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $TOK "transferFrom(address,address,uint256)" $VICTIM $CLEAN 10 --async
+sleep 6
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1
+# metrics: exec_revert_total{hook=log} 递增;VICTIM token 余额不变(整笔 drop,未上链)
 cast call --rpc-url $RPC $TOK "balanceOf(address)(uint256)" $VICTIM   # 仍 1000
 ```
 to=VICTIM 方向:
 ```bash
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $TOK "mint(address,uint256)" $DEPLOYER_ADDRESS 100
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $TOK "transfer(address,uint256)" $VICTIM 10   # Transfer(to=VICTIM) → 回滚
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $TOK "transfer(address,uint256)" $VICTIM 10 --async   # Transfer(to=VICTIM) → drop
 ```
 负向(holder 非名单 → 成功):
 ```bash
@@ -389,14 +399,14 @@ cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $TOK "transfer(addr
 机制同 C9(都产生 from=VICTIM 的 Transfer event),换授权方式:
 - approve+helper:VICTIM 提前 `approve(helper)`,helper 触发 transferFrom —— 复用 C9 的 transferFrom 路径,spender 换成 helper。
 - EIP-2612 permit:若 token 支持 permit,用离线签名替代 approve 后 transferFrom。
-验证点同 C9:exec_revert_total{hook=log} 递增 + intercepted 日志。
+验证点同 C9:exec_revert_total{hook=log} 递增 + Dropping(build-drop)日志。
 
 ### C11:ERC721(Transfer event,tokenId indexed)
 
 ERC721 的 Transfer 与 ERC20 同 topic0 但 tokenId 也 indexed;验证 from/to 仍从 topics 正确提取。
 ```bash
 # 最小 ERC721 合约 emit Transfer(from=VICTIM, to, tokenId);顶层 to=NFT 合约
-# 正向:from=VICTIM → hook=log 回滚;负向:from/to 均非名单 → 成功
+# 正向:from=VICTIM → hook=log build-drop;负向:from/to 均非名单 → 成功
 ```
 
 ### C12:ERC1155(TransferSingle/Batch,不同事件分支)
@@ -404,8 +414,9 @@ ERC721 的 Transfer 与 ERC20 同 topic0 但 tokenId 也 indexed;验证 from/to 
 $T1155 来自公共准备段。前置:`add(VICTIM)`(幂等)。
 正向(TransferSingle from=VICTIM 命中):
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $T1155 "move(address,address,uint256,uint256)" $VICTIM $CLEAN 1 5
-docker compose logs op-geth-seq | grep "intercepted at exec gate" | tail -1   # hook=log
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $T1155 "move(address,address,uint256,uint256)" $VICTIM $CLEAN 1 5 --async
+sleep 6
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1   # hook=log build-drop
 ```
 负向(from/to 均非名单 → 成功):
 ```bash
@@ -434,7 +445,7 @@ cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $TOK "noise(address
 | EIP-7702(B-11) | VICTIM 委托代码后被调用 | 内层 from/to + Transfer |
 | blob tx(B-14) | type-3 tx,载荷同普通 tx | 同底层机制 |
 
-不单列正式 case;做 defense-in-depth 时验证点统一为:exec_revert_total{hook=log 或 call} 递增 + intercepted 日志 + 整笔回滚。
+不单列正式 case;做 defense-in-depth 时验证点统一为:exec_revert_total{hook=log 或 eth_balance} 递增 + Dropping(build-drop)日志 + 整笔 drop。
 
 ## E 执行关·ETH balance / 精度(FR-2)
 
@@ -443,9 +454,10 @@ cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $TOK "noise(address
 $DES 来自公共准备段。前置:`add(VICTIM)`(幂等)。
 正向(selfdestruct 把 ETH 打给 VICTIM,顶层 to=DES 不在名单 → ETH balance 命中):
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1ether $DES "destroyTo(address)" $VICTIM
-docker compose logs op-geth-seq | grep "intercepted at exec gate" | tail -1
-# metrics: exec_revert_total{hook=eth_balance 或 selfdestruct} 递增;VICTIM ETH 余额不变
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1ether $DES "destroyTo(address)" $VICTIM --async
+sleep 6
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1
+# metrics: exec_revert_total{hook=selfdestruct 或 eth_balance} 递增;VICTIM ETH 余额不变(整笔 drop)
 ```
 负向(beneficiary 非名单 → 成功):
 ```bash
@@ -463,8 +475,8 @@ cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $SW "swallow(addres
 ```
 正向(整笔成功、不拦截):
 ```bash
-# 该 tx receipt status=1;日志无 "intercepted at exec gate"
-docker compose logs op-geth-seq | grep "intercepted at exec gate" | grep <该_tx_hash> ; echo "<-- 应为空"
+# 该 tx receipt status=1;无 build-drop 日志
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | grep <该_tx_hash> ; echo "<-- 应为空"
 ```
 说明:此 case 也是 reth/op-geth 跨端结论必须一致的点,单端先确认 op-geth 为 status=1。
 
@@ -477,19 +489,20 @@ for i in 1 2 3; do cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY 
 ```
 正向(不被误拦):
 ```bash
-docker compose logs op-geth-seq | grep "intercepted at exec gate" ; echo "<-- 应为空(费用流入不触发)"
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" ; echo "<-- 应为空(费用流入不触发)"
 # metrics: exec_revert_total 全程不增
 ```
 负向(真实 value 转移给 VICTIM 仍拦):
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1ether $FWD "forward(address)" $VICTIM   # 内层转 → 回滚
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1ether $FWD "forward(address)" $VICTIM --async   # 内层转 → build-drop
 ```
 说明:精确排除集(逐项断言)更适合 UT;此手动 case 验"费用流入不误拦"的宏观行为。若不便改 etherbase,降级为 UT。
 
 ## F L1↔L2(FR-3)
 
-### C18:L1 deposit included-as-reverted
+### C18:L1 deposit included-as-reverted(value→VICTIM,check③)
 
+deposit 与普通 L2 不同:命中后两路径(build + follower import)都拦,且是 included-as-reverted(上链但 status=0),不是 drop。此 case 用 value 转给 VICTIM(余额变动命中 check③);check② event 路径见 C19。
 ```bash
 PORTAL=$(grep '^OPTIMISM_PORTAL_PROXY_ADDRESS=' .env | cut -d= -f2)
 cast send --rpc-url $L1_RPC_URL --private-key $DEPLOYER_PRIVATE_KEY $PORTAL \
@@ -514,6 +527,7 @@ cast send --rpc-url $L1_RPC_URL --private-key $DEPLOYER_PRIVATE_KEY $PORTAL \
 # 对应 L2 tx status=0x1,无 intercepted 日志
 ```
 负向 2(系统/L1-attributes deposit,from=0xDeaD…0001):应 status=1,无拦截。
+负向 3(纯 CALL 触达 deposit,无资产移动、无 Transfer event):check① 已删,两端一致地不拦 → status=1。这是 Decision B 跨端对齐的正向证据(op-geth/reth 都跳 check①)。
 说明:deposit 在 build 与 follower import 两路径拦截一致(不同于普通 L2 tx 只在 build 拦);单 seq 节点走不到 follower import,该一致性待 reth/多节点。
 
 ### C19:deposit + Transfer event(A-9)
@@ -538,7 +552,7 @@ cast send --rpc-url $L1_RPC_URL --private-key $DEPLOYER_PRIVATE_KEY $PORTAL \
 
 ```bash
 # L2ToL1MessagePasser 预部署地址 0x4200000000000000000000000000000000000016
-# 经 helper 让内层 from/to 触达 VICTIM(顶层走 helper 绕过入口关)
+# 经 helper 让内层 from/to 触达 VICTIM(顶层 to=helper 不在名单,内层资产移动由执行关兜底)
 # 正向:涉及 VICTIM 的提款被执行关拦;负向:涉及 CLEAN 的提款成功
 ```
 
@@ -566,7 +580,8 @@ sleep 3
 正向(第 2 页的 VICTIM 仍被拦):
 ```bash
 cast call --rpc-url $RPC $MIRROR "getBlacklist(uint256,uint256)(uint256,address[])" 0 16 | head -1   # total=1030
-cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -iE "\-32000|on the blacklist"
+cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN --async   # 第 2 页的 VICTIM 移动资产 → build-drop
+sleep 6; docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1
 # metrics: cache_size == 1030(== total,无截断、无漏页)
 ```
 边界变体:恰好 1024(单页读完)、1025(触发第 2 页)。
@@ -613,7 +628,8 @@ remove 落入 block M → 从 M+1 起放行(与 add 落 N → N+1 对称)。
 ```bash
 # 承接 C4(VICTIM 已在名单)
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "remove(address)" $VICTIM
-cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -iE "32000|blacklist" || echo "已放行"   # 同块窗口可能仍被拒 → 1 块延迟
+cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN --async   # 同块窗口可能仍被 drop → 1 块延迟
+sleep 6; docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1 || echo "已放行"
 sleep 3
 cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN   # 现在应成功 status=1
 ```
@@ -628,16 +644,13 @@ cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN   # 现在应成
 cast rpc xlayer_isBlocked $VICTIM --rpc-url $RPC 2>&1 | grep -iE "method not found|does not exist"
 cast rpc eth_isBlocked    $VICTIM --rpc-url $RPC 2>&1 | grep -iE "method not found|does not exist"
 ```
-Pool 错误码精度(AC4)—— 复用 C4 被拒交易:
+无入口关 RPC 拒绝(原 AC4 池错误码精度作废):入口关已删,黑名单 tx 不再返回 -32000,而是进池后在出块时 build-drop。
 ```bash
-ERR=$(cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1)
-echo "$ERR" | grep -- "-32000"
-echo "$ERR" | grep -F "xlayer-blacklist: sender or recipient is on the blacklist"
-echo "$ERR" | grep -i "${VICTIM#0x}" ; echo "<-- 应为空(message 不含地址)"
+cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -- "-32000" ; echo "<-- 应为空(已无入口关错误码)"
 ```
-metrics 拆分(AC2):入口关拦截(C4)仅 pool_rejected_total +1;执行关拦截(C18 deposit / C9 event)仅 exec_revert_total +1。
+metrics(AC2):只有执行关计数 exec_revert,pool_rejected 已删。
 ```bash
-curl -s localhost:<metrics_port>/debug/metrics/prometheus | grep -E "xlayer_blacklist_(pool_rejected_total|exec_revert)"
+curl -s localhost:<metrics_port>/debug/metrics/prometheus | grep -E "xlayer_blacklist_(pool_rejected|exec_revert)" ; echo "<-- 只应出现 exec_revert,无 pool_rejected"
 ```
 
 ### C29:无黑名单 CLI 参数(FR-6 AC3)
@@ -696,7 +709,7 @@ sleep 5
 正向:
 ```bash
 for i in 1 2 3; do cast block-number --rpc-url http://localhost:8123; sleep 2; done   # 块高继续递增
-cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -iE "32000|blacklist"   # 仍生效
+cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN --async ; sleep 6; docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1   # 重启后仍生效(资产移动被 drop)
 # seq/rpc 仍一致(复用 C30 比对)
 ```
 负向:
@@ -724,7 +737,7 @@ cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $CLEAN   
 阶段 C — 首次 add 激活:
 ```bash
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM ; sleep 3
-cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -iE "32000|blacklist"      # 已拦截
+cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN --async ; sleep 6; docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1      # 已激活:资产移动被 drop
 ```
 过渡一致性(核心,无分叉):
 ```bash
@@ -747,13 +760,13 @@ cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN   # 恢复正常
 ```bash
 # 1) 确定性地址部署 proxy(impl=v1,enumerable set);走黑名单活动
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM ; sleep 3
-cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -iE "32000|blacklist"   # 升级前已拦
+cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN --async ; sleep 6; docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1   # 升级前已拦(资产移动被 drop)
 # 2) 升级 impl 到 v2(内部存储结构不同,但 getBlacklist ABI 不变):proxy admin 调 upgradeTo(v2)
 ```
 正向(升级后节点透明无感、名单延续、不分叉):
 ```bash
 cast call $MIRROR "getBlacklist(uint256,uint256)(uint256,address[])" 0 16 --rpc-url $RPC | head -1   # total 不变,VICTIM 仍在
-cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -iE "32000|blacklist"     # 升级后仍拦
+cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN --async ; sleep 6; docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1     # 升级后仍拦(资产移动被 drop)
 # 升级块前后 seq vs rpc state root 一致(复用 C30 比对)
 ```
 负向 / 失败模式(ABI 破坏性升级,归 UT):改坏 getBlacklist 签名 → 节点读失败 → fail-open 当空名单(静默关闭),但须确定性、seq/rpc 一致、不分叉。
@@ -765,12 +778,14 @@ cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -iE 
 
 ### C8-ext:多加黑账户互发(Gap 6)
 ```bash
-# VICTIM 和 VICTIM2 都在名单。VICTIM → VICTIM2 转账。
+# VICTIM 和 VICTIM2 都在名单。VICTIM → VICTIM2 转账(顶层 from/to 都在名单 + 余额变动)。
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM2
 sleep 3
-cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $VICTIM2 2>&1 | grep "32000"   # 入口关 from 先拦
-# 期望:pool_rejected +1(不重复计数);message 固定
+cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $VICTIM2 --async   # 资产移动 → 出块 drop
+sleep 6
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1
+# 期望:执行关命中一次、exec_revert +1(from/to 同列也只算一次);无 pool_rejected
 ```
 
 ### CXW1:L2 提款 helper 内层触达 VICTIM(Gap 1, 替换 C21)
@@ -805,31 +820,30 @@ R_reth=$(cast call $MIRROR "getBlacklist(uint256,uint256)(uint256,address[])" 0 
  	"time"
 
  	"github.com/ethereum/go-ethereum/common"
-@@ -238,6 +239,27 @@ func applyTransactionWithBlacklistGate(...) {
- 	if hit && !tx.IsDepositTx() && !dropNormalHit {
- 		hit = false
- 	}
-+	// CX5/CX6 anti-fork test ONLY: when XLAYER_BYPASS_BLACKLIST_GATE=1 is set on
-+	// a SEQUENCER process, bypass the gate so the seq produces a block where a
-+	// blacklisted deposit succeeds (or a clean one fails — toggled by =2). An
-+	// honest follower (no env var) will still apply the gate during re-exec and
-+	// detect the divergence as a bad block. DO NOT enable in production.
-+	if hit && os.Getenv("XLAYER_BYPASS_BLACKLIST_GATE") == "1" {
+@@ func (g *BlacklistGate) decide(msg *Message, tx *types.Transaction, ...) (hit bool, dropErr error) {
+ 	matched, category := g.evaluate(msg, tx, statedb, blockNumber, blockHash, blockTime)
++	// CX5/CX6 anti-fork test ONLY: when XLAYER_BYPASS_BLACKLIST_GATE is set on a
++	// SEQUENCER process, force a divergence vs an honest follower (no env var),
++	// which still applies the gate on re-exec and rejects the block as bad.
++	// DO NOT enable in production.
++	// =1 (CX5): bypass a real hit so a blacklisted deposit succeeds on the seq.
++	if matched && os.Getenv("XLAYER_BYPASS_BLACKLIST_GATE") == "1" {
 +		log.Warn("xlayer-blacklist: GATE BYPASSED (CX5 test mode)",
 +			"hash", tx.Hash(), "deposit", tx.IsDepositTx(), "category", category)
-+		hit = false
++		matched = false
 +	}
-+	// CX6: when env=2, FORCE a synthetic hit on every clean deposit to simulate
-+	// a malicious seq that revert-overrides a deposit that should have succeeded.
-+	if !hit && tx.IsDepositTx() && os.Getenv("XLAYER_BYPASS_BLACKLIST_GATE") == "2" {
++	// =2 (CX6): force a synthetic hit on a clean deposit so the seq
++	// revert-overrides a deposit that should have succeeded.
++	if !matched && tx.IsDepositTx() && os.Getenv("XLAYER_BYPASS_BLACKLIST_GATE") == "2" {
 +		if !params.IsDepositExemptSender(msg.From) {
-+			log.Warn("xlayer-blacklist: GATE FORCE-HIT (CX6 test mode)",
-+				"hash", tx.Hash())
-+			hit = true
++			log.Warn("xlayer-blacklist: GATE FORCE-HIT (CX6 test mode)", "hash", tx.Hash())
++			matched = true
 +			category = "cx6_force"
 +		}
 +	}
- 	if hit {
+ 	if !matched {
+ 		return false, nil
+ 	}
 ```
 
 `devnet/docker-compose.yml` `op-geth-seq` 服务加 environment 段:
@@ -944,13 +958,15 @@ docker build -t op-geth:latest -f Dockerfile .   # 重建干净 binary
 #   - 关键:两端的 fail-open 时点一致,否则一端拒一端过 → 分叉
 ```
 
-### CX11:reth pool 主动驱逐(bd6dc9c 专项)
+### CX11:池驱逐跨端一致(原 bd6dc9c 假设已作废)
 ```bash
-# 仅 reth-seq 拓扑
-# 让 X 提交 nonce-gap queued tx 入池
-# add(X) → 等 1-2 块
-# 期望:reth 主动从 pool 中删除 X 的 queued tx(对比 op-geth 不删)
-# 验证:txpool_content 不再包含 X 的该笔 tx
+# 两端都从池驱逐黑名单命中 tx,只是机制不同:op-geth `SetRejected` + legacypool failsafe 清理;
+# reth `txs_to_evict` 物理删除。注意:bd6dc9c 的"主动驱逐 queued tx"已在 v1 回退——
+# 驱逐是 build-drop 的副作用,纯 nonce-gap queued tx(出块碰不到)不会被驱逐。
+# reth-seq + geth-seq 各跑:
+# 让 X 提交一笔【可出块的资产移动 tx】入池 → add(X) → 等 1-2 块
+# 期望:两端都把该 tx 从 pool 删除(build-drop 后驱逐),行为等价
+# 验证:txpool_content 不再包含 X 的该笔 tx;Dropping 日志各出现一次
 ```
 
 ### CX13:multi-rpc 并发 import
@@ -963,8 +979,8 @@ docker build -t op-geth:latest -f Dockerfile .   # 重建干净 binary
 ### CX14:混合 seq pool 一致
 ```bash
 # 档二:2 reth-seq + 1 geth-seq,VICTIM 在名单
-# 把 VICTIM 的 tx 同时提交给三种 seq 的 RPC,各自的入口关都应拒
-# 没有"某 seq 不拦"的偏差
+# 把 VICTIM 的【资产移动 tx】同时提交给三种 seq 的 RPC,无论哪个 seq 出块都 build-drop 该 tx
+# 没有"某 seq 不 drop"的偏差(入口关已删,统一在执行关 build-drop)
 ```
 
 ### CXR1:reorg 后黑名单快照重建
@@ -988,8 +1004,9 @@ docker build -t op-geth:latest -f Dockerfile .   # 重建干净 binary
 ```bash
 # 启用 gasless(参考 gasless 测试计划)
 # 在 gasless 白名单中 add 某 EOA,同时在 blacklist 中也 add 同一 EOA
-# 该 EOA 发 0 价 tx
-# 期望:入口关优先级高于 gasless 放行 → tx 仍被入口关 -32000 拒(不靠 gasless 路径绕过 blacklist)
+# 该 EOA 发一笔【移动资产的】gasless tx
+# 期望:执行关 build-drop 优先于 gasless 放行 → 该 tx 仍被 drop(不靠 gasless 绕过 blacklist)
+# 注意:若是 value=0、无资产移动的 gasless tx,则不再被拦(check②/③ 都不命中)——与 C4 负向一致
 ```
 
 ### ST1/ST2/ST3:soak(5min / 15min / 30min)
