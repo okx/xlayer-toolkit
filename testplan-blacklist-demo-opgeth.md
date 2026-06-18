@@ -129,7 +129,7 @@ RPC=http://localhost:8123
 | 执行关拦截日志(deposit) | core/blacklist_gate_xlayer.go:171 | Warn | `xlayer-blacklist: tx intercepted at exec gate` + hash/category/deposit(仅 deposit included-as-reverted 时打印) | 是 |
 | 出块 drop 日志(普通 L2) | miner/worker.go:573 | Warn | `Dropping blacklisted transaction during block-building` + hash;命中 tx 经 `SetRejected` 从池驱逐 | 是 |
 | metric cache_size | core/blacklist_metrics_xlayer.go:15 | Prometheus | `xlayer_blacklist_cache_size` 当前名单快照大小 | 需 --metrics |
-| metric exec_revert | :24 | Prometheus | `xlayer_blacklist_exec_revert_total{hook=log\|selfdestruct\|eth_balance}`(check① 已删,无 `call`) | 需 --metrics |
+| metric exec_revert | :24 | Prometheus | check① 已删,无 `call`。两端导出形式不同(非共识,grep 要分客户端):op-geth 后缀式 3 counter `xlayer_blacklist_exec_revert_log` / `_selfdestruct` / `_eth_balance`(go-ethereum metrics 不支持 label);reth 带标签 `xlayer_blacklist_exec_revert_total{hook="log"\|"selfdestruct"\|"eth_balance"}`。下文 grep 用前缀 `xlayer_blacklist_exec_revert` 可同时命中两端 | 需 --metrics |
 | metric snapshot_read | :21 | Prometheus | `xlayer_blacklist_snapshot_read_duration_nanoseconds`(两端单位/命名一致) | 需 --metrics |
 
 # 测试矩阵(唯一权威:序号 | 分类 | case | 复测范围 | 预期 | 实际)
@@ -168,7 +168,7 @@ RPC=http://localhost:8123
 | 22 | F L1↔L2 | C21 L2→L1 提款 initiateWithdrawal | NA | — | ⏳ pending |
 | 23 | F L1↔L2 | CXW1-helper L2 inner-touch | reth-seq + geth-seq(2组) + 异类双向(2组) | 执行关拦,跨端一致 | ⏳ pending |
 | 24 | F L1↔L2 | C22 系统 deposit 豁免 | reth-seq + geth-seq(2组) + 异类双向(2组) | from=0xdead...0001 status=0x1 | ⏳ pending |
-| 25 | G 读取接口 | C23 分页 >1024 | reth-seq + geth-seq(2组) + 异类双向(2组) | cache==1025、第 2 页可拦 | ⏳ pending |
+| 25 | G 读取接口 | C23 分页 >1024 | reth-seq + geth-seq(2组) + 异类双向(2组) | cache==1030(>1024 翻页)、第 2 页可拦 | ⏳ pending |
 | 26 | G 读取接口 | C24 写入校验 | reth-seq + geth-seq(2组) | add(0x0) revert + 去重 | ⏳ pending |
 | 27 | G 读取接口 | C25 边界 | 任一客户端(1组,读合约) | 6 个边界符合契约 | ⏳ pending |
 | 28 | H 时序 | C26 remove 恢复 | reth-seq + geth-seq(2组) | VICTIM 发 tx status=1 | ⏳ pending |
@@ -414,9 +414,16 @@ ERC721 的 Transfer 与 ERC20 同 topic0 但 tokenId 也 indexed;验证 from/to 
 $T1155 来自公共准备段。前置:`add(VICTIM)`(幂等)。
 正向(TransferSingle from=VICTIM 命中):
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $T1155 "move(address,address,uint256,uint256)" $VICTIM $CLEAN 1 5 --async
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $T1155 "move(address,address,uint256,uint256)" $VICTIM $CLEAN 1 5 --async   # TransferSingle
 sleep 6
 docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1   # hook=log build-drop
+```
+TransferBatch 分支(单独触发 batch 事件路径,与 Single 不同 topic0):
+```bash
+# moveBatch 同时转两个 id → emit TransferBatch(operator, from=VICTIM, to, ids[], values[]) → check② 命中
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $T1155 "moveBatch(address,address,uint256[],uint256[])" $VICTIM $CLEAN "[1,2]" "[1,1]" --async
+sleep 6
+docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1   # hook=log,TransferBatch 分支
 ```
 负向(from/to 均非名单 → 成功):
 ```bash
@@ -502,11 +509,15 @@ cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1ether $FWD
 
 ### C18:L1 deposit included-as-reverted(value→VICTIM,check③)
 
-deposit 与普通 L2 不同:命中后两路径(build + follower import)都拦,且是 included-as-reverted(上链但 status=0),不是 drop。此 case 用 value 转给 VICTIM(余额变动命中 check③);check② event 路径见 C19。
+deposit 与普通 L2 不同:命中后两路径(build + follower import)都拦,且是 included-as-reverted(上链但 status=0),不是 drop。此 case 用 mint/value 给 VICTIM(余额变动命中 check③);check② event 路径见 C19。
+
+⚠ 本 devnet 是 Custom Gas Token(OKB)模式:`depositTransaction(...)` 带 value 会 revert(`OptimismPortal_NotAllowedOnCGTMode`),必须用 `depositERC20Transaction(address _to,uint256 _mint,uint256 _value,uint64 _gasLimit,bool _isCreation,bytes _data)`;`_mint`/`_value` > 0 时,发送方须先 approve PORTAL 花费 L1 gas token(dOKB)。dOKB 需走完整 CGT 桥获取——若不便,check③ 的 mint/value 路径降级 UT,included-as-reverted 的 receipt 逐字段奇偶(status/gasUsed/keep-mint/nonce)由 C19 的 event 路径 + 共享 CI 向量覆盖。
 ```bash
 PORTAL=$(grep '^OPTIMISM_PORTAL_PROXY_ADDRESS=' .env | cut -d= -f2)
+OKB=$(grep '^OKB_TOKEN_ADDRESS=' .env | cut -d= -f2)   # L1 gas token;若空见 0-all 日志 MockOKB 地址
+# mint 给 VICTIM → VICTIM L2 余额增加 → check③ 命中(需先 approve portal 花 dOKB)
 cast send --rpc-url $L1_RPC_URL --private-key $DEPLOYER_PRIVATE_KEY $PORTAL \
-  "depositTransaction(address,uint256,uint64,bool,bytes)" $VICTIM 1 100000 false 0x --value 1
+  "depositERC20Transaction(address,uint256,uint256,uint64,bool,bytes)" $VICTIM 1 0 100000 false 0x
 # 等 deposit 被 L2 打包
 ```
 正向(命中 deposit 必上链但 reverted,receipt 逐字段):
@@ -523,7 +534,7 @@ cast nonce   <DEPOSIT_FROM> --rpc-url $RPC   # +1
 负向 1(未命中 → status=1):
 ```bash
 cast send --rpc-url $L1_RPC_URL --private-key $DEPLOYER_PRIVATE_KEY $PORTAL \
-  "depositTransaction(address,uint256,uint64,bool,bytes)" $CLEAN 1 100000 false 0x --value 1
+  "depositERC20Transaction(address,uint256,uint256,uint64,bool,bytes)" $CLEAN 0 0 100000 false 0x
 # 对应 L2 tx status=0x1,无 intercepted 日志
 ```
 负向 2(系统/L1-attributes deposit,from=0xDeaD…0001):应 status=1,无拦截。
@@ -532,11 +543,24 @@ cast send --rpc-url $L1_RPC_URL --private-key $DEPLOYER_PRIVATE_KEY $PORTAL \
 
 ### C19:deposit + Transfer event(A-9)
 
-在 C18 基础上,让 deposit 内层产生 from=VICTIM 的 Transfer event:
+在 C18 基础上,让 deposit 内层产生 to/from=VICTIM 的 Transfer event。此路径用 FakeTransferEmitter,mint=0/value=0,无需 dOKB(CGT 下也可直接跑):
 ```bash
-# deposit 的 calldata 让 L2 侧执行 transferFrom(VICTIM,...) → 内层 Transfer event 命中
-# 正向:included-as-reverted(status=0、gasUsed=gasLimit),hook=log;负向:系统 deposit 不拦
+PORTAL=$(grep '^OPTIMISM_PORTAL_PROXY_ADDRESS=' .env | cut -d= -f2)
+# L2 部署 FakeTransferEmitter(contracts/blacklist);emitFakeTransfer 会 emit Transfer(from,to,value)
+EMIT=$(cd contracts/blacklist && forge create src/FakeTransferEmitter.sol:FakeTransferEmitter \
+  --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --broadcast --json | jq -r .deployedTo)
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM ; sleep 3
+DATA=$(cast calldata "emitFakeTransfer(address,address,uint256)" $CLEAN $VICTIM 1)   # Transfer(to=VICTIM) 命中 check②
+cast send --rpc-url $L1_RPC_URL --private-key $DEPLOYER_PRIVATE_KEY $PORTAL \
+  "depositERC20Transaction(address,uint256,uint256,uint64,bool,bytes)" $EMIT 0 0 200000 false "$DATA"
+# 等 ~40s op-node derive,在 L2 找到 to=EMIT 的 type 0x7e tx
 ```
+正向(命中 deposit included-as-reverted):
+```bash
+cast receipt <L2_TX_HASH> --rpc-url $RPC --json | jq '{status, gasUsed, logs:(.logs|length)}'
+#   status=0x0;gasUsed=0x30d40(=200000=gasLimit);logs=0(回滚后清空)
+```
+负向:系统 deposit(from=0xdead…0001)不拦,status=1。
 
 ### C20:deposit address aliasing(A-8)
 
@@ -648,9 +672,9 @@ cast rpc eth_isBlocked    $VICTIM --rpc-url $RPC 2>&1 | grep -iE "method not fou
 ```bash
 cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN 2>&1 | grep -- "-32000" ; echo "<-- 应为空(已无入口关错误码)"
 ```
-metrics(AC2):只有执行关计数 exec_revert,pool_rejected 已删。
+metrics(AC2):只有执行关计数 exec_revert,pool_rejected 已删。注意 exec_revert 两端导出名不同(见证据链表):op-geth 后缀式 `_log/_selfdestruct/_eth_balance`,reth 带标签 `_total{hook=…}`;用前缀 grep 同时命中。
 ```bash
-curl -s localhost:<metrics_port>/debug/metrics/prometheus | grep -E "xlayer_blacklist_(pool_rejected|exec_revert)" ; echo "<-- 只应出现 exec_revert,无 pool_rejected"
+curl -s localhost:<metrics_port>/debug/metrics/prometheus | grep -E "xlayer_blacklist_(pool_rejected|exec_revert)" ; echo "<-- 只应出现 exec_revert(op-geth 后缀 / reth _total{hook}),无 pool_rejected"
 ```
 
 ### C29:无黑名单 CLI 参数(FR-6 AC3)

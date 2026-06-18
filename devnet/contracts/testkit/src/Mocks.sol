@@ -69,9 +69,20 @@ contract MockERC1155 {
         uint256 id,
         uint256 value
     );
+    event TransferBatch(
+        address indexed operator,
+        address indexed from,
+        address indexed to,
+        uint256[] ids,
+        uint256[] values
+    );
 
     function move(address from, address to, uint256 id, uint256 v) external {
         emit TransferSingle(msg.sender, from, to, id, v);
+    }
+
+    function moveBatch(address from, address to, uint256[] calldata ids, uint256[] calldata values) external {
+        emit TransferBatch(msg.sender, from, to, ids, values);
     }
 }
 
