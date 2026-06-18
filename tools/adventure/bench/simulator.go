@@ -42,17 +42,12 @@ func SimulatorInit(amountStr string, configPath string) error {
 		os.Exit(1)
 	}
 
-	accountsFile, err := GetConfigFilePath(utils.TransferCfg.Accounts)
-	if err != nil {
-		return fmt.Errorf("failed to get accounts file path: %v", err)
-	}
-
 	if utils.TransferCfg.SenderPrivateKey == "" {
 		return errors.New("senderPrivateKey must be set in config file")
 	}
 
-	// Load addresses
-	addresses := utils.ReadDataFromFile(accountsFile)
+	// Reuse the accounts loadConfig already loaded (sliced by accountOffset) — no second file read
+	addresses := utils.TransferCfg.BenchmarkAccounts
 	hexAddrs := make([]ethcmn.Address, len(addresses))
 	if !strings.HasPrefix(addresses[0], "0x") {
 		// Support private key file input

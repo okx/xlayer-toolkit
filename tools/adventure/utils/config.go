@@ -5,8 +5,14 @@ var (
 )
 
 type TransferConfig struct {
-	Rpc                   []string        `json:"rpc"`
-	Accounts              int             `json:"accounts"`
+	Rpc      []string `json:"rpc"`
+	Accounts int      `json:"accounts"`
+	// AccountOffset selects a half-open sub-range "start:end" of the accounts file, i.e. indices
+	// [start, end) — "0:4000" uses accounts 0..3999. Empty (default) uses all. It applies to BOTH
+	// `*-init` (funds that slice) and `*-bench` (sends from that slice), so keep them on the same
+	// config. Lets you partition: gasless-init/bench on "0:1000", erc20-init/bench on "1000:5000",
+	// run concurrently without colliding on accounts/nonces.
+	AccountOffset         string          `json:"accountOffset"`
 	SenderPrivateKey      string          `json:"senderPrivateKey"`
 	Concurrency           int             `json:"concurrency"`
 	MempoolPauseThreshold int             `json:"mempoolPauseThreshold"`

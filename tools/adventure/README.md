@@ -28,6 +28,15 @@ adventure gasless-bench -f ./testdata/config.json --scenario transfer --contract
 # On devnet set tokenApprove in config.json or --contract 0xContractAddress
 adventure gasless-bench -f ./testdata/config.json --scenario approve
 
+# Partition accounts across two benches running at the same time (no account/nonce collisions) via
+# the accountOffset config field — see Configuration below. accountOffset applies to BOTH init and
+# bench, so each partition runs its OWN init+bench with the SAME offset (init funds exactly the
+# slice its bench sends from). config-gasless.json: "accountOffset":"0:1000"; config-erc20.json: "1000:5000":
+adventure gasless-init  -f ./testdata/config-gasless.json                              # funds 0..999 + registers gasless token
+adventure gasless-bench -f ./testdata/config-gasless.json --contract 0x<gaslessERC20>  # sends from 0..999
+adventure erc20-init 10ETH -f ./testdata/config-erc20.json                             # funds 1000..4999 + deploys token
+adventure erc20-bench   -f ./testdata/config-erc20.json   --contract 0x<erc20>         # sends from 1000..4999
+
 # Hybrid stress test: alternates one gasless transfer and one normal (gas-paying) ERC20 transfer of
 # the same token. hybrid-init deploys + whitelists an ERC20 and funds accounts with native gas AND
 # the token.
@@ -87,6 +96,7 @@ Edit `testdata/config.json` to adjust benchmark parameters:
 {
   "rpc": ["http://127.0.0.1:8123"],
   "accounts": 5000,
+  "accountOffset": "",
   "senderPrivateKey": "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
   "concurrency": 20,
   "mempoolPauseThreshold": 50000,
@@ -116,6 +126,7 @@ Edit `testdata/config.json` to adjust benchmark parameters:
 
 - **rpc**: RPC endpoint URLs (list; transactions are distributed across them)
 - **accounts**: Number of benchmark accounts to use as both senders and receivers. On first run, `testdata/accounts/accounts-<N>.txt` is auto-generated with this many private keys and reused on subsequent runs
+- **accountOffset**: Optional half-open sub-range `"start:end"` of the accounts file — `"0:4000"` uses accounts `0..3999`. Empty (the default) uses **all** accounts. It applies to **both** `*-init` (funds that slice) and `*-bench` (sends from that slice)
 - **senderPrivateKey**: Private key used by `*-init` commands to deploy contracts and distribute tokens to the benchmark accounts
 - **tokenApprove** / **tokenTransfer**: Gasless-whitelisted ERC20 used by `gasless-bench` for the `approve` / `transfer` scenarios respectively. On the local devnet (chain id 195) these are left empty and overridden by `gasless-init`'s freshly deployed ERC20 (the Makefile passes it via `--contract`); on 1952 / 196 set them to already-whitelisted tokens. `gasless-bench` sends zero-gas-price legacy transactions (gas price forced to `0`, ignoring `gasPriceGwei`); the node accepts them only because the token is whitelisted
 - **approveSpender**: Spender address passed to `approve(spender, 0)` in the gasless `approve` scenario (any address works). Defaults to `0x203B9aD06aeb929427E233587F0020661dd23B11`
