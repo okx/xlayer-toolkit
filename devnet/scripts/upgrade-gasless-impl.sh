@@ -34,7 +34,7 @@ source .env
 
 # --- config -----------------------------------------------------------------
 # Deterministic CREATE2 proxy address (see deploy-gasless.sh / enable-gasless.sh).
-GASLESS_PROXY="${GASLESS_PROXY_ADDR:-0x70CA900387FCD29C2A71d511F10E5c961dc9363F}"
+GASLESS_PROXY="${GASLESS_PROXY_ADDR:-0xA9092BC02e2000a3F8996D1991621E9A03Ef2dfE}"
 RPC="${L2_RPC_URL}"
 
 # EIP-1967 reserved slots.

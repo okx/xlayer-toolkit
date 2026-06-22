@@ -90,7 +90,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(reth_payloads_execution_state_root_duration_ms_sum[1m]) / rate(reth_payloads_execution_state_root_duration_ms_count[1m])",
+          "expr": "(rate(reth_flashblock_builder_state_root_calculation_duration_sum[1m]) / rate(reth_flashblock_builder_state_root_calculation_duration_count[1m])) * 1000",
           "legendFormat": "Avg Duration",
           "refId": "A"
         }
@@ -177,7 +177,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "rate(reth_payloads_execution_state_root_duration_ms_count[1m])",
+          "expr": "rate(reth_flashblock_builder_state_root_calculation_duration_count[1m])",
           "legendFormat": "Calculations/sec",
           "refId": "A"
         }
@@ -264,7 +264,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "reth_payloads_execution_state_root_duration_ms{quantile=\"0.5\"}",
+          "expr": "reth_flashblock_builder_state_root_calculation_duration{quantile=\"0.5\"} * 1000",
           "legendFormat": "p50",
           "refId": "A"
         },
@@ -273,7 +273,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "reth_payloads_execution_state_root_duration_ms{quantile=\"0.9\"}",
+          "expr": "reth_flashblock_builder_state_root_calculation_duration{quantile=\"0.9\"} * 1000",
           "legendFormat": "p90",
           "refId": "B"
         },
@@ -282,7 +282,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "reth_payloads_execution_state_root_duration_ms{quantile=\"0.95\"}",
+          "expr": "reth_flashblock_builder_state_root_calculation_duration{quantile=\"0.95\"} * 1000",
           "legendFormat": "p95",
           "refId": "C"
         },
@@ -291,7 +291,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "reth_payloads_execution_state_root_duration_ms{quantile=\"0.99\"}",
+          "expr": "reth_flashblock_builder_state_root_calculation_duration{quantile=\"0.99\"} * 1000",
           "legendFormat": "p99",
           "refId": "D"
         }

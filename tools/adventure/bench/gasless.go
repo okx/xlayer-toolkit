@@ -27,12 +27,14 @@ import (
 // are gasless). `gasless-bench` then has the benchmark accounts send zero-gas-price ERC20 transfers
 // to that contract — the gasless path under load.
 
-// Gasless whitelist predeploy addresses, keyed by chain id.
-//   - 195 (local devnet): the predeploy at 0x4200...0700, mirroring XLAYER_DEVNET_GASLESS_CONTRACT
-//     in alloy-op-evm.
+// Gasless whitelist addresses, keyed by chain id. These MUST match the address op-reth's gasless hook
+// actually reads, or registering a token here has no effect and zero-priced txs are rejected as
+// underpriced.
+//   - 195 (local devnet): the GaslessWhitelist proxy deployed by devnet/scripts/deploy-gasless.sh,
+//     equal to alloy-op-evm's XLAYER_DEVNET_GASLESS_CONTRACT.
 //   - 1952 / 196 (XLayer testnet / mainnet): the deployed GaslessWhitelist contract.
 const (
-	GaslessWhitelistAddrDevnet = "0x4200000000000000000000000000000000000700" // chain id 195
+	GaslessWhitelistAddrDevnet = "0xA9092BC02e2000a3F8996D1991621E9A03Ef2dfE" // chain id 195
 	GaslessWhitelistAddrXLayer = "0x19787404b0c70021b4752028f7e3a92313885B27" // chain id 1952 / 196
 )
 
@@ -86,17 +88,14 @@ func GaslessInit(configPath string) error {
 	}
 
 	rpcURL := utils.TransferCfg.Rpc[0]
-	accountsFile, err := GetConfigFilePath(utils.TransferCfg.Accounts)
-	if err != nil {
-		return fmt.Errorf("failed to get accounts file path: %v", err)
-	}
 
 	senderKey, err := crypto.HexToECDSA(strings.TrimPrefix(utils.TransferCfg.SenderPrivateKey, "0x"))
 	if err != nil {
 		return fmt.Errorf("failed to parse senderPrivateKey: %v", err)
 	}
 
-	hexAddrs := loadAccountAddresses(accountsFile)
+	// Reuse the accounts loadConfig already loaded (sliced by accountOffset) — no second file read.
+	hexAddrs := loadAccountAddresses(utils.TransferCfg.BenchmarkAccounts)
 	if len(hexAddrs) == 0 {
 		return errors.New("no benchmark accounts loaded")
 	}
@@ -322,14 +321,16 @@ func registerGaslessTransferToken(cli utils.Client, ownerKey *ecdsa.PrivateKey, 
 
 // loadAccountAddresses reads the accounts file (addresses or private keys) into addresses, mirroring
 // the loader in Erc20Init/NativeInit.
-func loadAccountAddresses(accountsFile string) []ethcmn.Address {
-	addresses := utils.ReadDataFromFile(accountsFile)
-	if len(addresses) == 0 {
+// loadAccountAddresses derives funding addresses from already-loaded account lines (private keys
+// or 0x-addresses). Callers pass utils.TransferCfg.BenchmarkAccounts (loaded once by the config
+// loader, already sliced by accountOffset) so the file is not read a second time during init.
+func loadAccountAddresses(accounts []string) []ethcmn.Address {
+	if len(accounts) == 0 {
 		return nil
 	}
-	hexAddrs := make([]ethcmn.Address, len(addresses))
-	if !strings.HasPrefix(addresses[0], "0x") {
-		for i, addr := range addresses {
+	hexAddrs := make([]ethcmn.Address, len(accounts))
+	if !strings.HasPrefix(accounts[0], "0x") {
+		for i, addr := range accounts {
 			privKey, err := crypto.HexToECDSA(strings.TrimPrefix(addr, "0x"))
 			if err != nil {
 				log.Printf("Failed to convert private key string %s: %v\n", addr, err)
@@ -338,7 +339,7 @@ func loadAccountAddresses(accountsFile string) []ethcmn.Address {
 			hexAddrs[i] = utils.GetEthAddressFromPK(privKey)
 		}
 	} else {
-		for i, addr := range addresses {
+		for i, addr := range accounts {
 			hexAddrs[i] = ethcmn.HexToAddress(addr)
 		}
 	}

@@ -70,11 +70,13 @@ CMD="op-reth node \
       --metrics=0.0.0.0:9001 \
       --xlayer.sequencer-mode"
 
-# Enable XLayer gasless (zero gas price) transactions in the mempool — both flags
+# Enable XLayer gasless (zero gas price) transactions in the mempool — all flags
 # only on builds that include gasless; blacklist-only reth doesn't recognize them.
 if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
     CMD="$CMD --rollup.allow-gasless"
     CMD="$CMD --rollup.gasless-mock-gas-price-percentile=${GASLESS_MOCK_GAS_PRICE_PERCENTILE:-0.1}"
+    CMD="$CMD --rollup.gasless-pending-lifetime=${GASLESS_PENDING_LIFETIME_SECS:-600}"
+    CMD="$CMD --builder.gasless-block-gas-limit=${BUILDER_GASLESS_BLOCK_GAS_LIMIT:-60000000}"
 fi
 
 # For flashblocks architecture
