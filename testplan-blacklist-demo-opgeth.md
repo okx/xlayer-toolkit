@@ -1,4 +1,4 @@
-测试计划:devnet 黑名单跨客户端功能验证(XLOP-1100,op-geth + xlayer-reth)
+测试计划:devnet 黑名单跨客户端功能验证(op-geth + xlayer-reth)
 
 # 测试目标
 
@@ -11,7 +11,6 @@
 - **长跑稳态**:高负载 + churn(高频 add/remove)+ 切主 下持续无分叉、无 bad block
 - **对抗性**:恶意 sequencer 包黑名单 tx → follower 必须拒块(P0 anti-fork)
 - **池驱逐一致性**:两端命中后都从 mempool 驱逐(op-geth `SetRejected` / reth `txs_to_evict`);flashblocks 预确认面行为
-- **黑名单 × gasless 交互**:同账户同时在两个白名单/黑名单中的判定优先级
 
 # 客户端 × 角色词汇
 
@@ -148,7 +147,7 @@ RPC=http://localhost:8123
 
 「实际」列:每个 case 跑完后填 `✅ PASS T<n> (简述结果 + 证据子目录)`,例如 `✅ PASS T3 (cast send drop, VICTIM 余额 0→0, devnet/test-results/<run-ts>/Cn.md)`。失败填 `❌ FAIL` + 现象;暂跳填 `⏸ DEFER` + 原因。
 
-证据目录结构建议:`devnet/test-results/blacklist-XLOP-1100-<拓扑代号>-<timestamp>/Cn.md` —— 每个 case 一个 .md,含 pre-state / 命令 / 输出 / post-state / 结论。
+证据目录结构建议:`devnet/test-results/blacklist-<拓扑代号>-<timestamp>/Cn.md` —— 每个 case 一个 .md,含 pre-state / 命令 / 输出 / post-state / 结论。
 
 **Anti-fork P0 强调段** —— 以下三条任一不通过即 P0 阻塞上线(客户端不一致 = 分叉):CX5、CX6、CX10。
 
@@ -204,12 +203,11 @@ RPC=http://localhost:8123
 | 48 | CX churn | CXW1 toggle 高频翻转 | 档二 | 三节点 stateRoot 一致 | ⏳ pending |
 | 49 | CX churn | CXW2 batch churn | 档二 | 同上 | ⏳ pending |
 | 50 | CX churn | CXW3 churn 跨切主 | 档二 | 同上 | ⏳ pending |
-| 51 | CX 交互 | CXG1 黑名单 × gasless 交互 | reth-seq + geth-seq(2组) | 执行关 build-drop 优先于 gasless;value=0 gasless tx 不拦 | ⏳ pending |
-| 52 | CX soak | ST1 5min soak | 档二(混选集群) | 0 div + no bad block | ⏳ pending |
-| 53 | CX soak | ST2 15min soak | 档二 | 同上 | ⏳ pending |
-| 54 | CX soak | ST3 30min soak | 档二 | 同上 | ⏳ pending |
+| 51 | CX soak | ST1 5min soak | 档二(混选集群) | 0 div + no bad block | ⏳ pending |
+| 52 | CX soak | ST2 15min soak | 档二 | 同上 | ⏳ pending |
+| 53 | CX soak | ST3 30min soak | 档二 | 同上 | ⏳ pending |
 
-汇总:**54 行**,其中:
+汇总:**53 行**,其中:
 - 已知 BLOCKED:C31(devnet 工具链限制,需 IT 环境)
 - 已知 NA:C17(OP Stack 无 miner coinbase)、C20(EOA 不 aliasing)、C21(L2 端 withdrawal 仅 emit event)
 
@@ -299,7 +297,7 @@ docker compose logs op-geth-seq | grep -iE "blacklist.*(call failed|decode faile
 
 ```bash
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 5ether $VICTIM   # 充值
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$VICTIM]"
 sleep 3   # add 落 N,从 N+1 生效
 ```
 正向(VICTIM 转账 → 出块 drop,不上链;无 -32000):
@@ -337,7 +335,7 @@ cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $CLEAN   
 X=$(cast wallet address --mnemonic "$MN" --mnemonic-derivation-path "m/44'/60'/0'/0/8")
 XKEY=$(cast wallet private-key --mnemonic "$MN" --mnemonic-derivation-path "m/44'/60'/0'/0/8")
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 5ether $X
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $X ; sleep 3
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$X]" ; sleep 3
 cast send --rpc-url $RPC --private-key $XKEY --value 1 --async $CLEAN   # 可出块的资产移动 tx
 cast rpc txpool_content --rpc-url $RPC | grep -i $X   # 进池
 sleep 6
@@ -354,7 +352,7 @@ cast rpc txpool_content --rpc-url $RPC | grep -i $X ; echo "<-- 应为空(build-
 ### C7:内层 CALL 触达(顶层 to 不在名单,执行关兜底)
 
 顶层 to 不命中,内层资产移动由执行关 check③ 兜底。$FWD 来自公共准备段,顶层 to=FWD(不在名单),内层把 ETH 打给 VICTIM → VICTIM 余额变动命中 check③。普通 L2 tx 命中 = 出块 drop(非 included-as-reverted)。
-前置:`cast send ... $MIRROR "add(address)" $VICTIM`(幂等)。
+前置:`cast send ... $MIRROR "add(address[])" "[$VICTIM]"`(幂等)。
 正向(内层把 ETH 转给 VICTIM → drop):
 ```bash
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $FWD "forward(address)" $VICTIM --async
@@ -371,8 +369,8 @@ cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $FWD "for
 
 $TOK 来自公共准备段。
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM    # 幂等,确保在名单
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM2
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$VICTIM]"    # 幂等,确保在名单
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$VICTIM2]"
 cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $TOK "transferFrom(address,address,uint256)" $VICTIM $VICTIM 10 --async   # from==to==VICTIM,Transfer event 命中
 ```
 正向(整笔 drop 一次,不重复计数):
@@ -559,7 +557,7 @@ PORTAL=$(grep '^OPTIMISM_PORTAL_PROXY_ADDRESS=' .env | cut -d= -f2)
 # L2 部署 FakeTransferEmitter(contracts/blacklist);emitFakeTransfer 会 emit Transfer(from,to,value)
 EMIT=$(cd contracts/blacklist && forge create src/FakeTransferEmitter.sol:FakeTransferEmitter \
   --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --broadcast --json | jq -r .deployedTo)
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM ; sleep 3
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$VICTIM]" ; sleep 3
 DATA=$(cast calldata "emitFakeTransfer(address,address,uint256)" $CLEAN $VICTIM 1)   # Transfer(to=VICTIM) 命中 check②
 cast send --rpc-url $L1_RPC_URL --private-key $DEPLOYER_PRIVATE_KEY $PORTAL \
   "depositERC20Transaction(address,uint256,uint256,uint64,bool,bytes)" $EMIT 0 0 200000 false "$DATA"
@@ -602,13 +600,17 @@ cast receipt <L2_TX_HASH> --rpc-url $RPC --json | jq '{status, gasUsed, logs:(.l
 
 ### C23:分页读取(名单跨多页)
 
-页大小编译期固定 1024,触发翻页需名单 > 1024。批量加入 1030 个确定性地址,VICTIM 最后加入(落第 2 页):
+页大小编译期固定 1024,触发翻页需名单 > 1024。用批量 `add(address[])` 分批(每批 300,避免单 tx 超区块 gas)灌入 1029 个确定性地址,VICTIM 最后加入(落第 2 页):
 ```bash
+BATCH=""
 for i in $(seq 1 1029); do
-  ADDR=$(printf '0x%040x' "$i")
-  cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" "$ADDR" >/dev/null
+  BATCH="$BATCH$(printf '0x%040x' "$i"),"
+  if [ $((i % 300)) -eq 0 ] || [ "$i" -eq 1029 ]; then
+    cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[${BATCH%,}]" >/dev/null
+    BATCH=""
+  fi
 done
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM   # 索引约 1029
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$VICTIM]"   # 索引约 1029
 sleep 3
 ```
 正向(第 2 页的 VICTIM 仍被拦):
@@ -623,9 +625,9 @@ sleep 6; docker compose logs op-geth-seq | grep "Dropping blacklisted transactio
 ### C24:合约写入校验(零地址 / 去重)
 
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" 0x0000000000000000000000000000000000000000 2>&1 | grep -i "zero address"
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[0x0000000000000000000000000000000000000000]" 2>&1 | grep -i "zero address"
 T1=$(cast call --rpc-url $RPC $MIRROR "getBlacklist(uint256,uint256)(uint256,address[])" 0 1 | head -1)
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM >/dev/null
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$VICTIM]" >/dev/null
 T2=$(cast call --rpc-url $RPC $MIRROR "getBlacklist(uint256,uint256)(uint256,address[])" 0 1 | head -1)
 [ "$T1" = "$T2" ] && echo "dedup OK"
 ```
@@ -644,7 +646,7 @@ cast call --rpc-url $RPC $MIRROR "getBlacklist(uint256,uint256)(uint256,address[
 ### C26:解黑恢复
 
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "remove(address)" $VICTIM
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "remove(address[])" "[$VICTIM]"
 sleep 3   # 等区块边界,从 M+1 生效
 ```
 正向(恢复正常):
@@ -661,7 +663,7 @@ cast call --rpc-url $RPC $MIRROR "getBlacklist(uint256,uint256)(uint256,address[
 remove 落入 block M → 从 M+1 起放行(与 add 落 N → N+1 对称)。
 ```bash
 # 承接 C4(VICTIM 已在名单)
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "remove(address)" $VICTIM
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "remove(address[])" "[$VICTIM]"
 cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN --async   # 同块窗口可能仍被 drop → 1 块延迟
 sleep 6; docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1 || echo "已放行"
 sleep 3
@@ -701,7 +703,7 @@ docker run --rm <op-geth-image> --xlayer.blacklist.enabled=true 2>&1 | grep -iE 
 本拓扑已起 seq(geth,8123)+ rpc(geth,8124)。rpc 导入 seq 区块时必须算出一致的 state/receipts root,否则拒块 → 分叉。这是 build vs import 路径一致性的直接验证(deposit 奇偶、L2-tx drop-vs-不拦截不对称都在此暴露),无需 reth。
 前置:确保 VICTIM 在名单并制造活动(C26/C27 可能已解黑,这里重新 add 再造一笔被拦交易):
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM ; sleep 3   # 幂等
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$VICTIM]" ; sleep 3   # 幂等
 cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN   # 制造一笔被 drop 的 L2 tx
 # 再发一笔涉及 VICTIM 的 deposit(同 C18)制造 included-as-reverted
 HEAD=$(cast block-number --rpc-url http://localhost:8123)
@@ -770,7 +772,7 @@ cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY --value 1 $CLEAN   
 ```
 阶段 C — 首次 add 激活:
 ```bash
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM ; sleep 3
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$VICTIM]" ; sleep 3
 cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN --async ; sleep 6; docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1      # 已激活:资产移动被 drop
 ```
 过渡一致性(核心,无分叉):
@@ -793,7 +795,7 @@ cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN   # 恢复正常
 节点只依赖 `getBlacklist` ABI、不读 storage,故合约内部实现可换而节点无感。需 mirror 以 proxy 形态部署在确定性地址(impl 可换、地址不变)。
 ```bash
 # 1) 确定性地址部署 proxy(impl=v1,enumerable set);走黑名单活动
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM ; sleep 3
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$VICTIM]" ; sleep 3
 cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN --async ; sleep 6; docker compose logs op-geth-seq | grep "Dropping blacklisted transaction" | tail -1   # 升级前已拦(资产移动被 drop)
 # 2) 升级 impl 到 v2(内部存储结构不同,但 getBlacklist ABI 不变):proxy admin 调 upgradeTo(v2)
 ```
@@ -813,8 +815,8 @@ cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $CLEAN --async ; sleep 
 ### C8-ext:多加黑账户互发(Gap 6)
 ```bash
 # VICTIM 和 VICTIM2 都在名单。VICTIM → VICTIM2 转账(顶层 from/to 都在名单 + 余额变动)。
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM
-cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address)" $VICTIM2
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$VICTIM]"
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[$VICTIM2]"
 sleep 3
 cast send --rpc-url $RPC --private-key $(VKEY) --value 1 $VICTIM2 --async   # 资产移动 → 出块 drop
 sleep 6
@@ -918,7 +920,7 @@ docker run --rm --entrypoint sh op-geth:latest -c \
 # 部署 FakeTransferEmitter 到 L2
 forge create src/FakeTransferEmitter.sol:FakeTransferEmitter --rpc-url L2 ...
 # add(VICTIM) 到 mirror
-cast send MIRROR "add(address)" VICTIM ...
+cast send MIRROR "add(address[])" "[VICTIM]" ...
 # L1 deposit:to=Emitter, data=emitFakeTransfer(SENDER, VICTIM, 1)
 DATA=$(cast calldata "emitFakeTransfer(address,address,uint256)" SENDER VICTIM 1)
 cast send --rpc-url L1 PORTAL \
@@ -1034,15 +1036,6 @@ docker build -t op-geth:latest -f Dockerfile .   # 重建干净 binary
 # 期望:全程三节点逐块 stateRoot 一致、无 bad block
 ```
 
-### CXG1:黑名单 × gasless 交互
-```bash
-# 启用 gasless(参考 gasless 测试计划)
-# 在 gasless 白名单中 add 某 EOA,同时在 blacklist 中也 add 同一 EOA
-# 该 EOA 发一笔【移动资产的】gasless tx
-# 期望:执行关 build-drop 优先于 gasless 放行 → 该 tx 仍被 drop(不靠 gasless 绕过 blacklist)
-# 注意:若是 value=0、无资产移动的 gasless tx,则不再被拦(check②/③ 都不命中)——与 C4 负向一致
-```
-
 ### ST1/ST2/ST3:soak(5min / 15min / 30min)
 ```bash
 # 档二:adventure 工具 + cast churn 线程 + 多端点提交,负载 ~300-400 TPS,混合 普通 tx + blacklist 拦截场景
@@ -1051,11 +1044,81 @@ docker build -t op-geth:latest -f Dockerfile .   # 重建干净 binary
 # 三轮时长递增,5min 验功能、15min 验中等累积、30min 验长时间退化
 ```
 
+# 性能对比:黑名单对 ERC20 TPS 的影响(仅 reth)
+
+目的:验证设置黑名单后,正常付费 ERC20 转账的 TPS 不会因黑名单机制(每块快照读 + 每 tx 检查)而显著下降。用 adventure ERC20 压测,只变「黑名单」这一个变量,三组对照。
+
+机制预判:每 tx 的黑名单判定是 O(1) 哈希查找(扫 Transfer log 的 from/to + 余额候选),与名单大小无关;唯一随规模增长的是每块一次的快照读(1 万条 ≈ ⌈10000/1024⌉ 次 getBlacklist staticcall)。故预期三组 TPS 基本持平。
+
+## 三组(只在 reth seq 上测,SEQ_TYPE=reth)
+
+| 组 | 黑名单状态 | 隔离的成本 |
+|---|---|---|
+| A 基线 | 不部署 mirror(或 `clear()` 空名单)→ gate 完全 no-op | 无黑名单开销 |
+| B 单条 | mirror + 1 个随机地址 → gate 激活、名单最小 | A→B = gate 机制固定开销(每 tx 检查) |
+| C 满名单 | mirror + 1 万个随机地址 | B→C = 名单规模开销(每块读 1 万条) |
+
+随机地址用顺序低位地址 `0x0…0001`…`0x0…2710`(十进制 1~10000)。关键:黑名单地址必须与 adventure 的 1 万压测账户、ERC20 合约地址都不重叠——否则相关 tx 会被执行关 drop,TPS 是因"交易被删"掉下去,对照无效(顺序低位地址与 keccak 派生的 EOA、合约地址必然不撞)。
+
+## 前置(一次性,三组共用)
+
+1. devnet 起好,`SEQ_TYPE=reth`、`ENABLE_GASLESS=false`(测普通付费 ERC20 转账)。
+2. adventure 配置 `tools/adventure/testdata/config.json`:`accounts: 10000`、`rpc` 指向 reth seq(`http://localhost:8123`);`concurrency` / `targetTPS: 0`(跑满)/ `maxBatchSize` 等参数三组保持完全一致。
+3. 部署 ERC20 + 给 1 万账户分发代币(只做一次,三组复用,链上代币/账户不变):
+   ```bash
+   cd tools/adventure && make build
+   adventure erc20-init 10ETH -f ./testdata/config.json   # 记下输出的 ERC20 Address
+   ERC20=0x<上一步输出的地址>
+   ```
+
+## 灌黑名单(B / C 组,用批量 add(address[]))
+
+```bash
+MIRROR=0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f
+# B:加 1 条
+cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[0x0000000000000000000000000000000000000001]"
+# C:承接 B,再补 2..10000(分批 300/笔,避免单 tx 超区块 gas)
+BATCH=""
+for i in $(seq 2 10000); do
+  BATCH="$BATCH$(printf '0x%040x' "$i"),"
+  if [ $((i % 300)) -eq 0 ] || [ "$i" -eq 10000 ]; then
+    cast send --rpc-url $RPC --private-key $DEPLOYER_PRIVATE_KEY $MIRROR "add(address[])" "[${BATCH%,}]" >/dev/null
+    BATCH=""
+  fi
+done
+cast call --rpc-url $RPC $MIRROR "getBlacklist(uint256,uint256)(uint256,address[])" 0 1 | head -1   # C 组应 == 10000
+```
+
+## 每组测量(3 次 × 5 分钟,取中位数)
+
+```bash
+for run in 1 2 3; do
+  timeout 300 adventure erc20-bench -f ./testdata/config.json --contract $ERC20 2>&1 | tee /tmp/erc20-bench-<组>-$run.log
+  # adventure 周期性打印 avg/instant/max/min TPS;取该 5 分钟窗口的 avg TPS
+done
+```
+A 组:`cast send $MIRROR "clear()"` 清空名单(或用未部署 mirror 的链)后再跑。
+
+## 有效性校验(每组跑时必须确认,否则对照无效)
+
+- `cache_size` == 预期(A:0;B:1;C:10000):`curl -s localhost:<reth_metrics_port>/... | grep xlayer_blacklist_cache_size`
+- `exec_revert` 全程 == 0(没有 adventure tx 被误拦):`grep xlayer_blacklist_exec_revert`(reth 为 `_total{hook=…}`)
+- reth 日志无 `Dropping blacklisted transaction`
+- 三组的 adventure 配置 / ERC20 合约 / 账户集 / 出块参数完全一致
+
+## 判定
+
+- 取每组 3 次的中位数:TPS_A / TPS_B / TPS_C。
+- 通过:`TPS_C ≥ TPS_A × 95%`(1 万黑名单导致的 TPS 下降 ≤ 5%);B 应介于 A、C 之间。
+- A→B 看 gate 固定开销,B→C 看名单规模开销;按机制预判两者都应可忽略,且 B≈C 坐实"名单大小不拖慢"。
+- PRD 的 G-3 目标是 <1%;devnet 单机噪声通常 >1%,严格 <1% 验证留给受控性能环境,本段以"无显著回退(≤5%)"为准。
+- 记录:每组 3 次原始 TPS + 中位数、`snapshot_read_duration_nanoseconds` p50/p99(规模开销的直接观测)、区块 gasUsed / 出块间隔、运行环境(机器/镜像 tag)。
+
 # 本计划不覆盖
 
 - **区块边界生效时机**:add 落入 block N,同块 N 内 from VICTIM 的 tx 不应被拦,从 N+1 才生效。手动难精确控同块时序,归 UT/IT 覆盖。
 - **上限截断**:total > 300000 时截断行为。手动构造不现实,归 UT;**跨端必须一致项**(若 reth 拒绝、op-geth 截断 → 跨端分叉,需统一)。
-- **TPS 性能**(G-3 "<1%"):关/开空名单/开带名单 loadtest 对照。归性能测试。
+- **严格 <1% TPS 验证**(G-3):逐项精确测留给受控性能环境;devnet 上的三组对照(A/B/C,≤5% 口径)见上文「性能对比」段,仅 reth。
 - **形式化验证 / 模糊测试**:归专项。
 - **`RETH_STORAGE_V2=true` 存储变体**:本计划默认 v1,v2 一致性归 reth 团队专项。
 - **网络分区**:raft 自身处理,跟 blacklist 无关。
@@ -1066,7 +1129,7 @@ docker build -t op-geth:latest -f Dockerfile .   # 重建干净 binary
 
 1. **档一 reth 单端 baseline**(T2 ≈ SEQ=reth+RPC=reth):全量跑序号 1-31 中所有标"reth-seq + geth-seq" 的 case 的 reth 那一组
 2. **档一 跨端**(T3/T4 ≈ 异类双向):跑序号 19-21、24、25、32、34、35-36、42、46(共 ~10 case × 2 组 = 20 跑)
-3. **档二 多节点**(CX8/13/14、CXR1、CXW1-3、CXG1):需要先改 docker-compose 给 reth/geth 实例独立端口、开 CONDUCTOR_ENABLED=true
+3. **档二 多节点**(CX8/13/14、CXR1、CXW1-3):需要先改 docker-compose 给 reth/geth 实例独立端口、开 CONDUCTOR_ENABLED=true
 4. **档二 soak**(ST1/2/3):最后跑,确认稳态无退化
 5. **CX5/CX6 对抗**:按本文档前面 patch 段步骤,跑完务必 git checkout op-geth 还原
-6. **跑完每 case 后**:更新本文件「实际」列(从 ⏳ pending 改成 ✅/❌/⏸ + 简述结果),保留原始证据到 `devnet/test-results/blacklist-XLOP-1100-<ts>/Cn.md`
+6. **跑完每 case 后**:更新本文件「实际」列(从 ⏳ pending 改成 ✅/❌/⏸ + 简述结果),保留原始证据到 `devnet/test-results/blacklist-<ts>/Cn.md`
