@@ -94,7 +94,17 @@ LAUNCH_RPC_NODE2=true
 # 参考 gasless 测试计划的"档二"搭建说明:把 4 个 seq 纳入同一 raft,端口分开
 ```
 
-注:`.env` 直接改(`clean.sh` 不覆盖已存在的 `.env`);若 `.env` 缺 `BLACKLIST_DEPLOYER_INDEX` 或 `BLACKLIST_MIRROR_ADDRESS`,从 example.env 同步过来(否则 7-deploy-blacklist.sh 第一次跑会 `invalid value '' for '<WHO>'`)。
+临时代码改动(仅档二 + SEQ_TYPE=reth,测完 `git checkout` 还原,不要进主仓库):
+`devnet/3-op-init.sh` 在 conductor 集群里给第 3 个 seq `op-geth-seq3` 拷 datadir 时,默认从 op-geth-seq 拷(`cp -r $OP_GETH_DATADIR $OP_GETH_DATADIR3`)。当主 seq 是 reth 时根本没有 op-geth-seq,这行会拷空导致 seq3 起不来。测前临时把这行改成从 op-geth-rpc 回退取源:
+```sh
+# 原: cp -r $OP_GETH_DATADIR $OP_GETH_DATADIR3
+GETH_SOURCE="${OP_GETH_DATADIR:-$(pwd)/data/op-geth-rpc}"
+[ -d "$GETH_SOURCE" ] || { echo "no op-geth datadir to seed op-geth-seq3"; exit 1; }
+cp -r "$GETH_SOURCE" "$OP_GETH_DATADIR3"
+```
+SEQ_TYPE=geth 的档二无需此改动(op-geth-seq 本就存在)。
+
+注:`.env` 直接改(`clean.sh` 不覆盖已存在的 `.env`)。`BLACKLIST_DEPLOYER_INDEX`(19)与 `BLACKLIST_MIRROR_ADDRESS`(`0x73511669…F31f`)现已固化为 `7-deploy-blacklist.sh` 内常量,`.env` 不再需要这两项(仅保留 `BLACKLIST_DEMO_ENABLED` 开关);如需覆盖才在 `.env` 里设。
 
 ## 测试用账户(devnet 标准助记词 test…junk)
 
