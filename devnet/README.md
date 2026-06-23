@@ -377,34 +377,6 @@ To run the full reth e2e test suite for flashblocks (starts the non-flashblock n
 make run-reth-test-all
 ```
 
-## Blacklist Demo
-
-The devnet can optionally deploy a demo `L2BlacklistMirror` contract to exercise
-the chain-level emergency-freeze blacklist on chain_id **195**. It is
-**off by default**, so `make run` is unaffected.
-
-Enable it with one toggle (in `example.env` then `./clean.sh`, or directly in `.env`):
-
-```bash
-BLACKLIST_DEMO_ENABLED=true   # default false
-```
-
-With the flag on, `0-all.sh` runs `7-deploy-blacklist.sh` after services are up:
-it deploys `contracts/blacklist/src/L2BlacklistMirror.sol` to the deterministic
-mirror address on L2 (the script asserts the deployed address) and seeds one demo
-entry. The deployer account and mirror address are constants baked into the
-script, not `.env` config.
-
-The deterministic-address derivation, the cross-client `getBlacklist` read
-interface and the full contract set are documented in
-`contracts/blacklist/src/README.md`; functional / cross-client test steps are in
-`testplan-blacklist-demo-opgeth.md`.
-
-Note: deploying the contract alone does not intercept anything. The same mirror
-address must also be hardcoded in the node binaries (op-geth / xlayer-reth) and
-the images rebuilt (`./init.sh`); until then the contract is queryable but the
-execution gate stays a no-op.
-
 ## Troubleshooting
 
 ### Common Issues
