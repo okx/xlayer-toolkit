@@ -20,11 +20,11 @@ contract L2BlacklistMirrorV2 {
     event Added(address indexed account);
     event Removed(address indexed account);
 
-    function add(address) external {
+    function add(address[] calldata) external {
         revert("L2BlacklistMirrorV2: read-only test impl");
     }
 
-    function remove(address) external {
+    function remove(address[] calldata) external {
         revert("L2BlacklistMirrorV2: read-only test impl");
     }
 

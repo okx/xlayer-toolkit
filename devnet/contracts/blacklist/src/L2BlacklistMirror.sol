@@ -35,9 +35,16 @@ contract L2BlacklistMirror {
     event Cleared();
     event Panicked(bool on);
 
-    /// @notice Add `account` to the blacklist. Rejects the zero address; a
-    ///         duplicate is a no-op (the set is deduped).
-    function add(address account) external {
+    /// @notice Add `accounts` to the blacklist (batched; pass one or many).
+    ///         Rejects the zero address; a duplicate is a no-op (the set is
+    ///         deduped). A zero address anywhere reverts the whole batch.
+    function add(address[] calldata accounts) external {
+        for (uint256 i = 0; i < accounts.length; i++) {
+            _add(accounts[i]);
+        }
+    }
+
+    function _add(address account) private {
         require(account != address(0), "L2BlacklistMirror: zero address");
         if (_index[account] != 0) {
             return;
@@ -47,8 +54,15 @@ contract L2BlacklistMirror {
         emit Added(account);
     }
 
-    /// @notice Remove `account` via swap-and-pop (O(1)). Reverts if not listed.
-    function remove(address account) external {
+    /// @notice Remove `accounts` via swap-and-pop (O(1) each; batched). Reverts
+    ///         the whole batch if any entry is not listed.
+    function remove(address[] calldata accounts) external {
+        for (uint256 i = 0; i < accounts.length; i++) {
+            _remove(accounts[i]);
+        }
+    }
+
+    function _remove(address account) private {
         uint256 idx = _index[account];
         require(idx != 0, "L2BlacklistMirror: not listed");
         uint256 last = _values.length;

@@ -131,7 +131,7 @@ echo "   ✅ mirror deployed at ${DEPLOYED} (matches expected)"
 DEMO_LISTED="${BLACKLIST_DEMO_SEED:-0x00000000000000000000000000000000000000AA}"
 echo "   seeding demo blacklisted address: ${DEMO_LISTED}"
 cast send --rpc-url "$L2_RPC_URL" --mnemonic "$MNEMONIC" --mnemonic-derivation-path "$DPATH" \
-  "$BLACKLIST_MIRROR_ADDRESS" "add(address)" "$DEMO_LISTED" >/dev/null
+  "$BLACKLIST_MIRROR_ADDRESS" "add(address[])" "[$DEMO_LISTED]" >/dev/null
 
 # Verify via the node read interface getBlacklist(start, limit) -> (total, addresses).
 # total is the first return value; one call returns total + the (single) page.
