@@ -377,72 +377,33 @@ To run the full reth e2e test suite for flashblocks (starts the non-flashblock n
 make run-reth-test-all
 ```
 
-## Blacklist Demo (XLOP-1100)
+## Blacklist Demo
 
 The devnet can optionally deploy a demo `L2BlacklistMirror` contract to exercise
-the chain-level emergency-freeze blacklist (XLOP-1100) on chain_id **195**. It is
+the chain-level emergency-freeze blacklist on chain_id **195**. It is
 **off by default**, so `make run` is unaffected.
 
-### Enable
-
-In `example.env` (then `./clean.sh`) or directly in `.env`:
+Enable it with one toggle (in `example.env` then `./clean.sh`, or directly in `.env`):
 
 ```bash
-BLACKLIST_DEMO_ENABLED=true                                  # default false
-BLACKLIST_DEPLOYER_INDEX=19                                  # dedicated deployer
-BLACKLIST_MIRROR_ADDRESS=0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f
+BLACKLIST_DEMO_ENABLED=true   # default false
 ```
 
 With the flag on, `0-all.sh` runs `7-deploy-blacklist.sh` after services are up:
-it deploys `contracts/blacklist/src/L2BlacklistMirror.sol` to L2, asserts the
-deployed address equals `BLACKLIST_MIRROR_ADDRESS`, and seeds one demo entry.
+it deploys `contracts/blacklist/src/L2BlacklistMirror.sol` to the deterministic
+mirror address on L2 (the script asserts the deployed address) and seeds one demo
+entry. The deployer account and mirror address are constants baked into the
+script, not `.env` config.
 
-### Why the address is deterministic
+The deterministic-address derivation, the cross-client `getBlacklist` read
+interface and the full contract set are documented in
+`contracts/blacklist/src/README.md`; functional / cross-client test steps are in
+`testplan-blacklist-demo-opgeth.md`.
 
-A CREATE contract address depends only on `(deployer EOA, nonce)`. The mirror is
-deployed by a **dedicated** test-mnemonic account (index `19`,
-`0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199`) used for nothing else, so its L2
-nonce is always `0` and the address is always
-`0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f`:
-
-```bash
-cast compute-address 0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199 --nonce 0
-# -> 0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f
-```
-
-The script fails fast if the deployer nonce is not `0` (address would drift) or
-if the deployed address does not match the expected value.
-
-### Read interface (cross-client ABI contract)
-
-The nodes read the list **only through the view method**, not via raw storage
-slots:
-
-```solidity
-function getBlacklist(uint256 start, uint256 limit)
-    external view returns (uint256 total, address[] addresses);
-```
-
-The node reads it once per block from the block-head/parent state: one call
-returns `total` plus the page of addresses, so a list within one page (page size
-1024) is fetched in a single call; larger lists are paginated. Because the node
-depends only on this ABI — never on the storage layout — the contract is free to
-use any internal representation (this stub uses an inline enumerable set). The
-function signature is the cross-client contract: op-geth, xlayer-reth and the
-contracts repo must all call the identical method, and any change is synchronized
-three ways. See `.claude/plan/blacklist-mirror-interface-spec.md` for the full
-alignment spec (page size, entry cap, zero-address and failure policy must be
-byte-identical across clients).
-
-### Prerequisite for actual interception
-
-The mirror address is **hardcoded at compile time** in the node binaries. Until
-`op-geth` (`params/config_xlayer.go`) and `xlayer-reth`
-(`crates/builder/src/blacklist/mirror.rs`) hardcode
-`0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f` for chain 195 **and the images are
-rebuilt (`./init.sh`)**, the nodes still read the old placeholder address — the
-demo contract deploys and is queryable, but the execution gate does not yet
-intercept. 1952 / 196 are out of scope for this demo.
+Note: deploying the contract alone does not intercept anything. The same mirror
+address must also be hardcoded in the node binaries (op-geth / xlayer-reth) and
+the images rebuilt (`./init.sh`); until then the contract is queryable but the
+execution gate stays a no-op.
 
 ## Troubleshooting
 
