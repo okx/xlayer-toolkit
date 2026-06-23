@@ -1,5 +1,5 @@
 #!/bin/bash
-# 7-deploy-blacklist.sh — deploy the L2BlacklistMirror demo stub (XLOP-1100).
+# 7-deploy-blacklist.sh — deploy the L2BlacklistMirror demo stub.
 #
 # Devnet-only, chain_id 195. Gated by BLACKLIST_DEMO_ENABLED in .env; when off
 # this is a no-op so `make run` / 0-all.sh behave exactly as before.
@@ -22,6 +22,15 @@ cd "$(dirname "$0")"
 source .env
 
 MNEMONIC="test test test test test test test test test test test junk"
+
+# Deterministic devnet constants (NOT user config — only BLACKLIST_DEMO_ENABLED is
+# meant to be toggled in .env). The mirror is deployed by a dedicated test-mnemonic
+# account at index BLACKLIST_DEPLOYER_INDEX whose L2 nonce stays 0, so its CREATE
+# address is deterministic and equals BLACKLIST_MIRROR_ADDRESS — which is also
+# hardcoded in the op-geth / xlayer-reth node binaries for chain 195. Derivation:
+# see contracts/blacklist/src/README.md. (.env may still override for advanced use.)
+BLACKLIST_DEPLOYER_INDEX="${BLACKLIST_DEPLOYER_INDEX:-19}"
+BLACKLIST_MIRROR_ADDRESS="${BLACKLIST_MIRROR_ADDRESS:-0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f}"
 
 if [ "${BLACKLIST_DEMO_ENABLED}" != "true" ]; then
   echo "ℹ️  BLACKLIST_DEMO_ENABLED != true — skipping blacklist mirror deploy (no-op)."

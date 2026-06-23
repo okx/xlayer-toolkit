@@ -169,11 +169,6 @@ services:
     image: "${OP_GETH_IMAGE_TAG}"
     container_name: op-geth-seq
     entrypoint: geth
-    environment:
-      # CX5/CX6 anti-fork test ONLY: when set to "1" the op-geth seq bypasses the
-      # blacklist gate, producing blocks where a banned deposit succeeds. The
-      # follower (reth) keeps the gate and will reject the block as bad.
-      XLAYER_BYPASS_BLACKLIST_GATE: "${XLAYER_BYPASS_BLACKLIST_GATE:-}"
     volumes:
       - ./data/op-geth-seq:/datadir
       - ./config-op/jwt.txt:/jwt.txt
@@ -193,7 +188,7 @@ services:
       - --config=/config.toml
       - --gcmode=archive
       - --rollup.disabletxpoolgossip=false
-      # XLOP-1100: gasless flags removed — blacklist branch of op-geth doesn't have them.
+      # gasless flags removed — blacklist branch of op-geth doesn't have them.
       # When testing gasless, restore: --rollup.allow-gasless / --rollup.gasless-mock-gas-price-percentile
       - --nodekeyhex=1aba031aeb5aa8aedadaf04159d20e7d58eeefb3280176c7d59040476c2ab21b
       - --pprof=true

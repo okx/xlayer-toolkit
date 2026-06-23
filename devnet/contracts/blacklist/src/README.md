@@ -1,20 +1,27 @@
-合约用途说明
+Contract overview
 
-# 生产合约
+# Production contract
 
-- `L2BlacklistMirror.sol` — 黑名单镜像（XLOP-1100 demo stub）。带 `panic()` test hook 用于 CX10 fail-open 测试；不设 panic 时跟原版 100% 一致。生产部署前需评估是否保留 panic 函数。
+- `L2BlacklistMirror.sol` — the blacklist mirror (devnet demo stub). Carries a `panic()` test hook used to exercise node fail-open behaviour; with panic unset it behaves identically to the plain mirror. Evaluate whether to keep the panic function before any production deployment.
 
-# 测试专用合约（CXn / Cn 测试使用，不进生产）
+# devnet mirror deploy address
 
-- `MirrorProxy.sol` — ERC-1967 minimal proxy。CX9 proxy upgrade 测试用，部署在 deterministic mirror 地址；委托给 `L2BlacklistMirror` 作为 V1 impl。
-- `L2BlacklistMirrorV2.sol` — CX9 测试用的 V2 impl，无视存储固定返回 `[BANANA]`，用于验证 upgradeTo 后两端立刻读取新 impl。
-- `FakeTransferEmitter.sol` — CX5/CX6 测试用，能够任意发射 ERC20-shaped `Transfer` 事件以触发 check②。
-- `SimpleERC20.sol` — C10/C14 测试用的最小 ERC20（mint/transfer/approve/transferFrom + Approval event）。
-- `SimpleERC721.sol` — C11 测试用的最小 ERC721（Transfer event topic0 与 ERC20 同）。
+On devnet (chain 195) the mirror is always deployed at the deterministic address `0x73511669fd4dE447feD18BB79bAFeAC93aB7F31f`:
 
-# 部署开关（in `.env`）
+- Deployed by a dedicated test-mnemonic account `m/44'/60'/0'/0/19` (standard `test … junk` mnemonic) whose only job is this one deploy, so its L2 nonce stays 0.
+- A plain CREATE address = `keccak256(rlp(deployer, nonce))[12:]`, i.e. it depends only on (deployer, nonce); fixed deployer + nonce 0 ⇒ the address above.
+- The same address is hardcoded in the node binaries (op-geth `params/config_xlayer.go`, xlayer-reth `crates/blacklist`); the nodes read the list via `getBlacklist`.
+- `7-deploy-blacklist.sh` asserts the deployed address equals this constant and aborts on mismatch, so the deployed address can never diverge from the node-hardcoded one.
+- The deployer index and this address are constants baked into `7-deploy-blacklist.sh`, not exposed in `.env` (only the `BLACKLIST_DEMO_ENABLED` toggle lives in `.env`).
 
-- `USE_PROXY_MIRROR=true` — `7-deploy-blacklist.sh` 将部署 `MirrorProxy + L2BlacklistMirror impl` 而不是裸 mirror。仅 CX9 使用。
-- `XLAYER_BYPASS_BLACKLIST_GATE=1`（CX5）/ `=2`（CX6）— 需配合 op-geth 端 `core/blacklist_gate_xlayer.go` patch（见 `testplan-blacklist-demo-opgeth.md` 的 CX5/CX6 段），跑完务必 `git checkout` 还原。
+# Test-only contracts (not for production)
 
-默认（两个 env 都不设或留空）合约部署行为跟历史一致，不影响 C1-C34 / 多数 CXn case。
+- `MirrorProxy.sol` — ERC-1967 minimal proxy, deployed at the deterministic mirror address and delegating to `L2BlacklistMirror` as the V1 impl. Used by the proxy-upgrade test.
+- `L2BlacklistMirrorV2.sol` — a V2 impl that ignores storage and always returns a fixed address list, used to verify both clients immediately read the new impl after an upgrade.
+- `FakeTransferEmitter.sol` — emits an arbitrary ERC20-shaped `Transfer` event to trigger the blacklist's committed event-log scan.
+
+Generic ERC20 / ERC721 / ERC1155 mocks live in `contracts/testkit/src/Mocks.sol` (`MockERC20` / `MockERC721` / `MockERC1155`); they are not maintained here.
+
+# Test switches
+
+Test-only env / switches (`USE_PROXY_MIRROR`, `XLAYER_BYPASS_BLACKLIST_GATE`, etc.) are set only during testing (including temporary docker-compose / op-geth patches). See `testplan-blacklist-demo-opgeth.md` for usage and revert steps. With them unset, contract deployment behaves as before and is unaffected.

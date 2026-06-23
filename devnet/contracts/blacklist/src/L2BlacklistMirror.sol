@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 /// @title L2BlacklistMirror (devnet demo stub)
 /// @notice Minimal mirror of the emergency-freeze blacklist for the XLayer
-///         devnet (chain_id 195), backing XLOP-1100.
+///         devnet (chain_id 195).
 ///
 /// @dev READ INTERFACE IS THE CROSS-CLIENT CONTRACT, NOT the storage layout.
 ///      The xlayer-reth and op-geth nodes read the list ONLY through the view
@@ -88,7 +88,7 @@ contract L2BlacklistMirror {
         return _panicked;
     }
 
-    /// @notice Node read interface (XLOP-1100). Returns the total number of
+    /// @notice Node read interface. Returns the total number of
     ///         listed addresses and a bounded page `[start, start+limit)` of
     ///         them. A list within one page is fetched in a single call (total +
     ///         all addresses together); larger lists are paginated by the caller.

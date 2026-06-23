@@ -206,7 +206,7 @@ RPC=http://localhost:8123
 # 公共准备(fixtures,所有 case 前执行一次)
 
 辅助合约是通用测试 mock(与黑名单无关,任何 devnet 测试可复用),落成真实文件、零依赖、已编译验证:
-`devnet/contracts/testkit/src/Mocks.sol` —— 含 `ValueForwarder` / `MockERC20` / `MockERC1155` / `SelfDestructor` / `CallSwallower`。非生产合约,`out/` 已 gitignore。
+`devnet/contracts/testkit/src/Mocks.sol` —— 含 `ValueForwarder` / `MockERC20` / `MockERC721` / `MockERC1155` / `SelfDestructor` / `CallSwallower`。非生产合约,`out/` 已 gitignore。
 
 执行顺序:devnet 起好(seq+rpc)且 mirror 已部署后,先跑下面这一段,把工具合约部署好、账户充值好,导出后续 case 用的变量。这样消除 case 之间的部署顺序依赖(任何 case 不再"用到还没部署的合约")。
 

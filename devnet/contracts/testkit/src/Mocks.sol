@@ -104,3 +104,24 @@ contract CallSwallower {
         ok; // swallow: outer tx succeeds regardless
     }
 }
+
+/// Minimal ERC721. ERC721's Transfer event topic0 is identical to ERC20's
+/// (keccak256("Transfer(address,address,uint256)")), so a Transfer-event based
+/// check hits this the same way as an ERC20 transfer.
+contract MockERC721 {
+    mapping(uint256 => address) public ownerOf;
+
+    event Transfer(address indexed from, address indexed to, uint256 indexed tokenId);
+
+    function mint(address to, uint256 tokenId) external {
+        require(ownerOf[tokenId] == address(0), "exists");
+        ownerOf[tokenId] = to;
+        emit Transfer(address(0), to, tokenId);
+    }
+
+    function transferFrom(address from, address to, uint256 tokenId) external {
+        require(ownerOf[tokenId] == from, "not owner");
+        ownerOf[tokenId] = to;
+        emit Transfer(from, to, tokenId);
+    }
+}
