@@ -15,4 +15,12 @@ if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     TRUSTED_PEERS="${TRUSTED_PEERS},enode://7d55f88b368875a905f641bb451f39c6e825f665ccb7134a75c0bae7f9db82c7f01e37004151e61f21562b92b896b7bee2066c735a11ff6ac11a2c055b9fce40@op-geth-seq3:30303"
 fi
 
+# rpc1 — the sequencer runs trusted_nodes_only=true, and reth >=2.2 drops
+# untrusted *inbound* connections, so the sequencer must trust the RPC replica
+# for it to peer (and sync). Fixed enode id is seeded by 3-op-init.sh into
+# data/op-reth-rpc/discovery-secret (secret 357d05ae…, id 61478df8…).
+if [ "$LAUNCH_RPC_NODE" = "true" ] && [ "$RPC_TYPE" = "reth" ]; then
+    TRUSTED_PEERS="${TRUSTED_PEERS},enode://61478df86822759718c3c849b078023745e0c6d96ea17957ae4779199bcf15c9186a17da75b2d6da6b99be49d999101cb1e82c41d370f133df145670dc8213e3@op-${RPC_TYPE}-rpc:30303"
+fi
+
 echo "$TRUSTED_PEERS"
