@@ -70,9 +70,6 @@ CMD="op-reth node \
       --txpool.max-pending-txns=100000 \
       --txpool.max-new-txns=100000 \
       --rpc.eth-proof-window=10000 \
-      --rollup.gasless-mock-gas-price-percentile=${GASLESS_MOCK_GAS_PRICE_PERCENTILE:-0.1} \
-      --rollup.gasless-pending-lifetime=${GASLESS_PENDING_LIFETIME_SECS:-600} \
-      --builder.gasless-block-gas-limit=${BUILDER_GASLESS_BLOCK_GAS_LIMIT:-60000000} \
       --rpc.legacy-url=http://l1-geth:8545"
 
 # Enable XLayer gasless` flag to forward gasless txs to sequencer node.

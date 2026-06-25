@@ -60,7 +60,7 @@ deploy_transactor() {
         forge create --json --broadcast --legacy \
           --rpc-url $L1_RPC_URL_IN_DOCKER \
           --private-key $DEPLOYER_PRIVATE_KEY \
-          src/periphery/Transactor.sol:Transactor.0.8.30 \
+          src/periphery/Transactor.sol:Transactor \
           --constructor-args $ADMIN_OWNER_ADDRESS)
 
     # Extract Transactor address
@@ -129,7 +129,6 @@ docker run --rm \
       --private-key $DEPLOYER_PRIVATE_KEY \
       --artifacts-locator file:///app/packages/contracts-bedrock/forge-artifacts \
       --superchain-proxy-admin-owner $L1_PROXY_ADMIN_OWNER \
-      --protocol-versions-owner $ADMIN_OWNER_ADDRESS \
       --guardian $ADMIN_OWNER_ADDRESS \
       --outfile /deployments/superchain.json
   "
@@ -153,7 +152,6 @@ docker run --rm \
       --outfile /deployments/implementations.json \
       --mips-version "8" \
       --private-key $DEPLOYER_PRIVATE_KEY \
-      --protocol-versions-proxy $PROTOCOL_VERSIONS_PROXY \
       --superchain-config-proxy $SUPERCHAIN_CONFIG_PROXY \
       --superchain-proxy-admin $PROXY_ADMIN \
       --upgrade-controller $ADMIN_OWNER_ADDRESS \
