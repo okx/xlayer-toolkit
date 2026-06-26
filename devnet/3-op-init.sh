@@ -177,6 +177,13 @@ fi
 # Get trusted peers enode url
 sed_inplace "s|TRUSTED_PEERS=.*|TRUSTED_PEERS=$(./scripts/trusted-peers.sh)|" .env
 
+# Apply the trusted_nodes_only toggle (TRUSTED_NODES_ONLY in .env) to the reth
+# seq/rpc configs. When true, reth >=2.2 peers only with TRUSTED_PEERS; when
+# false it also accepts untrusted peers.
+TRUSTED_NODES_ONLY="${TRUSTED_NODES_ONLY:-true}"
+sed_inplace "s/^trusted_nodes_only = .*/trusted_nodes_only = ${TRUSTED_NODES_ONLY}/" ./config-op/test.reth.seq.config.toml
+sed_inplace "s/^trusted_nodes_only = .*/trusted_nodes_only = ${TRUSTED_NODES_ONLY}/" ./config-op/test.reth.rpc.config.toml
+
 # init reth sequencer
 echo " 🔧 Initializing reth sequencer..."
 OP_RETH_DATADIR="$(pwd)/data/op-reth-seq"
@@ -320,7 +327,21 @@ if [ "$CONDUCTOR_ENABLED" = "true" ]; then
     # op-seq3 default EL is always op-geth to ensure multiple seqs' geth and reth compatibilities
     OP_GETH_DATADIR3="$(pwd)/data/op-geth-seq3"
     rm -rf "$OP_GETH_DATADIR3"
-    cp -r $OP_GETH_DATADIR $OP_GETH_DATADIR3
+    if [ "$SEQ_TYPE" = "geth" ]; then
+        # op-geth-seq is already genesis-initialized above; clone it.
+        cp -r "$OP_GETH_DATADIR" "$OP_GETH_DATADIR3"
+    else
+        # Sequencer EL is reth, so op-geth-seq was never initialized and
+        # OP_GETH_DATADIR is unset. Initialize op-geth-seq3 directly from
+        # genesis.json (same approach as the op-geth-rpc reth-sequencer path).
+        echo " 🔧 Initializing op-geth-seq3 from genesis.json (reth sequencer)..."
+        mkdir -p "$OP_GETH_DATADIR3"
+        docker compose run --no-deps --rm \
+          --entrypoint sh \
+          -v "$(pwd)/$CONFIG_DIR/genesis.json:/genesis.json" \
+          op-geth-seq3 \
+          -c "geth --datadir=/datadir --gcmode=archive --db.engine=$DB_ENGINE init --state.scheme=hash /genesis.json && rm -f /datadir/geth/nodekey"
+    fi
 fi
 
 if [ "$SEQ_TYPE" = "reth" ]; then
@@ -333,6 +354,21 @@ if [ "$SEQ_TYPE" = "reth" ]; then
     fi
   fi
     echo "✅ Set p2p nodekey for reth sequencer"
+fi
+
+# Seed a FIXED devp2p secret for the reth RPC node so it has a deterministic
+# enode id (61478df8…dc8213e3) that the sequencer trusts (see
+# scripts/trusted-peers.sh). reth >=2.2 rejects untrusted *inbound* connections
+# when trusted_nodes_only=true, so without a known, trusted id the sequencer
+# disconnects the replica and it never syncs.
+#
+# This runs regardless of USE_CHAINSPEC: in the chainspec path the datadir was
+# already copied from the sequencer above; otherwise the dir may not exist yet
+# (reth initializes the db from genesis on first start), so create it here.
+if [ "$LAUNCH_RPC_NODE" = "true" ] && [ "$RPC_TYPE" = "reth" ]; then
+  mkdir -p "$(pwd)/data/op-reth-rpc"
+  echo -n "357d05aeb6a2660667e6affd9dc6704a4e70f953e2675241f691859185e8cf2c" > "$(pwd)/data/op-reth-rpc/discovery-secret"
+  echo "✅ Set fixed p2p nodekey for reth rpc node"
 fi
 
 echo "✅ Finished init op-$SEQ_TYPE-seq and op-$RPC_TYPE-rpc."
