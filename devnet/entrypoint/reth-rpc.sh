@@ -4,6 +4,22 @@ set -e
 
 source /.env
 
+# Drop our own enode from the (shared) trusted-peers list so this node does not
+# dial itself. trusted-peers.sh emits one list containing every reth node's
+# enode and both the seq and rpc entrypoints consume it; combined with
+# --disable-discovery each node dials exactly that list, so without this filter
+# the node connects to itself (noisy "already connected" churn in the logs).
+OWN_P2P_HOST="op-${RPC_TYPE}-rpc"
+_filtered=""
+_OLDIFS="$IFS"; IFS=','
+for _peer in $TRUSTED_PEERS; do
+    [ -z "$_peer" ] && continue
+    case "$_peer" in *"@${OWN_P2P_HOST}:"*) continue ;; esac
+    _filtered="${_filtered:+$_filtered,}$_peer"
+done
+IFS="$_OLDIFS"
+TRUSTED_PEERS="$_filtered"
+
 # Enable jemalloc profiling if requested
 # Note: tikv-jemalloc (used by Rust) uses _RJEM_MALLOC_CONF, not MALLOC_CONF
 if [ "${JEMALLOC_PROFILING:-false}" = "true" ]; then
@@ -61,7 +77,6 @@ CMD="op-reth node \
       --authrpc.addr=0.0.0.0 \
       --authrpc.port=8552 \
       --authrpc.jwtsecret=/jwt.txt \
-      --trusted-peers=$TRUSTED_PEERS \
       --tx-propagation-policy=trusted \
       --txpool.max-account-slots=100000 \
       --txpool.pending-max-count=100000 \
@@ -71,6 +86,12 @@ CMD="op-reth node \
       --txpool.max-new-txns=100000 \
       --rpc.eth-proof-window=10000 \
       --rpc.legacy-url=http://l1-geth:8545"
+
+# Only pass --trusted-peers if any remain after removing our own enode (an empty
+# --trusted-peers= would be rejected).
+if [ -n "$TRUSTED_PEERS" ]; then
+    CMD="$CMD --trusted-peers=$TRUSTED_PEERS"
+fi
 
 # Enable XLayer gasless` flag to forward gasless txs to sequencer node.
 if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
