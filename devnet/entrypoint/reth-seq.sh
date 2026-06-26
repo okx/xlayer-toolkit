@@ -75,6 +75,20 @@ if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
     CMD="$CMD --rollup.allow-gasless"
 fi
 
+# Gasless tuning flags only exist on newer op-reth builds; apply each only if the
+# binary advertises it (older builds abort on an unknown argument). --help is
+# evaluated once and reused.
+RETH_NODE_HELP="$(op-reth node --help 2>/dev/null || true)"
+if echo "$RETH_NODE_HELP" | grep -q -- '--rollup.gasless-mock-gas-price-percentile'; then
+    CMD="$CMD --rollup.gasless-mock-gas-price-percentile=${GASLESS_MOCK_GAS_PRICE_PERCENTILE:-0.1}"
+fi
+if echo "$RETH_NODE_HELP" | grep -q -- '--rollup.gasless-pending-lifetime'; then
+    CMD="$CMD --rollup.gasless-pending-lifetime=${GASLESS_PENDING_LIFETIME_SECS:-600}"
+fi
+if echo "$RETH_NODE_HELP" | grep -q -- '--builder.gasless-block-gas-limit'; then
+    CMD="$CMD --builder.gasless-block-gas-limit=${BUILDER_GASLESS_BLOCK_GAS_LIMIT:-60000000}"
+fi
+
 # For flashblocks architecture
 if [ "$FLASHBLOCK_ENABLED" = "true" ]; then
     CMD="$CMD \
