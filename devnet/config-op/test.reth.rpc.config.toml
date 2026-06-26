@@ -58,7 +58,7 @@ block_interval = 5
 [peers]
 refill_slots_interval = "5s"
 trusted_nodes = []
-trusted_nodes_only = true
+trusted_nodes_only = false
 trusted_nodes_resolution_interval = "1h"
 max_backoff_count = 5
 ban_duration = "12h"
@@ -68,7 +68,6 @@ incoming_ip_throttle_duration = "30s"
 max_outbound = 100
 max_inbound = 30
 max_concurrent_outbound_dials = 15
-trusted_nodes_only = true
 
 [peers.reputation_weights]
 bad_message = -16384

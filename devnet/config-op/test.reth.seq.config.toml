@@ -58,7 +58,7 @@ block_interval = 5
 [peers]
 refill_slots_interval = "5s"
 trusted_nodes = []
-trusted_nodes_only = true
+trusted_nodes_only = false
 # Re-resolve trusted-peer DNS frequently: the RPC replica (op-reth-rpc) starts
 # *after* the sequencer, so its hostname isn't resolvable at seq boot. With the
 # default 1h interval the seq would keep rejecting the (then-untrusted) replica
