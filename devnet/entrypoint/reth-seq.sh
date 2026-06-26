@@ -4,6 +4,23 @@ set -e
 
 source /.env
 
+# Drop our own enode from the (shared) trusted-peers list so this node does not
+# dial itself. trusted-peers.sh emits one list containing every reth node's
+# enode and both the seq and rpc entrypoints consume it; combined with
+# --disable-discovery each node dials exactly that list, so without this filter
+# the node connects to itself (noisy "already connected" churn in the logs).
+# $1 is the seq index (empty for op-reth-seq, set for op-reth-seq2).
+OWN_P2P_HOST="op-${SEQ_TYPE}-seq${1:-}"
+_filtered=""
+_OLDIFS="$IFS"; IFS=','
+for _peer in $TRUSTED_PEERS; do
+    [ -z "$_peer" ] && continue
+    case "$_peer" in *"@${OWN_P2P_HOST}:"*) continue ;; esac
+    _filtered="${_filtered:+$_filtered,}$_peer"
+done
+IFS="$_OLDIFS"
+TRUSTED_PEERS="$_filtered"
+
 # Enable jemalloc profiling if requested
 # Note: tikv-jemalloc (used by Rust) uses _RJEM_MALLOC_CONF, not MALLOC_CONF
 if [ "${JEMALLOC_PROFILING:-false}" = "true" ]; then
@@ -54,7 +71,6 @@ CMD="op-reth node \
       --authrpc.addr=0.0.0.0 \
       --authrpc.port=8552 \
       --authrpc.jwtsecret=/jwt.txt \
-      --trusted-peers=$TRUSTED_PEERS \
       --tx-propagation-policy=all \
       --txpool.max-account-slots=100000 \
       --txpool.pending-max-count=100000 \
@@ -64,18 +80,35 @@ CMD="op-reth node \
       --txpool.max-new-txns=100000 \
       --txpool.pending-max-size=2000 \
       --txpool.basefee-max-size=2000 \
-      --rollup.gasless-mock-gas-price-percentile=${GASLESS_MOCK_GAS_PRICE_PERCENTILE:-0.1} \
-      --rollup.gasless-pending-lifetime=${GASLESS_PENDING_LIFETIME_SECS:-600} \
-      --builder.gasless-block-gas-limit=${BUILDER_GASLESS_BLOCK_GAS_LIMIT:-60000000} \
       --engine.persistence-threshold=${ENGINE_PERSISTENCE_THRESHOLD:-2} \
       --log.file.directory=/logs/reth \
       --log.file.filter=info \
       --metrics=0.0.0.0:9001 \
       --xlayer.sequencer-mode"
 
+# Only pass --trusted-peers if any remain after removing our own enode (an empty
+# --trusted-peers= would be rejected).
+if [ -n "$TRUSTED_PEERS" ]; then
+    CMD="$CMD --trusted-peers=$TRUSTED_PEERS"
+fi
+
 # Enable XLayer gasless (zero gas price) transactions in the mempool
 if [ "${ENABLE_GASLESS:-false}" = "true" ]; then
     CMD="$CMD --rollup.allow-gasless"
+fi
+
+# Gasless tuning flags only exist on newer op-reth builds; apply each only if the
+# binary advertises it (older builds abort on an unknown argument). --help is
+# evaluated once and reused.
+RETH_NODE_HELP="$(op-reth node --help 2>/dev/null || true)"
+if echo "$RETH_NODE_HELP" | grep -q -- '--rollup.gasless-mock-gas-price-percentile'; then
+    CMD="$CMD --rollup.gasless-mock-gas-price-percentile=${GASLESS_MOCK_GAS_PRICE_PERCENTILE:-0.1}"
+fi
+if echo "$RETH_NODE_HELP" | grep -q -- '--rollup.gasless-pending-lifetime'; then
+    CMD="$CMD --rollup.gasless-pending-lifetime=${GASLESS_PENDING_LIFETIME_SECS:-600}"
+fi
+if echo "$RETH_NODE_HELP" | grep -q -- '--builder.gasless-block-gas-limit'; then
+    CMD="$CMD --builder.gasless-block-gas-limit=${BUILDER_GASLESS_BLOCK_GAS_LIMIT:-60000000}"
 fi
 
 # For flashblocks architecture
