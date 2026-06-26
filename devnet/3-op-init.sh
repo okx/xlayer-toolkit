@@ -177,6 +177,13 @@ fi
 # Get trusted peers enode url
 sed_inplace "s|TRUSTED_PEERS=.*|TRUSTED_PEERS=$(./scripts/trusted-peers.sh)|" .env
 
+# Apply the trusted_nodes_only toggle (TRUSTED_NODES_ONLY in .env) to the reth
+# seq/rpc configs. When true, reth >=2.2 peers only with TRUSTED_PEERS; when
+# false it also accepts untrusted peers.
+TRUSTED_NODES_ONLY="${TRUSTED_NODES_ONLY:-true}"
+sed_inplace "s/^trusted_nodes_only = .*/trusted_nodes_only = ${TRUSTED_NODES_ONLY}/" ./config-op/test.reth.seq.config.toml
+sed_inplace "s/^trusted_nodes_only = .*/trusted_nodes_only = ${TRUSTED_NODES_ONLY}/" ./config-op/test.reth.rpc.config.toml
+
 # init reth sequencer
 echo " 🔧 Initializing reth sequencer..."
 OP_RETH_DATADIR="$(pwd)/data/op-reth-seq"
