@@ -131,15 +131,17 @@ echo "✅ Grafana available at http://localhost:3000 (admin/admin)"
 if [ "$LAUNCH_RPC_NODE" = "true" ]; then
     docker compose up -d op-${RPC_TYPE}-rpc
     wait_for_el_to_start "op-${RPC_TYPE}-rpc" "$RPC_TYPE"
-    # The sequencer was started above, before this RPC node's container existed,
-    # so at boot it couldn't resolve the RPC node's hostname. reth >=2.2 only adds
-    # a trusted peer to its inbound-allow set when it resolves at startup, and with
-    # trusted_nodes_only=true it then rejects the (untrusted) replica's inbound
-    # connection — so the replica can never peer or sync. Now that op-${RPC_TYPE}-rpc
-    # is up, restart the sequencer so its startup trusted-peer resolution succeeds
-    # and it trusts the replica. (Its periodic re-resolver would not reliably add it
-    # to the inbound-allow set.)
-    if [ "$SEQ_TYPE" = "reth" ] && [ "$RPC_TYPE" = "reth" ]; then
+    # Only needed when the sequencer runs trusted_nodes_only=true: it was started
+    # above, before this RPC node's container existed, so at boot it couldn't
+    # resolve the RPC node's hostname. reth >=2.2 only adds a trusted peer to its
+    # inbound-allow set when it resolves at startup, and with trusted_nodes_only=true
+    # it then rejects the (untrusted) replica's inbound connection — so the replica
+    # can never peer or sync. Now that op-${RPC_TYPE}-rpc is up, restart the sequencer
+    # so its startup trusted-peer resolution succeeds and it trusts the replica. (Its
+    # periodic re-resolver would not reliably add it to the inbound-allow set.)
+    # With trusted_nodes_only=false the seq accepts the untrusted inbound anyway, so
+    # the restart is skipped.
+    if [ "${TRUSTED_NODES_ONLY:-true}" = "true" ] && [ "$SEQ_TYPE" = "reth" ] && [ "$RPC_TYPE" = "reth" ]; then
         echo "🔄 Restarting op-${SEQ_TYPE}-seq so it resolves and trusts op-${RPC_TYPE}-rpc..."
         docker compose restart op-${SEQ_TYPE}-seq
         wait_for_el_to_start "op-${SEQ_TYPE}-seq" "$SEQ_TYPE"
