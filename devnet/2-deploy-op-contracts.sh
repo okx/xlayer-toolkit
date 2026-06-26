@@ -124,12 +124,19 @@ docker run --rm \
   "${OP_CONTRACTS_IMAGE_TAG}" \
   bash -c "
     set -e
+    # --protocol-versions-owner only exists on some op-deployer versions; pass it
+    # only if this binary advertises it (other builds reject the unknown flag).
+    PV_OWNER_FLAG=\"\"
+    if /app/op-deployer/bin/op-deployer bootstrap superchain --help 2>/dev/null | grep -q -- '--protocol-versions-owner'; then
+      PV_OWNER_FLAG=\"--protocol-versions-owner $ADMIN_OWNER_ADDRESS\"
+    fi
     /app/op-deployer/bin/op-deployer bootstrap superchain \
       --l1-rpc-url $L1_RPC_URL_IN_DOCKER \
       --private-key $DEPLOYER_PRIVATE_KEY \
       --artifacts-locator file:///app/packages/contracts-bedrock/forge-artifacts \
       --superchain-proxy-admin-owner $L1_PROXY_ADMIN_OWNER \
       --guardian $ADMIN_OWNER_ADDRESS \
+      \$PV_OWNER_FLAG \
       --outfile /deployments/superchain.json
   "
 
@@ -146,12 +153,19 @@ docker run --rm \
   "${OP_CONTRACTS_IMAGE_TAG}" \
   bash -c "
     set -e
+    # --protocol-versions-proxy only exists on some op-deployer versions; pass it
+    # only if this binary advertises it (other builds reject the unknown flag).
+    PV_PROXY_FLAG=\"\"
+    if /app/op-deployer/bin/op-deployer bootstrap implementations --help 2>/dev/null | grep -q -- '--protocol-versions-proxy'; then
+      PV_PROXY_FLAG=\"--protocol-versions-proxy $PROTOCOL_VERSIONS_PROXY\"
+    fi
     /app/op-deployer/bin/op-deployer bootstrap implementations \
       --artifacts-locator file:///app/packages/contracts-bedrock/forge-artifacts \
       --l1-rpc-url $L1_RPC_URL_IN_DOCKER \
       --outfile /deployments/implementations.json \
       --mips-version "8" \
       --private-key $DEPLOYER_PRIVATE_KEY \
+      \$PV_PROXY_FLAG \
       --superchain-config-proxy $SUPERCHAIN_CONFIG_PROXY \
       --superchain-proxy-admin $PROXY_ADMIN \
       --upgrade-controller $ADMIN_OWNER_ADDRESS \
