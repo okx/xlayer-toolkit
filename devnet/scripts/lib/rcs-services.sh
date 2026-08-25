@@ -197,6 +197,9 @@ rcs_prepare_runtime_config() {
     start_height=$(( ${FORK_BLOCK:-0} + 1 ))
     rules_tmp=$(mktemp "$config_root/rules.json.tmp.XXXXXX") || return 1
     printf '%s\n' '{"rules":[]}' > "$rules_tmp"
+    # mktemp creates 0600 files; the RCS container runs as non-root UID 10001 and
+    # must be able to read the bind-mounted rules.json, so widen to 0644 before publishing.
+    chmod 0644 "$rules_tmp" || return 1
     mv "$rules_tmp" "$config_root/rules.json"
 
     for ((i = 1; i <= count; i++)); do
@@ -243,6 +246,9 @@ xlayer_audit_rpc_url = "$endpoint"
 signer_private_key_env = ""
 tx_blacklist_contract_address = ""
 EOF
+        # mktemp creates 0600 files; the RCS container runs as non-root UID 10001 and
+        # must be able to read the bind-mounted config.toml, so widen to 0644 before publishing.
+        chmod 0644 "$config_tmp" || return 1
         mv "$config_tmp" "$instance_dir/config.toml"
     done
 }
