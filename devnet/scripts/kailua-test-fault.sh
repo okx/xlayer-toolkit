@@ -52,7 +52,7 @@ DOCKER_NETWORK=${DOCKER_NETWORK:-"dev-op"}
 # Host RPC URLs (for cast commands run on host)
 L1_RPC=${L1_RPC_URL:-"http://localhost:8545"}
 L1_BEACON=${L1_BEACON_URL:-"http://localhost:3500"}
-L2_RPC=${L2_RPC_URL:-"http://localhost:8123"}
+L2_RPC=${L2_SEQ_URL:-"http://localhost:8123"}
 OP_NODE=${L2_NODE_RPC_URL:-"http://localhost:9545"}
 
 # Docker RPC URLs (for kailua-cli inside container)
@@ -455,7 +455,7 @@ main() {
     # Check services (silent unless error)
     nc -z localhost 8545 2>/dev/null || (echo -e "${RED}✗ Error: L1 RPC (localhost:8545) NOT running${NC}" && exit 1)
     nc -z localhost 3500 2>/dev/null || (echo -e "${RED}✗ Error: L1 Beacon (localhost:3500) NOT running${NC}" && exit 1)
-    nc -z localhost 8123 2>/dev/null || (echo -e "${RED}✗ Error: L2 RPC (localhost:8123) NOT running${NC}" && exit 1)
+    cast chain-id --rpc-url "$L2_RPC" >/dev/null 2>&1 || { echo -e "${RED}✗ Error: L2 Sequencer RPC ($L2_RPC) not responding to JSON-RPC${NC}"; exit 1; }
     nc -z localhost 9545 2>/dev/null || (echo -e "${RED}✗ Error: OP Node (localhost:9545) NOT running${NC}" && exit 1)
     
     # Get game count

@@ -305,6 +305,16 @@ to the next free in-range port:
 - **Seq op-node RPC** (`9544 + index`): Node 1: 9545, Node 2: 9546, Node 3: 9547
 - **RPC op-node RPC** (`9644 + index`): RPC 1: 9645, RPC 2: 9646
 
+Host-side scripts read two distinct L2 JSON-RPC endpoints from `.env` (generated
+from `example.env`); they are separate settings and neither aliases the other:
+- `L2_SEQ_URL` (default `http://localhost:8123`): the L2 **sequencer** entry.
+  Flows that submit transactions or need immediate sequencer state — Gasless
+  deploy/enable/upgrade, dispute-game / OP-Succinct / Kailua host-side L2 reads,
+  and Custom Gas Token verification — target this URL. Override it to point at a
+  non-default host or port.
+- `L2_RPC_URL` (default `http://localhost:8223`): the normal L2 **RPC node**
+  entry for general queries. Its default is unchanged.
+
 The actual generated values are always in `config-op/cluster/cluster.env` after
 `3-op-init.sh` has run. It includes the effective counts and CL selections,
 service lists, `TRUSTED_PEERS`, and per-node `EL_HTTP_PORT_$i`,

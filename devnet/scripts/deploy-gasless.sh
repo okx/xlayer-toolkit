@@ -18,7 +18,7 @@ cd "$DEVNET_DIR"
 
 source .env
 
-RPC="${L2_RPC_URL}"
+RPC="${L2_SEQ_URL}"
 BEDROCK_DIR="${OP_STACK_LOCAL_DIRECTORY:?OP_STACK_LOCAL_DIRECTORY must be set in .env}/packages/contracts-bedrock"
 DEPLOY_SCRIPT="scripts/deploy/DeployXlayerGaslessWhitelist.s.sol:DeployGaslessWhitelist"
 DEPLOY_FACTORY="0xFaC897544659Fb136C064d5428947f5BC9cC1Fa2"

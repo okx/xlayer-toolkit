@@ -31,7 +31,7 @@ fi
 # MUST equal op-reth's compiled-in XLAYER_DEVNET_GASLESS_CONTRACT (chain id 195) for the gasless
 # hook to query it. 
 GASLESS_ADDR="${GASLESS_PROXY_ADDR:-0xA9092BC02e2000a3F8996D1991621E9A03Ef2dfE}"
-RPC="${L2_RPC_URL:-http://localhost:8123}"
+RPC="${L2_SEQ_URL:-http://localhost:8123}"
 OWNER_KEY="${RICH_L1_PRIVATE_KEY:?RICH_L1_PRIVATE_KEY (gasless owner) must be set in .env}"
 
 # Safety assert: the proxy MUST be at op-reth's compiled-in XLAYER_DEVNET_GASLESS_CONTRACT (chain
