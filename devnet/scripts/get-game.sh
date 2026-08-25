@@ -20,7 +20,7 @@ DEVNET_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 FACTORY_ADDRESS=${DISPUTE_GAME_FACTORY_ADDRESS:-""}
 L1_RPC=${L1_RPC_URL:-"http://localhost:8545"}
-L2_RPC=${L2_RPC_URL:-"http://localhost:8123"}
+L2_RPC=${L2_SEQ_URL:-"http://localhost:8123"}
 
 GENESIS_PARENT_INDEX=4294967295
 

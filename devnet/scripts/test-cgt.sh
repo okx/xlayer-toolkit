@@ -50,7 +50,7 @@ echo "   Initial Supply:     $INIT_TOTAL_SUPPLY (queried from OKB)"
 echo ""
 
 # Check if L2 is running before verifying L2 configuration
-if curl -s -X POST "$L2_RPC_URL" \
+if curl -s -X POST "$L2_SEQ_URL" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
   > /dev/null 2>&1; then
@@ -64,21 +64,21 @@ if curl -s -X POST "$L2_RPC_URL" \
   # Check isCustomGasToken
   IS_CUSTOM_GAS_TOKEN=$(cast call "$L1_BLOCK_ADDR" \
     "isCustomGasToken()(bool)" \
-    --rpc-url "$L2_RPC_URL")
+    --rpc-url "$L2_SEQ_URL")
 
   echo "  L1Block.isCustomGasToken(): $IS_CUSTOM_GAS_TOKEN"
 
   # Check gasPayingTokenName
   TOKEN_NAME=$(cast call "$L1_BLOCK_ADDR" \
     "gasPayingTokenName()(string)" \
-    --rpc-url "$L2_RPC_URL")
+    --rpc-url "$L2_SEQ_URL")
 
   echo "  L1Block.gasPayingTokenName(): $TOKEN_NAME"
 
   # Check gasPayingTokenSymbol
   TOKEN_SYMBOL=$(cast call "$L1_BLOCK_ADDR" \
     "gasPayingTokenSymbol()(string)" \
-    --rpc-url "$L2_RPC_URL")
+    --rpc-url "$L2_SEQ_URL")
 
   echo "  L1Block.gasPayingTokenSymbol(): $TOKEN_SYMBOL"
 
@@ -165,7 +165,7 @@ if [ -n "$OKB_TOKEN_ADDRESS" ] && [ -n "$ADAPTER_ADDRESS" ]; then
   echo "   Checking balance every 5 seconds..."
   echo ""
 
-  INIT_BALANCE=$(cast balance $L2_RECIPIENT --rpc-url $L2_RPC_URL)
+  INIT_BALANCE=$(cast balance $L2_RECIPIENT --rpc-url $L2_SEQ_URL)
   echo "  Deposit From $DEPLOYER_ADDRESS to $L2_RECIPIENT"
   echo "  Deposit Amount: $DEPOSIT_AMOUNT"
   echo "  L2 Recipient:   $L2_RECIPIENT"
@@ -180,7 +180,7 @@ if [ -n "$OKB_TOKEN_ADDRESS" ] && [ -n "$ADAPTER_ADDRESS" ]; then
   ATTEMPT=0
 
   while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-    CURRENT_BALANCE=$(cast balance $L2_RECIPIENT --rpc-url $L2_RPC_URL)
+    CURRENT_BALANCE=$(cast balance $L2_RECIPIENT --rpc-url $L2_SEQ_URL)
 
     echo "  [Attempt $((ATTEMPT + 1))/$MAX_ATTEMPTS] Current Balance: $CURRENT_BALANCE (Expected: $EXPECTED_BALANCE)"
 
@@ -222,6 +222,6 @@ if [ -n "$OKB_TOKEN_ADDRESS" ] && [ -n "$ADAPTER_ADDRESS" ]; then
     echo "   1. Check if L2 node is running and syncing"
     echo "   2. Check L1 transaction status"
     echo "   3. Monitor TransactionDeposited events on OptimismPortal: $OPTIMISM_PORTAL_PROXY_ADDRESS"
-    echo "   4. Manually check balance: cast balance $L2_RECIPIENT --rpc-url $L2_RPC_URL"
+    echo "   4. Manually check balance: cast balance $L2_RECIPIENT --rpc-url $L2_SEQ_URL"
   fi
 fi
