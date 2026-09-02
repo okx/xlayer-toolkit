@@ -179,7 +179,13 @@ case "$START_PHASE" in
             [ -n "${TZMOCK_SERVICE:-}" ] || { echo "❌ TZMOCK_SERVICE is empty" >&2; exit 1; }
             [ -n "${RCS_SERVICES:-}" ] || { echo "❌ RCS_SERVICES is empty" >&2; exit 1; }
             print_rcs_mapping
-            docker compose up -d --build $TZMOCK_SERVICE $RCS_SERVICES
+            # Only the first RCS service declares a build; the rest reuse the
+            # locally built xlayer-rcs image via pull_policy: never. A combined
+            # `up --build` resolves the build-less instances in parallel with the
+            # build and can race a registry pull before the image exists, so
+            # build the shared images first, then start every service.
+            docker compose build $TZMOCK_SERVICE $RCS_SERVICES
+            docker compose up -d $TZMOCK_SERVICE $RCS_SERVICES
             for service in $TZMOCK_SERVICE $RCS_SERVICES; do
                 wait_for_service_health "$service"
             done
