@@ -308,7 +308,10 @@ EOF
     image: "${RCS_IMAGE_TAG:-xlayer-rcs:latest}"
     container_name: $service
 EOF
-        if [ "${SKIP_RCS_BUILD:-false}" = false ]; then
+        # Every RCS instance runs the same image tag, so only the first service
+        # declares a build; the image is built once and the remaining instances
+        # reuse it instead of re-declaring an identical build entry.
+        if [ "${SKIP_RCS_BUILD:-false}" = false ] && [ "$i" -eq 1 ]; then
             cat >> "$compose_output" <<EOF
     build:
       context: $source_dir
