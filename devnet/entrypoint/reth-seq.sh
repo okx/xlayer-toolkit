@@ -4,8 +4,23 @@ set -e
 
 ENV_FILE="${ENV_FILE:-/.env}"
 [ -f "$ENV_FILE" ] || { echo "Missing Reth environment file: $ENV_FILE" >&2; exit 1; }
+
+# Compose injects a per-sequencer RCS_BASE_URL (http://rcsN:9195) into the
+# container environment. Sourcing the shared .env below would otherwise
+# override it with a single shared value, pointing every op-reth-seqN at the
+# same RCS. Preserve the injected value across the sourcing so each
+# op-reth-seqN keeps its own RCS endpoint. When nothing was injected, still
+# export whatever RCS_BASE_URL the shared .env provides, because sourcing a
+# plain `RCS_BASE_URL=...` assignment does not export it and op-reth reads
+# this value from its environment.
+_INJECTED_RCS_BASE_URL="${RCS_BASE_URL:-}"
 # shellcheck disable=SC1090
 source "$ENV_FILE"
+if [ -n "$_INJECTED_RCS_BASE_URL" ]; then
+    export RCS_BASE_URL="$_INJECTED_RCS_BASE_URL"
+elif [ -n "${RCS_BASE_URL:-}" ]; then
+    export RCS_BASE_URL
+fi
 
 # Each generated node has its own suffix and enode. Load it when the
 # entrypoint runs in a cluster, while keeping the single-node invocation
