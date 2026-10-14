@@ -68,15 +68,6 @@ if let Some(tracer) = get_global_tracer() {
 | 15060 | `RpcBlockReceiveEnd` | RPC node received block |
 | 15062 | `RpcBlockInsertEnd` | RPC node completed block insertion |
 
-> **About `P2pReceivedTx` (15015).** This point marks a transaction that arrived
-> over P2P and was **successfully admitted to the transaction pool**. Merely
-> receiving a P2P transaction, or an admission that fails, does **not** qualify.
-> This crate does not decide admission success — the caller emits the event, via
-> the existing `log_transaction(tx_hash, TransactionProcessId::P2pReceivedTx, block_number)`,
-> only once admission has succeeded. Node-side P2P / transaction-pool
-> instrumentation (deciding *when* to emit it) is separate downstream work and is
-> not provided by this crate.
-
 ## API
 
 ### Functions
