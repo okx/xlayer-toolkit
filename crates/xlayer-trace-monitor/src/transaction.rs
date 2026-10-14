@@ -10,6 +10,9 @@ pub enum TransactionProcessId {
     /// RPC node: Transaction received and ready to forward
     RpcReceiveTxEnd = 15010,
 
+    /// RPC node: P2P transaction successfully admitted to the transaction pool
+    P2pReceivedTx = 15015,
+
     /// Sequencer node: Transaction received and added to pool
     SeqReceiveTxEnd = 15030,
 
@@ -37,6 +40,7 @@ impl TransactionProcessId {
     pub const fn as_str(&self) -> &'static str {
         match self {
             Self::RpcReceiveTxEnd => "xlayer_rpc_receive_tx",
+            Self::P2pReceivedTx => "xlayer_p2p_received_tx",
             Self::SeqReceiveTxEnd => "xlayer_seq_receive_tx",
             Self::SeqBlockBuildStart => "xlayer_seq_begin_block",
             Self::SeqTxExecutionEnd => "xlayer_seq_package_tx",
@@ -56,9 +60,10 @@ impl TransactionProcessId {
     pub const fn service_name(&self) -> &'static str {
         match self {
             // RPC-related process IDs
-            Self::RpcReceiveTxEnd | Self::RpcBlockReceiveEnd | Self::RpcBlockInsertEnd => {
-                RPC_SERVICE_NAME
-            }
+            Self::RpcReceiveTxEnd
+            | Self::P2pReceivedTx
+            | Self::RpcBlockReceiveEnd
+            | Self::RpcBlockInsertEnd => RPC_SERVICE_NAME,
 
             // Sequencer-related process IDs
             Self::SeqReceiveTxEnd

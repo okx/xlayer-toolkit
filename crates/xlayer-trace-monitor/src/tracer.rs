@@ -491,4 +491,120 @@ mod tests {
         // temp_dir will be automatically cleaned up when it goes out of scope
         drop(temp_dir);
     }
+
+    #[test]
+    fn test_p2p_received_tx_identity() {
+        let id = TransactionProcessId::P2pReceivedTx;
+        assert_eq!(id.as_u64(), 15015);
+        assert_eq!(id.as_str(), "xlayer_p2p_received_tx");
+        assert_eq!(id.service_name(), "okx-defi-xlayer-rpcpay-pro");
+        assert_ne!(id.service_name(), "okx-defi-xlayer-egseqz-pro");
+    }
+
+    #[test]
+    fn test_existing_events_unchanged() {
+        // IDs
+        assert_eq!(TransactionProcessId::RpcReceiveTxEnd.as_u64(), 15010);
+        assert_eq!(TransactionProcessId::SeqReceiveTxEnd.as_u64(), 15030);
+        assert_eq!(TransactionProcessId::SeqBlockBuildStart.as_u64(), 15032);
+        assert_eq!(TransactionProcessId::SeqTxExecutionEnd.as_u64(), 15034);
+        assert_eq!(TransactionProcessId::SeqBlockBuildEnd.as_u64(), 15036);
+        assert_eq!(TransactionProcessId::SeqBlockSendStart.as_u64(), 15042);
+        assert_eq!(TransactionProcessId::RpcBlockReceiveEnd.as_u64(), 15060);
+        assert_eq!(TransactionProcessId::RpcBlockInsertEnd.as_u64(), 15062);
+        // Names
+        assert_eq!(
+            TransactionProcessId::RpcReceiveTxEnd.as_str(),
+            "xlayer_rpc_receive_tx"
+        );
+        assert_eq!(
+            TransactionProcessId::SeqReceiveTxEnd.as_str(),
+            "xlayer_seq_receive_tx"
+        );
+        assert_eq!(
+            TransactionProcessId::SeqBlockBuildStart.as_str(),
+            "xlayer_seq_begin_block"
+        );
+        assert_eq!(
+            TransactionProcessId::SeqTxExecutionEnd.as_str(),
+            "xlayer_seq_package_tx"
+        );
+        assert_eq!(
+            TransactionProcessId::SeqBlockBuildEnd.as_str(),
+            "xlayer_seq_end_block"
+        );
+        assert_eq!(
+            TransactionProcessId::SeqBlockSendStart.as_str(),
+            "xlayer_seq_ds_sent"
+        );
+        assert_eq!(
+            TransactionProcessId::RpcBlockReceiveEnd.as_str(),
+            "xlayer_rpc_receive_block"
+        );
+        assert_eq!(
+            TransactionProcessId::RpcBlockInsertEnd.as_str(),
+            "xlayer_rpc_finish_block"
+        );
+        // None of the existing events uses the new id or name
+        for id in [
+            TransactionProcessId::RpcReceiveTxEnd,
+            TransactionProcessId::SeqReceiveTxEnd,
+            TransactionProcessId::SeqBlockBuildStart,
+            TransactionProcessId::SeqTxExecutionEnd,
+            TransactionProcessId::SeqBlockBuildEnd,
+            TransactionProcessId::SeqBlockSendStart,
+            TransactionProcessId::RpcBlockReceiveEnd,
+            TransactionProcessId::RpcBlockInsertEnd,
+        ] {
+            assert_ne!(id.as_u64(), 15015);
+            assert_ne!(id.as_str(), "xlayer_p2p_received_tx");
+        }
+    }
+
+    #[test]
+    fn test_p2p_received_tx_csv_row_without_block_height() {
+        let (tracer, temp_dir, log_path) = setup_test_tracer(true);
+        let tx_hash = [0xab; 32];
+        tracer.log_transaction(tx_hash, TransactionProcessId::P2pReceivedTx, None);
+        tracer.flush().unwrap();
+
+        let content = fs::read_to_string(&log_path).unwrap();
+        let line = content.lines().next().expect("one row expected");
+        let fields: Vec<&str> = line.split(',').collect();
+        assert_eq!(fields.len(), 23);
+        assert_eq!(fields[7], "15015"); // col 8: numeric id
+        assert_eq!(fields[8], "xlayer_p2p_received_tx"); // col 9: event name
+        assert_eq!(fields[3], "okx-defi-xlayer-rpcpay-pro"); // col 4: service name
+        assert_eq!(fields[14], ""); // col 15: block height empty
+        assert_eq!(fields[15], ""); // col 16: block hash empty
+        assert!(line.contains(&format_hash_hex(&tx_hash))); // tx hash present
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_p2p_received_tx_csv_row_with_block_height() {
+        let (tracer, temp_dir, log_path) = setup_test_tracer(true);
+        let tx_hash = [0xcd; 32];
+        tracer.log_transaction(tx_hash, TransactionProcessId::P2pReceivedTx, Some(987_654));
+        tracer.flush().unwrap();
+
+        let content = fs::read_to_string(&log_path).unwrap();
+        let line = content.lines().next().expect("one row expected");
+        let fields: Vec<&str> = line.split(',').collect();
+        assert_eq!(fields.len(), 23);
+        assert_eq!(fields[14], "987654"); // col 15: block height populated
+        assert_eq!(fields[15], ""); // col 16: block hash still empty (tx-level event)
+        drop(temp_dir);
+    }
+
+    #[test]
+    fn test_p2p_received_tx_disabled_tracer_no_logging() {
+        let (tracer, temp_dir, log_path) = setup_test_tracer(false);
+        tracer.log_transaction([0xee; 32], TransactionProcessId::P2pReceivedTx, Some(1));
+        tracer.flush().unwrap();
+        if log_path.exists() {
+            assert!(fs::read_to_string(&log_path).unwrap().is_empty());
+        }
+        drop(temp_dir);
+    }
 }
