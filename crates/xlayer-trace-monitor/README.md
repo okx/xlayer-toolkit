@@ -8,7 +8,7 @@ A lightweight crate for logging transaction and block lifecycle events to CSV fi
 
 ## Features
 
-- 8 monitoring points covering transaction/block lifecycle
+- 9 monitoring points covering transaction/block lifecycle
 - CSV output with 23 fields
 - Buffered writes with auto-flush (100 writes or 1s)
 - Zero overhead when disabled
@@ -59,6 +59,7 @@ if let Some(tracer) = get_global_tracer() {
 | ID | Enum | Description |
 |----|------|-------------|
 | 15010 | `RpcReceiveTxEnd` | RPC node received transaction |
+| 15015 | `P2pReceivedTx` | RPC node: P2P transaction successfully admitted to the pool |
 | 15030 | `SeqReceiveTxEnd` | Sequencer node received transaction |
 | 15032 | `SeqBlockBuildStart` | Sequencer started building block |
 | 15034 | `SeqTxExecutionEnd` | Sequencer completed transaction execution |
@@ -66,6 +67,15 @@ if let Some(tracer) = get_global_tracer() {
 | 15042 | `SeqBlockSendStart` | Sequencer started sending block |
 | 15060 | `RpcBlockReceiveEnd` | RPC node received block |
 | 15062 | `RpcBlockInsertEnd` | RPC node completed block insertion |
+
+> **About `P2pReceivedTx` (15015).** This point marks a transaction that arrived
+> over P2P and was **successfully admitted to the transaction pool**. Merely
+> receiving a P2P transaction, or an admission that fails, does **not** qualify.
+> This crate does not decide admission success — the caller emits the event, via
+> the existing `log_transaction(tx_hash, TransactionProcessId::P2pReceivedTx, block_number)`,
+> only once admission has succeeded. Node-side P2P / transaction-pool
+> instrumentation (deciding *when* to emit it) is separate downstream work and is
+> not provided by this crate.
 
 ## API
 
