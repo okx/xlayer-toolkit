@@ -8,7 +8,7 @@ A lightweight crate for logging transaction and block lifecycle events to CSV fi
 
 ## Features
 
-- 8 monitoring points covering transaction/block lifecycle
+- 9 monitoring points covering transaction/block lifecycle
 - CSV output with 23 fields
 - Buffered writes with auto-flush (100 writes or 1s)
 - Zero overhead when disabled
@@ -59,6 +59,7 @@ if let Some(tracer) = get_global_tracer() {
 | ID | Enum | Description |
 |----|------|-------------|
 | 15010 | `RpcReceiveTxEnd` | RPC node received transaction |
+| 15015 | `P2pReceivedTx` | RPC node: P2P transaction successfully admitted to the pool |
 | 15030 | `SeqReceiveTxEnd` | Sequencer node received transaction |
 | 15032 | `SeqBlockBuildStart` | Sequencer started building block |
 | 15034 | `SeqTxExecutionEnd` | Sequencer completed transaction execution |
